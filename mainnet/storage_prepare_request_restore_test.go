@@ -23,7 +23,7 @@ import (
 
 // Birth and capacity are reviewed public inputs. The synthetic key remains
 // outside every request and plan and is used only by the actual runtime owner.
-func storageRequestRestoreCommandFixture(t *testing.T, loseOriginal bool) (*storageSnapshotRestoreFixture, validator.AttemptLedgerPreparationScope, []byte) {
+func storageRequestRestoreCommandFixture(t *testing.T, loseOriginal bool, configure ...func(*validator.ProviderAttemptRequestJournal, validator.ProviderAttemptRequestPreparation)) (*storageSnapshotRestoreFixture, validator.AttemptLedgerPreparationScope, []byte) {
 	t.Helper()
 	source := newStoragePreparationCommandFixture(t)
 	raw, err := os.ReadFile(source.requestPath)
@@ -71,6 +71,9 @@ func storageRequestRestoreCommandFixture(t *testing.T, loseOriginal bool) (*stor
 	original, err := journal.Append(t.Context(), preparation.Birth, connect.Id{23}, body, message, signature)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, configure := range configure {
+		configure(journal, preparation)
 	}
 	head, _, err = journal.Head(t.Context())
 	if err := errors.Join(err, journal.Close()); err != nil || head.Sequence != 1 {
