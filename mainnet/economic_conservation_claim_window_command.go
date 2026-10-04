@@ -60,6 +60,10 @@ func proposeEconomicConservationClaimWindow(ctx context.Context, request economi
 		return proposal, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, view.close()) }()
+	state.archiveView = view
+	if err := state.validateClaimCheckpointPath(request.Original.Path); err != nil {
+		return proposal, err
+	}
 	if view.claimReviews[claim.Role+"/"+request.ReviewSha256] {
 		return proposal, errors.New("economic Claim proposal reused an archived independent review")
 	}

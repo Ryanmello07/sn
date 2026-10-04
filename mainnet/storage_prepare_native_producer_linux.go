@@ -32,6 +32,7 @@ const storageNativeProducerSchema = "urnetwork-native-execution-artifact-restore
 // They are verified with the original policy key by the runtime's same loader.
 // Checkpoint is an independent original-byte pin, not a newly inferred cursor.
 type storageNativeProducerScope struct {
+	ApprovalSources   []storageNativeApprovalSource       `json:"original_signed_approval_sources,omitempty"`
 	CheckpointStorage *economicConservationStorageProfile `json:"original_checkpoint_storage,omitempty"`
 	Schema            string                              `json:"schema"`
 	Checkpoint        monitorHistoryReference             `json:"original_checkpoint"`
@@ -40,6 +41,14 @@ type storageNativeProducerScope struct {
 	State             *nativeExecutionProducerState       `json:"original_producer_state"`
 	Approvals         [][]byte                            `json:"original_signed_approval_bytes"`
 	SharedDirectories []string                            `json:"shared_original_ancestors,omitempty"`
+}
+
+// Exact protected copied files keep large signed approvals outside the fixed
+// owner-input envelope. Original policy references still select every digest;
+// these paths select only where the already authenticated bytes are retained.
+type storageNativeApprovalSource struct {
+	Reference planFileReference `json:"reference"`
+	Bytes     uint64            `json:"bytes"`
 }
 
 // A single bounded inventory hash covers pending and completed custody. The
@@ -64,7 +73,7 @@ func storageNativeProducerAuthorities(ctx context.Context, scope storageNativePr
 		return nil, err
 	}
 	references := append([]planFileReference{scope.Policy.Execution.Producer.Authority}, scope.Policy.Execution.Producer.Renewals...)
-	if len(references) != len(scope.Approvals) {
+	if scope.ApprovalSources != nil && (scope.Approvals != nil || len(scope.ApprovalSources) != len(references)) || scope.ApprovalSources == nil && len(references) != len(scope.Approvals) {
 		return nil, errors.New("native artifact restore omitted original approval lineage")
 	}
 	index := 0
@@ -75,7 +84,23 @@ func storageNativeProducerAuthorities(ctx context.Context, scope storageNativePr
 		if index >= len(references) || references[index] != reference {
 			return nil, errors.New("native artifact restore changed approval read order")
 		}
-		raw := scope.Approvals[index]
+		var raw []byte
+		if scope.ApprovalSources != nil {
+			source := scope.ApprovalSources[index]
+			if source.Bytes == 0 || source.Bytes > nativeProducerAuthorityLimit || source.Reference.Sha256 != reference.Sha256 || !bootstrapRootAbsolutePath(source.Reference.Path) {
+				return nil, errors.New("native restore approval source differs from its exact original reference")
+			}
+			var err error
+			raw, err = nativeProducerReadApproval(ctx, source.Reference)
+			if err != nil {
+				return nil, err
+			}
+			if uint64(len(raw)) != source.Bytes {
+				return nil, errors.New("native restore approval source changed original byte count")
+			}
+		} else {
+			raw = scope.Approvals[index]
+		}
 		index++
 		if len(raw) == 0 || len(raw) > nativeProducerAuthorityMaximum(scope.Policy.Execution.FeeCensus) || monitorReadDigest(raw) != reference.Sha256 {
 			return nil, errors.New("native artifact restore changed original signed approval bytes")
@@ -161,12 +186,12 @@ func storageNativeProducerProfile(ctx context.Context, owner durablevolume.Prepa
 	if err != nil {
 		return scope, nil, "", err
 	}
-	prefix, err := filepath.Rel(report.StateRoot.Path, scope.Policy.Execution.Directory)
-	if err != nil || prefix != "." && !storageMonitorTreePath(prefix) {
+	prefix, found := storageNativeRestoreRelative(report.StateRoot.Path, scope.Policy.Execution.Directory)
+	if !found || prefix != "." && !storageNativeRestorePath(prefix) {
 		return scope, nil, "", errors.New("native artifacts moved outside their original declared root")
 	}
 	for index, path := range scope.SharedDirectories {
-		if !storageMonitorTreePath(path) || !strings.HasPrefix(prefix, path+"/") || index > 0 && scope.SharedDirectories[index-1] >= path {
+		if !storageNativeRestorePath(path) || !strings.HasPrefix(prefix, path+"/") || index > 0 && scope.SharedDirectories[index-1] >= path {
 			return scope, nil, "", errors.New("native artifacts may share only exact sorted original ancestors")
 		}
 	}
@@ -236,7 +261,7 @@ func planStorageNativeProducerRestore(ctx context.Context, name string, owner du
 				return empty, errors.New("native artifact directory is outside the fixed original grammar")
 			}
 		} else if approvalFile {
-			if entry.Kind != "file" || entry.Mode != 0600 && entry.Mode != 0400 || entry.Size != uint64(len(approval)) || entry.Sha256 != monitorReadDigest(approval) {
+			if entry.Kind != "file" || entry.Mode != 0600 && entry.Mode != 0400 || entry.Size != approval.Bytes || entry.Sha256 != approval.Sha256 {
 				return empty, errors.New("native approval member changed original signed bytes")
 			}
 		} else {
@@ -270,7 +295,10 @@ func planStorageNativeProducerRestore(ctx context.Context, name string, owner du
 // Read a copied member under its held no-follow ancestry. Both byte digest
 // and named inode are checked; failed reads never become returned mismatches.
 func readStorageNativeProducerMember(ctx context.Context, root *os.File, member durablevolume.PreparationFile) (_ []byte, resultErr error) {
-	parent, err := openStorageMonitorTreeTarget(ctx, root, filepath.Dir(member.Path))
+	if !storageNativeRestorePath(member.Path) {
+		return nil, errors.New("native copied member is outside its bounded original namespace")
+	}
+	parent, err := openStorageNativeRestoreDirectory(ctx, root, filepath.Dir(member.Path))
 	if err != nil {
 		return nil, err
 	}

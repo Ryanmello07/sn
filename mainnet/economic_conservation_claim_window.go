@@ -177,6 +177,21 @@ func economicConservationClaimObservationHash(observation protocol.ClaimObservat
 	return rootObjectHash(observation)
 }
 
+// A copied checkpoint can retain exactly the same bytes while belonging to a
+// different prepared owner. The signed logical path survives ordinary archive
+// compaction; physical restore keeps that path and replaces only its custody.
+func (self *economicConservationState) validateClaimCheckpointPath(path string) error {
+	if self.archiveView != nil && self.archiveView.claimCheckpointPath != "" && self.archiveView.claimCheckpointPath != path {
+		return errors.New("economic Claim history moved the original checkpoint")
+	}
+	for _, window := range self.ClaimWindows {
+		if window.Original.Path != path {
+			return errors.New("economic Claim window moved the original checkpoint")
+		}
+	}
+	return nil
+}
+
 // Only matched original receipt evidence permits retiring an epoch. A signed
 // supplied retirement list cannot erase an unmatched receipt or unknown epoch.
 func deriveEconomicConservationClaimWindow(policy economicConservationPolicy, basis *economicConservationClaimBasis, supplied economicConservationClaimWindow) (economicConservationClaimWindow, monitorClaimState, error) {
@@ -296,6 +311,9 @@ func (self *economicConservationState) validateClaimWindows(policy economicConse
 		return nil // Structural decode only; command admission supplies custody.
 	}
 	for _, window := range self.ClaimWindows {
+		if self.archiveView.claimCheckpointPath != "" && self.archiveView.claimCheckpointPath != window.Original.Path {
+			return errors.New("economic Claim window moved the original checkpoint")
+		}
 		if self.archiveView.claimReviews[window.Role+"/"+window.ReviewSha256] {
 			return errors.New("economic Claim window reused an archived independent review")
 		}
@@ -329,6 +347,9 @@ func (self *economicConservationState) validateClaimWindows(policy economicConse
 
 func (self *economicConservationArchiveView) retainClaimWindows(policy economicConservationPolicy, original *economicConservationState) error {
 	for _, window := range original.ClaimWindows {
+		if self.claimCheckpointPath != "" && self.claimCheckpointPath != window.Original.Path {
+			return errors.New("economic Claim history moved the original checkpoint")
+		}
 		key := window.Role + "/" + window.ReviewSha256
 		if self.claimReviews[key] {
 			return errors.New("economic Claim archive reused an original window review")
@@ -336,6 +357,8 @@ func (self *economicConservationArchiveView) retainClaimWindows(policy economicC
 		if err := self.charge(window); err != nil {
 			return err
 		}
+		// The existing window charge includes this bounded original path.
+		self.claimCheckpointPath = window.Original.Path
 		self.claimReviews[key] = true
 		index, _, exists := economicConservationClaimRole(policy, window.Role)
 		if !exists || self.claimBasis == nil {

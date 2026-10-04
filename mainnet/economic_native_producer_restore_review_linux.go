@@ -25,8 +25,7 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 	}
 	var selected *monitorHistoryRestoreRootReview
 	for _, root := range roots {
-		path, err := filepath.Rel(root.request.RootPath, policy.Execution.Directory)
-		if err == nil && (path == "." || storageMonitorTreePath(path)) {
+		if _, found := storageNativeRestoreRelative(root.request.RootPath, policy.Execution.Directory); found {
 			if selected != nil {
 				return errors.New("native artifact restore has overlapping original roots")
 			}
@@ -41,7 +40,7 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 		var approvalRoot *monitorHistoryRestoreRootReview
 		var member durablevolume.PreparationFile
 		for _, root := range roots {
-			if path, found := monitorHistoryRestoreRelative(root.request.RootPath, reference.Path); found {
+			if path, found := storageNativeRestoreRelative(root.request.RootPath, reference.Path); found {
 				if approvalRoot != nil {
 					return errors.New("native approval has overlapping original roots")
 				}
@@ -55,11 +54,13 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 		}
 		var raw []byte
 		var err error
+		source := reference
 		if approvalRoot != nil {
 			raw, err = readNativeProducerRestoreSource(ctx, approvalRoot, member)
+			source.Path = filepath.Join(approvalRoot.request.RestoreSource.Directory, member.Path)
 		} else {
 			for path := range declared {
-				if _, found := monitorHistoryRestoreRelative(path, reference.Path); found {
+				if _, found := storageNativeRestoreRelative(path, reference.Path); found {
 					return errors.New("economic restore omits original native approval root")
 				}
 			}
@@ -68,7 +69,7 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 		if err != nil {
 			return err
 		}
-		scope.Approvals = append(scope.Approvals, raw)
+		scope.ApprovalSources = append(scope.ApprovalSources, storageNativeApprovalSource{Reference: source, Bytes: uint64(len(raw))})
 	}
 	prefix, err := filepath.Rel(selected.request.RootPath, policy.Execution.Directory)
 	if err != nil {

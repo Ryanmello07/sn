@@ -62,6 +62,9 @@ func proposeEconomicConservationNativeRenewal(ctx context.Context, request econo
 	}
 	defer func() { resultErr = errors.Join(resultErr, view.close()) }()
 	state.archiveView = view
+	if err := state.validateClaimCheckpointPath(request.Original.Path); err != nil {
+		return proposal, err
+	}
 	if view.nativeReviews[request.ReviewSha256] || state.NativeRenewal != nil && state.NativeRenewal.ReviewSha256 == request.ReviewSha256 {
 		return proposal, errors.New("economic native proposal reused an original independent review")
 	}

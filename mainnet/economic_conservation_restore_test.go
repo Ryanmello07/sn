@@ -50,10 +50,23 @@ func newEconomicConservationRestoreFixture(t *testing.T, rootCount, reviews int,
 // still rejects every unprotected ancestor; no adopted root is chmodded.
 func newEconomicConservationRestoreParentFixture(t *testing.T, parent string, rootCount, reviews int, mutate func(*economicConservationArchiveFixture)) *economicConservationRestoreFixture {
 	t.Helper()
+	return newEconomicConservationRestoreNamespaceFixture(t, parent, rootCount, reviews, "", mutate)
+}
+
+// Nested heads are born at their final logical paths. Test-only fresh
+// enrollment permits the runtime's accepted depth32 namespace before any
+// signed checkpoint exists; public restore must preserve every original path.
+func newEconomicConservationRestoreNamespaceFixture(t *testing.T, parent string, rootCount, reviews int, profile string, mutate func(*economicConservationArchiveFixture)) *economicConservationRestoreFixture {
+	t.Helper()
 	if rootCount < 1 || rootCount > 2 || reviews < 1 || reviews > 129 {
 		t.Fatal("invalid explicit combined restore fixture bounds")
 	}
-	f := &economicConservationRestoreFixture{}
+	f := &economicConservationRestoreFixture{readFiles: bootstrapSuccessorPreparationTestFiles}
+	if profile != "" {
+		f.readFiles = func(t *testing.T, root string) map[string]string {
+			return monitorHistoryRestoreTestFiles(t, root, true)
+		}
+	}
 	protectFreshEconomicConservationTestRoot(t, parent)
 	for _, name := range []string{"a", "b"}[:rootCount] {
 		path := filepath.Join(parent, name, "state")
@@ -91,8 +104,12 @@ func newEconomicConservationRestoreParentFixture(t *testing.T, parent string, ro
 	paths := make([]string, reviews+1)
 	for index := range paths {
 		name := fmt.Sprintf("economic-archive-%03d.json", index+1)
-		paths[index] = filepath.Join(f.sources[rootCount-1].root, name)
-		owners[rootCount-1] = append(owners[rootCount-1], storagePreparationSnapshotOwner(t, "mainnet-monitor-checkpoint", name, maxRpcReplyBytes))
+		if profile != "" {
+			paths[index] = monitorHistoryRestoreTestPath(t, f.sources[rootCount-1].root, name, profile)
+		} else {
+			paths[index] = filepath.Join(f.sources[rootCount-1].root, name)
+			owners[rootCount-1] = append(owners[rootCount-1], storagePreparationSnapshotOwner(t, "mainnet-monitor-checkpoint", name, maxRpcReplyBytes))
+		}
 	}
 	f.future = paths[reviews]
 	var prepared []durablevolume.Config
@@ -129,6 +146,15 @@ func newEconomicConservationRestoreParentFixture(t *testing.T, parent string, ro
 		}
 		prepared = append(prepared, config)
 	}
+	if profile != "" {
+		for _, path := range paths {
+			directory, name := filepath.Dir(path), filepath.Base(path)
+			if err := os.MkdirAll(directory, 0700); err != nil {
+				t.Fatal(err)
+			}
+			durablefixture.ProvisionSnapshot(t, directory, "mainnet-monitor-checkpoint", name, maxRpcReplyBytes, name+".lock", map[string][]byte{name + ".lock": nil})
+		}
+	}
 	f.retained = prepared[0]
 	for _, config := range prepared[1:] {
 		f.retained.Volumes[0].StateRoots = append(f.retained.Volumes[0].StateRoots, config.Volumes[0].StateRoots...)
@@ -161,9 +187,12 @@ func newEconomicConservationRestoreParentFixture(t *testing.T, parent string, ro
 	}
 	f.request = economicConservationRestoreRequest{Schema: economicConservationRestoreSchema, Policy: source.policy, Original: monitorHistoryReference{Path: source.checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}, Limits: durablevolume.PreparationCohortLimits{MaxRoots: uint64(rootCount), MaxPlanBytes: 32 * 1024 * 1024, MaxControlBytes: 64 * 1024 * 1024, MaxEntries: 8192, MaxBytes: 512 * 1024 * 1024, MaxOwnerAttributes: 4096, MaxOwnerAttributeBytes: 16 * 1024 * 1024}}
 	limits := durablevolume.InventoryLimits{MaxEntries: 4096, MaxBytes: 256 * 1024 * 1024, MaxDepth: 4, MaxOwnerAttributes: 2048, MaxOwnerAttributeBytes: 8 * 1024 * 1024}
+	if profile != "" {
+		limits.MaxDepth = 32
+	}
 	for index, original := range f.sources {
 		requireEconomicConservationTestPreparation(t, original)
-		f.files = append(f.files, bootstrapSuccessorPreparationTestFiles(t, original.root))
+		f.files = append(f.files, f.readFiles(t, original.root))
 		target := storageSnapshotRestoreTargetWithLimits(t, original, f.archive.ctx, owners[index][0], false, &limits)
 		f.targets = append(f.targets, target)
 		raw, err := os.ReadFile(target.target.requestPath)
@@ -174,9 +203,21 @@ func newEconomicConservationRestoreParentFixture(t *testing.T, parent string, ro
 		if err := decodeMonitorHistoryInput(raw, &request); err != nil {
 			t.Fatal(err)
 		}
+		request.Limits.MaxDepth = limits.MaxDepth
 		request.Owners[0].RestoreCoverage = durablevolume.PreparationCompleteUnion
 		if index == rootCount-1 {
 			future := owners[index][len(owners[index])-1]
+			if profile != "" {
+				relative, err := filepath.Rel(original.root, f.future)
+				if err != nil {
+					t.Fatal(err)
+				}
+				inputs, err := json.Marshal(storageMonitorTreeScope{Schema: storageMonitorTreeSchema, Snapshots: []string{relative}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				future = durablevolume.PreparationOwner{Kind: storageMonitorTreeKind, RelativePath: ".", Inputs: inputs}
+			}
 			future.Purpose, future.RestoreCoverage = "restore", durablevolume.PreparationCompleteUnion
 			request.Owners = append(request.Owners, future)
 		}
