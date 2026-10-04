@@ -36,6 +36,13 @@ func newProviderAttemptWindowTestOwner(t *testing.T, seed byte, completed, faile
 // first send; existing terminal-only fixtures keep their exact old path.
 func newProviderAttemptWindowTestOwnerWithRequests(t *testing.T, seed byte, completed, failed int, before func(*attemptCutV2SealTestFixture)) *providerAttemptWindowTestOwner {
 	t.Helper()
+	return newProviderAttemptWindowTestOwnerForWindow(t, seed, completed, failed, before, nil)
+}
+
+// A separately selected window precedes every dual-signed publication. Existing
+// callers retain their exact original clock; a new fixture never relabels a cut.
+func newProviderAttemptWindowTestOwnerForWindow(t *testing.T, seed byte, completed, failed int, before func(*attemptCutV2SealTestFixture), window *protocol.ValidatorEvidenceWindow) *providerAttemptWindowTestOwner {
+	t.Helper()
 	hotkey, err := crv4.KeypairFromSeed([32]byte{seed})
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +85,9 @@ func newProviderAttemptWindowTestOwnerWithRequests(t *testing.T, seed byte, comp
 	}
 	fixture.closure = sealAttemptSettlementV2Test(t, fixture.operators...)
 	options := fixture.options(t)
+	if window != nil {
+		options.Window = *window
+	}
 	self.read.Window, self.read.Origins = options.Window, [2]string{replicas[0].Origin, replicas[1].Origin}
 	self.read.Bounds = ReleaseEvidenceV2Bounds{Cut: fixture.operators[0].seal.bounds, MaxParticipants: options.Settlement.MaxParticipants, MaxTransitionBytes: options.Settlement.MaxTransitionBytes, MaxClosureBytes: options.Settlement.MaxClosureBytes}
 	publication, err := PublishValidatorEvidenceClosedCensusV2(t.Context(), fixture.closure, options)

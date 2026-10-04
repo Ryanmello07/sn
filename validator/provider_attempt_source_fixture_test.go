@@ -115,8 +115,15 @@ func newProviderAttemptSourceTestFixture(t *testing.T, failed bool) *providerAtt
 func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, completed bool) *providerAttemptSourceTestFixture {
 	t.Helper()
 	self := &providerAttemptSourceTestFixture{windowKey: ed25519.NewKeyFromSeed(bytes.Repeat([]byte{83}, 32))}
-	start := &types.Header{Number: big.NewInt(1), Time: 1700000000, GasLimit: 30000000, Extra: []byte("synthetic-provider-start")}
-	end := &types.Header{Number: big.NewInt(101), Time: 1700001000, GasLimit: 30000000, Extra: []byte("synthetic-provider-end")}
+	firstBlock := uint64(1)
+	if completed {
+		// Actual wallet consent needs a positive effective block before earning.
+		// Select this clock before any request, terminal or publication exists.
+		firstBlock = 2
+	}
+	window := protocol.ValidatorEvidenceWindow{Epoch: 42, StartBlock: firstBlock, EndBlock: firstBlock + 100, FinalizedBlock: firstBlock + 100}
+	start := &types.Header{Number: new(big.Int).SetUint64(window.StartBlock), Time: 1700000000, GasLimit: 30000000, Extra: []byte("synthetic-provider-start")}
+	end := &types.Header{Number: new(big.Int).SetUint64(window.EndBlock), Time: 1700001000, GasLimit: 30000000, Extra: []byte("synthetic-provider-end")}
 	startRaw, err := json.Marshal(start)
 	if err != nil {
 		t.Fatal(err)
@@ -135,8 +142,30 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 	activeUsed := false
 	completeUsed := false
 	before := func(seal *attemptCutV2SealTestFixture) {
+		if completed {
+			head, err := seal.ledger.Head()
+			if err != nil || head.LastSequence != 0 {
+				t.Fatal("prospective fixture cannot relabel existing original records", err)
+			}
+			terminal := &types.Header{Number: new(big.Int).SetUint64(window.EndBlock - 1), Time: 1700000999, GasLimit: 30000000, Extra: []byte("synthetic-provider-terminal")}
+			boundary := AttemptBoundary{SettlementEpoch: window.Epoch, EVMBlock: window.EndBlock - 1, EVMBlockHash: terminal.Hash().Hex()}
+			seal.expected.Boundary = boundary
+			seal.engine.cfg.AttemptBoundaryResolver = func(ctx context.Context, pinned *AttemptBoundary, clients []connect.Id) (AttemptBoundary, []AttemptBinding, error) {
+				if err := ctx.Err(); err != nil {
+					return AttemptBoundary{}, nil, err
+				}
+				if pinned != nil && *pinned != boundary {
+					return AttemptBoundary{}, nil, errors.New("prospective fixture original boundary changed")
+				}
+				bindings := make([]AttemptBinding, len(clients))
+				for index, client := range clients {
+					bindings[index] = attemptLedgerTestBinding(client, 1)
+				}
+				return boundary, bindings, nil
+			}
+		}
 		identity := ProviderAttemptRequestIdentity{Ledger: seal.ledger.identity, Coordinator: fmt.Sprintf("0x%x", seal.expected.Activation.Domain.Coordinator), ClientId: seal.engine.clientId, PolicyHash: seal.expected.Activation.Domain.PolicyHash}
-		preparation := ProviderAttemptRequestPreparation{Identity: identity, Limits: ProviderAttemptRequestLimits{MaxRecords: 1000, MaxRecordBytes: 8192, MaxJournalBytes: 8 * 1024 * 1024}, Birth: AttemptBoundary{SettlementEpoch: 42, EVMBlock: 1, EVMBlockHash: start.Hash().Hex()}}
+		preparation := ProviderAttemptRequestPreparation{Identity: identity, Limits: ProviderAttemptRequestLimits{MaxRecords: 1000, MaxRecordBytes: 8192, MaxJournalBytes: 8 * 1024 * 1024}, Birth: AttemptBoundary{SettlementEpoch: window.Epoch, EVMBlock: window.StartBlock, EVMBlockHash: start.Hash().Hex()}}
 		directory := t.TempDir()
 		if err := os.Chmod(directory, 0700); err != nil {
 			t.Fatal(err)
@@ -200,7 +229,6 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 			}
 			seal.engine.transport = seal.server
 		}
-		window := protocol.ValidatorEvidenceWindow{Epoch: 42, StartBlock: 1, EndBlock: 101, FinalizedBlock: 101}
 		cut, err := journal.SealWindow(t.Context(), window, 16*1024*1024)
 		if err != nil {
 			t.Fatal(err)
@@ -249,7 +277,7 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 		t.Cleanup(server.Close)
 		requests[seal] = requestFixture{preparation: preparation, cut: *cut, scope: scope, endpoint: server.URL + "/verify/original"}
 	}
-	self.base = &providerAttemptWindowTestFixture{owners: []*providerAttemptWindowTestOwner{newProviderAttemptWindowTestOwnerWithRequests(t, 51, 0, 0, before), newProviderAttemptWindowTestOwnerWithRequests(t, 52, 0, 0, before)}}
+	self.base = &providerAttemptWindowTestFixture{owners: []*providerAttemptWindowTestOwner{newProviderAttemptWindowTestOwnerForWindow(t, 51, 0, 0, before, &window), newProviderAttemptWindowTestOwnerForWindow(t, 52, 0, 0, before, &window)}}
 	sort.Slice(self.base.owners, func(i, j int) bool {
 		a, b := self.base.owners[i].fixture.hotkey.PublicKey(), self.base.owners[j].fixture.hotkey.PublicKey()
 		return bytes.Compare(a[:], b[:]) < 0
@@ -394,7 +422,7 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 			}
 		}
 	}
-	self.artifact, err = payoutartifact.Build(payoutartifact.BuildInput{DeploymentID: self.base.owners[0].fixture.operators[0].seal.ledger.identity.DeploymentID, GenesisHash: attemptHex32(domain.GenesisHash), PolicyHash: attemptHex32(domain.PolicyHash), ChainID: domain.ChainID, Netuid: domain.Netuid, Coordinator: common.Address(domain.Coordinator), SettlementVault: common.Address(domain.SettlementVault), Epoch: 42, NoID: 9, Start: payoutartifact.Boundary{Number: 1, Hash: start.Hash().Hex()}, End: payoutartifact.Boundary{Number: 101, Hash: end.Hash().Hex()}, OperatorSnapshotHash: "sha256:" + hex.EncodeToString(bytes.Repeat([]byte{1}, 32)), FleetSnapshotHash: "sha256:" + hex.EncodeToString(bytes.Repeat([]byte{2}, 32)), ReliabilityAMin: authority.Validators[0].Operators[0].Policy.Verify.ReliabilityAMin, Providers: providers, CreatedAt: time.Unix(1700001000, 0)})
+	self.artifact, err = payoutartifact.Build(payoutartifact.BuildInput{DeploymentID: self.base.owners[0].fixture.operators[0].seal.ledger.identity.DeploymentID, GenesisHash: attemptHex32(domain.GenesisHash), PolicyHash: attemptHex32(domain.PolicyHash), ChainID: domain.ChainID, Netuid: domain.Netuid, Coordinator: common.Address(domain.Coordinator), SettlementVault: common.Address(domain.SettlementVault), Epoch: window.Epoch, NoID: 9, Start: payoutartifact.Boundary{Number: window.StartBlock, Hash: start.Hash().Hex()}, End: payoutartifact.Boundary{Number: window.EndBlock, Hash: end.Hash().Hex()}, OperatorSnapshotHash: "sha256:" + hex.EncodeToString(bytes.Repeat([]byte{1}, 32)), FleetSnapshotHash: "sha256:" + hex.EncodeToString(bytes.Repeat([]byte{2}, 32)), ReliabilityAMin: authority.Validators[0].Operators[0].Policy.Verify.ReliabilityAMin, Providers: providers, CreatedAt: time.Unix(1700001000, 0)})
 	if err != nil {
 		t.Fatal(err)
 	}

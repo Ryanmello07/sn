@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/urfoundation/sn/protocol"
 )
 
@@ -20,6 +21,53 @@ import (
 func providerAttemptCompletedOriginalTest(t *testing.T) (*providerAttemptSourceTestFixture, []byte) {
 	t.Helper()
 	fixture := newProviderAttemptSourceTestFixtureWithCompleted(t, true, true)
+	window := protocol.ValidatorEvidenceWindow{Epoch: 42, StartBlock: 2, EndBlock: 102, FinalizedBlock: 102}
+	if fixture.artifact.Start.Number != window.StartBlock || fixture.artifact.End.Number != window.EndBlock || fixture.response.Authority.Window != window {
+		t.Fatal("completed original window has no positive prospective wallet boundary")
+	}
+	var start, end types.Header
+	if err := json.Unmarshal(fixture.response.Authority.StartHeader, &start); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(fixture.response.Authority.EndHeader, &end); err != nil {
+		t.Fatal(err)
+	}
+	if start.Number == nil || end.Number == nil || start.Number.Uint64() != window.StartBlock || end.Number.Uint64() != window.EndBlock || start.Hash().Hex() != fixture.artifact.Start.Hash || end.Hash().Hex() != fixture.artifact.End.Hash {
+		t.Fatal("prospective original headers differ from the signed artifact window")
+	}
+	for _, owner := range fixture.base.owners {
+		if owner.read.Window != window {
+			t.Fatal("dual original publication retained another window")
+		}
+		for _, operator := range owner.fixture.operators {
+			head, err := operator.seal.ledger.Head()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if head.LastSequence != 0 {
+				if err := operator.seal.ledger.Walk(t.Context(), 1, head.LastSequence, func(record AttemptRecord) error {
+					if record.Boundary != operator.seal.expected.Boundary || record.Boundary.EVMBlock != window.EndBlock-1 || record.Boundary.SettlementEpoch != window.Epoch {
+						return errors.New("actual original ledger contains a relabeled terminal boundary")
+					}
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
+	for _, lane := range fixture.response.Requests {
+		for _, cut := range lane.Windows {
+			if cut.Header.Window != window || cut.Header.Preparation.Birth.EVMBlock != window.StartBlock || cut.Header.Preparation.Birth.EVMBlockHash != start.Hash().Hex() {
+				t.Fatal("original request birth or signed cut differs from the prospective clock")
+			}
+			for _, record := range cut.Records {
+				if record.Boundary.EVMBlock != window.EndBlock-1 || record.Boundary.SettlementEpoch != window.Epoch {
+					t.Fatal("original pre-send request contains a relabeled terminal boundary")
+				}
+			}
+		}
+	}
 	raw, result, err := fixture.source.Read(t.Context(), fixture.artifact)
 	if err != nil || result == nil || !result.CutCensusComplete || !result.OwnedRequestsComplete {
 		t.Fatal("actual complete original source", err)
@@ -76,6 +124,20 @@ func providerAttemptCompletedOriginalTest(t *testing.T) (*providerAttemptSourceT
 // turning the independent failed or idle owners into successful providers.
 func TestProviderAttemptSourceActualCompletedFailedAndIdleOwners(t *testing.T) {
 	providerAttemptCompletedOriginalTest(t)
+}
+
+// The new positive fixture cannot rewrite a separately retained failed-only
+// component's original clock or turn its genuine missing completion into one.
+func TestProviderAttemptSourceFailedFixtureRetainsOriginalWindow(t *testing.T) {
+	fixture := newProviderAttemptSourceTestFixture(t, true)
+	window := protocol.ValidatorEvidenceWindow{Epoch: 42, StartBlock: 1, EndBlock: 101, FinalizedBlock: 101}
+	if fixture.artifact.Start.Number != 1 || fixture.artifact.End.Number != 101 || fixture.response.Authority.Window != window {
+		t.Fatal("completed fixture changed the failed-only original clock")
+	}
+	_, result, err := fixture.source.Read(t.Context(), fixture.artifact)
+	if err != nil || result == nil || result.CompleteTrails != 0 || result.FailedTrails != 1 || !result.CutCensusComplete || !result.OwnedRequestsComplete {
+		t.Fatal("failed-only original source changed", err)
+	}
 }
 
 // Sol supplies a distinct protected output directory. Exact failed-only export
