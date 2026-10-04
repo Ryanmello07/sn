@@ -43,8 +43,10 @@ type wholeWorkParticipantPool struct {
 // Only independently replayed outcomes may select a dispute amount policy.
 // Complete additionally requires the entire original earning-party set.
 type wholeWorkParticipantVerification struct {
-	Complete bool
-	Outcomes map[[16]byte]protocol.ProviderWorkOutcome
+	Complete           bool
+	Outcomes           map[[16]byte]protocol.ProviderWorkOutcome
+	FutureReservations map[[16]byte]protocol.ProviderWorkReservation
+	OpenThroughEnd     map[[16]byte]protocol.ProviderWorkOutcome
 }
 
 // Convert component failures without disguising cancellation as malformed data.
@@ -245,13 +247,43 @@ func (self *wholeWorkParticipantPool) streamParties(ctx context.Context, facts c
 	return true, nil
 }
 
+// The immutable reservation establishes actual creation time even when a late
+// SDK cut contains later work. Request and direction joins precede that use.
+func (self *wholeWorkParticipantPool) bindReservation(ctx context.Context, contract *wholeWorkContract, facts coreprotocol.OriginalContractCreationFacts, ownerNetworkKVs map[[16]byte][16]byte) (protocol.ProviderWorkReceipt, bool, error) {
+	hash, exists := self.reservationKVs[facts.ContractId]
+	if !exists || contract == nil {
+		return protocol.ProviderWorkReceipt{}, false, nil
+	}
+	original := self.originalKVs[hash]
+	reservation := original.Reservation
+	source, _ := protocol.ParseProviderWorkId(reservation.SourceId)
+	destination, _ := protocol.ParseProviderWorkId(reservation.DestinationId)
+	sourceNetwork, _ := protocol.ParseProviderWorkId(reservation.SourceNetworkId)
+	destinationNetwork, _ := protocol.ParseProviderWorkId(reservation.DestinationNetworkId)
+	if source != facts.SourceId || destination != facts.DestinationId || reservation.Capacity != facts.ReservedBytes || ownerNetworkKVs[source] != sourceNetwork || ownerNetworkKVs[destination] != destinationNetwork {
+		return protocol.ProviderWorkReceipt{}, false, errors.Join(ErrClosedWorkIntegrity, errors.New("original reservation differs from SDK admission"))
+	}
+	if reservation.RequestFrameHash == nil || reservation.UsageOriginIsSource == nil || !self.uniqueSourceAt(original) {
+		return original, false, nil
+	}
+	admission, err := coreprotocol.DecodeOriginalContractAdmission(ctx, contract.ends[source].OriginalCreation)
+	if err != nil {
+		return protocol.ProviderWorkReceipt{}, false, errors.Join(ErrClosedWorkIntegrity, err)
+	}
+	request, err := coreprotocol.DecodeOriginalContractRequest(ctx, admission.Request)
+	if err != nil || sha256.Sum256(request.RequestFrame) != *reservation.RequestFrameHash || facts.UsageOriginIsSource != *reservation.UsageOriginIsSource {
+		return protocol.ProviderWorkReceipt{}, false, errors.Join(ErrClosedWorkIntegrity, errors.New("SDK creation reinterprets its original received request or service direction"), err)
+	}
+	return original, true, ctx.Err()
+}
+
 // This is the only positive earning-party path: exact original requests,
 // fenced endpoint absence, original stream membership and original settlement.
 func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, authority WholeWorkAuthority, inventory *WholeWorkInventory, contracts map[[16]byte]*wholeWorkContract, creations map[[16]byte]coreprotocol.OriginalContractCreationFacts) (*wholeWorkParticipantVerification, error) {
 	if ctx == nil || artifact == nil || artifact.ClosedWork == nil || inventory == nil || inventory.Clock == nil {
 		return nil, ErrClosedWorkUnavailable
 	}
-	result := &wholeWorkParticipantVerification{Outcomes: map[[16]byte]protocol.ProviderWorkOutcome{}}
+	result := &wholeWorkParticipantVerification{Outcomes: map[[16]byte]protocol.ProviderWorkOutcome{}, FutureReservations: map[[16]byte]protocol.ProviderWorkReservation{}, OpenThroughEnd: map[[16]byte]protocol.ProviderWorkOutcome{}}
 	domainHash, err := authority.Domain.Digest()
 	if err != nil {
 		return nil, err
@@ -270,40 +302,66 @@ func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, author
 		}
 		ownerNetworkKVs[owner.ClientId] = owner.NetworkId
 	}
+	boundReservationKVs := map[[16]byte]protocol.ProviderWorkReceipt{}
+	for id, facts := range creations {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		original, bound, err := pool.bindReservation(ctx, contracts[id], facts, ownerNetworkKVs)
+		if err != nil {
+			return nil, err
+		}
+		if !bound {
+			continue
+		}
+		boundReservationKVs[id] = original
+		reservation := original.Reservation
+		future := !time.UnixMicro(reservation.CreatedAtUnixMicro).Before(inventory.Clock.EndTime)
+		if future {
+			result.FutureReservations[id] = *reservation
+		}
+		outcomeHash, exists := pool.outcomeKVs[id]
+		if !exists {
+			continue
+		}
+		outcomeOriginal := pool.originalKVs[outcomeHash]
+		outcome := outcomeOriginal.Outcome
+		if outcome.ReservationHash != pool.reservationKVs[id] || outcome.Capacity != facts.ReservedBytes {
+			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original settlement differs from its original reservation"))
+		}
+		if outcome.ClosedAtUnixMicro < reservation.CreatedAtUnixMicro {
+			// An original clock reversal cannot date either side of the cut.
+			delete(result.FutureReservations, id)
+			continue
+		}
+		if !future && pool.uniqueSourceAt(outcomeOriginal) && !time.UnixMicro(outcome.ClosedAtUnixMicro).Before(inventory.Clock.EndTime) {
+			// Timing evidence is separate from complete terminal amount proof:
+			// a boundary cut may correctly retain an earlier checkpoint.
+			result.OpenThroughEnd[id] = *outcome
+		}
+	}
 	complete := true
 	for _, row := range artifact.ClosedWork.Records {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		facts, created := creations[row.ContractId]
-		reservationHash, reserved := pool.reservationKVs[row.ContractId]
+		reservationOriginal, reserved := boundReservationKVs[row.ContractId]
+		reservationHash := pool.reservationKVs[row.ContractId]
 		outcomeHash, closed := pool.outcomeKVs[row.ContractId]
 		contract := contracts[row.ContractId]
 		if !created || !reserved || !closed || contract == nil {
 			complete = false
 			continue
 		}
-		reservationOriginal := pool.originalKVs[reservationHash]
 		outcomeOriginal := pool.originalKVs[outcomeHash]
 		reservation, outcome := reservationOriginal.Reservation, outcomeOriginal.Outcome
 		source, _ := protocol.ParseProviderWorkId(reservation.SourceId)
 		destination, _ := protocol.ParseProviderWorkId(reservation.DestinationId)
 		sourceNetwork, _ := protocol.ParseProviderWorkId(reservation.SourceNetworkId)
 		destinationNetwork, _ := protocol.ParseProviderWorkId(reservation.DestinationNetworkId)
-		if source != facts.SourceId || destination != facts.DestinationId || reservation.Capacity != facts.ReservedBytes || outcome.Capacity != facts.ReservedBytes || outcome.ReservationHash != reservationHash || ownerNetworkKVs[source] != sourceNetwork || ownerNetworkKVs[destination] != destinationNetwork {
+		if outcome.Capacity != facts.ReservedBytes || outcome.ReservationHash != reservationHash {
 			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original reservation or settlement differs from SDK admission"))
-		}
-		if reservation.RequestFrameHash == nil || reservation.UsageOriginIsSource == nil {
-			complete = false
-			continue
-		}
-		admission, err := coreprotocol.DecodeOriginalContractAdmission(ctx, contract.ends[source].OriginalCreation)
-		if err != nil {
-			return nil, errors.Join(ErrClosedWorkIntegrity, err)
-		}
-		request, err := coreprotocol.DecodeOriginalContractRequest(ctx, admission.Request)
-		if err != nil || sha256.Sum256(request.RequestFrame) != *reservation.RequestFrameHash || facts.UsageOriginIsSource != *reservation.UsageOriginIsSource {
-			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("SDK creation reinterprets its original received request or service direction"), err)
 		}
 		closedAt, err := time.Parse(time.RFC3339Nano, row.ClosedAt)
 		originalTime := time.UnixMicro(outcome.ClosedAtUnixMicro)
