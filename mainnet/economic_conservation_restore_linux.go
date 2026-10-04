@@ -74,6 +74,9 @@ func validateEconomicConservationRestoreHistory(ctx context.Context, policy econ
 	if state.Renewal != nil && state.Renewal.Original.Path != original.Path || state.FeeRevision != nil && state.FeeRevision.Original.Path != original.Path {
 		return errors.New("economic restore moved an original signed operational revision")
 	}
+	if state.NativeRenewal != nil && state.NativeRenewal.Original.Path != original.Path {
+		return errors.New("economic restore moved an original signed native adoption")
+	}
 	for _, window := range state.ClaimWindows {
 		if window.Original.Path != original.Path {
 			return errors.New("economic restore moved an original independently signed Claim window")
@@ -139,7 +142,11 @@ func reviewEconomicConservationRestore(ctx context.Context, request economicCons
 		if err != nil {
 			return empty, nil, err
 		}
-		if err := reviewEconomicNativeProducerRestore(ctx, request.Policy.Native.Observation, request.Original, state.Native, roots, declared); err != nil {
+		nativePolicy, err := state.nativeOperatingPolicy(request.Policy)
+		if err != nil {
+			return empty, nil, err
+		}
+		if err := reviewEconomicNativeProducerRestore(ctx, nativePolicy.Observation, request.Original, state.Native, roots, declared); err != nil {
 			return empty, nil, err
 		}
 	}

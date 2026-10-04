@@ -22,18 +22,19 @@ const economicConservationArchiveRequestSchema = "urnetwork-economic-conservatio
 const economicConservationArchivePlanSchema = "urnetwork-economic-conservation-archive-plan-v1"
 
 type economicConservationArchiveRequest struct {
-	ClaimWindows       []economicConservationClaimWindow `json:"claim_windows,omitempty"`
-	FeeRevision        *economicConservationFeeRevision  `json:"native_fee_revision,omitempty"`
-	RetireNativeFees   bool                              `json:"retire_native_fees,omitempty"`
-	Schema             string                            `json:"schema"`
-	Policy             economicConservationPolicy        `json:"original_policy"`
-	Original           monitorHistoryReference           `json:"original"`
-	ArchivePath        string                            `json:"archive_path"`
-	FormerWriterFence  planFileReference                 `json:"former_writer_fence"`
-	FutureSegments     uint64                            `json:"future_segments"`
-	FutureIndexEntries uint64                            `json:"future_index_entries"`
-	FutureIndexBytes   uint64                            `json:"future_index_bytes"`
-	Renewal            *economicConservationRenewal      `json:"resource_renewal,omitempty"`
+	NativeRenewal      *economicConservationNativeRenewal `json:"native_approval_adoption,omitempty"`
+	ClaimWindows       []economicConservationClaimWindow  `json:"claim_windows,omitempty"`
+	FeeRevision        *economicConservationFeeRevision   `json:"native_fee_revision,omitempty"`
+	RetireNativeFees   bool                               `json:"retire_native_fees,omitempty"`
+	Schema             string                             `json:"schema"`
+	Policy             economicConservationPolicy         `json:"original_policy"`
+	Original           monitorHistoryReference            `json:"original"`
+	ArchivePath        string                             `json:"archive_path"`
+	FormerWriterFence  planFileReference                  `json:"former_writer_fence"`
+	FutureSegments     uint64                             `json:"future_segments"`
+	FutureIndexEntries uint64                             `json:"future_index_entries"`
+	FutureIndexBytes   uint64                             `json:"future_index_bytes"`
+	Renewal            *economicConservationRenewal       `json:"resource_renewal,omitempty"`
 }
 
 type economicConservationArchivePlan struct {
@@ -103,6 +104,14 @@ func validateEconomicConservationArchiveRequest(ctx context.Context, request eco
 			return err
 		}
 	}
+	if request.NativeRenewal != nil {
+		if request.NativeRenewal.Original != request.Original {
+			return errors.New("economic native adoption names another original checkpoint")
+		}
+		if err := request.NativeRenewal.verify(request.Policy); err != nil {
+			return err
+		}
+	}
 	if len(request.ClaimWindows) > len(request.Policy.Claims) {
 		return errors.New("economic Claim adoption exceeds original role census")
 	}
@@ -148,6 +157,9 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 	if state.FeeRevision != nil && state.FeeRevision.Original.Path != request.Original.Path {
 		return plan, nil, errors.New("economic archive moved a retained fee revision")
 	}
+	if state.NativeRenewal != nil && state.NativeRenewal.Original.Path != request.Original.Path {
+		return plan, nil, errors.New("economic archive moved a retained native adoption")
+	}
 	if state.Archive != nil {
 		for _, reference := range state.Archive.Segments {
 			if monitorHistoryPathsAlias(reference.Path, request.ArchivePath) || monitorHistoryPathsAlias(reference.Path, request.Original.Path) {
@@ -176,6 +188,9 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 		return plan, nil, err
 	}
 	if err := applyEconomicConservationClaimWindows(request.Policy, compacted, request.ClaimWindows); err != nil {
+		return plan, nil, err
+	}
+	if err := applyEconomicConservationNativeRenewal(ctx, request.Policy, compacted, request.NativeRenewal); err != nil {
 		return plan, nil, err
 	}
 	if request.Renewal != nil && view.reviews[request.Renewal.ReviewSha256] {
@@ -211,6 +226,11 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 		// The next compaction retains a bounded policy/ordinal head alongside
 		// any later signed revision, even when no fee payload is retired.
 		feeSummaryBytes += 2048
+	}
+	if request.NativeRenewal != nil {
+		// The next compaction retains the original bounded approval list in
+		// its derived head, in addition to any future signed adoption frame.
+		feeSummaryBytes += uint64(len(request.NativeRenewal.To)) * (maximumMonitorHistoryPath + 128)
 	}
 	plan.RequiredHeadBytes = 2 * (uint64(len(next)) + request.FutureSegments*referenceBytes + feeSummaryBytes)
 	if plan.RequiredSegments > resources.ArchiveSegments || plan.RequiredIndexEntries > resources.IndexEntries || plan.RequiredIndexBytes > resources.IndexBytes || plan.RequiredHeadBytes > maxRpcReplyBytes {
@@ -363,11 +383,14 @@ func applyEconomicConservationArchive(ctx context.Context, plan economicConserva
 // No signer is loaded here. Operators supply an independently signed optional
 // resource revision in the request, then explicitly apply the exact plan.
 func runEconomicConservationArchive(ctx context.Context, args []string, stdout, stderr io.Writer, hooks monitorServiceHooks) int {
+	if len(args) != 0 && args[0] == "native-proposal" {
+		return runEconomicConservationNativeRenewal(ctx, args[1:], stdout, stderr, hooks)
+	}
 	if len(args) != 0 && (args[0] == "restore-request" || args[0] == "restore-cohort-plan") {
 		return runEconomicConservationRestore(ctx, args, stdout, stderr, hooks)
 	}
 	if len(args) == 0 || args[0] != "plan" && args[0] != "apply" {
-		fmt.Fprintln(stderr, "usage: economic-conservation-archive plan --request FILE --request-sha256 HASH | apply --plan FILE --plan-sha256 HASH")
+		fmt.Fprintln(stderr, "usage: economic-conservation-archive native-proposal|plan --request FILE --request-sha256 HASH | apply --plan FILE --plan-sha256 HASH")
 		return 2
 	}
 	mode := args[0]

@@ -47,7 +47,7 @@ func newNativeProducerRestoreFixture(t *testing.T) *nativeProducerRestoreFixture
 // A zero-completion source has a synced input but no replay or accounted job.
 // A reviewed source configures its independently signed renewal before the
 // first combined checkpoint; it does not rewrite a previously admitted policy.
-func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, renewal bool) *nativeProducerRestoreFixture {
+func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, renewal bool, beforeExport ...func(*nativeProducerRestoreFixture)) *nativeProducerRestoreFixture {
 	t.Helper()
 	p := nativeProducerPublicFixtureFrom(t, true)
 	f := &economicConservationRestoreFixture{readFiles: nativeProducerRestoreTestFiles}
@@ -219,6 +219,19 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 		t.Fatal(err)
 	}
 	result.proofs, result.blocks = p.proofs.Load(), p.blocks.Load()
+	// Successor controls may perform a real public adoption before the source
+	// snapshot. Refresh exact original bytes; restore still derives every owner.
+	for _, configure := range beforeExport {
+		configure(result)
+	}
+	if len(beforeExport) != 0 {
+		f.state = source.state(t)
+		raw, err := os.ReadFile(source.checkpoint)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.request.Original = monitorHistoryReference{Path: source.checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}
+	}
 	limits := durablevolume.InventoryLimits{MaxEntries: 8192, MaxBytes: 256 * 1024 * 1024, MaxDepth: 8, MaxOwnerAttributes: 128, MaxOwnerAttributeBytes: 128 * 4096}
 	for index, sourceRoot := range f.sources {
 		f.files = append(f.files, nativeProducerRestoreTestFiles(t, sourceRoot.root))

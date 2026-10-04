@@ -203,10 +203,16 @@ func loadEconomicConservation(owner *monitorCheckpointStore, policy economicCons
 	if result.FeeRevision != nil && result.FeeRevision.Original.Path != owner.path {
 		return nil, errors.New("economic fee revision moved the original checkpoint")
 	}
+	if result.NativeRenewal != nil && result.NativeRenewal.Original.Path != owner.path {
+		return nil, errors.New("economic native adoption moved the original checkpoint")
+	}
 	return &result, nil
 }
 
 func saveEconomicConservation(owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+	if err := state.requireNativeApprovalHistory(); err != nil {
+		return err
+	}
 	if (len(state.ClaimWindows) != 0 || state.Archive != nil && len(state.Archive.ClaimHeads) != 0) && state.archiveView == nil {
 		return errors.New("economic Claim publication requires admitted original history")
 	}
@@ -244,6 +250,9 @@ func economicConservationIssue(err error) string {
 // Each logical sample owns one deadline. Parallel native/vault/Claim attempts
 // share it, join before publication, and preserve prior domain cursors on error.
 func sampleEconomicConservation(ctx context.Context, policy economicConservationPolicy, prior *economicConservationState, native, vault *rpcClient, now time.Time, hooks monitorServiceHooks) (*economicConservationState, bool, bool, error) {
+	if err := prior.requireNativeApprovalHistory(); err != nil {
+		return nil, false, false, err
+	}
 	if (len(prior.ClaimWindows) != 0 || prior.Archive != nil && len(prior.Archive.ClaimHeads) != 0) && prior.archiveView == nil {
 		return nil, false, false, errors.New("economic Claim read requires admitted original history")
 	}

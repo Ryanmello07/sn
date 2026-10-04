@@ -181,6 +181,7 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	NativeRenewal        *economicConservationNativeRenewal       `json:"native_approval_adoption,omitempty"`
 	PrincipalExecutions  []economicConservationPrincipalExecution `json:"principal_execution_evidence,omitempty"`
 	OpeningPrincipals    *economicConservationOpeningPrincipal    `json:"opening_principal_evidence,omitempty"`
 	ClaimWindows         []economicConservationClaimWindow        `json:"claim_windows,omitempty"`
@@ -254,7 +255,7 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 	if self.Schema != economicConservationSchema || self.PolicyHash != policy.identityHash() || self.ContentHash != self.hash() || len(self.ClaimStates) != len(policy.Claims) || self.facts() > operating.MaximumFacts || len(self.NativeIssue) > 2048 || len(self.VaultIssue) > 2048 || len(self.JoinIssue) > 2048 {
 		return errors.New("economic conservation checkpoint changed original policy, evidence or capacity")
 	}
-	if err := errors.Join(self.Native.validate(policy.Native), self.Vault.validate(policy.Vault)); err != nil {
+	if err := errors.Join(self.Native.validate(operating.Native), self.Vault.validate(policy.Vault)); err != nil {
 		return err
 	}
 	for index, claim := range self.ClaimStates {

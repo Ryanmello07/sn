@@ -52,6 +52,7 @@ func (self economicConservationPolicy) identityHash() string {
 	if self.resourceBasis != nil {
 		self.MaximumFacts, self.ReadBudgetSeconds = self.resourceBasis.MaximumFacts, self.resourceBasis.ReadBudgetSeconds
 		self.Claims = self.resourceBasis.Claims
+		self.Native = self.resourceBasis.Native
 	}
 	return rootObjectHash(self)
 }
@@ -142,6 +143,10 @@ func (self *economicConservationState) operatingPolicy(policy economicConservati
 		policy.resourceBasis = &original
 	}
 	policy.MaximumFacts, policy.ReadBudgetSeconds = resources.ActiveFacts, resources.ReadBudgetSeconds
+	policy.Native, err = self.nativeOperatingPolicy(policy)
+	if err != nil {
+		return policy, err
+	}
 	heads, err := self.claimHeads(policy)
 	if err != nil {
 		return policy, err
