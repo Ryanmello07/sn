@@ -51,7 +51,11 @@ func loadMonitorChainCheckpoint(ctx context.Context, checkpoint *monitorCheckpoi
 		if operation.Err() != nil || !now().Before(deadline) {
 			break
 		}
-		wait := min(backoff, deadline.Sub(now()))
+		remaining := deadline.Sub(now())
+		if remaining <= 0 {
+			break
+		}
+		wait := min(backoff, remaining)
 		publishMonitorAdmission("chain", "pending", lastErr, wait, stdout, diagnostic, now)
 		var waitErr error
 		if hooks.rpcWait != nil {
