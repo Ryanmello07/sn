@@ -220,7 +220,13 @@
     "native-restore729c-positive-operational-root-adoption-20261004.json": "e9fb3e47965f2f714477c84032a51ed13ae760f9a602cdea6ed57f3bcf9d3fb6",
     "native-restore729c-controls-operational-root-review-20261004.json": "7c52fa2c2ab9d24472cd7bfedd8f314aad3fdbc2e0eb6db09730d25a90bd2715",
     "native-restore729c-normal-root-review-20261004.json": "6debdde0c07ef065b3437c45e017bfb06a9672cf5413bca2bb8a9fdf9b496a95",
-    "principal-activationec242-source-root-review-20261004.json": "85acd92c683ac3eade72e5ad371f3584d2a5b31edb0e3096f5f3659de4162863"
+    "principal-activationec242-source-root-review-20261004.json": "85acd92c683ac3eade72e5ad371f3584d2a5b31edb0e3096f5f3659de4162863",
+    "native-renewal1fe-source-root-review-20261004.json": "f212c7384aeab5a9e151f10c62d26e0d8d033697c9bb1e474a1ac3c447696569",
+    "principal-activationec242-stage-root-review-20261004.json": "6d90aed94ff8dac76c306d59dd7bea36ec3b4c26c60b2a5d017f875fe28e03e9",
+    "yuma-operational-cause-source-finding-20261004.json": "574f469e46eb074dc894de3bddaac7fedc269f13adfec279b59b64551d30e031",
+    "native-restore729c-terminal-root-review-20261004.json": "24ec3dd5ff560f47110fa31a579ae8586c77e2248fa9c9e52dcec92bf1cd6f4c",
+    "native-restore425-fixture-source-root-review-20261004.json": "2ebb0dc26487053b8a359c74602e10232a4da1353fd037c1fcb852280ae86719",
+    "principal-activationec242-rust-resource-root-review-20261004.json": "e79220ee0d18990fb6070dee8e031d469205d55c4653546fd654054cebc9cc1e"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -447,9 +453,9 @@
     },
     {
       "closed": false,
-      "evidence": "native-restore729c-normal-root-review-20261004.json",
+      "evidence": "native-restore729c-terminal-root-review-20261004.json",
       "requirement": "MG-09",
-      "status": "Core c618 read-only restore component qualified and published. Original a499 qualification failed six test compilation errors before any bodies. Test-only729 correction normal compile passes; all25 normal roots execute11PASS14FAIL0SKIP. Distinct ancestor-protection and prior-owner-custody setup failures are under repair; race/vet continue independently and controls require successful counterparts. Complete composed native restore, signed renewal adoption, full capacity and production restore rehearsal remain."
+      "status": "Core c618 read-only restore component qualified and published. Test-only729 correction compiles; both normal/race25 roots finish11PASS14FAIL0SKIP, vetPASS, all bodies joined. Source-reviewed425 corrects fresh ancestor protection and target preenrollment without changing production;14affected+2new roots/mode remain unqualified. Signed native renewal1fe source reviewed, corrected composed qualification, realistic capacity and production restore rehearsal remain."
     },
     {
       "closed": false,
