@@ -19,11 +19,13 @@ import (
 )
 
 const ClosedWorkReportsSchema = "urnetwork-original-close-report-census-v1"
+const ClosedWorkInventoryReportsSchema = "urnetwork-original-close-report-census-v2"
 const MaxClosedWorkReportsPerContract = 1024
 
 // The exact SQL envelope contains every stable report retained for this row.
 // The count cannot prove that legacy increments or entire contracts were absent.
 type ClosedWorkReports struct {
+	Window  *ClosedWorkWindow  `json:"window,omitempty"`
 	Schema  string             `json:"schema"`
 	Count   uint64             `json:"count"`
 	Reports []ClosedWorkReport `json:"reports"`
@@ -41,16 +43,21 @@ type ClosedWorkReport struct {
 	Original        []byte  `json:"original"`
 	KeyRegistration []byte  `json:"key_registration"`
 	KeyIssue        string  `json:"key_issue,omitempty"`
+	Inventory       []byte  `json:"inventory,omitempty"`
 }
 
 // These counters intentionally omit any whole-window or provider-authenticated
 // boolean. The original root signer must come from independently admitted state.
 type VerifiedClosedWorkReports struct {
-	ClosedWork        VerifiedClosedWork
-	Contracts         uint64
-	SignedReports     uint64
-	RegisteredReports uint64
-	AmountJoins       uint64
+	ClosedWork                VerifiedClosedWork
+	Contracts                 uint64
+	SignedReports             uint64
+	RegisteredReports         uint64
+	AmountJoins               uint64
+	CompleteReportInventories uint64
+	InventoryReports          uint64
+	Window                    *ClosedWorkWindow
+	VerifiedWindow            *VerifiedClosedWorkWindow
 }
 
 // Derive the identical versioned client-key namespace from the containing
@@ -112,7 +119,7 @@ func VerifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner
 		if err := json.Unmarshal(row.OriginalReports, &header); err != nil {
 			return nil, errors.Join(ErrClosedWorkIntegrity, err)
 		}
-		if header.Schema != ClosedWorkReportsSchema {
+		if header.Schema != ClosedWorkReportsSchema && header.Schema != ClosedWorkInventoryReportsSchema {
 			continue // Future optional evidence cannot change this component's authority.
 		}
 		var census ClosedWorkReports
@@ -125,12 +132,29 @@ func VerifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner
 		if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 			return nil, ErrClosedWorkIntegrity
 		}
-		if census.Schema != ClosedWorkReportsSchema || census.Reports == nil || census.Count != uint64(len(census.Reports)) {
+		if census.Reports == nil || census.Count != uint64(len(census.Reports)) {
 			continue // A different component or incomplete original is unknown here.
 		}
 		if len(census.Reports) > MaxClosedWorkReportsPerContract {
 			return nil, ErrClosedWorkCapacity
 		}
+		if census.Window != nil {
+			if result.Window != nil {
+				return nil, ErrClosedWorkIntegrity
+			}
+			window, err := VerifyClosedWorkWindow(ctx, artifact, census.Window, nil)
+			if err != nil && !errors.Is(err, ErrClosedWorkUnavailable) {
+				return nil, err
+			}
+			if window != nil {
+				result.Window, result.VerifiedWindow = census.Window, window
+			}
+		}
+		completeInventory, inventoryCount, err := verifyClosedReportInventory(ctx, census)
+		if err != nil {
+			return nil, err
+		}
+		result.InventoryReports += inventoryCount
 		var totals [2]uint64
 		var terminals [2]uint64
 		var clients [2][16]byte
@@ -219,6 +243,9 @@ func VerifyClosedWorkReports(ctx context.Context, artifact *Artifact, rootSigner
 			lower, upper := min(totals[0], totals[1]), max(totals[0], totals[1])
 			if snapshot.Expiry == nil && snapshot.Legacy == nil && lower+(upper-lower)/2 == uint64(*snapshot.ByteCount) {
 				result.AmountJoins++
+				if completeInventory {
+					result.CompleteReportInventories++
+				}
 			}
 		}
 	}

@@ -113,7 +113,7 @@ func TestBootstrapProviderRoleFilesReachActualSignedProviderReport(t *testing.T)
 		owner, stopOwner := context.WithTimeout(t.Context(), 10*time.Second)
 		ctx, cancel := context.WithCancel(owner)
 		oob := &bootstrapProviderReportOob{}
-		client := connect.NewClient(ctx, connect.NewId(), oob, settings)
+		client := connect.NewClient(ctx, connect.NewId(), oob, &settings)
 		cancel()
 		if err := client.CloseAndWait(owner); err != nil {
 			stopOwner()

@@ -6,13 +6,16 @@ package main
 import (
 	"context"
 	"errors"
+	"math"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfoundation/sn/payoutartifact"
 	"github.com/urfoundation/sn/stabi"
 	"github.com/urfoundation/sn/validator"
@@ -163,6 +166,7 @@ func readEconomicEntitlementCensus(ctx context.Context, policy economicConservat
 	if vaultAddress, ok := vaultValue.(common.Address); !ok || vaultAddress != common.HexToAddress(policy.Vault.Address) {
 		return nil, monitorEvmIntegrity("entitlement coordinator belongs to another vault")
 	}
+	windowClock := &payoutartifact.ClosedWorkWindowClock{}
 	boundary := func(method string) (payoutartifact.Boundary, error) {
 		value, err := economicEntitlementScalar(ctx, coordinatorReader, commitHeader.Hash().Hex(), method, epoch)
 		if err != nil {
@@ -176,7 +180,20 @@ func readEconomicEntitlementCensus(ctx context.Context, policy economicConservat
 		if err != nil {
 			return payoutartifact.Boundary{}, err
 		}
-		return payoutartifact.Boundary{Number: n.Uint64(), Hash: header.Hash().Hex()}, nil
+		observed := payoutartifact.Boundary{Number: n.Uint64(), Hash: header.Hash().Hex()}
+		if header.Time > math.MaxInt64 {
+			return payoutartifact.Boundary{}, monitorEvmIntegrity("entitlement epoch clock exceeds original timestamp domain")
+		}
+		raw, err := rlp.EncodeToBytes(header)
+		if err != nil {
+			return payoutartifact.Boundary{}, err
+		}
+		if method == "epochStartBlock" {
+			windowClock.Start, windowClock.StartTime, windowClock.StartHeader = observed, time.Unix(int64(header.Time), 0).UTC(), raw
+		} else {
+			windowClock.End, windowClock.EndTime, windowClock.EndHeader = observed, time.Unix(int64(header.Time), 0).UTC(), raw
+		}
+		return observed, nil
 	}
 	start, err := boundary("epochStartBlock")
 	if err != nil {
@@ -226,7 +243,10 @@ func readEconomicEntitlementCensus(ctx context.Context, policy economicConservat
 	}
 	result.LeafObligationsAlpha = allocated.String()
 	result.FloorResidueAlpha = new(big.Int).Sub(total, allocated).String()
-	result.ClosedWork, err = readEconomicClosedWork(ctx, artifact, committer)
+	result.ClosedWork, err = readEconomicClosedWork(ctx, artifact, committer, windowClock)
+	if result.ClosedWork != nil && result.ClosedWork.WindowHash != "" {
+		result.WindowClock = windowClock
+	}
 	if err != nil {
 		return nil, economicEntitlementEvidenceError(err)
 	}

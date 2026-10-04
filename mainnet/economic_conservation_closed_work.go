@@ -15,6 +15,13 @@ import (
 // Comparable counters can be retained in the exact original archive reference.
 // A zero value is omitted from legacy references, preserving their hash grammar.
 type economicConservationClosedWork struct {
+	WindowHash                string `json:"window_hash,omitempty"`
+	WindowClockMatched        bool   `json:"window_clock_matched,omitempty"`
+	CanceledContracts         uint64 `json:"canceled_contracts,omitempty"`
+	OpenContracts             uint64 `json:"open_contracts,omitempty"`
+	UnassignedCanceled        uint64 `json:"unassigned_canceled,omitempty"`
+	CompleteReportInventories uint64 `json:"complete_report_inventories,omitempty"`
+	InventoryReports          uint64 `json:"original_inventory_reports,omitempty"`
 	Hash                      string `json:"census_hash"`
 	Contracts                 uint64 `json:"contracts"`
 	Providers                 uint64 `json:"providers"`
@@ -29,7 +36,7 @@ type economicConservationClosedWork struct {
 
 // Missing, partial or foreign components are unknown without erasing an
 // otherwise valid original entitlement. Actual contradictions remain typed.
-func readEconomicClosedWork(ctx context.Context, artifact *payoutartifact.Artifact, rootSigner common.Address) (*economicConservationClosedWork, error) {
+func readEconomicClosedWork(ctx context.Context, artifact *payoutartifact.Artifact, rootSigner common.Address, clocks ...*payoutartifact.ClosedWorkWindowClock) (*economicConservationClosedWork, error) {
 	reports, err := payoutartifact.VerifyClosedWorkReports(ctx, artifact, rootSigner)
 	if errors.Is(err, payoutartifact.ErrClosedWorkUnavailable) {
 		return nil, nil
@@ -41,13 +48,26 @@ func readEconomicClosedWork(ctx context.Context, artifact *payoutartifact.Artifa
 		return nil, err
 	}
 	value := reports.ClosedWork
-	return &economicConservationClosedWork{Hash: value.CensusHash, Contracts: value.Contracts, Providers: value.Providers, UsageBytes: value.UsageBytes, OrdinarySnapshots: value.OrdinarySnapshots, ExpiredSnapshots: value.ExpiredSnapshots, UncreditedLegacySnapshots: value.UncreditedLegacySnapshots, SignedCloseReports: reports.SignedReports, RegisteredCloseReports: reports.RegisteredReports, CloseAmountJoins: reports.AmountJoins}, nil
+	result := &economicConservationClosedWork{Hash: value.CensusHash, Contracts: value.Contracts, Providers: value.Providers, UsageBytes: value.UsageBytes, OrdinarySnapshots: value.OrdinarySnapshots, ExpiredSnapshots: value.ExpiredSnapshots, UncreditedLegacySnapshots: value.UncreditedLegacySnapshots, SignedCloseReports: reports.SignedReports, RegisteredCloseReports: reports.RegisteredReports, CloseAmountJoins: reports.AmountJoins, CompleteReportInventories: reports.CompleteReportInventories, InventoryReports: reports.InventoryReports}
+	if reports.Window != nil {
+		var clock *payoutartifact.ClosedWorkWindowClock
+		if len(clocks) > 0 {
+			clock = clocks[0]
+		}
+		window, err := payoutartifact.VerifyClosedWorkWindow(ctx, artifact, reports.Window, clock)
+		if err != nil {
+			return nil, err
+		}
+		result.WindowHash, result.WindowClockMatched = window.Hash, window.EpochClockMatched
+		result.CanceledContracts, result.OpenContracts, result.UnassignedCanceled = window.Canceled, window.Open, window.UnassignedCanceled
+	}
+	return result, nil
 }
 
 // Only recomputed original rows can populate retained counters. A caller's
 // self-sealed counters, or dropping known evidence, cannot manufacture truth.
 func (self *economicConservationEntitlementCensus) validateClosedWork(ctx context.Context) error {
-	known, err := readEconomicClosedWork(ctx, &self.Artifact, common.HexToAddress(self.RootSigner))
+	known, err := readEconomicClosedWork(ctx, &self.Artifact, common.HexToAddress(self.RootSigner), self.WindowClock)
 	if err != nil {
 		return err
 	}
@@ -82,10 +102,18 @@ func (self *economicConservationEntitlementSummary) addClosedWork(value economic
 		return
 	}
 	self.ClosedWorkRoots++
+	if value.WindowHash != "" {
+		self.ClosedWorkWindows++
+	}
+	if value.WindowClockMatched {
+		self.ClockMatchedWindows++
+	}
 	self.ClosedWorkContracts += value.Contracts
 	self.SignedCloseReports += value.SignedCloseReports
 	self.RegisteredCloseReports += value.RegisteredCloseReports
 	self.CloseAmountJoins += value.CloseAmountJoins
+	self.CompleteReportInventories += value.CompleteReportInventories
+	self.InventoryReports += value.InventoryReports
 	amount := new(big.Int)
 	if self.ClosedWorkUsageBytes != "" {
 		amount.SetString(self.ClosedWorkUsageBytes, 10)
@@ -97,10 +125,14 @@ func (self *economicConservationEntitlementSummary) addClosedWork(value economic
 // summary. Full provider authentication remains a separate evidence decision.
 func (self *economicConservationEntitlementSummary) mergeClosedWork(cold *economicConservationEntitlementSummary) {
 	self.ClosedWorkRoots += cold.ClosedWorkRoots
+	self.ClosedWorkWindows += cold.ClosedWorkWindows
+	self.ClockMatchedWindows += cold.ClockMatchedWindows
 	self.ClosedWorkContracts += cold.ClosedWorkContracts
 	self.SignedCloseReports += cold.SignedCloseReports
 	self.RegisteredCloseReports += cold.RegisteredCloseReports
 	self.CloseAmountJoins += cold.CloseAmountJoins
+	self.CompleteReportInventories += cold.CompleteReportInventories
+	self.InventoryReports += cold.InventoryReports
 	if cold.ClosedWorkUsageBytes == "" {
 		return
 	}

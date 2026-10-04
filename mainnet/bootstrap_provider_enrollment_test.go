@@ -43,7 +43,7 @@ func TestBootstrapProviderRoleFilesReachActualEnrollmentAndRotation(t *testing.T
 			if settings.ClientKeyRegistrationRequired {
 				t.Fatal("optional provider namespace introduced a processed-registration startup gate")
 			}
-			provider := connect.NewClient(ctx, connect.NewId(), connect.NewNoContractClientOob(), settings)
+			provider := connect.NewClient(ctx, connect.NewId(), connect.NewNoContractClientOob(), &settings)
 			receiverSettings := connect.DefaultClientSettings()
 			receiverSettings.ControlPingTimeout = 0
 			receiverSettings.EncryptionSettings.Mode = connect.EncryptionModeOff

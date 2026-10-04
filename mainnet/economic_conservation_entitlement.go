@@ -38,26 +38,27 @@ type economicConservationEntitlementPolicy struct {
 // and the root-authenticated receipt inclusion remain explicitly different
 // authority from independent consensus finality or measured provider usage.
 type economicConservationEntitlementCensus struct {
-	Schema                   string                          `json:"schema"`
-	Entitlement              string                          `json:"entitlement"`
-	Finalization             monitorEconomicEvmEvent         `json:"original_finalization"`
-	Commitment               monitorEconomicEvmEvent         `json:"original_commitment"`
-	CoordinatorFinalization  monitorEconomicEvmEvent         `json:"coordinator_finalization"`
-	CoordinatorCodeHash      string                          `json:"coordinator_code_hash"`
-	CommitmentReceiptsRoot   string                          `json:"commitment_receipts_root"`
-	FinalizationReceiptsRoot string                          `json:"finalization_receipts_root"`
-	RootSigner               string                          `json:"original_root_signer"`
-	OperatorColdkey          string                          `json:"original_operator_coldkey"`
-	OperatorEffectiveEpoch   uint64                          `json:"operator_effective_epoch"`
-	PolicyHash               string                          `json:"original_epoch_policy_hash"`
-	Start                    payoutartifact.Boundary         `json:"original_epoch_start"`
-	End                      payoutartifact.Boundary         `json:"original_epoch_end"`
-	FundingHash              string                          `json:"original_funding_hash"`
-	Artifact                 payoutartifact.Artifact         `json:"original_artifact"`
-	ClosedWork               *economicConservationClosedWork `json:"original_closed_work,omitempty"`
-	LeafObligationsAlpha     string                          `json:"leaf_obligations_alpha"`
-	FloorResidueAlpha        string                          `json:"floor_residue_alpha"`
-	ContentHash              string                          `json:"content_hash"`
+	WindowClock              *payoutartifact.ClosedWorkWindowClock `json:"original_window_clock,omitempty"`
+	Schema                   string                                `json:"schema"`
+	Entitlement              string                                `json:"entitlement"`
+	Finalization             monitorEconomicEvmEvent               `json:"original_finalization"`
+	Commitment               monitorEconomicEvmEvent               `json:"original_commitment"`
+	CoordinatorFinalization  monitorEconomicEvmEvent               `json:"coordinator_finalization"`
+	CoordinatorCodeHash      string                                `json:"coordinator_code_hash"`
+	CommitmentReceiptsRoot   string                                `json:"commitment_receipts_root"`
+	FinalizationReceiptsRoot string                                `json:"finalization_receipts_root"`
+	RootSigner               string                                `json:"original_root_signer"`
+	OperatorColdkey          string                                `json:"original_operator_coldkey"`
+	OperatorEffectiveEpoch   uint64                                `json:"operator_effective_epoch"`
+	PolicyHash               string                                `json:"original_epoch_policy_hash"`
+	Start                    payoutartifact.Boundary               `json:"original_epoch_start"`
+	End                      payoutartifact.Boundary               `json:"original_epoch_end"`
+	FundingHash              string                                `json:"original_funding_hash"`
+	Artifact                 payoutartifact.Artifact               `json:"original_artifact"`
+	ClosedWork               *economicConservationClosedWork       `json:"original_closed_work,omitempty"`
+	LeafObligationsAlpha     string                                `json:"leaf_obligations_alpha"`
+	FloorResidueAlpha        string                                `json:"floor_residue_alpha"`
+	ContentHash              string                                `json:"content_hash"`
 }
 
 // A complete artifact can become cold while its unclaimed obligation remains
@@ -107,6 +108,10 @@ func (self *economicConservationEntitlement) retireCensus(reference monitorHisto
 }
 
 type economicConservationEntitlementSummary struct {
+	ClosedWorkWindows                 uint64  `json:"closed_work_windows,omitempty"`
+	ClockMatchedWindows               uint64  `json:"clock_matched_windows,omitempty"`
+	CompleteReportInventories         uint64  `json:"complete_report_inventories,omitempty"`
+	InventoryReports                  uint64  `json:"original_inventory_reports,omitempty"`
 	SignedCloseReports                uint64  `json:"signed_close_reports,omitempty"`
 	RegisteredCloseReports            uint64  `json:"registered_close_reports,omitempty"`
 	CloseAmountJoins                  uint64  `json:"close_amount_joins,omitempty"`
