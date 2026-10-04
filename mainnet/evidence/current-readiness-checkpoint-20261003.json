@@ -311,7 +311,8 @@
     "funding-8ad5-matched-engines-root-readback-20261004.json": "c9e04178e7efd797215c517b54bb95d7e84c7693d35875f3d963341dbeeef1bd",
     "provider-optional-domain-nonregular-source-finding-20261004.json": "5e51189c453e3874be477e8e620ed01efb60a28db0512f85d4fbd18694637a1f",
     "funding-dual-profile-cd2-root-source-review-20261004.json": "2b2e0d027bd153a13beb661115d0eea156d7417cede4f1ae7ca7834b0e265039",
-    "original-close-pinned-protobuf-root-readback-20261004.json": "061e0a1d32ee64aa71d56290ef6c8cf5246581abb5492ac2c9aad999578fa9b6"
+    "original-close-pinned-protobuf-root-readback-20261004.json": "061e0a1d32ee64aa71d56290ef6c8cf5246581abb5492ac2c9aad999578fa9b6",
+    "server-participant-current-publication-root-readback-20261004.json": "374024c9cd6de3e8ed883053dd0ad99d13ff88430ca3968e5f9bac044af9b615"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
