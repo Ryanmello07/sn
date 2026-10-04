@@ -126,7 +126,8 @@
     "native-continuous-producer-source-review-20261004.json": "b8c8b902b3fe60be3e279989ab58b70f21ce740e5a8bbabadc18e87b004c5a72",
     "0e5-four-normal-operative-controls-independent-review-20261004.json": "a9a266e9aa3e381af064afbfec32472f27c777ae4f9f6f2760088980a2f52ad9",
     "0e5-mainnet-race-independent-readback-20261004.json": "a90af504723444fe7451790341f2d7ffcab726c91efd6abb77070204773671c7",
-    "foreground-successor-source-review-20261004.json": "8e554f51dcf1799185b7bbbbb9ec2d961159fd76e0bd7fb051e016aedc452be2"
+    "foreground-successor-source-review-20261004.json": "8e554f51dcf1799185b7bbbbb9ec2d961159fd76e0bd7fb051e016aedc452be2",
+    "rpc-retry-cause-traversal-finding-20261004.json": "a78089add177bacabb8d1fe3fde1080f7d0dc4179c316a04cc8a20af94bba8f2"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
