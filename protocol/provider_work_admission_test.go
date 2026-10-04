@@ -112,3 +112,40 @@ func TestProviderWorkReplayPreservesCancellationAndFiniteAdmission(t *testing.T)
 		t.Fatalf("stopped owner replayed: %v", err)
 	}
 }
+
+func TestProviderWorkPresenceOnlyExtenderRetirementRestoresProvenAbsence(t *testing.T) {
+	authority, key := providerWorkTestAuthority()
+	baseline := providerWorkTestEvent(t, authority, key, "baseline", nil, nil)
+	admit := providerWorkTestEvent(t, authority, key, "admit", &baseline, nil)
+	admit.Session.ExtenderId = "00000000-0000-0000-0000-000000000006"
+	admit, err := SignProviderWorkReceipt(t.Context(), admit, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retire := providerWorkTestEvent(t, authority, key, "retire", &admit, nil)
+	states, err := ReplayProviderWorkEndpoint(t.Context(), authority, []ProviderWorkReceipt{baseline, admit, retire})
+	if err != nil || len(states) != 3 || states[1].ActiveExtenders != 1 || states[2].ActiveExtenders != 0 || states[2].ActiveConnections != 0 {
+		t.Fatalf("presence-only original left a permanent gap after retirement: %+v, %v", states, err)
+	}
+}
+
+func TestProviderWorkAuthorityThroughBoundaryIsExclusive(t *testing.T) {
+	authority, key := providerWorkTestAuthority()
+	authority.ThroughUnixMicro = authority.FromUnixMicro + 1
+	original := providerWorkTestEvent(t, authority, key, "baseline", nil, nil)
+	if err := VerifyProviderWorkReceiptAuthority(t.Context(), original, authority); err != nil {
+		t.Fatalf("inclusive start refused: %v", err)
+	}
+	original.Session.ObservedAtUnixMicro = authority.ThroughUnixMicro
+	original, err := SignProviderWorkReceipt(t.Context(), original, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyProviderWorkReceiptAuthority(t.Context(), original, authority); !errors.Is(err, ErrProviderWorkUnavailable) {
+		t.Fatalf("exclusive through admitted: %v", err)
+	}
+	authority.ThroughUnixMicro = authority.FromUnixMicro
+	if err := authority.Validate(); !errors.Is(err, ErrProviderWorkIntegrity) {
+		t.Fatalf("empty source validity interval admitted: %v", err)
+	}
+}

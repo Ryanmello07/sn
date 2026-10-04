@@ -72,9 +72,9 @@ func ReplayProviderWorkEndpoint(ctx context.Context, authority ProviderWorkSourc
 				return nil, ErrProviderWorkIntegrity
 			}
 			usedKVs[event.ConnectionId] = true
-			activeKVs[event.ConnectionId] = event.Extender != nil
+			activeKVs[event.ConnectionId] = event.Extender != nil || event.ExtenderId != ""
 			state.ActiveConnections++
-			if event.Extender != nil {
+			if event.Extender != nil || event.ExtenderId != "" {
 				state.ActiveExtenders++
 			}
 		case "retire":

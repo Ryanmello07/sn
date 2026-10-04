@@ -48,8 +48,8 @@ type ProviderWorkExtender struct {
 	DirectoryOriginal []byte   `json:"directory_original,omitempty"`
 }
 
-// Baseline is an original empty genesis under the live admission fence. Later
-// retirement names its original connection and never recreates directory facts.
+// Baseline is an original empty genesis under the live admission fence. An
+// ExtenderId proves presence only; retirement removes that original connection.
 type ProviderWorkSessionEvent struct {
 	ClientId            string                `json:"client_id"`
 	NetworkId           string                `json:"network_id"`
@@ -58,6 +58,7 @@ type ProviderWorkSessionEvent struct {
 	PreviousHash        [32]byte              `json:"previous_hash"`
 	Kind                string                `json:"kind"`
 	ObservedAtUnixMicro int64                 `json:"observed_at_unix_micro"`
+	ExtenderId          string                `json:"extender_id,omitempty"`
 	Extender            *ProviderWorkExtender `json:"extender,omitempty"`
 }
 
@@ -153,7 +154,7 @@ func ParseProviderWorkId(value string) ([16]byte, error) {
 // Authority is always supplied by the independently admitted roster, never by
 // the receipt whose original facts the caller is trying to authenticate.
 func (self ProviderWorkSourceAuthority) Validate() error {
-	if self.DomainHash == ([32]byte{}) || self.PublicKey == ([32]byte{}) || self.FromUnixMicro <= 0 || self.ThroughUnixMicro < self.FromUnixMicro || self.MaxEndpointEvents == 0 || self.MaxEndpointEvents > MaximumProviderWorkEndpointEvents || self.MaxCohortMembers > MaximumProviderWorkCohortMembers || len(self.DirectoryPublicKeys) > 8 {
+	if self.DomainHash == ([32]byte{}) || self.PublicKey == ([32]byte{}) || self.FromUnixMicro <= 0 || self.ThroughUnixMicro <= self.FromUnixMicro || self.MaxEndpointEvents == 0 || self.MaxEndpointEvents > MaximumProviderWorkEndpointEvents || self.MaxCohortMembers > MaximumProviderWorkCohortMembers || len(self.DirectoryPublicKeys) > 8 {
 		return ErrProviderWorkIntegrity
 	}
 	for _, id := range []string{self.SourceId, self.Generation} {
@@ -207,18 +208,24 @@ func (self ProviderWorkReceipt) signingBytes(ctx context.Context) ([]byte, error
 		}
 		switch event.Kind {
 		case "baseline":
-			if event.Sequence != 1 || event.PreviousHash != ([32]byte{}) || event.ConnectionId != "" || event.Extender != nil {
+			if event.Sequence != 1 || event.PreviousHash != ([32]byte{}) || event.ConnectionId != "" || event.Extender != nil || event.ExtenderId != "" {
 				return nil, ErrProviderWorkIntegrity
 			}
 		case "admit", "retire":
 			ids = append(ids, event.ConnectionId)
-			if event.Sequence < 2 || event.PreviousHash == ([32]byte{}) || event.Kind == "retire" && event.Extender != nil {
+			if event.Sequence < 2 || event.PreviousHash == ([32]byte{}) || event.Kind == "retire" && (event.Extender != nil || event.ExtenderId != "") {
 				return nil, ErrProviderWorkIntegrity
 			}
 		default:
 			return nil, ErrProviderWorkIntegrity
 		}
+		if event.ExtenderId != "" {
+			ids = append(ids, event.ExtenderId)
+		}
 		if extender := event.Extender; extender != nil {
+			if event.ExtenderId != "" && event.ExtenderId != extender.ExtenderId {
+				return nil, ErrProviderWorkIntegrity
+			}
 			ids = append(ids, extender.ExtenderId, extender.ClientId, extender.NetworkId)
 			if len(extender.DirectoryOriginal) > MaximumProviderWorkDirectoryBytes {
 				return nil, ErrProviderWorkCapacity
@@ -352,7 +359,7 @@ func VerifyProviderWorkReceiptAuthority(ctx context.Context, value ProviderWorkR
 	if value.DomainHash != expected.DomainHash || value.SourceId != expected.SourceId || value.Generation != expected.Generation || value.PublicKey != expected.PublicKey {
 		return ErrProviderWorkIntegrity
 	}
-	if at := value.ObservedUnixMicro(); at < expected.FromUnixMicro || at > expected.ThroughUnixMicro {
+	if at := value.ObservedUnixMicro(); at < expected.FromUnixMicro || at >= expected.ThroughUnixMicro {
 		return ErrProviderWorkUnavailable
 	}
 	if value.Session != nil && value.Session.Sequence > uint64(expected.MaxEndpointEvents) || value.Stream != nil && len(value.Stream.Intermediaries) > int(expected.MaxCohortMembers) {
