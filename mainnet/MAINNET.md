@@ -1,5 +1,8 @@
 # Mainnet launch and operations plan
 
+The [corrected exporter independent readback](evidence/proof-drained-continuation77-six-root-independent-readback-20261004.json) verifies a fresh Rust test image, six exact passing roots and all22 private hashed exports. This supplies the previously missing five-job proof-drained corpus without weakening the original post-state verifier. Advance the nineteen dependent Go roots using retained exact images; three causal controls and complete joined-source qualification remain separate. The original failed exporter and running long recovery remain retained.
+
+
 The [corrected proof-drained exporter source review](evidence/proof-drained-continuation77-scoped-root-source-review-20261004.json) verifies the sole test-file change at `77a4ab38`. First-block dispatch uses the independently authenticated absent epoch marker, so a drained parent can execute accrual; later jobs retain that marker and do not repeat emissions. All five expected child roots remain independently constructed, and actual capture plus reduced replay are required before export. Qualify six Rust roots and three causal controls using a fresh libtest image while retaining unchanged qualified engines and Go images. Keep the original failure, successful ordinary roots and live long recovery; dependent Go results remain pending until the corrected corpus exists.
 
 
