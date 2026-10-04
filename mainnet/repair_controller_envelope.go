@@ -213,6 +213,14 @@ func repairControllerHostStep(host *repairValidatorHost, now func() time.Time) r
 		if err := ctx.Err(); err != nil {
 			return "cancelled", false, err
 		}
+		if attempted {
+			if _, err := os.Lstat(envelope.plan.StatePath); err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					err = errors.Join(durablevolume.ErrIdentity, err)
+				}
+				return "original-journal-unavailable", false, err
+			}
+		}
 		if !attempted {
 			_, statErr := os.Lstat(envelope.plan.StatePath)
 			create := errors.Is(statErr, os.ErrNotExist)
