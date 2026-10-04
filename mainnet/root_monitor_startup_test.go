@@ -312,7 +312,10 @@ func TestRootMonitorStartupPublicInvalidPolicyDominatesEarlierRead(t *testing.T)
 func TestRootMonitorStartupPublicDefaultBudgetIsSharedAcrossReads(t *testing.T) {
 	f := newRootMonitorStartupFixture(t, "retained")
 	server := rootFixtureServer(t, f.rpc)
-	stamp, policyReads, waits, failing := f.checkpoint.stamp, 0, 0, false
+	// The actual diagnostic exporter reads the same clock concurrently.
+	var elapsed atomic.Int64
+	now := func() time.Time { return f.checkpoint.stamp.Add(time.Duration(elapsed.Load())) }
+	policyReads, waits, failing := 0, 0, false
 	host := &compositionObservationHost{Host: f.checkpoint.storage.Host, observe: func(*os.File) error {
 		if failing {
 			return syscall.EIO
@@ -330,18 +333,18 @@ func TestRootMonitorStartupPublicDefaultBudgetIsSharedAcrossReads(t *testing.T) 
 	hooks := monitorServiceHooks{afterCheckpointOpen: func(_ context.Context, _ string, file *os.File) { lock = file; failing = true }, rpcWait: func(_ context.Context, _ string, delay time.Duration) error {
 		waits++
 		if waits == 1 {
-			stamp = stamp.Add(200 * time.Second)
+			elapsed.Add(int64(200 * time.Second))
 		} else {
 			if err := monitorChainStartupLockError(f.checkpoint.path, lock); err != nil {
 				return err
 			}
-			stamp = stamp.Add(delay)
+			elapsed.Add(int64(delay))
 		}
 		return nil
 	}}
-	code := runMainWithMonitorHooks(ctx, f.arguments(server.URL), io.Discard, io.Discard, func() time.Time { return stamp }, hooks)
-	if code != 1 || stamp.Sub(f.checkpoint.stamp) != 300*time.Second || policyReads != 2 || waits < 2 || f.rpc.count("chain_getFinalizedHead") != 0 {
-		t.Fatal("root startup reset or lost its original default window", code, stamp.Sub(f.checkpoint.stamp), policyReads, waits)
+	code := runMainWithMonitorHooks(ctx, f.arguments(server.URL), io.Discard, io.Discard, now, hooks)
+	if code != 1 || time.Duration(elapsed.Load()) != 300*time.Second || policyReads != 2 || waits < 2 || f.rpc.count("chain_getFinalizedHead") != 0 {
+		t.Fatal("root startup reset or lost its original default window", code, time.Duration(elapsed.Load()), policyReads, waits)
 	}
 	if _, err := lock.Stat(); !errors.Is(err, os.ErrClosed) {
 		t.Fatal("exhausted startup retained its process owner", err)
