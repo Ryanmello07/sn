@@ -100,6 +100,7 @@ func VerifyProviderAttemptRequestPrefix(ctx context.Context, checkpoint Provider
 	if err := verifyProviderAttemptClosedPrefix(checkpoint.Closed, head); err != nil {
 		return nil, err
 	}
+	closedReplay := newProviderRequestClosedReplay(checkpoint.Closed)
 	var last ProviderAttemptRequestRecord
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
@@ -128,6 +129,9 @@ func VerifyProviderAttemptRequestPrefix(ctx context.Context, checkpoint Provider
 		if err := verifyProviderAttemptClosedPrefix(checkpoint.Closed, head); err != nil {
 			return nil, err
 		}
+		if err := closedReplay.record(record, raw); err != nil {
+			return nil, err
+		}
 		last = record
 	}
 	if err := scanner.Err(); err != nil {
@@ -135,6 +139,9 @@ func VerifyProviderAttemptRequestPrefix(ctx context.Context, checkpoint Provider
 	}
 	if prefix.N != 0 || head != checkpoint.Committed {
 		return nil, errors.Join(durablevolume.ErrIdentity, errors.New("provider request original prefix is incomplete or changed"))
+	}
+	if err := closedReplay.finish(); err != nil {
+		return nil, err
 	}
 	tail, err := io.ReadAll(io.LimitReader(journal, int64(expected.Limits.MaxRecordBytes)+1))
 	if err != nil {
@@ -178,6 +185,9 @@ func VerifyProviderAttemptRequestPrefix(ctx context.Context, checkpoint Provider
 	}
 	if !providerAttemptRequestAtOrAfter(record.Boundary, expected.Birth) {
 		return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, errors.New("provider pending request predates original birth"))
+	}
+	if err := verifyProviderRequestAfterClose(checkpoint.Closed, record); err != nil {
+		return nil, err
 	}
 	if checkpoint.Pending != nil && (checkpoint.Pending.Bytes != uint64(len(pending)) || checkpoint.Pending.Hash != sha256.Sum256(pending)) {
 		return nil, errors.Join(durablevolume.ErrIdentity, errors.New("provider request original pending commitment differs"))

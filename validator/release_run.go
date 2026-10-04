@@ -1043,6 +1043,7 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		trailReady = runtimeV2.preparation.ready
 	}
 	return runReleaseOperatorWorkers(ctx, cancel, cfg, runtimes, releaseRuntimeOperations{
+		providerRequests: runtimeV2.runProviderRequestPublications,
 		refresh: func(ctx context.Context) error {
 			if production {
 				return steerer.runProductionPreparationAndRefresh(ctx)

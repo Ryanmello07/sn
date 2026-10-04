@@ -202,6 +202,9 @@ func (self *ProviderAttemptRequestJournal) openFileAndRecover(ctx context.Contex
 	if err := VerifyProviderAttemptRequest(ctx, record, self.identity, self.checkpoint.Committed, self.limits); err != nil {
 		return err
 	}
+	if err := verifyProviderRequestAfterClose(self.checkpoint.Closed, record); err != nil {
+		return err
+	}
 	if self.checkpoint.Pending == nil {
 		self.checkpoint.Pending = &ProviderAttemptRequestPending{Bytes: uint64(len(pending)), Hash: sha256.Sum256(pending)}
 		if err := self.saveCheckpoint(false); err != nil {
@@ -391,6 +394,7 @@ func (self *ProviderAttemptRequestJournal) walk(ctx context.Context, visit func(
 	}
 	scanner := bufio.NewScanner(io.NewSectionReader(self.file, 0, int64(self.checkpoint.Committed.Bytes)))
 	scanner.Buffer(make([]byte, 1024), int(self.limits.MaxRecordBytes))
+	closedReplay := newProviderRequestClosedReplay(self.checkpoint.Closed)
 	var head ProviderAttemptRequestHead
 	if err := verifyProviderAttemptClosedPrefix(self.checkpoint.Closed, head); err != nil {
 		return err
@@ -422,6 +426,9 @@ func (self *ProviderAttemptRequestJournal) walk(ctx context.Context, visit func(
 		if !providerAttemptRequestAtOrAfter(record.Boundary, self.checkpoint.Birth) {
 			return errors.Join(protocol.ErrProviderAttemptsIntegrity, errors.New("provider original request predates original birth"))
 		}
+		if err := closedReplay.record(record, raw); err != nil {
+			return err
+		}
 		if visit != nil {
 			if err := visit(record); err != nil {
 				return err
@@ -434,7 +441,7 @@ func (self *ProviderAttemptRequestJournal) walk(ctx context.Context, visit func(
 	if head != self.checkpoint.Committed {
 		return errors.Join(durablevolume.ErrIdentity, errors.New("provider original request prefix differs from retained head"))
 	}
-	return errors.Join(self.check(), ctx.Err())
+	return errors.Join(closedReplay.finish(), self.check(), ctx.Err())
 }
 
 // Borrow each original for the callback; it receives owned decoded byte slices.

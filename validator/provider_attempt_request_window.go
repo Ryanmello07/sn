@@ -3,12 +3,14 @@
 package validator
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"io"
 	"slices"
 	"sync"
 
@@ -73,6 +75,11 @@ func (self *ProviderAttemptRequestJournal) CloseRequests(ctx context.Context, cu
 	}
 	if hash != cutHash || self.active[cut.Header.Window.Epoch] != 0 {
 		return protocol.ErrProviderAttemptsIntegrity
+	}
+	payload := *cut
+	payload.Closures = nil
+	if err := VerifyProviderAttemptRequestWindow(ctx, payload, self.preparation, cut.Header.Begin, cut.Header.PreviousCutHash, cut.Header.Window, self.limits.MaxJournalBytes+8192); err != nil {
+		return err
 	}
 	genesis, err := canonicalAttemptHex32("provider close genesis", self.identity.Ledger.GenesisHash, false)
 	if err != nil {
@@ -233,11 +240,11 @@ func (self *ProviderAttemptRequestJournal) SealWindow(ctx context.Context, windo
 	}
 	result = &ProviderAttemptRequestWindow{Header: header, Records: []ProviderAttemptRequestRecord{}}
 	digest := sha256.New()
-	head := ProviderAttemptRequestHead{}
+	head := header.Begin
 	if len(header.Signature) == 0 {
 		header.End = header.Begin
 	}
-	if err := self.walk(ctx, func(record ProviderAttemptRequestRecord) error {
+	if err := self.walkWindowWithLock(ctx, header, func(record ProviderAttemptRequestRecord) error {
 		raw, err := json.Marshal(record)
 		if err != nil {
 			return err
@@ -342,4 +349,90 @@ func VerifyProviderAttemptRequestWindow(ctx context.Context, cut ProviderAttempt
 		return protocol.ErrProviderAttemptsCapacity
 	}
 	return ctx.Err()
+}
+
+// Open already verified the whole original prefix. Later closure reads only
+// its new signed interval while retaining the same inode/metadata custody.
+// No process-global cache or skipped cold verification is introduced.
+func (self *ProviderAttemptRequestJournal) walkWindowWithLock(ctx context.Context, header ProviderAttemptRequestClosedHead, visit func(ProviderAttemptRequestRecord) error) error {
+	if err := self.check(); err != nil {
+		return err
+	}
+	begin, end := header.Begin, self.checkpoint.Committed
+	if len(header.Signature) != 0 {
+		end = header.End
+	}
+	if begin.Bytes > end.Bytes || end.Bytes > self.checkpoint.Committed.Bytes || begin.Sequence > end.Sequence {
+		return protocol.ErrProviderAttemptsIntegrity
+	}
+	scanner := bufio.NewScanner(io.NewSectionReader(self.file, int64(begin.Bytes), int64(end.Bytes-begin.Bytes)))
+	scanner.Buffer(make([]byte, 1024), int(self.limits.MaxRecordBytes))
+	head := begin
+	stopped := false
+	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if self.step != nil {
+			if err := self.step("provider-request-window-record"); err != nil {
+				return err
+			}
+		}
+		raw := scanner.Bytes()
+		var record ProviderAttemptRequestRecord
+		if err := attemptStoreDecode(raw, &record); err != nil {
+			return err
+		}
+		if err := VerifyProviderAttemptRequest(ctx, record, self.identity, head, self.limits); err != nil {
+			return err
+		}
+		canonical, err := json.Marshal(record)
+		if err != nil || !bytes.Equal(raw, canonical) {
+			return errors.Join(protocol.ErrProviderAttemptsIntegrity, err)
+		}
+		if len(header.Signature) == 0 && record.Boundary.SettlementEpoch > header.Window.Epoch {
+			stopped = true
+			break
+		}
+		hash, err := record.Hash()
+		if err != nil {
+			return err
+		}
+		head = ProviderAttemptRequestHead{Sequence: record.Sequence, Hash: hash, Bytes: head.Bytes + uint64(len(raw)) + 1, LastBoundary: record.Boundary}
+		if err := visit(record); err != nil {
+			return err
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	if !stopped && head != end {
+		return protocol.ErrProviderAttemptsIntegrity
+	}
+	return errors.Join(self.check(), ctx.Err())
+}
+
+// The optional retained close is copied under its original physical owner.
+// This lets an unattended publisher resume the prior output before advancing.
+func (self *ProviderAttemptRequestJournal) ClosedWindow(ctx context.Context) (result *ProviderAttemptRequestClosedHead, resultErr error) {
+	self.stateLock.Lock()
+	defer self.stateLock.Unlock()
+	if err := self.directory.enter(ctx); err != nil {
+		return nil, err
+	}
+	defer func() {
+		resultErr = errors.Join(resultErr, self.directory.leave())
+		if resultErr != nil {
+			result = nil
+		}
+	}()
+	if err := self.ready(ctx); err != nil {
+		return nil, err
+	}
+	if self.checkpoint.Closed == nil {
+		return nil, nil
+	}
+	copy := *self.checkpoint.Closed
+	copy.Signature = bytes.Clone(copy.Signature)
+	return &copy, nil
 }

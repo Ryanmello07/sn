@@ -35,13 +35,13 @@ type ProviderAttemptReceiptBody struct {
 // Bind new metadata to the selected immutable deployment/policy. A missing
 // scope is explicitly unusable as subnet earning authority.
 type ProviderAttemptReceiptScope struct {
-	Profile       string   `json:"profile"`
-	GenesisHash   [32]byte `json:"genesis_hash"`
-	DeploymentId  string   `json:"deployment_id"`
-	DeploymentKey string   `json:"deployment_key"`
-	PolicyHash    [32]byte `json:"policy_hash"`
-	Netuid        uint64   `json:"netuid"`
-	NoId          uint64   `json:"no_id"`
+	Profile       string   `json:"profile" yaml:"profile"`
+	GenesisHash   [32]byte `json:"genesis_hash" yaml:"genesis_hash"`
+	DeploymentId  string   `json:"deployment_id" yaml:"deployment_id"`
+	DeploymentKey string   `json:"deployment_key" yaml:"deployment_key"`
+	PolicyHash    [32]byte `json:"policy_hash" yaml:"policy_hash"`
+	Netuid        uint64   `json:"netuid" yaml:"netuid"`
+	NoId          uint64   `json:"no_id" yaml:"no_id"`
 }
 
 // Decode bounded retained bytes without promoting their source to authority.

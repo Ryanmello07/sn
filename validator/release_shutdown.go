@@ -21,10 +21,11 @@ type releaseSteererRunner interface {
 // Call-local dependencies retain real production construction at RunRelease.
 // Test functions cannot change the shared close/wait/error-selection algorithm.
 type releaseRuntimeOperations struct {
-	refresh    func(context.Context) error
-	newSteerer func([]*ReleaseMeasurementContext) (releaseSteererRunner, error)
-	running    func()
-	trailReady <-chan struct{}
+	providerRequests func(context.Context) error
+	refresh          func(context.Context) error
+	newSteerer       func([]*ReleaseMeasurementContext) (releaseSteererRunner, error)
+	running          func()
+	trailReady       <-chan struct{}
 }
 
 // Every non-nil cause must be an explicitly allowed lifecycle result. In
@@ -117,7 +118,7 @@ func closeReleaseAttemptStates(states map[uint64]*releaseAttemptState) error {
 // Every process-owned worker joins before the same operator teardown callbacks;
 // the public RunRelease returns this operation's result directly.
 func runReleaseOperatorWorkers(ctx context.Context, cancel context.CancelFunc, cfg *ReleaseConfig, runtimes []*releaseOperatorRuntime, operations releaseRuntimeOperations) (returnErr error) {
-	runtimeErrors := make(chan error, 2*len(runtimes)+3)
+	runtimeErrors := make(chan error, 2*len(runtimes)+4)
 	var workers sync.WaitGroup
 	defer func() {
 		cancel()
@@ -132,6 +133,13 @@ func runReleaseOperatorWorkers(ctx context.Context, cancel context.CancelFunc, c
 			returnErr = errors.Join(returnErr, releaseStageError(fmt.Sprintf("validator no_id %d shutdown", cfg.Operators[index].NoID), runtime.close()))
 		}
 	}()
+	if operations.providerRequests != nil {
+		workers.Go(func() {
+			if err := releaseRuntimeError(ctx, operations.providerRequests(ctx)); err != nil {
+				runtimeErrors <- err
+			}
+		})
+	}
 	workers.Go(func() {
 		if err := releaseRuntimeError(ctx, operations.refresh(ctx)); err != nil {
 			runtimeErrors <- err
