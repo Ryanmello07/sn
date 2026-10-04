@@ -671,6 +671,9 @@ func TestRepairOperatorContinuedCensusPreservesEveryOriginalAttempt(t *testing.T
 // operator envelope, retaining both intents before the real adapter's effect.
 func TestRepairOperatorPublicControllerOwnsDurablePendingAndCompletion(t *testing.T) {
 	f := newRepairOperatorFixture(t)
+	resource := filepath.Join(f.envelope.original.Plan.env("WARP_VAULT_HOME"), "main", "1.0.0", "provider_work_session.json")
+	repairValidatorTestWrite(t, resource, repairOperatorSessionTestSource(t, f.base.now, "valid"), 0600)
+	repairOperatorSessionTestSign(t, f)
 	f.base.host.operator = &repairOperatorTransports{reader: f.reader, procRoot: f.envelope.procRoot}
 	raw, err := os.ReadFile(f.approvalPath)
 	if err != nil {

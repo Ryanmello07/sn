@@ -14,6 +14,7 @@ import (
 
 	"github.com/urnetwork/server"
 	"github.com/urnetwork/server/controller"
+	"github.com/urnetwork/server/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -282,6 +283,24 @@ func inspectRepairOperatorBlob(raw []byte, plan repairOperatorHostPlan, routes m
 	return errors.Join(errRpcIntegrity, errors.New("operator actual local blob root is absent from original quota custody"))
 }
 
+// An absent optional live-session signer remains absent. If configured, the
+// taskworker must be able to consume its original bytes under the production
+// parser. The complete tree pin retains its independent key and authority;
+// neither this read nor taskworker readiness admits it to an earning roster.
+func inspectRepairOperatorSessionSource(ctx context.Context, host *repairValidatorHost, plan repairOperatorHostPlan) error {
+	raw, err := readRepairOperatorResource(ctx, host, plan, plan.env("WARP_VAULT_HOME"), "provider_work_session.json")
+	if errors.Is(err, server.ErrResourceNotFound) {
+		return ctx.Err()
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := model.InspectProviderWorkSessionSourceBytes(raw); err != nil {
+		return errors.Join(errRpcIntegrity, errors.New("operator original optional session source is invalid"), err)
+	}
+	return ctx.Err()
+}
+
 // This is the source-adapter boundary used before any claim or process effect.
 // Existing Server resolution and ST configuration validation remain operative.
 func (self *repairOperatorCustody) source(ctx context.Context) error {
@@ -295,6 +314,9 @@ func (self *repairOperatorCustody) source(ctx context.Context) error {
 		return err
 	}
 	if _, err := inspectRepairOperatorSt(raw, p); err != nil {
+		return err
+	}
+	if err := inspectRepairOperatorSessionSource(ctx, self.host, p); err != nil {
 		return err
 	}
 	for _, binding := range p.Source.Databases {
