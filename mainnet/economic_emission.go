@@ -63,6 +63,17 @@ func (self economicEmissionPolicy) validate() error {
 		}
 		seen[payer] = true
 	}
+	if self.Execution != nil && self.Execution.Principal != nil {
+		principal := self.Execution.Principal
+		if principal.Parent.Number > self.From.Number || principal.Parent.Number == self.From.Number && principal.Parent.Hash != self.From.Hash {
+			return errors.New("native principal authority replaced its original opening parent")
+		}
+		for _, query := range principal.Queries {
+			if query.Netuid != self.Netuid {
+				return errors.New("native principal authority borrowed another subnet")
+			}
+		}
+	}
 	return self.Execution.validate()
 }
 

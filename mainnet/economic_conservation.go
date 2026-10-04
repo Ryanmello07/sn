@@ -52,6 +52,9 @@ func (self economicConservationPolicy) validate() error {
 	if err := self.Continuation.validate(self); err != nil {
 		return err
 	}
+	if err := self.validatePrincipalAuthority(); err != nil {
+		return err
+	}
 	if err := self.validateFeeAuthority(); err != nil {
 		return err
 	}
@@ -178,6 +181,7 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	OpeningPrincipals    *economicConservationOpeningPrincipal    `json:"opening_principal_evidence,omitempty"`
 	FeeRevision          *economicConservationFeeRevision         `json:"native_fee_revision,omitempty"`
 	NativeFeeObligations []economicConservationFeeObligation      `json:"native_fee_obligations,omitempty"`
 	NativeFeeIssue       string                                   `json:"native_fee_issue,omitempty"`
@@ -230,7 +234,11 @@ func (self economicConservationState) hash() string {
 }
 
 func (self economicConservationState) facts() uint64 {
-	return uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
+	principalFacts := uint64(0)
+	if self.OpeningPrincipals != nil {
+		principalFacts = uint64(len(self.OpeningPrincipals.Projection.Observations)) + 1
+	}
+	return principalFacts + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
 }
 
 func (self economicConservationState) validate(policy economicConservationPolicy) error {
@@ -258,6 +266,9 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 		return errors.New("economic conservation archive adoption is not configured")
 	}
 	if err := self.Archive.validate(policy, &self); err != nil {
+		return err
+	}
+	if err := self.validateOpeningPrincipal(policy); err != nil {
 		return err
 	}
 	if _, err := self.feeSummary(policy); err != nil {
@@ -359,6 +370,9 @@ func (self *economicConservationState) appendNative(policy economicConservationP
 		outcome := block.ExecutionOutcome
 		if outcome == nil {
 			return errors.New("economic native source did not retain original execution")
+		}
+		if err := self.appendOpeningPrincipal(policy, *outcome); err != nil {
+			return err
 		}
 		projection := outcome.RecipientEffects
 		if err := projection.validate(*outcome); err != nil {

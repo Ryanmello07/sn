@@ -25,6 +25,7 @@ const nativeExecutionPolicySchema = "urnetwork-native-miner-execution-policy-v1"
 const nativeExecutionAdmissionLimit = 1024 * 1024
 
 type nativeExecutionPolicy struct {
+	Principal         *nativePrincipalPolicy         `json:"opening_principal_authority,omitempty"`
 	Schema            string                         `json:"schema"`
 	ApprovalPublicKey string                         `json:"approval_ed25519_public_key"`
 	ReviewSha256      string                         `json:"runtime_semantics_review_sha256"`
@@ -41,7 +42,7 @@ func (self *nativeExecutionPolicy) validate() error {
 	if self.Schema != nativeExecutionPolicySchema || !rootCanonicalHash(self.ApprovalPublicKey) || !planSha256(self.ReviewSha256) || !planSha256(self.ProfileSha256) || !bootstrapRootAbsolutePath(self.Engine.Path) || !planSha256(self.Engine.Sha256) || !bootstrapRootAbsolutePath(self.Directory) {
 		return errors.New("native execution requires original independent runtime/layout/engine authority")
 	}
-	return self.Producer.validate()
+	return errors.Join(self.Producer.validate(), self.Principal.validate())
 }
 
 // An admitted recipient is a registration generation, never merely an event UID.
@@ -54,6 +55,7 @@ type nativeExecutionRecipient struct {
 }
 
 type nativeExecutionAdmission struct {
+	Principal         *nativePrincipalPolicy     `json:"opening_principal_authority,omitempty"`
 	Schema            string                     `json:"schema"`
 	Network           planNetwork                `json:"network"`
 	Netuid            uint16                     `json:"netuid"`
@@ -88,7 +90,7 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 	if err := expected.validate(); err != nil {
 		return err
 	}
-	if self.Schema != nativeExecutionAdmissionSchema || self.Network != policy.Network || self.Netuid != policy.Netuid || self.Registration != *policy.SubnetRegistrationBlock || self.Generation != *policy.SubnetGeneration || self.Child != block.Boundary || self.Parent.Number+1 != self.Child.Number || self.Parent.Hash != block.Header.ParentHash || self.Runtime != runtime || self.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || self.ReviewSha256 != expected.ReviewSha256 || self.ProfileSha256 != expected.ProfileSha256 || self.EngineSha256 != expected.Engine.Sha256 || self.FinalityAuthority != "independently-reviewed-finalized-boundary" || !bootstrapRootAbsolutePath(self.Job.Path) || !planSha256(self.Job.Sha256) || len(self.Providers) > int(policy.MaximumUids) {
+	if !reflect.DeepEqual(self.Principal, expected.Principal) || self.Schema != nativeExecutionAdmissionSchema || self.Network != policy.Network || self.Netuid != policy.Netuid || self.Registration != *policy.SubnetRegistrationBlock || self.Generation != *policy.SubnetGeneration || self.Child != block.Boundary || self.Parent.Number+1 != self.Child.Number || self.Parent.Hash != block.Header.ParentHash || self.Runtime != runtime || self.Runtime.RuntimeSourceCommit != frontierMappingSourceCommit || self.ReviewSha256 != expected.ReviewSha256 || self.ProfileSha256 != expected.ProfileSha256 || self.EngineSha256 != expected.Engine.Sha256 || self.FinalityAuthority != "independently-reviewed-finalized-boundary" || !bootstrapRootAbsolutePath(self.Job.Path) || !planSha256(self.Job.Sha256) || len(self.Providers) > int(policy.MaximumUids) {
 		return errors.New("native execution approval differs from original runtime, boundary or economic identity")
 	}
 	seen := map[string]bool{}
@@ -111,6 +113,7 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // FixedPointTolerance covers the observed final normalization and u64 casts;
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
+	OpeningPrincipals      *nativePrincipalProjection       `json:"opening_principals,omitempty"`
 	RecipientEffects       *nativeExecutionEffectProjection `json:"recipient_effects,omitempty"`
 	Boundary               economicEmissionBoundary         `json:"boundary"`
 	ProducerAuthorityHash  string                           `json:"producer_authority_hash,omitempty"`
@@ -143,6 +146,7 @@ type nativeExecutionDrain struct {
 func (self nativeExecutionOutcome) hash() string {
 	self.ContentHash = ""
 	self.RecipientEffects = nil
+	self.OpeningPrincipals = nil
 	return rootObjectHash(self)
 }
 
@@ -527,7 +531,7 @@ func observeNativeExecution(ctx context.Context, client *rpcClient, policy econo
 	if err != nil {
 		return nil, err
 	}
-	if job.ObservationProfile == nil || monitorReadDigest(profileRaw) != admission.ProfileSha256 || job.RuntimeCodeSha256 != historicalReplayDigest(sha256.Sum256(code)) || len(job.ExtrinsicsHex) != block.BodyCount {
+	if !reflect.DeepEqual(job.PrincipalQueries, policy.Execution.Principal.queriesAt(admission.Parent)) || job.ObservationProfile == nil || monitorReadDigest(profileRaw) != admission.ProfileSha256 || job.RuntimeCodeSha256 != historicalReplayDigest(sha256.Sum256(code)) || len(job.ExtrinsicsHex) != block.BodyCount {
 		return nil, errors.New("native replay input differs before process admission")
 	}
 	report, err := runHistoricalReplay(ctx, historicalReplayRequest{Engine: policy.Execution.Engine, Job: admission.Job, Budget: client.retryWindow}, historicalReplayHooks{})
@@ -592,6 +596,10 @@ func validateNativeExecutionReplay(policy economicEmissionPolicy, admission nati
 		drains[index] = nativeExecutionDrain{Key: key.Hex(), Fallback: append([]byte(nil), entries[name].Fallback...)}
 	}
 	result, err := deriveNativeExecution(policy, admission, block, job, *report, drains)
+	if err != nil {
+		return nil, errors.Join(errRpcIntegrity, err)
+	}
+	result.OpeningPrincipals, err = deriveNativePrincipal(policy, admission, job, report, *result)
 	if err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
 	}

@@ -31,6 +31,8 @@ pub mod fee_events;
 mod hosts;
 #[path = "historical_observer.rs"]
 pub mod observer;
+#[path = "historical_principal.rs"]
+pub mod principal;
 #[path = "historical_pure_hosts.rs"]
 mod pure_hosts;
 #[path = "historical_backend.rs"]
@@ -98,6 +100,8 @@ pub struct HistoricalJob {
     pub proof_nodes_hex: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observation_profile: Option<observer::ObservationProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_queries: Option<Vec<principal::PrincipalQuery>>,
 }
 
 /// A complete state-root reproduction is deliberately separate from economic
@@ -128,6 +132,8 @@ pub struct HistoricalReport {
     pub production_selection: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hook_observations: Option<observer::ObservationReport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opening_principals: Option<Vec<principal::PrincipalObservation>>,
 }
 
 /// Bound before allocation and reject alternate hexadecimal spellings.
@@ -210,6 +216,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
     }
     let job: HistoricalJob = serde_json::from_slice(raw)
         .map_err(|e| ProbeError::new(format!("historical job JSON: {e}")))?;
+    principal::validate(&job.principal_queries)?;
     let (maximum_job_bytes, maximum_nodes, maximum_proof_bytes) =
         proof_limits(&job.observation_profile);
     if raw.len() > maximum_job_bytes
@@ -327,7 +334,11 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
             })
             .build();
     let mut extensions = Extensions::default();
-    extensions.register(hosts::HistoricalBudget(hosts::Budget { work, depth: 0 }));
+    extensions.register(hosts::HistoricalBudget(hosts::Budget {
+        work,
+        depth: 0,
+        read_only: false,
+    }));
     let mut version_overlay = OverlayedChanges::<Blake2Hasher>::default();
     let version_raw = StateMachine::new(
         &backend,
@@ -354,6 +365,14 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
             "historical executing state version or version side effect differs",
         ));
     }
+    let opening_principals = principal::observe(
+        &job.principal_queries,
+        &backend,
+        &executor,
+        &mut extensions,
+        &runtime,
+        parent.hash(),
+    )?;
     // Decode metadata from the same original code with storage/offchain hosts
     // absent. A witness cannot supply a substituted layout for its events.
     let event_layout = job
@@ -470,6 +489,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         native_fee_withdrawal_refund_observed: false,
         production_selection: false,
         hook_observations,
+        opening_principals,
     })
     .map_err(|e| ProbeError::new(format!("historical report JSON: {e}")))
 }

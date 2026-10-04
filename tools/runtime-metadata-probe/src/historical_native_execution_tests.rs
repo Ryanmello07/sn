@@ -41,6 +41,13 @@ fn fixture() -> HistoricalJob {
 }
 
 fn fixture_with_continuation(continuous: bool) -> (HistoricalJob, sp_core::storage::Storage) {
+    fixture_with_principal(continuous, None)
+}
+
+fn fixture_with_principal(
+    continuous: bool,
+    principal: Option<Option<u64>>,
+) -> (HistoricalJob, sp_core::storage::Storage) {
     let drains = [
         key(b"SubtensorModule", b"PendingServerEmission", true),
         key(b"SubtensorModule", b"PendingValidatorEmission", true),
@@ -140,6 +147,32 @@ fn fixture_with_continuation(continuous: bool) -> (HistoricalJob, sp_core::stora
             span(1400, events.len()), span(1900, 1), span(1000, drains[0].len()), body
         );
     }
+    let principal_key = b"synthetic-opening-stake";
+    if principal.is_some() {
+        let mut result = vec![1];
+        result.extend_from_slice(&[0x11; 32]);
+        result.extend_from_slice(&[0x33; 32]);
+        result.extend_from_slice(&[100, 0, 0, 0, 0, 0, 1]);
+        declarations.push_str(&segment(2000, principal_key));
+        declarations.push_str(&segment(6000, &result));
+        declarations.push_str(&segment(6200, &[0]));
+        declarations.push_str(&format!(r#"
+            (func (export "StakeInfoRuntimeApi_get_stake_info_for_hotkey_coldkey_netuid") (param i32 i32) (result i64)
+              (local $value i32)
+              (local.set $value (i32.wrap_i64 (call $get (i64.const {key}))))
+              (if (i32.eqz (i32.load8_u (local.get $value))) (then (return (i64.const {absent}))))
+              (if (i32.ne (i32.load8_u offset=1 (local.get $value)) (i32.const 32)) (then unreachable))
+              (i32.store8 (i32.const 6066) (i32.shl (i32.load8_u offset=2 (local.get $value)) (i32.const 2)))
+              (i64.const {present}))"#,
+              key=span(2000,principal_key.len()),absent=span(6200,1),present=span(6000,result.len())));
+        if principal.flatten().is_some() {
+            body.push_str(&format!(r#"
+              (local.set $n (i32.wrap_i64 (call $get (i64.const {key}))))
+              (i64.store (i32.const 6100) (i64.add (i64.load offset=2 (local.get $n)) (i64.load (i32.const 4384))))
+              (call $set (i64.const {key}) (i64.const {updated}))"#,
+              key=span(2000,principal_key.len()),updated=span(6100,8)));
+        }
+    }
     let code = wasm(&declarations, &body);
     let mut initial = parent_storage(&code);
     for (index, drain) in drains.iter().enumerate() {
@@ -149,6 +182,9 @@ fn fixture_with_continuation(continuous: bool) -> (HistoricalJob, sp_core::stora
     }
     initial.top.insert(phase, vec![2]);
     initial.top.insert(events.clone(), vec![0]);
+    if let Some(stock) = principal.flatten() {
+        initial.top.insert(principal_key.to_vec(), words(&[stock]));
+    }
     let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
         &code,
         initial.clone(),
@@ -170,6 +206,11 @@ fn fixture_with_continuation(continuous: bool) -> (HistoricalJob, sp_core::stora
     expected.top.insert(provider.to_vec(), words(&[9, 3, 6]));
     expected.top.insert(owner.to_vec(), words(&[89]));
     expected.top.insert(events, [vec![4], event].concat());
+    if let Some(stock) = principal.flatten() {
+        expected
+            .top
+            .insert(principal_key.to_vec(), words(&[stock + 6]));
+    }
     let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
         &code,
         expected.clone(),
@@ -271,6 +312,13 @@ fn fixture_with_continuation(continuous: bool) -> (HistoricalJob, sp_core::stora
                 .into_iter()
                 .collect(),
             observation_profile: Some(profile),
+            principal_queries: principal.map(|_| {
+                vec![principal::PrincipalQuery {
+                    hotkey: [0x11; 32],
+                    coldkey: [0x33; 32],
+                    netuid: 25,
+                }]
+            }),
         },
         expected,
     )
@@ -410,5 +458,72 @@ fn historical_native_execution_exports_actual_original_program_for_go_consumer()
         file.write_all(&serde_json::to_vec(&job).unwrap())
             .expect("complete original fixture output");
         file.sync_all().expect("sync original fixture output");
+    }
+}
+
+// A separate export leaves all old fixture bytes and selectors unchanged. The
+// public Go producer captures these real parent paths and runs two owned ELFs.
+#[test]
+fn historical_native_principal_exports_original_parent_jobs() {
+    let mut jobs = Vec::new();
+    for (name, stock) in [("present", Some(14)), ("zero", Some(0)), ("absent", None)] {
+        let (job, expected) = fixture_with_principal(false, Some(stock));
+        let captured =
+            super::capture_tests::collect(&job).expect("actual original native principal capture");
+        let exported: HistoricalJob = serde_json::from_str(&captured.job_json).unwrap();
+        let replayed = run(&exported).expect("actual original native principal replay");
+        for report in [&captured.replay, &replayed] {
+            assert!(report.post_state_reproduced && !report.runtime_admitted);
+            let observation = &report.opening_principals.as_ref().unwrap()[0];
+            assert_eq!(
+                observation.opening_stake_alpha,
+                stock.map(|value| value.to_string())
+            );
+            assert_eq!(observation.registered, stock.map(|_| true));
+            assert_eq!(
+                report
+                    .hook_observations
+                    .as_ref()
+                    .unwrap()
+                    .observations
+                    .len(),
+                7
+            );
+        }
+        assert_eq!(
+            expected.top.get(b"synthetic-opening-stake".as_slice()),
+            stock.map(|value| words(&[value + 6])).as_ref()
+        );
+        jobs.push((name, exported));
+    }
+    let mut missing = fixture();
+    missing.principal_queries = Some(vec![principal::PrincipalQuery {
+        hotkey: [0x11; 32],
+        coldkey: [0x33; 32],
+        netuid: 25,
+    }]);
+    let error = super::capture_tests::collect(&missing)
+        .err()
+        .expect("missing principal API was accepted");
+    assert!(error.to_string().contains("principal"), "{error}");
+    jobs.push(("missing-api", missing));
+    if let Some(directory) = std::env::var_os("URNETWORK_NATIVE_PRINCIPAL_FIXTURE_OUT") {
+        let directory = Path::new(&directory);
+        assert!(directory.is_absolute() && directory.is_dir());
+        for (name, job) in jobs {
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .mode(0o600)
+                .open(directory.join(format!("principal-{name}.json")))
+                .expect("exclusive principal export");
+            file.write_all(&serde_json::to_vec(&job).unwrap())
+                .expect("complete principal export");
+            file.sync_all().expect("durable principal export");
+        }
+        std::fs::File::open(directory)
+            .unwrap()
+            .sync_all()
+            .expect("durable principal export directory");
     }
 }

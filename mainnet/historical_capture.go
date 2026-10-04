@@ -35,6 +35,7 @@ type historicalCaptureInput struct {
 	RuntimeCodeBlake2b256 historicalReplayDigest              `json:"runtime_code_blake2b_256"`
 	ExecutionStateVersion uint8                               `json:"execution_state_version"`
 	ObservationProfile    *historicalReplayObservationProfile `json:"observation_profile,omitempty"`
+	PrincipalQueries      []historicalPrincipalQuery          `json:"principal_queries,omitempty"`
 }
 
 type historicalCaptureReport struct {
@@ -74,7 +75,7 @@ func (self historicalCaptureInput) validate() error {
 		}
 		total += len(raw)
 	}
-	return self.ObservationProfile.validate(historicalReplayJob{RuntimeCodeSha256: self.RuntimeCodeSha256})
+	return errors.Join(self.ObservationProfile.validate(historicalReplayJob{RuntimeCodeSha256: self.RuntimeCodeSha256}), validateHistoricalPrincipalQueries(self.PrincipalQueries))
 }
 
 func validateHistoricalCaptureReport(input historicalCaptureInput, raw []byte, report historicalCaptureReport) error {
@@ -87,7 +88,7 @@ func validateHistoricalCaptureReport(input historicalCaptureInput, raw []byte, r
 	if err := decodePlanJson([]byte(report.JobJSON), &job); err != nil {
 		return err
 	}
-	if job.Schema != historicalReplaySchema || job.ParentHeaderHex != input.ParentHeaderHex || job.ParentHash != input.ParentHash || job.ChildHeaderHex != input.ChildHeaderHex || job.ChildHash != input.ChildHash || !slices.Equal(job.ExtrinsicsHex, input.ExtrinsicsHex) || job.RuntimeCodeSha256 != input.RuntimeCodeSha256 || job.RuntimeCodeBlake2b256 != input.RuntimeCodeBlake2b256 || job.ExecutionStateVersion != input.ExecutionStateVersion || !reflect.DeepEqual(job.ObservationProfile, input.ObservationProfile) || len(job.ProofNodesHex) == 0 || len(job.ProofNodesHex) > maximumNodes {
+	if job.Schema != historicalReplaySchema || job.ParentHeaderHex != input.ParentHeaderHex || job.ParentHash != input.ParentHash || job.ChildHeaderHex != input.ChildHeaderHex || job.ChildHash != input.ChildHash || !slices.Equal(job.ExtrinsicsHex, input.ExtrinsicsHex) || job.RuntimeCodeSha256 != input.RuntimeCodeSha256 || job.RuntimeCodeBlake2b256 != input.RuntimeCodeBlake2b256 || job.ExecutionStateVersion != input.ExecutionStateVersion || !reflect.DeepEqual(job.ObservationProfile, input.ObservationProfile) || !reflect.DeepEqual(job.PrincipalQueries, input.PrincipalQueries) || len(job.ProofNodesHex) == 0 || len(job.ProofNodesHex) > maximumNodes {
 		return errors.New("historical capture job differs from original request")
 	}
 	code, err := historicalReplayHex(job.RuntimeCodeHex, 8*1024*1024)

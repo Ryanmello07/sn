@@ -101,25 +101,26 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
-	feePolicies     map[string]economicNativeFeePolicy
-	feeReviews      map[string]bool
-	feeEvidence     map[string]string
-	feeRetired      map[string]string
-	feeTransactions map[string]historicalFeeContextTransaction
-	feeOrigins      map[string]economicConservationFeeObligation
-	feeSummary      *economicConservationFeeSummary
-	owners          []*monitorHistorySnapshot
-	resources       economicConservationResources
-	entries         uint64
-	bytes           uint64
-	mappings        map[string]economicConservationMapping
-	lotIds          map[string]bool
-	captureKeys     map[string]string
-	claimKeys       map[string]string
-	claims          map[string]economicConservationClaim
-	entitlements    map[string]economicConservationEntitlement
-	receipts        map[string]economicConservationReceipt
-	reviews         map[string]bool
+	openingPrincipalHash string
+	feePolicies          map[string]economicNativeFeePolicy
+	feeReviews           map[string]bool
+	feeEvidence          map[string]string
+	feeRetired           map[string]string
+	feeTransactions      map[string]historicalFeeContextTransaction
+	feeOrigins           map[string]economicConservationFeeObligation
+	feeSummary           *economicConservationFeeSummary
+	owners               []*monitorHistorySnapshot
+	resources            economicConservationResources
+	entries              uint64
+	bytes                uint64
+	mappings             map[string]economicConservationMapping
+	lotIds               map[string]bool
+	captureKeys          map[string]string
+	claimKeys            map[string]string
+	claims               map[string]economicConservationClaim
+	entitlements         map[string]economicConservationEntitlement
+	receipts             map[string]economicConservationReceipt
+	reviews              map[string]bool
 }
 
 func newEconomicConservationArchiveView(resources economicConservationResources) *economicConservationArchiveView {
@@ -393,6 +394,9 @@ func economicConservationRetainedIds[T any](values []T, id func(T) string) map[s
 func (self *economicConservationArchiveView) admit(original, compacted *economicConservationState) error {
 	retireFees, err := self.indexAdmission(original, compacted)
 	if err != nil {
+		return err
+	}
+	if err := self.retainOpeningPrincipal(original); err != nil {
 		return err
 	}
 	if err := self.retainFeeRevision(original); err != nil {

@@ -152,6 +152,7 @@ fn job(code: &[u8], change: impl FnOnce(&mut Storage)) -> HistoricalJob {
             .into_iter()
             .collect(),
         observation_profile: None,
+        principal_queries: None,
     }
 }
 
