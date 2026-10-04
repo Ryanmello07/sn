@@ -89,10 +89,22 @@ func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMa
 	producer := newNativeProducerPublicFixture(t)
 	f.native, f.policy.Native.Observation, f.policy.Native.BatchBlocks = producer.source, producer.source.policy, 1
 	f.writePolicy(t)
+	// A synthetic volume declaration does not provision a snapshot owner. The
+	// combined checkpoint explicitly starts with an owned absent-head marker.
+	provisionEconomicConservationPrincipalFixture(t, f.checkpoint)
 	storage := durablefixture.New(t, t.Context(), producer.source.policy.Execution.Directory, filepath.Dir(f.checkpoint))
 	storage.Host.SetReserve(4*1024*1024*1024, 1024*1024)
 	producer.ctx = storage.Context
-	return &economicConservationArchiveFixture{source: f, ctx: storage.Context, metadata: t.TempDir()}, producer
+	metadata := t.TempDir()
+	protectFreshEconomicConservationTestRoot(t, metadata)
+	return &economicConservationArchiveFixture{source: f, ctx: storage.Context, metadata: metadata}, producer
+}
+
+// Provision only the fresh test fixture. Public observers never recreate a lost
+// lock, reinterpret an empty committed file as absence, or repair its owner.
+func provisionEconomicConservationPrincipalFixture(t *testing.T, checkpoint string) {
+	t.Helper()
+	provisionMonitorTestCustody(t, checkpoint)
 }
 
 // The first positive reaches actual replay and public conservation; the
