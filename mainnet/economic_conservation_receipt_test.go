@@ -48,13 +48,16 @@ func TestEconomicConservationArchivedReceiptContradictionRefusesPublicReopenAndP
 	path, hash := f.document(t, "contradictory-request.json", f.request)
 	before := mainnetNamespaceTest(t, filepath.Dir(f.source.checkpoint))
 	reads := f.source.claimReads.Load()
-	for _, command := range [][]string{
-		f.source.args(t),
-		{"economic-conservation-archive", "plan", "--request", path, "--request-sha256", hash},
+	for _, check := range []struct {
+		command []string
+		status  int
+	}{
+		{command: f.source.args(t), status: 3},
+		{command: []string{"economic-conservation-archive", "plan", "--request", path, "--request-sha256", hash}, status: 2},
 	} {
 		var output, diagnostic bytes.Buffer
-		code := runMainWithMonitorHooks(f.ctx, command, &output, &diagnostic, func() time.Time { return f.source.now }, monitorServiceHooks{})
-		if code != 3 || output.Len() != 0 || !strings.Contains(diagnostic.String(), "archived original Claim receipt contradicts") || f.source.claimReads.Load() != reads {
+		code := runMainWithMonitorHooks(f.ctx, check.command, &output, &diagnostic, func() time.Time { return f.source.now }, monitorServiceHooks{})
+		if code != check.status || output.Len() != 0 || !strings.Contains(diagnostic.String(), "archived original Claim receipt contradicts") || f.source.claimReads.Load() != reads {
 			t.Fatal("public archived receipt contradiction was overwritten or reached another source read", code, output.String(), diagnostic.String())
 		}
 		if !reflect.DeepEqual(before, mainnetNamespaceTest(t, filepath.Dir(f.source.checkpoint))) {
