@@ -143,6 +143,7 @@ type economicConservationArchiveView struct {
 	claimBasis               *economicConservationClaimBasis
 	claimBasisEntries        uint64
 	claimBasisBytes          uint64
+	claimCheckpointPath      string
 	claimWork                func(role, stage string, units uint64)
 	claimReviews             map[string]bool
 	claimRetired             map[string]*monitorClaimWindowAdmission

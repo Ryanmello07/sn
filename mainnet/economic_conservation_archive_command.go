@@ -151,6 +151,9 @@ func buildEconomicConservationArchivePlan(ctx context.Context, request economicC
 		return plan, nil, errors.New("economic archive predecessor admission is absent")
 	}
 	state.archiveView = view
+	if err := state.validateClaimCheckpointPath(request.Original.Path); err != nil {
+		return plan, nil, err
+	}
 	if state.Renewal != nil && state.Renewal.Original.Path != request.Original.Path {
 		return plan, nil, errors.New("economic archive moved a retained operational revision")
 	}

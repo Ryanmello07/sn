@@ -252,10 +252,16 @@ func loadEconomicConservation(ctx context.Context, owner *monitorCheckpointStore
 	if result.NativeRenewal != nil && result.NativeRenewal.Original.Path != owner.path {
 		return nil, errors.New("economic native adoption moved the original checkpoint")
 	}
+	if err := result.validateClaimCheckpointPath(owner.path); err != nil {
+		return nil, err
+	}
 	return &result, nil
 }
 
 func saveEconomicConservation(ctx context.Context, owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+	if err := state.validateClaimCheckpointPath(owner.path); err != nil {
+		return err
+	}
 	if err := state.requireEntitlementHistory(); err != nil {
 		return err
 	}
@@ -572,6 +578,9 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		}
 	}()
 	state.archiveView = archive
+	if err := state.validateClaimCheckpointPath(owner.path); err != nil {
+		return refuse(err)
+	}
 
 	operating, err := state.operatingPolicy(policy)
 	if err != nil {

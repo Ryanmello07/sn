@@ -80,10 +80,8 @@ func validateEconomicConservationRestoreHistory(ctx context.Context, policy econ
 	if state.NativeRenewal != nil && state.NativeRenewal.Original.Path != original.Path {
 		return errors.New("economic restore moved an original signed native adoption")
 	}
-	for _, window := range state.ClaimWindows {
-		if window.Original.Path != original.Path {
-			return errors.New("economic restore moved an original independently signed Claim window")
-		}
+	if err := state.validateClaimCheckpointPath(original.Path); err != nil {
+		return err
 	}
 	view, err := readEconomicConservationArchive(ctx, policy, state, hooks, func(_ context.Context, reference monitorHistoryReference) (*monitorHistorySnapshot, []byte, error) {
 		if monitorHistoryPathsAlias(reference.Path, original.Path) {
@@ -95,7 +93,8 @@ func validateEconomicConservationRestoreHistory(ctx context.Context, policy econ
 	if err != nil {
 		return err
 	}
-	return errors.Join(ctx.Err(), view.close())
+	state.archiveView = view
+	return errors.Join(ctx.Err(), state.validateClaimCheckpointPath(original.Path), view.close())
 }
 
 // Read all copied original bytes before staging any plan. A missing later
