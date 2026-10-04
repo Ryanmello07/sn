@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -151,13 +152,17 @@ func TestEconomicConservationPublicRetiredUnknownFeeMustRemainHot(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(f.source.checkpoint, raw, 0600); err != nil {
+	writer, err := openMonitorHistorySnapshot(f.ctx, f.source.checkpoint, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := errors.Join(writer.publish(append(raw, '\n'), nil), writer.close()); err != nil {
 		t.Fatal(err)
 	}
 	reads := f.source.claimReads.Load()
 	var output, diagnostic bytes.Buffer
 	code := runMainWithMonitorHooks(f.ctx, f.source.args(t), &output, &diagnostic, func() time.Time { return f.source.now }, monitorServiceHooks{})
-	if code != 3 || output.Len() != 0 || reads != f.source.claimReads.Load() {
+	if code != 3 || output.Len() != 0 || reads != f.source.claimReads.Load() || !strings.Contains(diagnostic.String(), "active head dropped or changed an original unknown fee obligation") {
 		t.Fatal("restored fee head erased original unknown obligations", code, diagnostic.String())
 	}
 }
@@ -198,13 +203,17 @@ func TestEconomicConservationPublicFeeArchiveSummaryCannotSelfSealNewKnowledge(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(f.source.checkpoint, raw, 0600); err != nil {
+	writer, err := openMonitorHistorySnapshot(f.ctx, f.source.checkpoint, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := errors.Join(writer.publish(append(raw, '\n'), nil), writer.close()); err != nil {
 		t.Fatal(err)
 	}
 	reads := f.source.claimReads.Load()
 	var output, diagnostic bytes.Buffer
 	code := runMainWithMonitorHooks(f.ctx, f.source.args(t), &output, &diagnostic, func() time.Time { return f.source.now }, monitorServiceHooks{})
-	if code != 3 || output.Len() != 0 || reads != f.source.claimReads.Load() {
+	if code != 3 || output.Len() != 0 || reads != f.source.claimReads.Load() || !strings.Contains(diagnostic.String(), "archive summary differs from exact original checkpoints") {
 		t.Fatal("self-sealed archived sum invented fee authority before original admission", code, diagnostic.String())
 	}
 }
