@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 
 	"github.com/urfoundation/sn/protocol"
 )
@@ -18,11 +17,18 @@ func readProviderCloseReportDomain(path string) ([32]byte, error) {
 	if path == "" {
 		return [32]byte{}, nil
 	}
-	file, err := os.Open(path)
+	file, err := openProviderCloseReportDomain(path)
 	if err != nil {
 		return [32]byte{}, err
 	}
 	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return [32]byte{}, err
+	}
+	if !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > 16*1024 {
+		return [32]byte{}, errors.New("close-report domain must be a bounded regular file")
+	}
 	data, err := io.ReadAll(io.LimitReader(file, 16*1024+1))
 	if err != nil || len(data) > 16*1024 {
 		return [32]byte{}, errors.Join(errors.New("close-report domain exceeds its fixed input bound"), err)
