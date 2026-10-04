@@ -171,7 +171,7 @@ func (self *monitorEconomicNativeWorker) load(ctx context.Context) (*monitorEcon
 	if err != nil {
 		return nil, err
 	}
-	record, err := decodeMonitorEconomicNativeCheckpoint(raw, self.policy)
+	record, err := decodeMonitorEconomicNativeCheckpoint(raw, self.policy, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +428,7 @@ func (self *monitorEconomicNativeWorker) run(ctx context.Context, interval time.
 		code := "caught-up"
 		if readErr == nil && observation != nil {
 			var next *monitorEconomicNativeState
-			next, readErr = self.state.append(self.policy, observation, observedAt)
+			next, readErr = self.state.append(self.policy, observation, observedAt, ctx)
 			if readErr == nil {
 				candidate, code = *next, next.Status
 			}

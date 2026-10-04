@@ -67,6 +67,13 @@ func decodeEconomicConservation(ctx context.Context, raw []byte, policy economic
 	if err := decodeMonitorHistoryInput(raw, &state); err != nil {
 		return nil, err
 	}
+	native, err := state.nativeOperatingPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+	if err := state.Native.admitRuntime(ctx, native); err != nil {
+		return nil, err
+	}
 	return &state, state.validate(ctx, policy)
 }
 

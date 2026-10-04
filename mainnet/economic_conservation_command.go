@@ -106,6 +106,9 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 	if result.Yuma != nil && result.Yuma.Current {
 		result.FullQuantizationToleranceAlpha = result.Yuma.FullQuantizationTolerance
 	}
+	if err := self.Native.admitRuntime(ctx, policy.Native); err != nil {
+		return result, err
+	}
 	result.PrincipalEffects, err = self.principalEffectsSummary(policy)
 	if err != nil {
 		return result, err
@@ -227,6 +230,7 @@ func cloneEconomicConservation(value *economicConservationState, policies ...eco
 		return nil, err
 	}
 	result.archiveView = value.archiveView
+	result.Native.runtimeAdmission = value.Native.runtimeAdmission
 	return &result, nil
 }
 
@@ -243,6 +247,13 @@ func loadEconomicConservation(ctx context.Context, owner *monitorCheckpointStore
 	}
 	var result economicConservationState
 	if err := decodePlanJson(raw, &result); err != nil {
+		return nil, err
+	}
+	native, err := result.nativeOperatingPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+	if err := result.Native.admitRuntime(ctx, native); err != nil {
 		return nil, err
 	}
 	if err := result.validate(ctx, policy); err != nil {

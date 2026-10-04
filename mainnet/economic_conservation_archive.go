@@ -268,6 +268,13 @@ func compactEconomicConservationWithFeeRetirement(ctx context.Context, policy ec
 
 func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy economicConservationPolicy, original *economicConservationState, reference monitorHistoryReference, renewal *economicConservationRenewal, retireFees bool, feeRevision *economicConservationFeeRevision) (*economicConservationState, error) {
 	policy = policy.withStorageProfile()
+	native, err := original.nativeOperatingPolicy(policy)
+	if err != nil {
+		return nil, err
+	}
+	if err := original.Native.admitRuntime(ctx, native); err != nil {
+		return nil, err
+	}
 	if err := errors.Join(original.validate(ctx, policy), policy.validateReference(reference)); err != nil {
 		return nil, err
 	}
@@ -333,6 +340,9 @@ func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy econo
 	if len(next.Native.History) != 0 {
 		nativePolicy, err := original.nativeOperatingPolicy(policy)
 		if err != nil {
+			return nil, err
+		}
+		if err := next.Native.admitRuntime(ctx, nativePolicy); err != nil {
 			return nil, err
 		}
 		checkpoint := monitorEconomicNativeCheckpoint{Schema: monitorEconomicNativeCheckpointSchema, PolicyHash: nativePolicy.identityHash(), State: next.Native}

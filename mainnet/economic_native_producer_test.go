@@ -104,9 +104,16 @@ func nativeProducerPublicFixtureFrom(t *testing.T, continuous bool, additionalJo
 // Existing fixture families retain their exact nil authority and body bounds.
 func nativeProducerPublicFixtureWithFee(t *testing.T, continuous bool, feePolicy *nativeFeeCensusPolicy, additionalJobs ...historicalReplayJob) *nativeProducerPublicFixture {
 	t.Helper()
+	return nativeProducerPublicFixtureWithRuntime(t, continuous, feePolicy, false, additionalJobs...)
+}
+
+// Renewal fixtures additionally prove an actual original :code write and use
+// the next program's original profile. Ordinary fixtures retain exact inputs.
+func nativeProducerPublicFixtureWithRuntime(t *testing.T, continuous bool, feePolicy *nativeFeeCensusPolicy, runtimeRenewal bool, additionalJobs ...historicalReplayJob) *nativeProducerPublicFixture {
+	t.Helper()
 	capturePath, replayPath, fixturePath := os.Getenv("URNETWORK_NATIVE_CAPTURE_ENGINE"), os.Getenv("URNETWORK_NATIVE_EXECUTION_ENGINE"), os.Getenv("URNETWORK_NATIVE_EXECUTION_FIXTURE")
 	continuationDirectory := os.Getenv("URNETWORK_NATIVE_PRODUCER_FIXTURE")
-	if continuous && continuationDirectory != "" {
+	if continuous && continuationDirectory != "" && !runtimeRenewal {
 		fixturePath = filepath.Join(continuationDirectory, "native-job-101.json")
 	}
 	if capturePath == "" && replayPath == "" && fixturePath == "" {
@@ -240,7 +247,9 @@ func nativeProducerPublicFixtureWithFee(t *testing.T, continuous bool, feePolicy
 	if continuous {
 		// The selected child has no direct certificate. The outgoing set
 		// certifies 104, where the delayed change announced at102 enacts.
-		delete(certificates, source.policy.Through.Hash)
+		if !runtimeRenewal {
+			delete(certificates, source.policy.Through.Hash)
+		}
 		previous := job
 		for number := uint64(102); number <= 105; number++ {
 			input, _, err := readPlanFile(t.Context(), filepath.Join(continuationDirectory, fmt.Sprintf("native-job-%d.json", number)), historicalNativeJobLimit)
@@ -251,8 +260,11 @@ func nativeProducerPublicFixtureWithFee(t *testing.T, continuous bool, feePolicy
 			if err := decodePlanJson(input, &current); err != nil {
 				t.Fatal(err)
 			}
-			if current.RuntimeCodeSha256 != job.RuntimeCodeSha256 || current.RuntimeCodeBlake2b256 != job.RuntimeCodeBlake2b256 || !reflect.DeepEqual(current.ObservationProfile, job.ObservationProfile) {
+			if (!runtimeRenewal || number == 102) && (current.RuntimeCodeSha256 != job.RuntimeCodeSha256 || current.RuntimeCodeBlake2b256 != job.RuntimeCodeBlake2b256 || !reflect.DeepEqual(current.ObservationProfile, job.ObservationProfile)) {
 				t.Fatal("continuation changed original runtime or reviewed callsites")
+			}
+			if runtimeRenewal && number >= 103 && (current.RuntimeCodeSha256 == job.RuntimeCodeSha256 || current.RuntimeCodeBlake2b256 == job.RuntimeCodeBlake2b256 || current.ObservationProfile == nil || !current.PrincipalEffects || !reflect.DeepEqual(current.PrincipalQueries, job.PrincipalQueries)) {
+				t.Fatal("runtime renewal requires distinct actual code and the original principal query authority")
 			}
 			encoded, err := historicalReplayHex(current.ChildHeaderHex, 64*1024)
 			if err != nil {
@@ -290,6 +302,16 @@ func nativeProducerPublicFixtureWithFee(t *testing.T, continuous bool, feePolicy
 			}
 			source.set(t, number, "Events", []byte{0})
 			jobs[hash], proofs[nativeExecutionTestHex(current.ParentHash[:])] = current, current.ProofNodesHex
+			if runtimeRenewal && number >= 103 {
+				profile := source.policy.Runtime
+				profile.RuntimeVersion.SpecVersion++
+				profile.RuntimeCodeHash = nativeExecutionTestHex(current.RuntimeCodeBlake2b256[:])
+				for _, boundaryHash := range []string{hash, nativeExecutionTestHex(current.ParentHash[:])} {
+					source.chain.runtimeKVs[boundaryHash] = profile
+					code := current.RuntimeCodeHex
+					source.storageKVs[boundaryHash][runtimeCodeStorageKey] = &code
+				}
+			}
 			if number == 104 || number == 105 {
 				key, setId := consensus, uint64(9)
 				if number == 105 {
@@ -299,7 +321,9 @@ func nativeProducerPublicFixtureWithFee(t *testing.T, continuous bool, feePolicy
 			}
 			previous = current
 		}
-		source.chain.finalized = source.chain.byHeight[105]
+		if !runtimeRenewal {
+			source.chain.finalized = source.chain.byHeight[105]
+		}
 		filePolicy.Producer.MaximumDescendantHeaders = 3
 	}
 	for _, current := range additionalJobs {

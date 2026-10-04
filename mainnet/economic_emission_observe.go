@@ -343,6 +343,14 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 		if producer != nil {
 			value := producer.state
 			result.ExecutionProducer = &value
+			if len(producer.authorities) > 1 {
+				result.runtimeAdmission, err = admitNativeProducerRuntimes(policy, &value, producer.authorities, func(reference planFileReference) ([]byte, error) {
+					return producer.files.readReference(reference, nativeProducerCompletionMaximum(policy.Execution.FeeCensus))
+				})
+				if err != nil {
+					return result, err
+				}
+			}
 			result.FinalityAuthority = "independently-approved-anchor-and-verified-grandpa"
 		}
 		result.NativeMinerAllocationAlpha, result.ProviderEntitlementAlpha, result.OwnerRecycledAlpha = &window.MinerAllocation, &window.ProviderEntitlement, &window.OwnerRecycled

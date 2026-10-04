@@ -30,7 +30,7 @@ type economicConservationPrincipalEffectSummary struct {
 	Authority string                                `json:"authority"`
 }
 
-func (self *economicConservationState) appendPrincipalEffects(policy economicConservationPolicy, outcome nativeExecutionOutcome) error {
+func (self *economicConservationState) appendPrincipalEffects(policy economicConservationPolicy, outcome nativeExecutionOutcome, native *monitorEconomicNativeState) error {
 	authority := policy.Native.Observation.Execution.Principal
 	if authority == nil || authority.Effects == nil {
 		if outcome.PrincipalEffects != nil {
@@ -38,7 +38,15 @@ func (self *economicConservationState) appendPrincipalEffects(policy economicCon
 		}
 		return nil
 	}
-	if err := outcome.PrincipalEffects.validate(policy.Native.Observation, outcome); err != nil {
+	nativePolicy, err := native.runtimeReadPolicy(policy.Native)
+	if err != nil {
+		return err
+	}
+	executionPolicy, err := nativePolicy.runtimeAdmission.principalExecutionPolicy(policy.Native.Observation, outcome)
+	if err != nil {
+		return err
+	}
+	if err := outcome.PrincipalEffects.validate(executionPolicy, outcome); err != nil {
 		return err
 	}
 	for _, query := range outcome.PrincipalEffects.Authority.Queries {
@@ -94,6 +102,10 @@ func (self economicConservationState) validatePrincipalEffects(policy economicCo
 		}
 		return nil
 	}
+	nativePolicy, err := self.Native.runtimeReadPolicy(policy.Native)
+	if err != nil {
+		return err
+	}
 	previous := authority.Parent
 	var after []historicalPrincipalObservation
 	if archived != nil {
@@ -119,7 +131,11 @@ func (self economicConservationState) validatePrincipalEffects(policy economicCo
 		if value.Outcome.PrincipalEffects != nil || value.Outcome.OpeningPrincipals != nil || value.Projection.Parent != previous || after != nil && !reflect.DeepEqual(after, value.Projection.Before) {
 			return errors.New("economic principal effects lost original contiguous stock lineage")
 		}
-		if err := errors.Join(value.Projection.validate(policy.Native.Observation, value.Outcome), value.Outcome.RecipientEffects.validate(value.Outcome)); err != nil {
+		executionPolicy, err := nativePolicy.runtimeAdmission.principalExecutionPolicy(policy.Native.Observation, value.Outcome)
+		if err != nil {
+			return err
+		}
+		if err := errors.Join(value.Projection.validate(executionPolicy, value.Outcome), value.Outcome.RecipientEffects.validate(value.Outcome)); err != nil {
 			return err
 		}
 		if self.archiveView != nil && self.archiveView.principalExecutionHashes[value.Projection.Boundary.Hash] != "" {

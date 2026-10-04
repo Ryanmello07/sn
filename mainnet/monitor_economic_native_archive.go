@@ -28,7 +28,7 @@ type monitorEconomicNativeArchive struct {
 	Events              uint64                    `json:"events"`
 }
 
-func decodeMonitorEconomicNativeCheckpoint(raw []byte, policy monitorEconomicNativePolicy) (record monitorEconomicNativeCheckpoint, resultErr error) {
+func decodeMonitorEconomicNativeCheckpoint(raw []byte, policy monitorEconomicNativePolicy, contexts ...context.Context) (record monitorEconomicNativeCheckpoint, resultErr error) {
 	if len(raw) == 0 || len(raw) > maxRpcReplyBytes {
 		return record, errors.New("native checkpoint exceeds its byte bound")
 	}
@@ -50,6 +50,9 @@ func decodeMonitorEconomicNativeCheckpoint(raw []byte, policy monitorEconomicNat
 		return record, err
 	}
 	if err := record.State.Catalog.validate(policy.HistoryCatalog, policy.Role, policy.identityHash(), ""); err != nil {
+		return record, err
+	}
+	if err := record.State.admitRuntime(nativeRuntimeAdmissionContext(contexts), policy); err != nil {
 		return record, err
 	}
 	return record, record.State.validate(policy)
@@ -170,7 +173,7 @@ func openMonitorEconomicNativeArchive(ctx context.Context, policy monitorEconomi
 			return owners, err
 		}
 		owners = append(owners, owner)
-		record, err := decodeMonitorEconomicNativeCheckpoint(raw, policy)
+		record, err := decodeMonitorEconomicNativeCheckpoint(raw, policy, ctx)
 		if err != nil {
 			return owners, err
 		}

@@ -95,21 +95,28 @@ func (self nativeProducerRenewalAcknowledgement) admission() nativeProducerRenew
 }
 
 func (self *nativeProducerSession) verifyRenewalAcknowledgement(ack nativeProducerRenewalAcknowledgement, selected nativeProducerReviewedAuthority) error {
-	review := selected.renewal
-	if ack.Revision != selected.reference || ack.After != review.After || ack.Completed != review.Completed || ack.CompletionChain != review.CompletionChain || ack.Capacity != review.Next.capacity() || ack.FirstCompletion == nil {
-		return errors.Join(errRpcIntegrity, errors.New("native producer acknowledgement changed its original signed renewal"))
+	if ack.FirstCompletion == nil {
+		return errors.Join(errRpcIntegrity, errors.New("native producer acknowledgement omitted its original first completion"))
 	}
 	raw, err := self.files.readReference(*ack.FirstCompletion, nativeProducerCompletionMaximum(self.originalPolicy.Execution.FeeCensus))
 	if err != nil {
 		return err
+	}
+	return validateNativeProducerRenewalAcknowledgement(ack, selected, self.files.path, raw)
+}
+
+func validateNativeProducerRenewalAcknowledgement(ack nativeProducerRenewalAcknowledgement, selected nativeProducerReviewedAuthority, directory string, raw []byte) error {
+	review := selected.renewal
+	if review == nil || ack.Revision != selected.reference || ack.After != review.After || ack.Completed != review.Completed || ack.CompletionChain != review.CompletionChain || ack.Capacity != review.Next.capacity() || ack.FirstCompletion == nil || monitorReadDigest(raw) != ack.FirstCompletion.Sha256 {
+		return errors.Join(errRpcIntegrity, errors.New("native producer acknowledgement changed its original signed renewal"))
 	}
 	var first nativeProducerCompletion
 	if err := decodePlanJson(raw, &first); err != nil {
 		return errors.Join(errRpcIntegrity, err)
 	}
 	admission := ack.admission()
-	expectedPath := filepath.Join(self.files.path, fmt.Sprintf("b%010d-%s", first.Admission.Child.Number, strings.TrimPrefix(first.Admission.Child.Hash, "0x")), "complete.json")
-	if first.Schema != nativeProducerCompletionSchema || first.AuthorityHash != ack.Revision.Sha256 || first.Sequence != ack.AdoptedCompleted+1 || first.Previous != ack.AdoptedChain || first.Admission.Parent != ack.AdoptedAfter || first.Admission.Child.Number != ack.AdoptedAfter.Number+1 || !rootCanonicalHash(first.Admission.Child.Hash) || first.Renewal == nil || !reflect.DeepEqual(*first.Renewal, admission) || ack.FirstCompletion.Path != expectedPath {
+	expectedPath := filepath.Join(directory, fmt.Sprintf("b%010d-%s", first.Admission.Child.Number, strings.TrimPrefix(first.Admission.Child.Hash, "0x")), "complete.json")
+	if first.Schema != nativeProducerCompletionSchema || first.AuthorityHash != ack.Revision.Sha256 || first.Sequence != ack.AdoptedCompleted+1 || first.Previous != ack.AdoptedChain || first.Admission.Parent != ack.AdoptedAfter || first.Admission.Child.Number != ack.AdoptedAfter.Number+1 || !rootCanonicalHash(first.Admission.Child.Hash) || first.Admission.Runtime != selected.value.Runtime || first.Renewal == nil || !reflect.DeepEqual(*first.Renewal, admission) || ack.FirstCompletion.Path != expectedPath {
 		return errors.Join(errRpcIntegrity, errors.New("native producer first renewed completion changed its retained adoption"))
 	}
 	return nil
@@ -235,7 +242,7 @@ func nativeProducerReviewedProfile(authority nativeProducerAuthority) error {
 
 func loadNativeProducerAuthorities(ctx context.Context, policy economicEmissionPolicy) ([]nativeProducerReviewedAuthority, error) {
 	return readNativeProducerAuthorities(ctx, policy, func(ctx context.Context, reference planFileReference) ([]byte, error) {
-		return nativeProducerReadApprovalFor(ctx, reference, policy.Execution.FeeCensus)
+		return readNativeProducerRuntimeOriginal(ctx, reference, nativeProducerAuthorityMaximum(policy.Execution.FeeCensus))
 	})
 }
 

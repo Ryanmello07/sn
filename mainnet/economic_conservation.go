@@ -295,6 +295,9 @@ func (self economicConservationState) validate(ctx context.Context, policy econo
 	if err != nil {
 		return err
 	}
+	if err := self.Native.admitRuntime(ctx, operating.Native); err != nil {
+		return err
+	}
 	if self.Schema != economicConservationSchema || self.PolicyHash != policy.identityHash() || self.ContentHash != self.hash() || len(self.ClaimStates) != len(policy.Claims) || self.facts() > operating.MaximumFacts || len(self.NativeIssue) > 2048 || len(self.VaultIssue) > 2048 || len(self.JoinIssue) > 2048 {
 		return errors.New("economic conservation checkpoint changed original policy, evidence or capacity")
 	}
@@ -329,7 +332,7 @@ func (self economicConservationState) validate(ctx context.Context, policy econo
 	if err := self.validateYuma(ctx, policy); err != nil {
 		return err
 	}
-	if err := self.validatePrincipalEffects(policy); err != nil {
+	if err := self.validatePrincipalEffects(operating); err != nil {
 		return err
 	}
 	if _, err := self.feeSummary(policy); err != nil {
@@ -428,7 +431,7 @@ func (self *economicConservationState) appendNative(ctx context.Context, policy 
 	if observation == nil {
 		return nil
 	}
-	next, err := self.Native.append(policy.Native, observation, now)
+	next, err := self.Native.append(policy.Native, observation, now, ctx)
 	if err != nil {
 		return err
 	}
@@ -453,7 +456,7 @@ func (self *economicConservationState) appendNative(ctx context.Context, policy 
 		if err := self.appendYuma(ctx, policy, *outcome); err != nil {
 			return err
 		}
-		if err := self.appendPrincipalEffects(policy, *outcome); err != nil {
+		if err := self.appendPrincipalEffects(policy, *outcome, next); err != nil {
 			return err
 		}
 		projection := outcome.RecipientEffects

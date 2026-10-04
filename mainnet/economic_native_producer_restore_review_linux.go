@@ -37,35 +37,7 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 	}
 	scope := storageNativeProducerScope{Schema: storageNativeProducerSchema, Checkpoint: checkpoint, CheckpointStorage: storage, Policy: policy, Cursor: state.Cursor, State: state.ExecutionProducer}
 	for _, reference := range append([]planFileReference{policy.Execution.Producer.Authority}, policy.Execution.Producer.Renewals...) {
-		var approvalRoot *monitorHistoryRestoreRootReview
-		var member durablevolume.PreparationFile
-		for _, root := range roots {
-			if path, found := storageNativeRestoreRelative(root.request.RootPath, reference.Path); found {
-				if approvalRoot != nil {
-					return errors.New("native approval has overlapping original roots")
-				}
-				entry, present := root.entries[path]
-				if !present || entry.Kind != "file" || entry.Size == 0 || entry.Size > uint64(nativeProducerAuthorityMaximum(policy.Execution.FeeCensus)) || entry.Sha256 != reference.Sha256 {
-					return errors.New("native restore omitted original signed approval member")
-				}
-				approvalRoot = root
-				member = durablevolume.PreparationFile{Path: path, Kind: entry.Kind, Mode: entry.Mode, Bytes: entry.Size, Sha256: entry.Sha256}
-			}
-		}
-		var raw []byte
-		var err error
-		source := reference
-		if approvalRoot != nil {
-			raw, err = readNativeProducerRestoreSource(ctx, approvalRoot, member)
-			source.Path = filepath.Join(approvalRoot.request.RestoreSource.Directory, member.Path)
-		} else {
-			for path := range declared {
-				if _, found := storageNativeRestoreRelative(path, reference.Path); found {
-					return errors.New("economic restore omits original native approval root")
-				}
-			}
-			raw, err = nativeProducerReadApprovalFor(ctx, reference, policy.Execution.FeeCensus)
-		}
+		raw, source, err := readNativeProducerRestoreOriginal(ctx, reference, nativeProducerAuthorityMaximum(policy.Execution.FeeCensus), roots, declared)
 		if err != nil {
 			return err
 		}
@@ -174,6 +146,42 @@ func reviewEconomicNativeProducerRestore(ctx context.Context, policy economicEmi
 		root.request.Owners = append(root.request.Owners, approvalOwner)
 	}
 	return ctx.Err()
+}
+
+// Runtime consumer admission and the full producer restore share original
+// approval and first-completion custody. A declared missing root never falls
+// back to a live path, even when that path still contains matching bytes.
+func readNativeProducerRestoreOriginal(ctx context.Context, reference planFileReference, maximum int, roots []*monitorHistoryRestoreRootReview, declared map[string]durablevolume.StateRootSpec) ([]byte, planFileReference, error) {
+	var selected *monitorHistoryRestoreRootReview
+	var member durablevolume.PreparationFile
+	for _, root := range roots {
+		if path, found := storageNativeRestoreRelative(root.request.RootPath, reference.Path); found {
+			if selected != nil {
+				return nil, reference, errors.New("native original has overlapping restored roots")
+			}
+			entry, present := root.entries[path]
+			if !present || entry.Kind != "file" || entry.Size == 0 || entry.Size > uint64(maximum) || entry.Sha256 != reference.Sha256 {
+				return nil, reference, errors.New("native restore omitted original signed approval or completion member")
+			}
+			selected = root
+			member = durablevolume.PreparationFile{Path: path, Kind: entry.Kind, Mode: entry.Mode, Bytes: entry.Size, Sha256: entry.Sha256}
+		}
+	}
+	if selected != nil {
+		raw, err := readNativeProducerRestoreSource(ctx, selected, member)
+		reference.Path = filepath.Join(selected.request.RestoreSource.Directory, member.Path)
+		return raw, reference, err
+	}
+	for path := range declared {
+		if _, found := storageNativeRestoreRelative(path, reference.Path); found {
+			return nil, reference, errors.New("economic restore omits original native approval or completion root")
+		}
+	}
+	raw, digest, err := readPlanFile(ctx, reference.Path, maximum)
+	if err == nil && digest != reference.Sha256 {
+		err = errors.Join(errRpcIntegrity, errors.New("native restore original bytes differ from their exact reference"))
+	}
+	return raw, reference, err
 }
 
 // Copied-source readback uses the same retained inode/byte checks as target

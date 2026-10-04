@@ -125,6 +125,10 @@ func reviewEconomicConservationRestore(ctx context.Context, request economicCons
 		}
 		roots = append(roots, root)
 	}
+	ctx = context.WithValue(ctx, nativeProducerRuntimeReadKey{}, func(ctx context.Context, reference planFileReference, maximum int) ([]byte, error) {
+		raw, _, err := readNativeProducerRestoreOriginal(ctx, reference, maximum, roots, declared)
+		return raw, err
+	})
 	var originalRaw []byte
 	if err := validateEconomicConservationRestoreHistory(ctx, request.Policy, request.Original, func(reference monitorHistoryReference) ([]byte, error) {
 		root, err := monitorHistoryRestoreRootLimit(roots, reference, request.Policy.storageMaximum())

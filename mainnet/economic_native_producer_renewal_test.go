@@ -335,7 +335,7 @@ func TestNativeProducerRenewalAcknowledgementRequiresOriginalFirstCompletion(t *
 	state := nativeExecutionProducerState{AuthorityHash: revision.Previous.Sha256, Cursor: revision.After, Completed: revision.Completed, CompletionChain: revision.CompletionChain}
 	ack := revision.acknowledgement(authorities[1].reference, state)
 	child := economicEmissionBoundary{Number: revision.After.Number + 1, Hash: nativeExecutionTestHex(bytes.Repeat([]byte{7}, 32))}
-	completion := nativeProducerCompletion{Schema: nativeProducerCompletionSchema, AuthorityHash: ack.Revision.Sha256, Previous: ack.AdoptedChain, Sequence: ack.AdoptedCompleted + 1, Admission: nativeExecutionAdmission{Parent: ack.AdoptedAfter, Child: child}, Renewal: &ack}
+	completion := nativeProducerCompletion{Schema: nativeProducerCompletionSchema, AuthorityHash: ack.Revision.Sha256, Previous: ack.AdoptedChain, Sequence: ack.AdoptedCompleted + 1, Admission: nativeExecutionAdmission{Parent: ack.AdoptedAfter, Child: child, Runtime: revision.Next.Runtime}, Renewal: &ack}
 	raw, err := json.Marshal(completion)
 	if err != nil {
 		t.Fatal(err)

@@ -17,6 +17,9 @@ mod capture_join_tests;
 #[path = "historical_native_fee_census_tests.rs"]
 mod fee_census_tests;
 
+#[path = "historical_native_runtime_renewal_tests.rs"]
+mod runtime_renewal_tests;
+
 use super::*;
 use parity_scale_codec as codec;
 use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt, path::Path};
@@ -123,6 +126,28 @@ fn fixture_with_fee_census(
     yuma: Option<&str>,
     drained_activation: bool,
     fee_mode: Option<&str>,
+) -> (HistoricalJob, sp_core::storage::Storage) {
+    fixture_with_runtime_upgrade(
+        continuous,
+        principal,
+        effects,
+        yuma,
+        drained_activation,
+        fee_mode,
+        None,
+    )
+}
+
+// The renewal fixture's first program writes the complete next original Wasm
+// only after the independently proved first epoch. Existing fixtures are exact.
+fn fixture_with_runtime_upgrade(
+    continuous: bool,
+    principal: Option<Option<u64>>,
+    effects: Option<&str>,
+    yuma: Option<&str>,
+    drained_activation: bool,
+    fee_mode: Option<&str>,
+    upgrade: Option<&[u8]>,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
     let allocation_count = yuma_capacity_tests::count(yuma);
     let capture = effects
@@ -389,12 +414,23 @@ fn fixture_with_fee_census(
         declarations.push_str(&fees.declarations());
         body.push_str(&fees.body());
     }
+    if let Some(upgrade) = upgrade {
+        assert!(upgrade.len() < 64 * 1024);
+        declarations.push_str(&segment(10000, b":code"));
+        declarations.push_str(&segment(11000, upgrade));
+        body = format!(
+            "(i32.store8 (i32.const 9000) (i32.load8_u (i32.wrap_i64 (call $get (i64.const {}))))) {} (if (i32.ne (i32.load8_u (i32.const 9000)) (i32.const 0)) (then (call $set (i64.const {}) (i64.const {}))))",
+            span(1700, epoch.len()), body, span(10000, 5), span(11000, upgrade.len())
+        );
+    }
     let code = if allocation_count > 2 {
         yuma_capacity_tests::expand(allocation_count, &mut declarations, &mut body);
         if yuma_populated_tests::selected(yuma) {
             yuma_populated_tests::expand(allocation_count, &mut declarations, &mut body);
         }
         wasm_with_heap(&declarations, &body, 400000)
+    } else if upgrade.is_some() {
+        wasm_with_heap(&declarations, &body, 128000)
     } else if fees.is_some() {
         wasm_with_heap(&declarations, &body, 60000)
     } else {

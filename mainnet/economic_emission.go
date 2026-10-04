@@ -165,6 +165,7 @@ type economicEmissionBlock struct {
 // Complete means the explicit archive range was read and rechecked. It never
 // means the economic target, denominator, payment or finality authority passed.
 type economicEmissionObservation struct {
+	runtimeAdmission            *nativeProducerRuntimeAdmission
 	ExecutionWindow             *nativeExecutionWindow        `json:"execution_window,omitempty"`
 	ExecutionProducer           *nativeExecutionProducerState `json:"execution_producer,omitempty"`
 	RuntimeCatalog              []monitorEconomicRuntimeEntry `json:"runtime_catalog,omitempty"`
