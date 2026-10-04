@@ -198,7 +198,8 @@
     "principal-dc1-go-fd4-operational-adoption-v2-20261004.json": "6b1136f00f368e308485aee924bfe8497c8f08fd53381c441ada4d1f7ddf9756",
     "principal-fixture8d3-incremental-stage-root-review-20261004.json": "3bb030dd1eea7b9910949c77b664f88d845ff0cfffbc949bb0fac96808bf6ffe",
     "native-readonly-restore-mode-source-finding-20261004.json": "6724bd7046d04c635fa7fc5088d56e41ae1255529ce3608979660380d29a307d",
-    "yuma-owner-cancellation-source-finding-20261004.json": "b23301a2162f8ef6294e9388de5ccd6ca4d9ead817213699359a5208959cf753"
+    "yuma-owner-cancellation-source-finding-20261004.json": "b23301a2162f8ef6294e9388de5ccd6ca4d9ead817213699359a5208959cf753",
+    "native-readonly-corec618-source-root-review-20261004.json": "bca835415c2c1564eb4d1068dfba5b89c33b7fce249c0d78362b72e85d452c51"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
