@@ -38,6 +38,8 @@ type providerAttemptObjectStore struct {
 	indexKVs   map[string]int
 	usedKVs    map[string]bool
 	live       bool
+	budget     *providerAttemptOriginalBudget
+	pendingKVs map[string]chan struct{}
 }
 
 // Transport whitespace and omitted optional nulls are not signed metadata.
@@ -59,8 +61,8 @@ func decodeProviderAttemptTransport(raw []byte, target any) error {
 }
 
 // Neither a fresh request nor a cold object can exceed the same full budget.
-func newProviderAttemptObjectStore(original *ProviderAttemptOriginal, authority ProviderAttemptAuthority, live bool) (*providerAttemptObjectStore, error) {
-	self := &providerAttemptObjectStore{original: original, limit: authority.MaxOriginalBytes, maxObjects: authority.MaxObjects, indexKVs: map[string]int{}, usedKVs: map[string]bool{}, live: live}
+func newProviderAttemptObjectStore(original *ProviderAttemptOriginal, authority ProviderAttemptAuthority, live bool, budget *providerAttemptOriginalBudget) (*providerAttemptObjectStore, error) {
+	self := &providerAttemptObjectStore{original: original, limit: authority.MaxOriginalBytes, maxObjects: authority.MaxObjects, indexKVs: map[string]int{}, usedKVs: map[string]bool{}, live: live, budget: budget, pendingKVs: map[string]chan struct{}{}}
 	if uint64(len(original.Objects)) > self.maxObjects {
 		return nil, protocol.ErrProviderAttemptsCapacity
 	}
@@ -85,6 +87,15 @@ func (self *providerAttemptObjectStore) read(ctx context.Context, reader *HTTPAt
 	}
 	key := origin + "\x00" + kind + "\x00" + hash
 	self.stateLock.Lock()
+	if pending := self.pendingKVs[key]; pending != nil {
+		self.stateLock.Unlock()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-pending:
+			return self.read(ctx, reader, origin, kind, hash, size)
+		}
+	}
 	if index, exists := self.indexKVs[key]; exists {
 		value := self.original.Objects[index]
 		self.usedKVs[key] = true
@@ -103,9 +114,29 @@ func (self *providerAttemptObjectStore) read(ctx context.Context, reader *HTTPAt
 		self.stateLock.Unlock()
 		return nil, protocol.ErrProviderAttemptsCapacity
 	}
+	pending := make(chan struct{})
+	self.pendingKVs[key] = pending
 	self.stateLock.Unlock()
+	defer func() {
+		self.stateLock.Lock()
+		delete(self.pendingKVs, key)
+		close(pending)
+		self.stateLock.Unlock()
+	}()
+	wireBytes, err := providerAttemptObjectWireBytes(origin, kind, hash, size)
+	if err != nil {
+		return nil, err
+	}
+	if err := self.budget.reserve(wireBytes); err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			self.budget.release(wireBytes)
+		}
+	}()
 	var raw []byte
-	var err error
 	if kind == "metadata" {
 		raw, err = reader.ReadMetadata(ctx, hash, size)
 	} else {
@@ -135,6 +166,7 @@ func (self *providerAttemptObjectStore) read(ctx context.Context, reader *HTTPAt
 		if size > self.limit-self.bytes || uint64(len(self.original.Objects)) >= self.maxObjects {
 			return nil, protocol.ErrProviderAttemptsCapacity
 		}
+		committed = true
 		self.bytes += size
 		self.indexKVs[key] = len(self.original.Objects)
 		self.original.Objects = append(self.original.Objects, ProviderAttemptOriginalObject{Origin: origin, Kind: kind, Hash: hash, Body: bytes.Clone(raw)})
@@ -208,15 +240,28 @@ func providerAttemptHttp(ctx context.Context, endpoint, method string, request [
 // The endpoint serves per-window independently signed input selections. It is
 // a discovery transport; neither its URL nor its JSON grants economic authority.
 func (self *ProviderAttemptAuthoritySource) Read(ctx context.Context, artifact *payoutartifact.Artifact) (json.RawMessage, *VerifiedProviderAttemptMeasurement, error) {
+	if self == nil {
+		return nil, nil, protocol.ErrProviderAttemptsUnavailable
+	}
+	return self.ReadBounded(ctx, artifact, self.authority.MaxOriginalBytes)
+}
+
+// Clip this operation's acquisition to the caller's remaining physical frame.
+// A larger configured authority is valid: it grants a ceiling, not an allocation.
+func (self *ProviderAttemptAuthoritySource) ReadBounded(ctx context.Context, artifact *payoutartifact.Artifact, maximumOriginalBytes uint64) (json.RawMessage, *VerifiedProviderAttemptMeasurement, error) {
 	if self == nil || artifact == nil {
 		return nil, nil, protocol.ErrProviderAttemptsUnavailable
 	}
+	if maximumOriginalBytes == 0 {
+		return nil, nil, protocol.ErrProviderAttemptsCapacity
+	}
+	maximumOriginalBytes = min(maximumOriginalBytes, self.authority.MaxOriginalBytes)
 	endpoint, err := providerAttemptEndpoint(self.authority.WindowEndpoint)
 	if err != nil {
 		return nil, nil, err
 	}
 	endpoint.Path = fmt.Sprintf("%s/%d/%d", endpoint.Path, artifact.NoID, artifact.Epoch)
-	raw, err := providerAttemptHttp(ctx, endpoint.String(), http.MethodGet, nil, self.authority.MaxWindowBytes)
+	raw, err := providerAttemptHttp(ctx, endpoint.String(), http.MethodGet, nil, min(self.authority.MaxWindowBytes, maximumOriginalBytes))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -225,7 +270,15 @@ func (self *ProviderAttemptAuthoritySource) Read(ctx context.Context, artifact *
 		return nil, nil, err
 	}
 	original := ProviderAttemptOriginal{Schema: ProviderAttemptOriginalSchema, AuthorityHash: self.hash, Response: response, Objects: []ProviderAttemptOriginalObject{}, Receipts: []ProviderAttemptOriginalResponse{}}
-	verified, err := self.verify(ctx, artifact, &original, true)
+	initial, err := json.Marshal(original)
+	if err != nil {
+		return nil, nil, err
+	}
+	budget := &providerAttemptOriginalBudget{maximum: maximumOriginalBytes}
+	if err := budget.reserve(uint64(len(initial))); err != nil {
+		return nil, nil, err
+	}
+	verified, err := self.verify(ctx, artifact, &original, true, budget)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -241,7 +294,7 @@ func (self *ProviderAttemptAuthoritySource) Read(ctx context.Context, artifact *
 	if err != nil {
 		return nil, nil, err
 	}
-	if uint64(len(raw)) > self.authority.MaxOriginalBytes {
+	if uint64(len(raw)) > maximumOriginalBytes {
 		return nil, nil, protocol.ErrProviderAttemptsCapacity
 	}
 	verified.OriginalHash = sha256.Sum256(raw)
@@ -274,12 +327,15 @@ func (self *ProviderAttemptAuthoritySource) VerifyRetained(ctx context.Context, 
 	if err != nil || !bytes.Equal(raw, canonical) {
 		return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, err)
 	}
-	verified, err := self.verify(ctx, artifact, &original, false)
+	verified, err := self.verify(ctx, artifact, &original, false, nil)
 	if err != nil {
 		return nil, err
 	}
 	verified.OriginalHash = sha256.Sum256(raw)
-	return verified, ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return verified, nil
 }
 
 // Canonical headers, not receipt wall-time approximations, select the interval.
@@ -318,7 +374,7 @@ func (self *ProviderAttemptAuthoritySource) verifyArtifactWindow(ctx context.Con
 
 // Construct actual replay callbacks only after the independent signature has
 // selected every profile/key. One new scratch child belongs to this operation.
-func (self *ProviderAttemptAuthoritySource) verify(ctx context.Context, artifact *payoutartifact.Artifact, original *ProviderAttemptOriginal, live bool) (result *VerifiedProviderAttemptMeasurement, resultErr error) {
+func (self *ProviderAttemptAuthoritySource) verify(ctx context.Context, artifact *payoutartifact.Artifact, original *ProviderAttemptOriginal, live bool, budget *providerAttemptOriginalBudget) (result *VerifiedProviderAttemptMeasurement, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("provider attempt source owner absent")
 	}
@@ -335,7 +391,7 @@ func (self *ProviderAttemptAuthoritySource) verify(ctx context.Context, artifact
 	if err != nil {
 		return nil, err
 	}
-	store, err := newProviderAttemptObjectStore(original, self.authority, live)
+	store, err := newProviderAttemptObjectStore(original, self.authority, live, budget)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +475,7 @@ func (self *ProviderAttemptAuthoritySource) verify(ctx context.Context, artifact
 	if err != nil {
 		return nil, err
 	}
-	rows, requestsHash, err := self.verifyRequests(ctx, original, startMs, endMs, live)
+	rows, requestsHash, err := self.verifyRequests(ctx, original, startMs, endMs, live, budget)
 	if err != nil {
 		return nil, err
 	}

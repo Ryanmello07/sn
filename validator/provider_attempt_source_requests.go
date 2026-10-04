@@ -34,7 +34,7 @@ type providerAttemptLookupResult struct {
 }
 
 // Returned rows are staged until every independently expected lane succeeds.
-func (self *ProviderAttemptAuthoritySource) verifyRequests(ctx context.Context, original *ProviderAttemptOriginal, startMs, endMs uint64, live bool) ([]VerifiedProviderAttemptRow, [32]byte, error) {
+func (self *ProviderAttemptAuthoritySource) verifyRequests(ctx context.Context, original *ProviderAttemptOriginal, startMs, endMs uint64, live bool, budget *providerAttemptOriginalBudget) ([]VerifiedProviderAttemptRow, [32]byte, error) {
 	type laneKey struct {
 		hotkey [32]byte
 		noId   uint64
@@ -166,7 +166,7 @@ func (self *ProviderAttemptAuthoritySource) verifyRequests(ctx context.Context, 
 							}
 							endpoint = strings.TrimSuffix(endpoint, "/") + "/close"
 						}
-						body, err := providerAttemptHttp(ctx, endpoint, http.MethodPost, raw, 128*1024)
+						body, err := providerAttemptHttp(ctx, endpoint, http.MethodPost, raw, budget.remaining(128*1024))
 						if err != nil {
 							return nil, [32]byte{}, err
 						}
@@ -175,6 +175,13 @@ func (self *ProviderAttemptAuthoritySource) verifyRequests(ctx context.Context, 
 							return nil, [32]byte{}, err
 						}
 						response = ProviderAttemptOriginalResponse{RequestHash: requestHash, Receipt: result.Original, Closure: closure, ClosedUnreceived: result.ClosedUnreceived}
+						wire, err := json.Marshal(response)
+						if err != nil {
+							return nil, [32]byte{}, err
+						}
+						if err := budget.reserve(uint64(len(wire)) + 1); err != nil {
+							return nil, [32]byte{}, err
+						}
 						responses[requestHash] = response
 						original.Receipts = append(original.Receipts, response)
 					} else if !exists {
