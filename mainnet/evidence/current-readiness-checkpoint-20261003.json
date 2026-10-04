@@ -242,7 +242,9 @@
     "economic-storage5f5-scoped-source-root-review-20261004.json": "232544c51127edd649bd8275bf0a27189ebe2a5e83a75ce874294c359f4f1523",
     "native-capture263b-sequence-source-root-review-20261004.json": "f65bc5d99b29aa6ea9f14c979e3aabde428f5cdefd3254624cb43d8a9fe03cbb",
     "fee-claim-archive-handoff-root-finding-20261004.json": "06af9caa6165536edf9893a1bd7807e3fdbd453d83e1cb7f13ccbfb8787c8763",
-    "readiness-requirement-outcome-mapping-correction-20261004.json": "fddd9d0adc97e0df040c87c464721229e6229e98d6c8ee81945c18f1c883fa58"
+    "readiness-requirement-outcome-mapping-correction-20261004.json": "fddd9d0adc97e0df040c87c464721229e6229e98d6c8ee81945c18f1c883fa58",
+    "conservation-counterab0-independent-source-review-20261004.json": "35d4fdf93b2d0c861fbb3f9538558e54e5c9de980c4734f116adbd362117b8e9",
+    "claim-full128-normal-recovery-independent-readback-20261004.json": "761cee0237bb11b7cd15ffe6907904d9fd9f48a710cdede094aaf2d6069674be"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

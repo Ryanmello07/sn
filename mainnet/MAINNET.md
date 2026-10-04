@@ -2,6 +2,8 @@
 
 ## Current execution status — October 4
 
+The [independent counter correction review](evidence/conservation-counterab0-independent-source-review-20261004.json) verifies the test-only `ab0` successor before compilation: compare the actual unsigned observation counter with an unsigned count and retain the original source finding. The corrected joined archive batch still requires its41-root normal/race qualification. The [independent normal full128 recovery readback](evidence/claim-full128-normal-recovery-independent-readback-20261004.json) verifies one actual public Claim-window root, exact RUN/PASS census and joined process exit; race and remaining recovery bodies are separate. Preserve successful original work while qualifying the successor.
+
 Mainnet readiness remains unproven. The economic decisions are settled: providers receive 10% of the native miner allocation, 90% is recycled through the owner path, and paid/free completed traffic has equal weight. The October 6 `00:00 UTC` cutoff changes new-earnings attribution; pre-cutoff USDC obligations may finish paying later. Published configuration remains blocked from mainnet activation until the exact deployment package is ready.
 
 | Workstream | Current evidence and next required action | Owner |
