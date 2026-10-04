@@ -279,6 +279,28 @@ func (self economicConservationState) validate(policy economicConservationPolicy
 		}
 		seen[payment.Id] = true
 	}
+	seenReceipts := map[string]bool{}
+	claimPolicies := make(map[string]monitorClaimPolicy, len(policy.Claims))
+	for _, claim := range policy.Claims {
+		claimPolicies[claim.Role] = claim
+	}
+	for _, receipt := range self.Receipts {
+		key := economicConservationReceiptKey(receipt)
+		claim, roleKnown := claimPolicies[receipt.Role]
+		epochKnown := false
+		for _, epoch := range claim.Epochs {
+			epochKnown = epochKnown || epoch.Epoch == receipt.Epoch && epoch.ShareBps == receipt.Observation.ShareBps
+		}
+		if seenReceipts[key] || receipt.Observation.Validate() != nil || receipt.Observation.EvidenceKind != "signed-receipt" || receipt.Observation.Epoch != receipt.Epoch ||
+			!roleKnown || !epochKnown || receipt.Observation.Pool != claim.ExpectedPool ||
+			receipt.ClaimId == "" && receipt.Status != "original-receipt-not-yet-observed" || receipt.ClaimId != "" && (!planSha256(receipt.ClaimId) || receipt.Status != "original-acceptance-observed") {
+			return errors.New("economic original Claim receipt identity or status differs")
+		}
+		seenReceipts[key] = true
+		if _, err := self.archiveView.retainedReceipt(receipt); err != nil {
+			return err
+		}
+	}
 	raw, err := json.Marshal(self)
 	if err != nil {
 		return err
@@ -728,10 +750,12 @@ func (self *economicConservationState) reconcile(policy economicConservationPoli
 				}
 				receipt.ClaimId, receipt.Status = claim.Id, "original-acceptance-observed"
 			}
-			if self.archiveView != nil {
-				if previous, ok := self.archiveView.receipts[economicConservationReceiptKey(receipt)]; ok && rootObjectHash(previous) == rootObjectHash(receipt) {
-					continue
-				}
+			known, err := self.archiveView.retainedReceipt(receipt)
+			if err != nil {
+				return err
+			}
+			if known {
+				continue
 			}
 			self.Receipts = append(self.Receipts, receipt)
 		}

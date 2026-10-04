@@ -30,9 +30,12 @@ type economicConservationArchiveFixture struct {
 	sequence uint64
 }
 
-func newEconomicConservationArchiveFixture(t *testing.T, signed bool) *economicConservationArchiveFixture {
+func newEconomicConservationArchiveFixture(t *testing.T, signed bool, configure ...func(*economicConservationFixture)) *economicConservationArchiveFixture {
 	t.Helper()
 	f := &economicConservationArchiveFixture{source: newEconomicConservationFixture(t, false), metadata: t.TempDir()}
+	for _, change := range configure {
+		change(f.source)
+	}
 	if err := os.Chmod(f.metadata, 0700); err != nil {
 		t.Fatal(err)
 	}

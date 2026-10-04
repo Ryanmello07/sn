@@ -157,6 +157,32 @@ func economicConservationReceiptKey(value economicConservationReceipt) string {
 	return value.Role + "/" + fmt.Sprint(value.Epoch)
 }
 
+// Rechecking the same original transaction may refresh observation time. It
+// cannot rewrite acceptance, payer, payment or original block evidence. Keep
+// the first archived bytes instead of charging another slot for bookkeeping.
+func economicConservationSameReceipt(prior, current economicConservationReceipt) bool {
+	prior.Observation.ObservedAt, current.Observation.ObservedAt = "", ""
+	return reflect.DeepEqual(prior, current)
+}
+
+func (self *economicConservationArchiveView) retainedReceipt(receipt economicConservationReceipt) (bool, error) {
+	if self == nil {
+		return false, nil
+	}
+	prior, exists := self.receipts[economicConservationReceiptKey(receipt)]
+	if exists && !economicConservationSameReceipt(prior, receipt) {
+		return false, errors.New("economic archived original Claim receipt contradicts retained evidence")
+	}
+	return exists, nil
+}
+
+// Unknown payment details remain an active obligation. A later observation
+// of the same receipt may fill them; later separate payments cannot revise a
+// known receipt's deferred/paid fields.
+func economicConservationReceiptArchivable(receipt economicConservationReceipt) bool {
+	return receipt.ClaimId != "" && monitorClaimPaymentKnown(&receipt.Observation)
+}
+
 // Pure compaction retains all active liabilities and exact source references.
 // Component summaries refer to this combined snapshot; their earlier prefix
 // is retained by the outer complete chain rather than a second owner catalog.
@@ -297,13 +323,15 @@ func compactEconomicConservation(policy economicConservationPolicy, original *ec
 	}
 	next.Receipts = nil
 	for _, receipt := range original.Receipts {
-		if receipt.ClaimId == "" {
+		if !economicConservationReceiptArchivable(receipt) {
 			next.Receipts = append(next.Receipts, receipt)
 			continue
 		}
-		if original.archiveView == nil {
-			archive.Counts.Receipts++
-		} else if _, exists := original.archiveView.receipts[economicConservationReceiptKey(receipt)]; !exists {
+		known, err := original.archiveView.retainedReceipt(receipt)
+		if err != nil {
+			return nil, err
+		}
+		if !known {
 			archive.Counts.Receipts++
 		}
 	}
@@ -399,11 +427,15 @@ func (self *economicConservationArchiveView) admit(original, compacted *economic
 		self.entitlements[entitlement.Id] = entitlement
 	}
 	for _, receipt := range original.Receipts {
-		if receipt.ClaimId == "" {
+		if !economicConservationReceiptArchivable(receipt) {
 			continue
 		}
 		key := economicConservationReceiptKey(receipt)
-		if prior, exists := self.receipts[key]; exists && reflect.DeepEqual(prior, receipt) {
+		known, err := self.retainedReceipt(receipt)
+		if err != nil {
+			return err
+		}
+		if known {
 			continue
 		}
 		if err := self.charge(receipt); err != nil {
@@ -467,6 +499,13 @@ func openEconomicConservationArchive(ctx context.Context, policy economicConserv
 	}
 	if state.Renewal != nil && view.reviews[state.Renewal.ReviewSha256] {
 		return nil, errors.New("economic continuation reused an archived operational review")
+	}
+	// Check the active head against the admitted original receipt index before
+	// the observer can perform a new source read or publish another snapshot.
+	checked := *state
+	checked.archiveView = view
+	if err := checked.validate(policy); err != nil {
+		return nil, err
 	}
 	return view, errors.Join(ctx.Err(), view.check())
 }
