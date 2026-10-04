@@ -206,6 +206,10 @@ type economicConservationReceipt struct {
 // before an append and never prunes an unresolved liability. Archived matched
 // facts stay authenticated by exact checkpoints under separately held custody.
 type economicConservationState struct {
+	FinalityApproval     []byte                                   `json:"original_consensus_approval,omitempty"`
+	FinalityWindows      []nativeExecutionFinalityWindow          `json:"original_consensus_windows,omitempty"`
+	FinalityFrom         *economicEmissionBoundary                `json:"original_consensus_vault_from,omitempty"`
+	FinalityVaultBlocks  []economicEmissionBoundary               `json:"original_consensus_vault_blocks,omitempty"`
 	EntitlementReadAfter map[string]string                        `json:"entitlement_read_after,omitempty"`
 	NativeRenewal        *economicConservationNativeRenewal       `json:"native_approval_adoption,omitempty"`
 	Yuma                 []economicConservationYumaEvidence       `json:"original_yuma_evidence,omitempty"`
@@ -269,7 +273,7 @@ func (self economicConservationState) facts() uint64 {
 	if self.OpeningPrincipals != nil {
 		principalFacts = uint64(len(self.OpeningPrincipals.Projection.Observations)) + 1
 	}
-	return self.entitlementCensusFacts() + principalFacts + self.yumaFacts() + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
+	return self.finalityFacts() + self.entitlementCensusFacts() + principalFacts + self.yumaFacts() + self.principalEffectFacts() + uint64(len(self.Mappings)+len(self.Lots)+len(self.Captures)+len(self.Entitlements)+len(self.Claims)+len(self.Payments)+len(self.Receipts)) + self.feeFacts()
 }
 
 func (self economicConservationState) validate(ctx context.Context, policy economicConservationPolicy) error {
@@ -307,6 +311,9 @@ func (self economicConservationState) validate(ctx context.Context, policy econo
 		return errors.New("economic conservation archive adoption is not configured")
 	}
 	if err := self.Archive.validate(policy, &self); err != nil {
+		return err
+	}
+	if err := self.validateFinality(ctx, policy); err != nil {
 		return err
 	}
 	if err := self.validateOpeningPrincipal(policy); err != nil {
@@ -426,6 +433,9 @@ func (self *economicConservationState) appendNative(ctx context.Context, policy 
 		outcome := block.ExecutionOutcome
 		if outcome == nil {
 			return errors.New("economic native source did not retain original execution")
+		}
+		if err := self.appendFinality(ctx, policy, *outcome, block); err != nil {
+			return err
 		}
 		if err := self.appendOpeningPrincipal(policy, *outcome); err != nil {
 			return err
@@ -565,9 +575,20 @@ func (self *economicConservationState) appendVault(policy economicConservationPo
 	if self.OpeningVault == nil {
 		self.opening(observation.Before)
 	}
+	trackFinality := policy.Native.Observation.Execution != nil && policy.Native.Observation.Execution.Producer != nil
+	if trackFinality && self.FinalityFrom == nil {
+		boundary := self.Vault.Cursor
+		self.FinalityFrom = &boundary
+	}
 	for _, block := range observation.Blocks {
 		if block.Boundary.Number > next.Cursor.Number {
 			break
+		}
+		if trackFinality {
+			if self.facts()+1 > policy.MaximumFacts {
+				return errMonitorEconomicCapacity
+			}
+			self.FinalityVaultBlocks = append(self.FinalityVaultBlocks, block.Boundary)
 		}
 		for _, event := range block.Events {
 			if self.facts()+2 > policy.MaximumFacts {

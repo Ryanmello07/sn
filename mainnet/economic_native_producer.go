@@ -24,12 +24,13 @@ type nativeProducerStateKey struct{}
 type nativeProducerSessionKey struct{}
 
 type nativeProducerSession struct {
-	files          *nativeProducerFiles
-	authority      *nativeProducerAuthority
-	authorities    []nativeProducerReviewedAuthority
-	originalPolicy economicEmissionPolicy
-	policy         economicEmissionPolicy
-	state          nativeExecutionProducerState
+	finalityApproval []byte
+	files            *nativeProducerFiles
+	authority        *nativeProducerAuthority
+	authorities      []nativeProducerReviewedAuthority
+	originalPolicy   economicEmissionPolicy
+	policy           economicEmissionPolicy
+	state            nativeExecutionProducerState
 }
 
 func openNativeProducerSession(ctx context.Context, policy economicEmissionPolicy) (_ *nativeProducerSession, resultErr error) {
@@ -374,6 +375,10 @@ func (self *nativeProducerSession) observe(ctx context.Context, client *rpcClien
 	outcome.ProducerAuthorityHash = self.state.AuthorityHash
 	outcome.FinalityProofHash = finality.ProofHash
 	outcome.ContentHash = outcome.hash()
+	outcome.CertifiedWindow, err = self.finalityProjection(ctx, reference, *outcome, finality)
+	if err != nil {
+		return nil, err
+	}
 	completion := nativeProducerCompletion{Schema: nativeProducerCompletionSchema, AuthorityHash: self.state.AuthorityHash, Previous: self.state.CompletionChain, Sequence: self.state.Completed + 1, Input: planFileReference{Path: filepath.Join(self.files.path, inputName), Sha256: monitorReadDigest(inputRaw)}, Admission: admission, Anchor: self.state.Anchor, Window: reference, Certified: economicEmissionBoundary{Number: finality.Certified.Number, Hash: finality.Certified.Hash}, OutcomeHash: outcome.ContentHash}
 	completion.ResourceForecast = self.files.forecast
 	if len(self.state.AuthorityRevisions) != 0 {

@@ -115,6 +115,7 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // FixedPointTolerance covers the observed final normalization and u64 casts;
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
+	CertifiedWindow        *nativeExecutionFinalityProjection  `json:"original_finality_window,omitempty"`
 	Yuma                   *nativeYumaProjection               `json:"complete_allocation_witness,omitempty"`
 	PrincipalEffects       *nativePrincipalExecutionProjection `json:"principal_execution_effects,omitempty"`
 	OpeningPrincipals      *nativePrincipalProjection          `json:"opening_principals,omitempty"`
@@ -149,6 +150,7 @@ type nativeExecutionDrain struct {
 // original completion or pretending an older result retained recipient amounts.
 func (self nativeExecutionOutcome) hash() string {
 	self.ContentHash = ""
+	self.CertifiedWindow = nil
 	self.RecipientEffects = nil
 	self.OpeningPrincipals = nil
 	self.PrincipalEffects = nil

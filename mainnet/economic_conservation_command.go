@@ -21,6 +21,7 @@ import (
 const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
+	OriginalFinality               *economicConservationFinalitySummary        `json:"original_consensus_coverage,omitempty"`
 	Funding                        *economicConservationFundingSummary         `json:"original_funding_composition,omitempty"`
 	Conformance                    *economicConservationConformance            `json:"observed_economic_conformance,omitempty"`
 	OriginalEntitlements           *economicConservationEntitlementSummary     `json:"original_entitlement_census,omitempty"`
@@ -173,6 +174,13 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 		}
 		result.DirectGrossAlpha, result.TailGrossAlpha, result.RewardCollateralAlpha = &direct, &tail, &collateral
 		result.UnroutedGrossAlpha = &unrouted
+	}
+	result.OriginalFinality, err = self.finalitySummary(ctx, policy)
+	if err != nil {
+		return economicConservationSummary{}, err
+	}
+	if result.OriginalEntitlements != nil {
+		result.OriginalEntitlements.IndependentFinalityAuthenticated = result.OriginalFinality != nil && result.OriginalFinality.Complete
 	}
 	result.Funding, err = self.fundingSummary(ctx)
 	if err != nil {

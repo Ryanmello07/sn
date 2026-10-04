@@ -23,6 +23,7 @@ type monitorServiceHooks struct {
 	afterEntitlementRead        func(context.Context, string, error)
 	economicClaimWork           func(role, stage string, units uint64)
 	economicFundingWork         func(context.Context)
+	economicFinalityWork        func(context.Context)
 	beforeNativeFeeRead         func(context.Context, context.CancelFunc)
 	afterNativeFeeRead          func(context.Context, error)
 	nativeFeeReplay             historicalReplayHooks

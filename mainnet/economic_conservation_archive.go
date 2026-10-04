@@ -12,6 +12,8 @@ import (
 	"os"
 	"reflect"
 	"slices"
+
+	"github.com/urnetwork/server/strecovery"
 )
 
 type economicConservationCounts struct {
@@ -33,6 +35,7 @@ type economicConservationArchivedAmounts struct {
 }
 
 type economicConservationArchive struct {
+	Finality           *economicConservationFinalityHead       `json:"original_consensus_head,omitempty"`
 	Yuma               *economicConservationYumaArchive        `json:"original_yuma_summary,omitempty"`
 	NativeApprovalHead *economicConservationNativeApprovalHead `json:"native_approval_head,omitempty"`
 	PrincipalEffects   *economicConservationPrincipalArchive   `json:"original_principal_effects,omitempty"`
@@ -110,6 +113,12 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	finality                 *economicFinalityIndex
+	finalityVerified         map[string]*economicVerifiedFinalityWindow
+	finalityAnchor           *strecovery.NativeFinalityCheckpoint
+	finalityApprovalHash     string
+	finalityPolicy           *economicEmissionPolicy
+	finalityWork             func(context.Context)
 	funding                  *economicConservationFundingIndex
 	fundingWork              func(context.Context)
 	admission                context.Context
@@ -159,7 +168,7 @@ type economicConservationArchiveView struct {
 }
 
 func newEconomicConservationArchiveView(resources economicConservationResources) *economicConservationArchiveView {
-	return &economicConservationArchiveView{principalExecutions: map[uint64]economicConservationPrincipalExecution{}, captureEffectHeads: map[string]economicConservationCaptureEffects{}, yumaHashes: map[string]string{}, entitlementVerified: map[string]string{}, entitlementOriginal: map[string]string{}, entitlementReferences: map[string]*economicConservationEntitlementReference{}, entitlementRequired: map[string]string{}, entitlementLeaves: map[string]map[string]string{}, entitlementClaimIds: map[string][]string{}, entitlementFundingUses: map[string]string{}, nativeReviews: map[string]bool{}, principalExecutionHashes: map[string]string{}, claimReviews: map[string]bool{}, claimRetired: map[string]*monitorClaimWindowAdmission{}, feePolicies: map[string]economicNativeFeePolicy{}, feeReviews: map[string]bool{}, feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, feeOrigins: map[string]economicConservationFeeObligation{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
+	return &economicConservationArchiveView{finalityVerified: map[string]*economicVerifiedFinalityWindow{}, principalExecutions: map[uint64]economicConservationPrincipalExecution{}, captureEffectHeads: map[string]economicConservationCaptureEffects{}, yumaHashes: map[string]string{}, entitlementVerified: map[string]string{}, entitlementOriginal: map[string]string{}, entitlementReferences: map[string]*economicConservationEntitlementReference{}, entitlementRequired: map[string]string{}, entitlementLeaves: map[string]map[string]string{}, entitlementClaimIds: map[string][]string{}, entitlementFundingUses: map[string]string{}, nativeReviews: map[string]bool{}, principalExecutionHashes: map[string]string{}, claimReviews: map[string]bool{}, claimRetired: map[string]*monitorClaimWindowAdmission{}, feePolicies: map[string]economicNativeFeePolicy{}, feeReviews: map[string]bool{}, feeEvidence: map[string]string{}, feeRetired: map[string]string{}, feeTransactions: map[string]historicalFeeContextTransaction{}, feeOrigins: map[string]economicConservationFeeObligation{}, resources: resources, mappings: map[string]economicConservationMapping{}, lotIds: map[string]bool{}, captureKeys: map[string]string{}, claimKeys: map[string]string{}, claims: map[string]economicConservationClaim{}, entitlements: map[string]economicConservationEntitlement{}, receipts: map[string]economicConservationReceipt{}, reviews: map[string]bool{}}
 }
 
 // The encoded facts and fixed per-entry bookkeeping have separate bounds.
@@ -453,6 +462,9 @@ func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy econo
 			return nil, err
 		}
 	}
+	if err := next.retireFinality(ctx, original); err != nil {
+		return nil, err
+	}
 	if err := next.retireYuma(); err != nil {
 		return nil, err
 	}
@@ -477,6 +489,9 @@ func economicConservationRetainedIds[T any](values []T, id func(T) string) map[s
 func (self *economicConservationArchiveView) admit(ctx context.Context, original, compacted *economicConservationState) error {
 	retireFees, err := self.indexAdmission(original, compacted)
 	if err != nil {
+		return err
+	}
+	if err := self.retainFinality(ctx, original, compacted); err != nil {
 		return err
 	}
 	if err := self.retainFundingComposition(ctx, original, compacted); err != nil {
@@ -684,9 +699,12 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 	}
 	view := newEconomicConservationArchiveView(resources)
 	view.admission = ctx
+	finalityPolicy := economicConservationNativeBasis(policy).Native.Observation
+	view.finalityPolicy = &finalityPolicy
 	view.entitlementEnabled = policy.EntitlementSources != nil
 	view.claimWork = hooks.economicClaimWork
 	view.fundingWork = hooks.economicFundingWork
+	view.finalityWork = hooks.economicFinalityWork
 	if policy.FeeAuthority != nil {
 		view.feeReviews[policy.FeeAuthority.ReviewSha256] = true
 	}
@@ -712,6 +730,9 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		}
 		checked := *state
 		checked.archiveView = view
+		if err := checked.validateFinality(ctx, policy); err != nil {
+			return nil, err
+		}
 		if err := checked.reconcileEntitlementLeaves(ctx); err != nil {
 			return nil, err
 		}
