@@ -171,7 +171,7 @@ func (self *ProviderAttemptAuthoritySource) verifyRequests(ctx context.Context, 
 							return nil, [32]byte{}, err
 						}
 						var result providerAttemptLookupResult
-						if err := attemptStoreDecode(body, &result); err != nil {
+						if err := decodeProviderAttemptTransport(body, &result); err != nil {
 							return nil, [32]byte{}, err
 						}
 						response = ProviderAttemptOriginalResponse{RequestHash: requestHash, Receipt: result.Original, Closure: closure, ClosedUnreceived: result.ClosedUnreceived}

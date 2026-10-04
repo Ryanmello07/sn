@@ -40,6 +40,24 @@ type providerAttemptObjectStore struct {
 	live       bool
 }
 
+// Transport whitespace and omitted optional nulls are not signed metadata.
+// Reject duplicate/unknown fields and trailing documents while preserving all
+// original signed byte slices for their separate canonical verification.
+func decodeProviderAttemptTransport(raw []byte, target any) error {
+	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
+		return errors.Join(protocol.ErrProviderAttemptsIntegrity, err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return errors.Join(protocol.ErrProviderAttemptsIntegrity, err)
+	}
+	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
+		return errors.Join(protocol.ErrProviderAttemptsIntegrity, errors.New("provider transport has trailing JSON"))
+	}
+	return nil
+}
+
 // Neither a fresh request nor a cold object can exceed the same full budget.
 func newProviderAttemptObjectStore(original *ProviderAttemptOriginal, authority ProviderAttemptAuthority, live bool) (*providerAttemptObjectStore, error) {
 	self := &providerAttemptObjectStore{original: original, limit: authority.MaxOriginalBytes, maxObjects: authority.MaxObjects, indexKVs: map[string]int{}, usedKVs: map[string]bool{}, live: live}
@@ -203,7 +221,7 @@ func (self *ProviderAttemptAuthoritySource) Read(ctx context.Context, artifact *
 		return nil, nil, err
 	}
 	var response ProviderAttemptWindowResponse
-	if err := attemptStoreDecode(raw, &response); err != nil {
+	if err := decodeProviderAttemptTransport(raw, &response); err != nil {
 		return nil, nil, err
 	}
 	original := ProviderAttemptOriginal{Schema: ProviderAttemptOriginalSchema, AuthorityHash: self.hash, Response: response, Objects: []ProviderAttemptOriginalObject{}, Receipts: []ProviderAttemptOriginalResponse{}}
