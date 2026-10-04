@@ -143,7 +143,8 @@
     "rust-output-classifier-integration-20261004.json": "397e30b9dc08ffbdd6f5a7afa3d756d989ba60ac6bdeaa10f49e923c3ec6c98e",
     "parallel-qualification-launch-20261004.json": "6558116a9f7fff3626a808d4b01c5f6d4b31b35ef35341f3f4a51019a68106b4",
     "model-c2b-normal-independent-census-20261004.json": "a4a08ff372a1b6436a5cf54c20376357c8dcc347e08c92f2dc98293c1bb2a90f",
-    "composed-source-input-readback-20261004.json": "aa9bfbbf118ca2aab6945b69248edabae1e72a7043de7b5edb15bd91fd0d71c7"
+    "composed-source-input-readback-20261004.json": "aa9bfbbf118ca2aab6945b69248edabae1e72a7043de7b5edb15bd91fd0d71c7",
+    "core-preflight-and-control-rebase-20261004.json": "27925c91b26042e31ecf08c30ab67c43f9879f51a514cf775f843420cf17d41d"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
