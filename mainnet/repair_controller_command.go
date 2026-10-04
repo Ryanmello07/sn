@@ -23,6 +23,9 @@ func runRepairControllerCommand(ctx context.Context, args []string, stdout, stde
 // A supervisor may retry unavailable shared observations without refunding any
 // retained allowance. Confirmed identity and ambiguous publication stay held.
 func repairControllerCommandExit(err error) int {
+	if errors.Is(err, errRepairControllerHeartbeatHeld) {
+		return 3
+	}
 	status, cause := repairControllerCause(err)
 	if status == "held" {
 		return 3
@@ -106,6 +109,8 @@ func runRepairControllerCommandWithHost(ctx context.Context, args []string, stdo
 		fmt.Fprintln(stderr, "repair controller requires Linux root custody")
 		return 2
 	}
+	ctx, cancelOwner := context.WithCancel(ctx)
+	defer cancelOwner()
 	flags := flag.NewFlagSet("repair-controller", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	manifestPath := flags.String("manifest", "", "immutable independently reviewed envelope roster")
@@ -203,22 +208,19 @@ func runRepairControllerCommandWithHost(ctx context.Context, args []string, stdo
 		fmt.Fprintln(stderr, err)
 		return repairControllerCommandExit(err)
 	}
-	controller := repairController{manifest: manifest, record: record, unitLocks: unitLocks, now: now, step: repairControllerHostStep(host, now), save: func(record repairControllerRecord) error {
-		if err := saveRepairControllerStore(store, record, manifest, hash); err != nil {
-			return err
-		}
-		if err := metrics.saveRaw(record.metrics()); err != nil {
-			fmt.Fprintln(stderr, "repair controller metrics observation:", err)
-		}
-		return nil
-	}}
+	heartbeat := &repairControllerHeartbeat{store: store, metrics: metrics, manifest: manifest, hash: hash, now: now, checkManifest: func(observation context.Context) error {
+		return host.pin(observation, manifestReference, 64*1024, false)
+	}, cancelOwner: cancelOwner, stderr: stderr}
+	heartbeat.retain(record)
+	heartbeat.start(ctx)
+	controller := repairController{manifest: manifest, record: record, unitLocks: unitLocks, now: now, step: repairControllerHostStep(host, now), save: func(record repairControllerRecord) error { return heartbeat.persist(ctx, record) }}
 	for {
-		err = errors.Join(host.pin(ctx, manifestReference, 64*1024, false), store.validateOwner())
+		err = heartbeat.check(ctx)
 		if err == nil {
 			err = controller.cycle(ctx)
 		}
 		if err == nil {
-			err = metrics.saveRaw(controller.record.metrics())
+			err = heartbeat.publish(ctx)
 		}
 		if err == nil {
 			err = json.NewEncoder(stdout).Encode(controller.record)
@@ -235,7 +237,10 @@ func runRepairControllerCommandWithHost(ctx context.Context, args []string, stdo
 			break
 		}
 	}
-	err = errors.Join(err, metrics.close(), store.close())
+	// The cycle has joined every action. Cancel both the timer's child context
+	// and the original context retained by file owners before joining the timer.
+	cancelOwner()
+	err = errors.Join(err, heartbeat.close(), metrics.close(), store.close())
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return repairControllerCommandExit(err)
