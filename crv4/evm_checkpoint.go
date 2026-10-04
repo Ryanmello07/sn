@@ -155,6 +155,19 @@ func readEvmCheckpointAttempt(ctx context.Context, chain *Chain, query EVMCheckp
 	if err != nil {
 		return empty, fmt.Errorf("EVM/native checkpoint parent: %w", err)
 	}
+	// Canonical hashes cannot establish that the opening finality witness is
+	// still finalized after the dependent storage reads.
+	closing, err := FinalizedHeadContext(ctx, chain)
+	if err != nil {
+		return empty, err
+	}
+	closingNumber, _, err := chain.CanonicalHeaderAtContext(ctx, closing)
+	if err != nil {
+		return empty, err
+	}
+	if closingNumber < finalizedNumber {
+		return empty, errors.New("EVM/native checkpoint finalized head regressed during observation")
+	}
 	for _, boundary := range []struct {
 		hash   types.Hash
 		number uint64
