@@ -5,8 +5,10 @@ package payoutartifact
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/urfoundation/sn/protocol"
@@ -29,6 +31,13 @@ type wholeWorkEndpointProof struct {
 	state  protocol.ProviderWorkEndpointState
 }
 
+// The producer retains one first observation for each exact requested phase.
+type wholeWorkOpenIdentity struct {
+	contractId [16]byte
+	epoch      uint64
+	blockHash  [32]byte
+}
+
 // Receipt hashes identify originals shared by many contracts. Endpoint replay
 // retains one state per original prefix, never a quadratic copy per contract.
 type wholeWorkParticipantPool struct {
@@ -36,6 +45,7 @@ type wholeWorkParticipantPool struct {
 	originalKVs    map[[32]byte]protocol.ProviderWorkReceipt
 	reservationKVs map[[16]byte][32]byte
 	outcomeKVs     map[[16]byte][32]byte
+	openKVs        map[[16]byte][][32]byte
 	streamKVs      map[[16]byte][32]byte
 	endpointKVs    map[[32]byte]wholeWorkEndpointProof
 }
@@ -46,7 +56,7 @@ type wholeWorkParticipantVerification struct {
 	Complete           bool
 	Outcomes           map[[16]byte]protocol.ProviderWorkOutcome
 	FutureReservations map[[16]byte]protocol.ProviderWorkReservation
-	OpenThroughEnd     map[[16]byte]protocol.ProviderWorkOutcome
+	OpenThroughEnd     map[[16]byte]protocol.ProviderWorkReceipt
 }
 
 // Convert component failures without disguising cancellation as malformed data.
@@ -85,7 +95,7 @@ func (self *wholeWorkParticipantPool) uniqueSourceAt(original protocol.ProviderW
 func readWholeWorkParticipantPool(ctx context.Context, domainHash [32]byte, authorities []protocol.ProviderWorkSourceAuthority, originals [][]byte) (*wholeWorkParticipantPool, error) {
 	pool := &wholeWorkParticipantPool{
 		authorityKVs: map[wholeWorkSourceIdentity]protocol.ProviderWorkSourceAuthority{}, originalKVs: map[[32]byte]protocol.ProviderWorkReceipt{},
-		reservationKVs: map[[16]byte][32]byte{}, outcomeKVs: map[[16]byte][32]byte{}, streamKVs: map[[16]byte][32]byte{}, endpointKVs: map[[32]byte]wholeWorkEndpointProof{},
+		reservationKVs: map[[16]byte][32]byte{}, outcomeKVs: map[[16]byte][32]byte{}, openKVs: map[[16]byte][][32]byte{}, streamKVs: map[[16]byte][32]byte{}, endpointKVs: map[[32]byte]wholeWorkEndpointProof{},
 	}
 	for _, authority := range authorities {
 		if err := ctx.Err(); err != nil {
@@ -101,6 +111,7 @@ func readWholeWorkParticipantPool(ctx context.Context, domainHash [32]byte, auth
 		pool.authorityKVs[identity] = authority
 	}
 	endpointKVs := map[wholeWorkEndpointIdentity][]protocol.ProviderWorkReceipt{}
+	openKVs := map[wholeWorkOpenIdentity]bool{}
 	seenOriginalKVs := map[[32]byte]bool{}
 	var unavailableErr error
 	for _, raw := range originals {
@@ -145,6 +156,14 @@ func readWholeWorkParticipantPool(ctx context.Context, domainHash [32]byte, auth
 			idText, target = original.Reservation.ContractId, pool.reservationKVs
 		case original.Outcome != nil:
 			idText, target = original.Outcome.ContractId, pool.outcomeKVs
+		case original.Open != nil:
+			id, _ := protocol.ParseProviderWorkId(original.Open.ContractId)
+			identity := wholeWorkOpenIdentity{contractId: id, epoch: original.Open.Epoch, blockHash: original.Open.BlockHash}
+			if openKVs[identity] {
+				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("conflicting original open observation"))
+			}
+			openKVs[identity] = true
+			pool.openKVs[id] = append(pool.openKVs[id], hash)
 		case original.Stream != nil:
 			idText, target = original.Stream.StreamId, pool.streamKVs
 		}
@@ -316,7 +335,11 @@ func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, author
 	if ctx == nil || artifact == nil || artifact.ClosedWork == nil || inventory == nil || inventory.Clock == nil {
 		return nil, ErrClosedWorkUnavailable
 	}
-	result := &wholeWorkParticipantVerification{Outcomes: map[[16]byte]protocol.ProviderWorkOutcome{}, FutureReservations: map[[16]byte]protocol.ProviderWorkReservation{}, OpenThroughEnd: map[[16]byte]protocol.ProviderWorkOutcome{}}
+	result := &wholeWorkParticipantVerification{Outcomes: map[[16]byte]protocol.ProviderWorkOutcome{}, FutureReservations: map[[16]byte]protocol.ProviderWorkReservation{}, OpenThroughEnd: map[[16]byte]protocol.ProviderWorkReceipt{}}
+	endHash, err := hex.DecodeString(strings.TrimPrefix(artifact.End.Hash, "0x"))
+	if err != nil || len(endHash) != 32 {
+		return nil, ErrClosedWorkIntegrity
+	}
 	domainHash, err := authority.Domain.Digest()
 	if err != nil {
 		return nil, err
@@ -353,24 +376,44 @@ func verifyWholeWorkParticipants(ctx context.Context, artifact *Artifact, author
 		if future {
 			result.FutureReservations[id] = *reservation
 		}
-		outcomeHash, exists := pool.outcomeKVs[id]
-		if !exists {
-			continue
-		}
-		outcomeOriginal := pool.originalKVs[outcomeHash]
+		outcomeOriginal := pool.originalKVs[pool.outcomeKVs[id]]
 		outcome := outcomeOriginal.Outcome
-		if outcome.ReservationHash != pool.reservationKVs[id] || outcome.Capacity != facts.ReservedBytes {
-			return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original settlement differs from its original reservation"))
+		if outcome != nil {
+			if outcome.ReservationHash != pool.reservationKVs[id] || outcome.Capacity != facts.ReservedBytes {
+				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original settlement differs from its original reservation"))
+			}
+			if outcome.ClosedAtUnixMicro < reservation.CreatedAtUnixMicro {
+				// An original clock reversal cannot date either side of the cut.
+				delete(result.FutureReservations, id)
+			}
 		}
-		if outcome.ClosedAtUnixMicro < reservation.CreatedAtUnixMicro {
-			// An original clock reversal cannot date either side of the cut.
-			delete(result.FutureReservations, id)
-			continue
+		for _, hash := range pool.openKVs[id] {
+			openOriginal := pool.originalKVs[hash]
+			open := openOriginal.Open
+			if open.ReservationHash != pool.reservationKVs[id] || open.ObservedAtUnixMicro < reservation.CreatedAtUnixMicro {
+				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original open observation differs from its original reservation"))
+			}
+			// Serialized open then close can share a truncated microsecond.
+			// A strictly earlier terminal contradicts the live null observation.
+			if outcome != nil && outcome.ClosedAtUnixMicro < open.ObservedAtUnixMicro {
+				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original open observation follows its terminal outcome"))
+			}
+			if open.Epoch != artifact.Epoch || open.Block != artifact.End.Number || open.BlockHash != [32]byte(endHash) {
+				continue
+			}
+			if open.BoundaryUnixMicro != inventory.Clock.EndTime.UnixMicro() {
+				return nil, errors.Join(ErrClosedWorkIntegrity, errors.New("original open observation changed the recovered boundary clock"))
+			}
+			if !future && pool.uniqueSourceAt(openOriginal) {
+				result.OpenThroughEnd[id] = openOriginal
+			}
 		}
-		if !future && pool.uniqueSourceAt(outcomeOriginal) && !time.UnixMicro(outcome.ClosedAtUnixMicro).Before(inventory.Clock.EndTime) {
+		if !future && outcome != nil && outcome.ClosedAtUnixMicro >= reservation.CreatedAtUnixMicro && pool.uniqueSourceAt(outcomeOriginal) && !time.UnixMicro(outcome.ClosedAtUnixMicro).Before(inventory.Clock.EndTime) {
 			// Timing evidence is separate from complete terminal amount proof:
 			// a boundary cut may correctly retain an earlier checkpoint.
-			result.OpenThroughEnd[id] = *outcome
+			if _, observed := result.OpenThroughEnd[id]; !observed {
+				result.OpenThroughEnd[id] = outcomeOriginal
+			}
 		}
 	}
 	complete := true
