@@ -22,6 +22,8 @@ Use the [reviewed two-times resource forecast](evidence/scoped-warm-go-resource-
 
 ## Retained component progress — October 4
 
+The [original funding exporter scope](evidence/funding-ab48-original-export-scope-root-review-20261004.json) verifies all 33 crate source entries against the original reviewed composition. Execute four actual exporters, retain 14 exact outputs and qualify five causal controls, then feed those results to the existing corrected Go images for the full funding scope. Source recipes and matching hashes do not replace execution or measured populated resource sizing.
+
 The [Server fixture workspace recovery](evidence/server5b-logical-workspace-recovery-review-20261004.json) fixes logical-versus-physical module path admission without rebuilding valid test images. Preflight the exact child helper command, working directory and GOWORK; a model-only graph cannot prove the startup helper resolves. The corrected helper and model graphs pass, and the unchanged 32-root normal/race scope is adopted. Preserve the original zero-body refusal and successful cleanup; actual model execution remains pending.
 
 The [corrected ABI two-mode readback](evidence/coordinator-ab48-nine-two-mode-independent-readback-20261004.json) verifies nine normal and nine race passes, no skips or failures, joined exit zero and exact protected image bytes. The four original fixture failures now pass both modes. Fixture-control/vet and complete funding41 remain separate pending scopes.

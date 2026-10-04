@@ -284,7 +284,8 @@
     "coordinator-ab48-nine-normal-independent-readback-20261004.json": "cecc9fa1a1fd7876a8a96acede18f69e65abee9989b2657a57c14f03a7e38a25",
     "validator-terminal-current-integration-source-review-20261004.json": "dca90e85ca694c47bd661c8f555b62c4e56939f88d2c7a9ac830da8923731697",
     "coordinator-ab48-nine-two-mode-independent-readback-20261004.json": "0c7bd366c72953fa6b85e0f5f876ba3794ad8d90aa64d9e5eb9f2e2857805cc8",
-    "server5b-logical-workspace-recovery-review-20261004.json": "2188faf84d0dce3ce84b52d3a9642d3be500881f3729ec5a416619693b928301"
+    "server5b-logical-workspace-recovery-review-20261004.json": "2188faf84d0dce3ce84b52d3a9642d3be500881f3729ec5a416619693b928301",
+    "funding-ab48-original-export-scope-root-review-20261004.json": "e166d6bf47a42ed0205827294054f0c293e21679aa3c4d1dfe34f93efe2f17fe"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
