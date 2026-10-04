@@ -46,7 +46,35 @@ type ClosedWorkWindowClock struct {
 // Reconstruct timestamps from exact header bytes whose hashes are the original
 // artifact boundaries. A self-sealed clock counter cannot replace this evidence.
 func (self *ClosedWorkWindowClock) matches(ctx context.Context, artifact *Artifact, start, end time.Time) bool {
-	if self == nil || self.Start != artifact.Start || self.End != artifact.End || !self.StartTime.Equal(start) || !self.EndTime.Equal(end) || !self.StartTime.Before(self.EndTime) {
+	if artifact == nil {
+		return false
+	}
+	return self.matchesBoundaries(ctx, artifact.Start, artifact.End, start, end)
+}
+
+// The publisher shares the exact raw-header checks with the full consumer.
+// Its containing owner must independently admit the authority before this call;
+// authenticating a clock supplies neither SDK completeness nor source authority.
+func VerifyWholeWorkWindowClock(ctx context.Context, authority WholeWorkAuthority, clock *ClosedWorkWindowClock) error {
+	if ctx == nil || clock == nil {
+		return ErrClosedWorkUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(err, context.Cause(ctx))
+	}
+	if clock.Start != authority.Start || clock.End != authority.End || clock.HeaderProfile != authority.ClockProfile {
+		return ErrClosedWorkIntegrity
+	}
+	if !clock.matchesBoundaries(ctx, authority.Start, authority.End, clock.StartTime, clock.EndTime) {
+		return errors.Join(ErrClosedWorkUnavailable, ctx.Err(), context.Cause(ctx))
+	}
+	return ctx.Err()
+}
+
+// Boundary-based input avoids manufacturing an unsigned artifact merely to
+// authenticate the already independently selected original header pair.
+func (self *ClosedWorkWindowClock) matchesBoundaries(ctx context.Context, startBoundary, endBoundary Boundary, start, end time.Time) bool {
+	if ctx == nil || self == nil || self.Start != startBoundary || self.End != endBoundary || !self.StartTime.Equal(start) || !self.EndTime.Equal(end) || !self.StartTime.Before(self.EndTime) {
 		return false
 	}
 	for _, original := range []struct {
