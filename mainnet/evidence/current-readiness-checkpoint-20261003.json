@@ -159,7 +159,8 @@
     "runtime-transport-f3-compile-root-review-20261004.json": "874e98c117be64d1bc7fcf16eef96b9c9244a1b5a2379ab6402511bb59b526d1",
     "fee-fixture-c04-source-root-review-20261004.json": "17759ae46ea6bac44df663af5feb4c522c55b8c8edbcdd84e13d8b405394886b",
     "runtime-transport-original-normal-root-review-20261004.json": "8172a6c0ba991ea975866b6966da110e3e942c0662024be0a7d32f92e08b6563",
-    "fee-retirement-logical-guard-source-finding-20261004.json": "9290afe26ef4f8392c0815c69ad3ce7cfb3c4dffd308c7e57c56e31f0b67da27"
+    "fee-retirement-logical-guard-source-finding-20261004.json": "9290afe26ef4f8392c0815c69ad3ce7cfb3c4dffd308c7e57c56e31f0b67da27",
+    "runtime-transport-original-race-root-review-20261004.json": "e73997f99a4b80fb61e03136391a6bdf91fa20117b2de100ed4d5904399d68bc"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -274,7 +275,7 @@
       "closed": false,
       "evidence": "runtime-transport-original-normal-root-review-20261004.json",
       "requirement": "PH-18",
-      "status": "Transport-generation successor f3 compiles three packages and completes normal33 roots at32 pass/one actual reconnect failure/no skips. Implicit reconnect invalidates the attempted proof; automatic whole-read reobservation through actual public owners and original pinned budgets is being implemented. Preserve f3 race and exact source results. Observation-cause successor f89 is source-reviewed; generic all-role capability/current composition remains."
+      "status": "Transport-generation successor f3 compiles three packages and completes normal and race33-root scopes each at32 pass/one actual reconnect failure/no skips. Implicit reconnect invalidates the attempted proof; automatic whole-read reobservation through actual public owners and original pinned budgets is being implemented. Both original f3 results remain retained. Observation-cause successor f89 is source-reviewed; generic all-role capability/current composition remains."
     },
     {
       "closed": false,

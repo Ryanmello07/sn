@@ -2,6 +2,8 @@
 
 ## Current execution status — October 4
 
+The [transport race batch](evidence/runtime-transport-original-race-root-review-20261004.json) reproduces the same sole reconnect failure:32 passes, one failure, no skips. Both original modes remain failed and retained. Qualify the distinct whole-read recovery successor; do not repeat f3 or infer recovery from compilation.
+
 The [fee-retirement review](evidence/fee-retirement-logical-guard-source-finding-20261004.json) found two adjacent tests whose direct checkpoint overwrite could satisfy a generic refusal before reaching the intended logical guard. Correct the unknown-obligation and archive-summary fixtures through the actual physical-head publisher, require the named logical cause and qualify omitted-guard controls. Keep physical-tamper coverage separate. Retain the unexecuted eca source/graph history; qualify its corrected successor instead of collecting misleading positives. Production retirement preserves exact archived proofs, hot unresolved identities and transaction deduplication, but its41-root normal/race scope remains unqualified.
 
 The [fee-fixture successor](evidence/fee-fixture-c04-source-root-review-20261004.json) is source-reviewed atc04 with49 roots per mode queued. It preserves all production bodies and corrects the signer, physical publication and stable Claim birth fixtures. Three new deterministic signature tests require original-key admission before malformed-wire and canonical foreign-key refusal. Preserve ineffective original controls as unqualified and prove the corrected omission reaches its intended guard.
