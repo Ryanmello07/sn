@@ -167,9 +167,17 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 			p.source.policy.Through = economicEmissionBoundary{Number: number, Hash: p.source.chain.byHeight[number]}
 			writePolicy()
 		}
-		observation, code, issue := p.command(t)
-		if code != 0 || !observation.Complete || observation.ExecutionProducer == nil {
-			t.Fatal("real producer baseline before restore", number, code, issue)
+		// Continuous checkpoints require the actual parent-execution and
+		// child-post-state runtime reads. The finite emission CLI deliberately
+		// has another envelope and cannot be used as a monitor append input.
+		observation, err := observeMonitorEconomicNative(p.ctx, p.source.client, source.policy.Native, &state.Native)
+		if err != nil || observation == nil || !observation.Complete || observation.ExecutionProducer == nil {
+			t.Fatal("real continuous producer baseline before restore", number, err)
+		}
+		for _, block := range observation.Blocks {
+			if block.ExecutionRuntime == nil || block.PostStateRuntime == nil {
+				t.Fatal("real continuous baseline omitted original runtime read context")
+			}
 		}
 		if renewal && number == 101 {
 			// This reviewed config remains outside both copied durable roots.
@@ -178,7 +186,7 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 			source.writePolicy(t)
 			state = newEconomicConservationState(source.policy)
 		}
-		if err := state.appendNative(ctx, source.policy, &observation, source.now); err != nil {
+		if err := state.appendNative(ctx, source.policy, observation, source.now); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -199,7 +207,13 @@ func newNativeProducerRestoreOptionsFixture(t *testing.T, completed uint64, rene
 	if err := errors.Join(snapshot.publish(raw, nil), snapshot.close()); err != nil {
 		t.Fatal(err)
 	}
-	f.state = *state
+	// The expected checkpoint is the exact original durable representation,
+	// including a first pending capture with no completed native window.
+	// Private in-memory indexes and time locations are not restored evidence.
+	f.state = source.state(t)
+	if f.state.ContentHash != state.ContentHash || f.state.hash() != state.hash() {
+		t.Fatal("original published restore checkpoint differs from constructed evidence")
+	}
 	f.request = economicConservationRestoreRequest{Schema: economicConservationRestoreSchema, Policy: source.policy, Original: monitorHistoryReference{Path: source.checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}, Limits: durablevolume.PreparationCohortLimits{MaxRoots: 2, MaxPlanBytes: 32 * 1024 * 1024, MaxControlBytes: 64 * 1024 * 1024, MaxEntries: 16384, MaxBytes: 512 * 1024 * 1024, MaxOwnerAttributes: 256, MaxOwnerAttributeBytes: 256 * 4096}}
 	// A real failed directory-sync acknowledgement leaves the completed job
 	// visible, while the original accounting checkpoint remains at child102.
