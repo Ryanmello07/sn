@@ -253,7 +253,9 @@
     "proof-drained-continuation77-scoped-root-source-review-20261004.json": "15394543e8b0eb0e3930427b9e80fe5fe98e8bcb4e370d0c4b1fdd339e2b9c53",
     "proof-drained-continuation77-six-root-independent-readback-20261004.json": "c13653ad878bfc5e5d3bf44bbd8cf84636d4266af3fde932b69a297e9218d622",
     "conservation-populated3a13-composed-source-scope-review-20261004.json": "2bf41d3a8b4e8634acfacf791b478158d04b16f2a93f24aff431d551854895f4",
-    "proof-drained-continuation77-three-controls-independent-readback-20261004.json": "45fd7111937262e3bb80062dce14da78682c7baf995687814e9747a38c1b62be"
+    "proof-drained-continuation77-three-controls-independent-readback-20261004.json": "45fd7111937262e3bb80062dce14da78682c7baf995687814e9747a38c1b62be",
+    "conservation-native-followce78-scoped-root-source-review-20261004.json": "cf37883f12b2bba73b146c4cddcb7f72fb077b664193ca561c573d63de54459a",
+    "admissionab0-dual77-normal19-independent-failure-readback-20261004.json": "97994b444a5af7075162611e12d6d16090d1ece3361b08e8d50b056c7fa60470"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",

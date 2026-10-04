@@ -1,5 +1,11 @@
 # Mainnet prelaunch fixes
 
+The [dependent dual-engine normal19 readback](evidence/admissionab0-dual77-normal19-independent-failure-readback-20261004.json) records nine passes and ten failures with every root executed and no skips. Nine failures share a missing completed-block runtime read context; trace the restore fixture finite-CLI path against the real complete monitor observation rather than fabricating runtime fields or weakening admission. The separate full restore-state comparison failure remains under investigation. Preserve the nine successes, continue race and long-history work, and batch root causes with adjacent deterministic tests before qualifying affected successors.
+
+
+The [continuous native-worker source review](evidence/conservation-native-followce78-scoped-root-source-review-20261004.json) verifies `ce78b81c`: one bounded native capture/replay worker hands its actual result to the parent under the exact original native predecessor and policy. Vault, Claim and artifact publication can continue while native work is pending; missing evidence remains pending, transient reads retry, and a genuine native contradiction holds only that domain. Cancellation joins the worker before outer custody closes. Qualify seven new and five neighboring roots per mode plus three exact controls. Full native-income-to-entitlement funding conformance remains separate and must exclude opening stock, deposits and refunds from earnings.
+
+
 Qualification scheduling must follow actual workload and resource ownership. A restriction against a second long128/129-history body must not serialize unrelated ordinary dependent tests behind the first. Once exact source/image/export prerequisites and fresh combined resource admission pass, run the ordinary work alongside the retained long body with its original reservation included. Keep per-phase concurrency bounded and retain original outcomes; an unfinished long history is not a prerequisite for independently scoped ordinary roots.
 
 
