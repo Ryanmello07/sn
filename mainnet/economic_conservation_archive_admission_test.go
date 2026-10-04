@@ -59,40 +59,38 @@ func economicConservationAdmissionWork(work map[string]uint64) monitorServiceHoo
 
 func TestEconomicConservationArchiveAdmissionChecksCompletePrefixOnce(t *testing.T) {
 	for _, segments := range []int{2, 4, 8} {
-		t.Run(fmt.Sprint(segments), func(t *testing.T) {
-			f := newEconomicConservationHistoryAdmissionFixture(t, segments)
-			state := f.source.state(t)
-			original := rootObjectHash(state)
-			for attempt := 0; attempt < 2; attempt++ {
-				work := map[string]uint64{}
-				view, err := openEconomicConservationArchive(f.ctx, f.source.policy, &state, economicConservationAdmissionWork(work))
-				if err != nil || view == nil {
-					t.Fatal("actual full original admission refused", err)
-				}
-				if work["original-read"] != uint64(segments) || work["archive-checkpoint-decoded"] != uint64(segments) || work["archive-custody-check"] != uint64(segments) || work["archive-index-ready"] != 1 || len(view.owners) != segments || view.claimBasis == nil || len(view.claimBasis.states) != 1 || len(view.claimBasis.states[0].Epochs) != 128 {
-					_ = view.close()
-					t.Fatal("cold admission skipped originals or repeated growing custody prefixes", segments, attempt, work)
-				}
-				beforeEntries, beforeBytes := view.entries, view.bytes
-				for range 3 {
-					if err := view.checkAdmission(); err != nil {
-						_ = view.close()
-						t.Fatal("published index lost complete original custody", err)
-					}
-				}
-				if work["archive-custody-check"] != 4*uint64(segments) || work["original-read"] != uint64(segments) || work["archive-checkpoint-decoded"] != uint64(segments) || view.entries != beforeEntries || view.bytes != beforeBytes || rootObjectHash(state) != original {
-					_ = view.close()
-					t.Fatal("successful owner reuse reread original payloads or waived live custody", work)
-				}
-				if err := view.close(); err != nil {
-					t.Fatal(err)
-				}
-				if !errors.Is(view.check(), os.ErrClosed) || !errors.Is(view.checkAdmission(), os.ErrClosed) {
-					t.Fatal("closed admitted index retained original custody")
-				}
-				t.Logf("full original census: pages=%d epochs=128 reopen=%d work=%v", segments, attempt, work)
+		f := newEconomicConservationHistoryAdmissionFixture(t, segments)
+		state := f.source.state(t)
+		original := rootObjectHash(state)
+		for attempt := 0; attempt < 2; attempt++ {
+			work := map[string]uint64{}
+			view, err := openEconomicConservationArchive(f.ctx, f.source.policy, &state, economicConservationAdmissionWork(work))
+			if err != nil || view == nil {
+				t.Fatal("actual full original admission refused", err)
 			}
-		})
+			if work["original-read"] != uint64(segments) || work["archive-checkpoint-decoded"] != uint64(segments) || work["archive-custody-check"] != uint64(segments) || work["archive-index-ready"] != 1 || len(view.owners) != segments || view.claimBasis == nil || len(view.claimBasis.states) != 1 || len(view.claimBasis.states[0].Epochs) != 128 {
+				_ = view.close()
+				t.Fatal("cold admission skipped originals or repeated growing custody prefixes", segments, attempt, work)
+			}
+			beforeEntries, beforeBytes := view.entries, view.bytes
+			for range 3 {
+				if err := view.checkAdmission(); err != nil {
+					_ = view.close()
+					t.Fatal("published index lost complete original custody", err)
+				}
+			}
+			if work["archive-custody-check"] != 4*uint64(segments) || work["original-read"] != uint64(segments) || work["archive-checkpoint-decoded"] != uint64(segments) || view.entries != beforeEntries || view.bytes != beforeBytes || rootObjectHash(state) != original {
+				_ = view.close()
+				t.Fatal("successful owner reuse reread original payloads or waived live custody", work)
+			}
+			if err := view.close(); err != nil {
+				t.Fatal(err)
+			}
+			if !errors.Is(view.check(), os.ErrClosed) || !errors.Is(view.checkAdmission(), os.ErrClosed) {
+				t.Fatal("closed admitted index retained original custody")
+			}
+			t.Logf("full original census: pages=%d epochs=128 reopen=%d work=%v", segments, attempt, work)
+		}
 	}
 }
 
