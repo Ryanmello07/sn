@@ -225,6 +225,35 @@ fn historical_native_yuma_exports_original_complete_branches() {
     let mut jobs = Vec::new();
     for mode in ["legacy", "yuma3", "liquid"] {
         let (job, _) = fixture_with_allocation(false, None, None, Some(mode));
+        // Each branch must prove the exact drained state exposed by the public
+        // RPC fixture. The original next-block Wasm then accrues both inputs.
+        let parent: NativeHeader = scale_exact(
+            "Yuma parent",
+            &hex_bytes("Yuma parent", &job.parent_header_hex, MAXIMUM_HEADER_BYTES).unwrap(),
+        )
+        .unwrap();
+        let nodes = job
+            .proof_nodes_hex
+            .iter()
+            .map(|node| hex_bytes("Yuma proof node", node, MAXIMUM_CODE_BYTES).unwrap());
+        let backend = create_proof_check_backend::<Blake2Hasher>(
+            *parent.state_root(),
+            StorageProof::new(nodes),
+        )
+        .unwrap();
+        for item in [
+            b"PendingServerEmission".as_slice(),
+            b"PendingValidatorEmission".as_slice(),
+            b"PendingRootAlphaDivs".as_slice(),
+        ] {
+            assert_eq!(
+                backend
+                    .storage(&key(b"SubtensorModule", item, true))
+                    .unwrap(),
+                Some(words(&[0])),
+                "original Yuma activation parent is not actually drained: {mode}"
+            );
+        }
         let captured = super::super::capture_tests::collect(&job)
             .expect("actual complete original Yuma capture");
         let exported: HistoricalJob = serde_json::from_str(&captured.job_json).unwrap();
@@ -244,6 +273,15 @@ fn historical_native_yuma_exports_original_complete_branches() {
             .find(|record| record.purpose == "native-epoch")
             .unwrap();
         let values = &epoch.native.as_ref().unwrap().memory;
+        assert_eq!(
+            values
+                .iter()
+                .find(|value| value.name == "total-alpha")
+                .unwrap()
+                .bytes_hex,
+            encoded(&words(&[200])),
+            "original Yuma next-block accrual differs: {mode}"
+        );
         assert_eq!(
             values
                 .iter()

@@ -71,7 +71,13 @@ fn fixture_with_allocation(
     effects: Option<&str>,
     yuma: Option<&str>,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
-    fixture_with_allocation_activation(continuous, principal, effects, yuma, principal.is_some())
+    fixture_with_allocation_activation(
+        continuous,
+        principal,
+        effects,
+        yuma,
+        principal.is_some() || yuma.is_some(),
+    )
 }
 
 fn fixture_with_allocation_activation(
