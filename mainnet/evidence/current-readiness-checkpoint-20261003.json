@@ -201,7 +201,9 @@
     "yuma-owner-cancellation-source-finding-20261004.json": "b23301a2162f8ef6294e9388de5ccd6ca4d9ead817213699359a5208959cf753",
     "native-readonly-corec618-source-root-review-20261004.json": "bca835415c2c1564eb4d1068dfba5b89c33b7fce249c0d78362b72e85d452c51",
     "principal-dc1-go-original-terminal-root-review-20261004.json": "837bcb2780148b0ade59220a4b3e2a278f868f30f0f4a4180be836c59b7177ce",
-    "principal-fixture8d3-operational-adoption-root-review-20261004.json": "b8bbd5c5ba11285c044367c218c86440db28fef4a97674170940af18f415bbdd"
+    "principal-fixture8d3-operational-adoption-root-review-20261004.json": "b8bbd5c5ba11285c044367c218c86440db28fef4a97674170940af18f415bbdd",
+    "native-complete-restorea499-source-root-review-20261004.json": "1c590d208c781766fb1cfaa733a62d60fa5b6328807d8de827acdc5e8289c5f3",
+    "principal-fixture8d3-normal-root-review-20261004.json": "0de33a34f9e31baa024a8e3680166ca7bec7a26932f7af403087e6be3fdebc43"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -322,7 +324,7 @@
       "closed": false,
       "evidence": "fee-revision3e7-source-root-review-20261004.json",
       "requirement": "PH-19",
-      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal/race each48PASS1FAIL,all49 terminal with no timeout; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with operational resource admission and24 exact Rust positives passing plus ten exported jobs; both Rust causal controls qualified;Original dc1 Go normal/race each execute38 roots:19PASS19FAIL0SKIP; mainnet vetPASS, all failures at fresh fixture root permission custody; reviewed test-only8d3 successor selects19 masked roots plus one deterministic protection/tamper root per mode and one fixture omission per mode. Original batch is joined; reviewed8d3 incremental actual overlay compilation live after graph/helper preflightPASS. Incremental20-root/mode qualification and six Go causal groups remain separate. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain. Unfrozen full Yuma candidate also requires actual owner-context cancellation through repeated validation and bounded arithmetic refusal."
+      "status": "Native producer/profile continuation retains all26 passing phases. Fee fixtures c04normal/race each48PASS1FAIL,all49 terminal with no timeout; retention121normal33PASS2FAIL6UNRUN; original663race17PASS15FAIL14UNRUN remain. Corrected revision3e7 source-reviewed54roots/mode and nine controls. Opening-stock dc1 is source-reviewed (38 Go roots/mode,24 Rust roots,8 causal groups), with operational resource admission and24 exact Rust positives passing plus ten exported jobs; both Rust causal controls qualified;Original dc1 Go normal/race each execute38 roots:19PASS19FAIL0SKIP; mainnet vetPASS, all failures at fresh fixture root permission custody; reviewed test-only8d3 successor selects19 masked roots plus one deterministic protection/tamper root per mode and one fixture omission per mode. Original batch is joined; reviewed8d3 incremental actual overlay compilation live after graph/helper preflightPASS. Incremental20-root/mode qualification and six Go causal groups remain separate. Principal-effects986 source-reviewed (48 Go roots/mode,27 Rust roots,eight causal groups); behavioral qualification and actual native-to-vault capture join remain. Full denominator/quantization, complete entitlement/root/funding census, current composition and unattended operational admission remain. Unfrozen full Yuma candidate also requires actual owner-context cancellation through repeated validation and bounded arithmetic refusal. Incremental8d3normal20roots:10PASS10FAIL0SKIP; original directory mode corrected, next principal fixture checkpoint provisioning gap under correction."
     },
     {
       "closed": false,
@@ -430,7 +432,7 @@
       "closed": false,
       "evidence": "current-connect-paired-core-publication-20261003.json",
       "requirement": "MG-09",
-      "status": "Recovery core published; capacity and current composed volume/backup/restore rehearsal remain. Native read-only0400 artifact inventory/copy mode mismatch confirmed; narrow Core successor and actual combined restore qualification remain."
+      "status": "Recovery core published; capacity and current composed volume/backup/restore rehearsal remain. Native read-only0400 artifact inventory/copy mode mismatch confirmed; narrow Core successor and actual combined restore qualification remain. Complete nativea499 source reviewed24roots/mode6controls; exact qualified Corec618 join and behavioral continuation remain."
     },
     {
       "closed": false,
