@@ -277,7 +277,8 @@
     "server5b-selected-model-runner-root-review-20261004.json": "0ccd60fb64169baf1336ea38a097b9d2a6e0f282d890c137bc122fea0ea00fc5",
     "validatorb6-four-controls-independent-readback-20261004.json": "3a23022665b552b95781a593dc1a04bee9260d52aa78fadb6f8a674369ee5746",
     "provider-closed-work-tests-controls-source-review-20261004.json": "de83adbfdbbbdd2bacaf67cbe6864b739e53997869b5966e58656f02574f735a",
-    "fundinge0-operative-controls-source-review-20261004.json": "6ed8d4ea8c86b2e18a6b03f9350e85a9281e6ed1714da13298adb6334342013a"
+    "fundinge0-operative-controls-source-review-20261004.json": "6ed8d4ea8c86b2e18a6b03f9350e85a9281e6ed1714da13298adb6334342013a",
+    "validatorb6-selected-component-qualified-20261004.json": "f4688f15922041c002852f265b9ccc6026d070911d225ae1347483bf5fa1bd70"
   },
   "limits": [
     "No new tests or live launch acceptance from this index.",
@@ -316,9 +317,9 @@
     },
     {
       "closed": false,
-      "evidence": "validatorb6-four-controls-independent-readback-20261004.json",
+      "evidence": "validatorb6-selected-component-qualified-20261004.json",
       "requirement": "PH-05",
-      "status": "Existing cache scope retained. Full-lineage b6 selected14 roots pass normal/race and vet; root reproduces four operative groups both modes. Two control groups, larger-history and contention remain; full durable dependency-bound proof reuse not closed.",
+      "status": "Full-lineage b6 selected14 roots pass normal/race and vet; all six operative controls qualify both modes. Selected component qualified; current release integration, broader-history/contention and whole durable dependency-bound proof reuse remain.",
       "required_outcome": "Historical verifiers: durable, dependency-bound successful proof reuse"
     },
     {
