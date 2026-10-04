@@ -69,6 +69,84 @@ where
     B: Backend<Blake2Hasher>,
     E: CodeExecutor + Clone + 'static,
 {
+    let mut overlay = OverlayedChanges::<Blake2Hasher>::default();
+    observe_overlay(
+        queries,
+        backend,
+        &mut overlay,
+        executor,
+        extensions,
+        runtime,
+        parent,
+        None,
+    )
+}
+
+// False is omitted so every pre-effects job keeps its original wire identity.
+pub(super) fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+pub(super) fn validate_effects(
+    enabled: bool,
+    queries: &Option<Vec<PrincipalQuery>>,
+) -> Result<(), ProbeError> {
+    if enabled && queries.is_none() {
+        return Err(ProbeError::new(
+            "historical principal effects omitted their original query census",
+        ));
+    }
+    Ok(())
+}
+
+// This borrows the exact completed Core_execute_block overlay. A fresh parent
+// overlay would silently report the old stock again and is never used here.
+pub(super) fn observe_execution<B, E>(
+    enabled: bool,
+    queries: &Option<Vec<PrincipalQuery>>,
+    backend: &B,
+    overlay: &mut OverlayedChanges<Blake2Hasher>,
+    executor: &E,
+    extensions: &mut Extensions,
+    runtime: &RuntimeCode,
+    child: sp_core::H256,
+    state_version: StateVersion,
+    expected_root: sp_core::H256,
+) -> Result<Option<Vec<PrincipalObservation>>, ProbeError>
+where
+    B: Backend<Blake2Hasher>,
+    E: CodeExecutor + Clone + 'static,
+{
+    validate_effects(enabled, queries)?;
+    if !enabled {
+        return Ok(None);
+    }
+    observe_overlay(
+        queries,
+        backend,
+        overlay,
+        executor,
+        extensions,
+        runtime,
+        child,
+        Some((state_version, expected_root)),
+    )
+}
+
+fn observe_overlay<B, E>(
+    queries: &Option<Vec<PrincipalQuery>>,
+    backend: &B,
+    overlay: &mut OverlayedChanges<Blake2Hasher>,
+    executor: &E,
+    extensions: &mut Extensions,
+    runtime: &RuntimeCode,
+    block: sp_core::H256,
+    post_state: Option<(StateVersion, sp_core::H256)>,
+) -> Result<Option<Vec<PrincipalObservation>>, ProbeError>
+where
+    B: Backend<Blake2Hasher>,
+    E: CodeExecutor + Clone + 'static,
+{
     validate(queries)?;
     let Some(queries) = queries else {
         return Ok(None);
@@ -76,7 +154,6 @@ where
     let mut results = Vec::with_capacity(queries.len());
     for query in queries {
         let args = (query.hotkey, query.coldkey, query.netuid).encode();
-        let mut overlay = OverlayedChanges::<Blake2Hasher>::default();
         extensions
             .get_mut(TypeId::of::<hosts::HistoricalBudget>())
             .and_then(|value| value.downcast_mut::<hosts::HistoricalBudget>())
@@ -86,7 +163,7 @@ where
         let execution = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             StateMachine::new(
                 backend,
-                &mut overlay,
+                &mut *overlay,
                 executor,
                 STAKE_API,
                 &args,
@@ -94,7 +171,7 @@ where
                 runtime,
                 CallContext::Onchain,
             )
-            .set_parent_hash(parent)
+            .set_parent_hash(block)
             .execute()
         }));
         extensions
@@ -109,8 +186,8 @@ where
             })?
             .map_err(|e| ProbeError::new(format!("historical opening principal query: {e}")))?;
         if raw.len() > 256
-            || overlay.changes().next().is_some()
-            || overlay.children().next().is_some()
+            || post_state.is_none()
+                && (overlay.changes().next().is_some() || overlay.children().next().is_some())
             || overlay.transaction_depth() != 0
             || extensions
                 .get_mut(TypeId::of::<hosts::HistoricalBudget>())
@@ -118,6 +195,19 @@ where
                 .is_none_or(|value| value.0.depth != 0)
         {
             return Err(ProbeError::new("historical opening principal query changed state, left a transaction or exceeded bound"));
+        }
+        if let Some((version, expected)) = post_state {
+            let root = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                overlay.storage_root(backend, version).0
+            }))
+            .map_err(|_| {
+                ProbeError::new("historical closing principal post-state proof incomplete")
+            })?;
+            if root != expected {
+                return Err(ProbeError::new(
+                    "historical closing principal query changed the completed execution state",
+                ));
+            }
         }
         let value: Option<StakeInfo> = scale_exact("opening stake API result", &raw)?;
         if value.as_ref().is_some_and(|value| {

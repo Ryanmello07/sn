@@ -102,6 +102,8 @@ pub struct HistoricalJob {
     pub observation_profile: Option<observer::ObservationProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub principal_queries: Option<Vec<principal::PrincipalQuery>>,
+    #[serde(default, skip_serializing_if = "principal::is_false")]
+    pub principal_effects: bool,
 }
 
 /// A complete state-root reproduction is deliberately separate from economic
@@ -134,6 +136,8 @@ pub struct HistoricalReport {
     pub hook_observations: Option<observer::ObservationReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opening_principals: Option<Vec<principal::PrincipalObservation>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub closing_principals: Option<Vec<principal::PrincipalObservation>>,
 }
 
 /// Bound before allocation and reject alternate hexadecimal spellings.
@@ -217,6 +221,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
     let job: HistoricalJob = serde_json::from_slice(raw)
         .map_err(|e| ProbeError::new(format!("historical job JSON: {e}")))?;
     principal::validate(&job.principal_queries)?;
+    principal::validate_effects(job.principal_effects, &job.principal_queries)?;
     let (maximum_job_bytes, maximum_nodes, maximum_proof_bytes) =
         proof_limits(&job.observation_profile);
     if raw.len() > maximum_job_bytes
@@ -462,6 +467,21 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         .and_then(|value| value.downcast_mut::<observer::HistoricalObserver>())
         .map(|observer| observer.finish(event_layout.as_ref(), job.extrinsics_hex.len()))
         .transpose()?;
+    // API queries are not block callsite observations. Finish and remove the
+    // observer before querying the same original runtime on its completed overlay.
+    extensions.deregister(TypeId::of::<observer::HistoricalObserver>());
+    let closing_principals = principal::observe_execution(
+        job.principal_effects,
+        &job.principal_queries,
+        &backend,
+        &mut overlay,
+        &executor,
+        &mut extensions,
+        &runtime,
+        child.hash(),
+        state_version,
+        root,
+    )?;
     let budget = extensions
         .get_mut(TypeId::of::<hosts::HistoricalBudget>())
         .and_then(|value| value.downcast_mut::<hosts::HistoricalBudget>())
@@ -490,6 +510,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         production_selection: false,
         hook_observations,
         opening_principals,
+        closing_principals,
     })
     .map_err(|e| ProbeError::new(format!("historical report JSON: {e}")))
 }

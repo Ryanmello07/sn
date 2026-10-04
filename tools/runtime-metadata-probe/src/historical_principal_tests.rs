@@ -175,3 +175,48 @@ fn historical_principal_api_and_canonical_layout_are_required() {
         }
     }
 }
+
+// Only the post-execution API attempts a write. Parent capture succeeds first;
+// the completed overlay query must refuse even a transaction rolled back to it.
+#[test]
+fn historical_principal_completed_overlay_refuses_top_child_and_rollback_writes() {
+    for mutation in [
+        WRITE.to_owned(),
+        CHILD_WRITE.to_owned(),
+        format!("(call $begin){WRITE}(call $rollback)"),
+    ] {
+        let query_body = format!(
+            r#"
+          (local.set $value (i32.wrap_i64 (call $get (i64.const 51539609536))))
+          (if (i32.ne (i32.load8_u offset=1 (local.get $value)) (i32.const 129)) (then {mutation}))"#
+        );
+        let code = principal_wasm(&query_body, WRITE, &stake_result(7));
+        let mut original = job(&code, |storage| {
+            storage.top.insert(ACCOUNT.to_vec(), b"v".to_vec());
+        });
+        original.principal_queries = Some(vec![query()]);
+        assert!(
+            collect(&original).is_ok(),
+            "original parent-only query must reach valid execution"
+        );
+        original.principal_effects = true;
+        for result in [collect(&original).map(|_| ()), run(&original).map(|_| ())] {
+            let error = result.expect_err("completed overlay accepted a mutating principal API");
+            assert!(error.to_string().contains("principal"), "{error}");
+        }
+    }
+}
+
+#[test]
+fn historical_principal_effects_require_explicit_nonempty_queries() {
+    let code = wasm("", "");
+    let mut original = job(&code, |_| {});
+    assert!(collect(&original).is_ok(), "legacy block must capture");
+    original.principal_effects = true;
+    for result in [collect(&original).map(|_| ()), run(&original).map(|_| ())] {
+        assert!(result
+            .expect_err("effect request omitted query census")
+            .to_string()
+            .contains("query census"));
+    }
+}

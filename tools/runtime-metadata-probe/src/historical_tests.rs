@@ -153,6 +153,7 @@ fn job(code: &[u8], change: impl FnOnce(&mut Storage)) -> HistoricalJob {
             .collect(),
         observation_profile: None,
         principal_queries: None,
+        principal_effects: false,
     }
 }
 
@@ -238,6 +239,7 @@ fn observation_profile(code: &[u8], export: &str, purpose: &str) -> observer::Ob
             memory: Vec::new(),
         }],
         metadata_sha256: None,
+        principal_storage_prefixes: None,
     }
 }
 

@@ -48,6 +48,14 @@ fn fixture_with_principal(
     continuous: bool,
     principal: Option<Option<u64>>,
 ) -> (HistoricalJob, sp_core::storage::Storage) {
+    fixture_with_principal_effects(continuous, principal, None)
+}
+
+fn fixture_with_principal_effects(
+    continuous: bool,
+    principal: Option<Option<u64>>,
+    effects: Option<&str>,
+) -> (HistoricalJob, sp_core::storage::Storage) {
     let drains = [
         key(b"SubtensorModule", b"PendingServerEmission", true),
         key(b"SubtensorModule", b"PendingValidatorEmission", true),
@@ -165,12 +173,44 @@ fn fixture_with_principal(
               (i32.store8 (i32.const 6066) (i32.shl (i32.load8_u offset=2 (local.get $value)) (i32.const 2)))
               (i64.const {present}))"#,
               key=span(2000,principal_key.len()),absent=span(6200,1),present=span(6000,result.len())));
-        if principal.flatten().is_some() {
+        if principal.flatten().is_some() && effects.is_none() {
             body.push_str(&format!(r#"
               (local.set $n (i32.wrap_i64 (call $get (i64.const {key}))))
               (i64.store (i32.const 6100) (i64.add (i64.load offset=2 (local.get $n)) (i64.load (i32.const 4384))))
               (call $set (i64.const {key}) (i64.const {updated}))"#,
               key=span(2000,principal_key.len()),updated=span(6100,8)));
+        }
+    }
+    if let Some(mode) = effects {
+        for (name, operation) in [
+            ("earning", "add"),
+            ("deposit", "add"),
+            ("withdrawal", "sub"),
+            ("refund", "add"),
+        ] {
+            declarations.push_str(&format!(r#"
+              (func $stake_{name} (export "stake_{name}") (param $amount i64)
+                (local $value i32)
+                (local.set $value (i32.wrap_i64 (call $get (i64.const {key}))))
+                (i64.store (i32.const 6400) (i64.load offset=2 (local.get $value)))
+                (i64.store (i32.const 6408) (i64.{operation} (i64.load (i32.const 6400)) (local.get $amount)))
+                (call $set (i64.const {key}) (i64.const {value})))"#,
+                key=span(2000,principal_key.len()), value=span(6408,8)));
+        }
+        if principal.flatten().is_some() {
+            body.push_str("(call $stake_earning (i64.load (i32.const 4384)))");
+            match mode {
+                "causes" => body.push_str("(call $stake_deposit (i64.const 5)) (call $stake_withdrawal (i64.const 3)) (call $stake_refund (i64.const 2))"),
+                "rollback" => body.push_str("(call $begin) (call $stake_deposit (i64.const 5)) (call $rollback)"),
+                "unclassified" | "residual" => {
+                    // No selected callsite wraps these actual mutations. The
+                    // independent storage census must retain both even at net zero.
+                    body.push_str(&format!("(i64.store (i32.const 6408) (i64.add (i64.load (i32.const 6408)) (i64.const 1))) (call $set (i64.const {key}) (i64.const {value}))",key=span(2000,principal_key.len()),value=span(6408,8)));
+                    if mode=="unclassified" { body.push_str(&format!("(i64.store (i32.const 6408) (i64.sub (i64.load (i32.const 6408)) (i64.const 1))) (call $set (i64.const {key}) (i64.const {value}))",key=span(2000,principal_key.len()),value=span(6408,8))); }
+                },
+                "earning" => (),
+                _ => panic!("unsupported synthetic principal effect mode"),
+            }
         }
     }
     let code = wasm(&declarations, &body);
@@ -207,9 +247,18 @@ fn fixture_with_principal(
     expected.top.insert(owner.to_vec(), words(&[89]));
     expected.top.insert(events, [vec![4], event].concat());
     if let Some(stock) = principal.flatten() {
-        expected
-            .top
-            .insert(principal_key.to_vec(), words(&[stock + 6]));
+        expected.top.insert(
+            principal_key.to_vec(),
+            words(&[stock
+                + 6
+                + if effects == Some("causes") {
+                    4
+                } else if effects == Some("residual") {
+                    1
+                } else {
+                    0
+                }]),
+        );
     }
     let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
         &code,
@@ -293,6 +342,26 @@ fn fixture_with_principal(
         rule.memory = fields(&items);
         profile.rules.push(rule);
     }
+    if effects.is_some() {
+        profile.principal_storage_prefixes = Some(vec![encoded(principal_key)]);
+        for name in ["earning", "deposit", "withdrawal", "refund"] {
+            let mut rule = observation_profile(
+                &code,
+                &format!("stake_{name}"),
+                &format!("native-principal-{name}"),
+            )
+            .rules
+            .remove(0);
+            rule.memory = fields(&[
+                ("netuid", 4000, 2),
+                ("hotkey", 4200, 32),
+                ("coldkey", 4500, 32),
+                ("before", 6400, 8),
+                ("after", 6408, 8),
+            ]);
+            profile.rules.push(rule);
+        }
+    }
     (
         HistoricalJob {
             schema: HISTORICAL_SCHEMA.to_owned(),
@@ -312,6 +381,7 @@ fn fixture_with_principal(
                 .into_iter()
                 .collect(),
             observation_profile: Some(profile),
+            principal_effects: effects.is_some(),
             principal_queries: principal.map(|_| {
                 vec![principal::PrincipalQuery {
                     hotkey: [0x11; 32],
@@ -525,5 +595,61 @@ fn historical_native_principal_exports_original_parent_jobs() {
             .unwrap()
             .sync_all()
             .expect("durable principal export directory");
+    }
+}
+
+// Every exported case executes the original program in capture and strict
+// replay. Mutation counts are independent of selected causal observations.
+#[test]
+fn historical_native_principal_effects_export_original_causal_jobs() {
+    let mut jobs = Vec::new();
+    for (name, mode, stock, after, mutations, discarded) in [
+        ("earning", "earning", Some(14), Some(20), 1, 0),
+        ("causes", "causes", Some(14), Some(24), 4, 0),
+        ("zero", "earning", Some(0), Some(6), 1, 0),
+        ("absent", "earning", None, None, 0, 0),
+        ("unclassified", "unclassified", Some(14), Some(20), 3, 0),
+        ("residual", "residual", Some(14), Some(21), 2, 0),
+        ("rollback", "rollback", Some(14), Some(20), 1, 2),
+    ] {
+        let (job, _) = fixture_with_principal_effects(false, Some(stock), Some(mode));
+        let captured =
+            super::capture_tests::collect(&job).expect("actual original principal effect capture");
+        let exported: HistoricalJob = serde_json::from_str(&captured.job_json).unwrap();
+        let replayed = run(&exported).expect("actual original principal effect replay");
+        for report in [&captured.replay, &replayed] {
+            assert!(report.post_state_reproduced);
+            assert_eq!(
+                report.opening_principals.as_ref().unwrap()[0].opening_stake_alpha,
+                stock.map(|n| n.to_string())
+            );
+            assert_eq!(
+                report.closing_principals.as_ref().unwrap()[0].opening_stake_alpha,
+                after.map(|n| n.to_string())
+            );
+            let trace = report.hook_observations.as_ref().unwrap();
+            assert_eq!(
+                trace.principal_mutations.as_ref().unwrap().len(),
+                mutations,
+                "{name}"
+            );
+            assert_eq!(trace.discarded_on_rollback, discarded, "{name}");
+        }
+        jobs.push((name, exported));
+    }
+    if let Some(directory) = std::env::var_os("URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_OUT") {
+        let directory = Path::new(&directory);
+        assert!(directory.is_absolute() && directory.is_dir());
+        for (name, job) in jobs {
+            let mut file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .mode(0o600)
+                .open(directory.join(format!("principal-effects-{name}.json")))
+                .expect("exclusive original effect fixture");
+            file.write_all(&serde_json::to_vec(&job).unwrap()).unwrap();
+            file.sync_all().unwrap();
+        }
+        std::fs::File::open(directory).unwrap().sync_all().unwrap();
     }
 }

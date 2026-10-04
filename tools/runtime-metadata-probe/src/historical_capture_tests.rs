@@ -23,6 +23,7 @@ fn request(job: &HistoricalJob) -> CaptureRequest {
         execution_state_version: job.execution_state_version,
         observation_profile: job.observation_profile.clone(),
         principal_queries: job.principal_queries.clone(),
+        principal_effects: job.principal_effects,
     }
 }
 

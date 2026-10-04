@@ -55,6 +55,8 @@ pub struct CaptureRequest {
     pub observation_profile: Option<observer::ObservationProfile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub principal_queries: Option<Vec<principal::PrincipalQuery>>,
+    #[serde(default, skip_serializing_if = "principal::is_false")]
+    pub principal_effects: bool,
 }
 
 /// Exact job JSON is preserved as bytes in a string, avoiding authority based
@@ -246,6 +248,7 @@ fn capture_historical_scoped<S: TrieBackendStorage<Blake2Hasher>>(
     let request: CaptureRequest = serde_json::from_slice(raw)
         .map_err(|e| ProbeError::new(format!("historical capture request JSON: {e}")))?;
     principal::validate(&request.principal_queries)?;
+    principal::validate_effects(request.principal_effects, &request.principal_queries)?;
     if request.schema != CAPTURE_SCHEMA || request.extrinsics_hex.len() > 16384 {
         return Err(ProbeError::new(
             "historical capture schema or body item bound",
@@ -449,6 +452,21 @@ fn capture_historical_scoped<S: TrieBackendStorage<Blake2Hasher>>(
         ));
     }
     check(canceled, &captured)?;
+    let _ = principal::observe_execution(
+        request.principal_effects,
+        &request.principal_queries,
+        &backend,
+        &mut overlay,
+        &executor,
+        &mut extensions,
+        &runtime,
+        child.hash(),
+        state_version,
+        root,
+    )?;
+    check(canceled, &captured)?;
+    check_failure(&captured)?;
+    scopes.check().map_err(ProbeError::new)?;
     let proof = backend
         .inner
         .extract_proof()
@@ -480,6 +498,7 @@ fn capture_historical_scoped<S: TrieBackendStorage<Blake2Hasher>>(
             .collect(),
         observation_profile: request.observation_profile,
         principal_queries: request.principal_queries,
+        principal_effects: request.principal_effects,
     };
     let job_json = serde_json::to_string(&job)
         .map_err(|e| ProbeError::new(format!("historical capture job JSON: {e}")))?;

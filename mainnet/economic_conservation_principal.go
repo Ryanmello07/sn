@@ -96,7 +96,7 @@ func (self *economicConservationState) appendOpeningPrincipal(policy economicCon
 		}
 	}
 	value := &economicConservationOpeningPrincipal{Projection: *outcome.OpeningPrincipals, Outcome: outcome}
-	value.Outcome.OpeningPrincipals, value.Outcome.RecipientEffects = nil, nil
+	value.Outcome.OpeningPrincipals, value.Outcome.RecipientEffects, value.Outcome.PrincipalEffects = nil, nil, nil
 	if self.OpeningPrincipals != nil && !reflect.DeepEqual(self.OpeningPrincipals, value) {
 		return errors.New("economic opening principal replaced its original replay")
 	}
@@ -124,7 +124,7 @@ func (self economicConservationState) validateOpeningPrincipal(policy economicCo
 		return nil
 	}
 	value := self.OpeningPrincipals
-	if self.Native.Cursor.Number <= authority.Parent.Number || value.Outcome.OpeningPrincipals != nil || value.Outcome.RecipientEffects != nil {
+	if self.Native.Cursor.Number <= authority.Parent.Number || value.Outcome.OpeningPrincipals != nil || value.Outcome.RecipientEffects != nil || value.Outcome.PrincipalEffects != nil {
 		return errors.New("economic opening principal is outside original native progress")
 	}
 	if err := value.Projection.validate(policy.Native.Observation, value.Outcome); err != nil {

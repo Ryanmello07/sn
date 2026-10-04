@@ -26,6 +26,9 @@ import (
 func newEconomicConservationPrincipalFixture(t *testing.T, name string, parentMapping bool, change func(*historicalReplayJob)) (*economicConservationArchiveFixture, *nativeProducerPublicFixture) {
 	t.Helper()
 	directory := os.Getenv("URNETWORK_NATIVE_PRINCIPAL_FIXTURE_DIR")
+	if strings.HasPrefix(name, "effects-") {
+		directory = os.Getenv("URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_DIR")
+	}
 	if directory == "" || os.Getenv("URNETWORK_NATIVE_CAPTURE_ENGINE") == "" || os.Getenv("URNETWORK_NATIVE_EXECUTION_ENGINE") == "" {
 		t.Fatal("principal scope requires explicit real Rust exports and two distinct owned engines")
 	}

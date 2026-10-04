@@ -20,12 +20,13 @@ const historicalPrincipalLayout = "Option<StakeInfo{hotkey:AccountId32,coldkey:A
 // The original observation policy and its signed execution/producer admission
 // both bind this API/layout review and exact parent/query census, without amounts.
 type nativePrincipalPolicy struct {
-	Schema       string                     `json:"schema"`
-	Api          string                     `json:"runtime_api"`
-	LayoutSha256 string                     `json:"scale_layout_sha256"`
-	ReviewSha256 string                     `json:"independent_api_review_sha256"`
-	Parent       economicEmissionBoundary   `json:"original_parent"`
-	Queries      []historicalPrincipalQuery `json:"query_census"`
+	Effects      *nativePrincipalEffectsPolicy `json:"execution_effects,omitempty"`
+	Schema       string                        `json:"schema"`
+	Api          string                        `json:"runtime_api"`
+	LayoutSha256 string                        `json:"scale_layout_sha256"`
+	ReviewSha256 string                        `json:"independent_api_review_sha256"`
+	Parent       economicEmissionBoundary      `json:"original_parent"`
+	Queries      []historicalPrincipalQuery    `json:"query_census"`
 }
 
 func (self *nativePrincipalPolicy) validate() error {
@@ -35,11 +36,11 @@ func (self *nativePrincipalPolicy) validate() error {
 	if self.Schema != historicalPrincipalSchema || self.Api != historicalPrincipalApi || self.LayoutSha256 != monitorReadDigest([]byte(historicalPrincipalLayout)) || !planSha256(self.ReviewSha256) || self.Parent.Number == 0 || !rootCanonicalHash(self.Parent.Hash) || self.Queries == nil {
 		return errors.New("native principal lacks independently pinned original API/layout/parent authority")
 	}
-	return validateHistoricalPrincipalQueries(self.Queries)
+	return errors.Join(validateHistoricalPrincipalQueries(self.Queries), self.Effects.validate())
 }
 
 func (self *nativePrincipalPolicy) queriesAt(parent economicEmissionBoundary) []historicalPrincipalQuery {
-	if self == nil || self.Parent != parent {
+	if self == nil || self.Parent != parent && (self.Effects == nil || parent.Number < self.Parent.Number) {
 		return nil
 	}
 	return append([]historicalPrincipalQuery{}, self.Queries...)
@@ -83,7 +84,7 @@ func deriveNativePrincipal(policy economicEmissionPolicy, admission nativeExecut
 	if err := validateHistoricalPrincipalReport(queries, report.OpeningPrincipals); err != nil {
 		return nil, err
 	}
-	if queries == nil {
+	if queries == nil || admission.Parent != authority.Parent {
 		return nil, nil
 	}
 	if authority.Parent != policy.From || authority.Parent != admission.Parent || admission.Parent.Number+1 != admission.Child.Number || admission.Child != outcome.Boundary || admission.Runtime != policy.Runtime || report.ParentHash != job.ParentHash || economicNativeFeeHash(job.ParentHash) != authority.Parent.Hash {

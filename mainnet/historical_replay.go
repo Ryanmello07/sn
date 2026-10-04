@@ -61,6 +61,7 @@ type historicalReplayJob struct {
 	ProofNodesHex         []string                            `json:"proof_nodes_hex"`
 	ObservationProfile    *historicalReplayObservationProfile `json:"observation_profile,omitempty"`
 	PrincipalQueries      []historicalPrincipalQuery          `json:"principal_queries,omitempty"`
+	PrincipalEffects      bool                                `json:"principal_effects,omitempty"`
 }
 
 type historicalReplayReport struct {
@@ -87,6 +88,7 @@ type historicalReplayReport struct {
 	ProductionSelection       bool                             `json:"production_selection"`
 	HookObservations          *historicalReplayObservations    `json:"hook_observations,omitempty"`
 	OpeningPrincipals         []historicalPrincipalObservation `json:"opening_principals,omitempty"`
+	ClosingPrincipals         []historicalPrincipalObservation `json:"closing_principals,omitempty"`
 }
 
 type historicalReplayRequest struct {
@@ -229,7 +231,7 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	if len(raw) > maximumJob || job.Schema != historicalReplaySchema || len(job.ProofNodesHex) == 0 || len(job.ProofNodesHex) > maximumNodes || len(job.ExtrinsicsHex) > 16384 || job.ExecutionStateVersion > 1 {
 		return nil, errors.New("historical replay job exceeds declared protocol bounds")
 	}
-	if err := errors.Join(job.ObservationProfile.validate(job), validateHistoricalPrincipalQueries(job.PrincipalQueries)); err != nil {
+	if err := errors.Join(job.ObservationProfile.validate(job), validateHistoricalPrincipalQueries(job.PrincipalQueries), validateHistoricalPrincipalEffectsRequest(job.PrincipalEffects, job.PrincipalQueries)); err != nil {
 		return nil, err
 	}
 	maximumReportBytes := historicalReplayReportLimit
@@ -240,6 +242,9 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 		}
 	}
 	if job.PrincipalQueries != nil {
+		maximumReportBytes += historicalPrincipalReportLimit
+	}
+	if job.PrincipalEffects {
 		maximumReportBytes += historicalPrincipalReportLimit
 	}
 	output, err := runHistoricalProofWorker(owner, cancel, historicalProofWorkerRequest{Engine: request.Engine, Input: raw, Directory: filepath.Dir(request.Job.Path), MaximumReport: maximumReportBytes}, hooks)
@@ -264,7 +269,7 @@ func validateHistoricalReplayReport(job historicalReplayJob, raw []byte, report 
 	if report.AnchorAuthority != "caller-supplied-unapproved" || report.RuntimeAdmitted || report.NativeFeeDebit != nil || report.NativeFeeWithdrawalRefund || report.ProductionSelection {
 		return errors.New("historical replay report claims unestablished runtime, fee or finality authority")
 	}
-	return errors.Join(validateHistoricalReplayObservations(job, report.HookObservations), validateHistoricalPrincipalReport(job.PrincipalQueries, report.OpeningPrincipals))
+	return errors.Join(validateHistoricalReplayObservations(job, report.HookObservations), validateHistoricalPrincipalReport(job.PrincipalQueries, report.OpeningPrincipals), validateHistoricalClosingPrincipal(job, report))
 }
 
 // Both fixed workers share exact executable custody and joined bounded pipes.

@@ -113,26 +113,27 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // FixedPointTolerance covers the observed final normalization and u64 casts;
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
-	OpeningPrincipals      *nativePrincipalProjection       `json:"opening_principals,omitempty"`
-	RecipientEffects       *nativeExecutionEffectProjection `json:"recipient_effects,omitempty"`
-	Boundary               economicEmissionBoundary         `json:"boundary"`
-	ProducerAuthorityHash  string                           `json:"producer_authority_hash,omitempty"`
-	FinalityProofHash      string                           `json:"finality_proof_hash,omitempty"`
-	AdmissionHash          string                           `json:"admission_hash"`
-	JobHash                string                           `json:"job_hash"`
-	TraceHash              string                           `json:"trace_hash"`
-	MinerAllocation        string                           `json:"miner_allocation_alpha"`
-	ProviderEntitlement    string                           `json:"provider_entitlement_alpha"`
-	OwnerRecycled          string                           `json:"owner_recycled_alpha"`
-	ResidualEntitlement    string                           `json:"residual_entitlement_alpha"`
-	CollateralCapture      string                           `json:"reward_collateral_capture_alpha"`
-	FixedPointDust         string                           `json:"fixed_point_dust_alpha"`
-	FixedPointTolerance    string                           `json:"fixed_point_tolerance_alpha"`
-	AllocationDifference   string                           `json:"allocation_difference_alpha"`
-	RedirectedToValidators string                           `json:"redirected_to_validators_alpha"`
-	Recipients             []nativeExecutionRecipient       `json:"execution_generations"`
-	AmountsAuthenticated   bool                             `json:"amounts_authenticated"`
-	ContentHash            string                           `json:"content_hash"`
+	PrincipalEffects       *nativePrincipalExecutionProjection `json:"principal_execution_effects,omitempty"`
+	OpeningPrincipals      *nativePrincipalProjection          `json:"opening_principals,omitempty"`
+	RecipientEffects       *nativeExecutionEffectProjection    `json:"recipient_effects,omitempty"`
+	Boundary               economicEmissionBoundary            `json:"boundary"`
+	ProducerAuthorityHash  string                              `json:"producer_authority_hash,omitempty"`
+	FinalityProofHash      string                              `json:"finality_proof_hash,omitempty"`
+	AdmissionHash          string                              `json:"admission_hash"`
+	JobHash                string                              `json:"job_hash"`
+	TraceHash              string                              `json:"trace_hash"`
+	MinerAllocation        string                              `json:"miner_allocation_alpha"`
+	ProviderEntitlement    string                              `json:"provider_entitlement_alpha"`
+	OwnerRecycled          string                              `json:"owner_recycled_alpha"`
+	ResidualEntitlement    string                              `json:"residual_entitlement_alpha"`
+	CollateralCapture      string                              `json:"reward_collateral_capture_alpha"`
+	FixedPointDust         string                              `json:"fixed_point_dust_alpha"`
+	FixedPointTolerance    string                              `json:"fixed_point_tolerance_alpha"`
+	AllocationDifference   string                              `json:"allocation_difference_alpha"`
+	RedirectedToValidators string                              `json:"redirected_to_validators_alpha"`
+	Recipients             []nativeExecutionRecipient          `json:"execution_generations"`
+	AmountsAuthenticated   bool                                `json:"amounts_authenticated"`
+	ContentHash            string                              `json:"content_hash"`
 }
 
 type nativeExecutionDrain struct {
@@ -147,6 +148,7 @@ func (self nativeExecutionOutcome) hash() string {
 	self.ContentHash = ""
 	self.RecipientEffects = nil
 	self.OpeningPrincipals = nil
+	self.PrincipalEffects = nil
 	return rootObjectHash(self)
 }
 
@@ -222,6 +224,9 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 	recipients := []historicalReplayObservation{}
 	for index := range trace.Observations {
 		record := &trace.Observations[index]
+		if historicalPrincipalEffectPurpose(record.Purpose) {
+			continue
+		}
 		// The same original runtime callsite can execute for several subnets.
 		// Its actual netuid remains part of the authenticated memory capture.
 		netuid, err := nativeCaptureUint(*record, "netuid", 2)
@@ -531,7 +536,7 @@ func observeNativeExecution(ctx context.Context, client *rpcClient, policy econo
 	if err != nil {
 		return nil, err
 	}
-	if !reflect.DeepEqual(job.PrincipalQueries, policy.Execution.Principal.queriesAt(admission.Parent)) || job.ObservationProfile == nil || monitorReadDigest(profileRaw) != admission.ProfileSha256 || job.RuntimeCodeSha256 != historicalReplayDigest(sha256.Sum256(code)) || len(job.ExtrinsicsHex) != block.BodyCount {
+	if job.PrincipalEffects != policy.Execution.Principal.effectsAt(admission.Parent) || !reflect.DeepEqual(job.PrincipalQueries, policy.Execution.Principal.queriesAt(admission.Parent)) || job.ObservationProfile == nil || monitorReadDigest(profileRaw) != admission.ProfileSha256 || job.RuntimeCodeSha256 != historicalReplayDigest(sha256.Sum256(code)) || len(job.ExtrinsicsHex) != block.BodyCount {
 		return nil, errors.New("native replay input differs before process admission")
 	}
 	report, err := runHistoricalReplay(ctx, historicalReplayRequest{Engine: policy.Execution.Engine, Job: admission.Job, Budget: client.retryWindow}, historicalReplayHooks{})
@@ -596,6 +601,10 @@ func validateNativeExecutionReplay(policy economicEmissionPolicy, admission nati
 		drains[index] = nativeExecutionDrain{Key: key.Hex(), Fallback: append([]byte(nil), entries[name].Fallback...)}
 	}
 	result, err := deriveNativeExecution(policy, admission, block, job, *report, drains)
+	if err != nil {
+		return nil, errors.Join(errRpcIntegrity, err)
+	}
+	result.PrincipalEffects, err = deriveNativePrincipalEffects(policy, admission, job, report, *result)
 	if err != nil {
 		return nil, errors.Join(errRpcIntegrity, err)
 	}
