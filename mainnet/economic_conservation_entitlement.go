@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfoundation/sn/payoutartifact"
+	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/validator"
 )
 
@@ -23,11 +24,12 @@ const maximumEconomicEntitlementProviders = 4096
 // amounts or an artifact signer. Actual authorization comes from the original
 // epoch's rootSigner and its included OperatorRootCommitted receipt.
 type economicConservationEntitlementSource struct {
-	PoolId              string `json:"pool_id"`
-	Endpoint            string `json:"endpoint"`
-	DeploymentId        string `json:"deployment_id"`
-	Coordinator         string `json:"coordinator"`
-	CoordinatorCodeHash string `json:"coordinator_code_hash"`
+	ProviderMeasurements *economicProviderMeasurementPolicy `json:"provider_measurements,omitempty"`
+	PoolId               string                             `json:"pool_id"`
+	Endpoint             string                             `json:"endpoint"`
+	DeploymentId         string                             `json:"deployment_id"`
+	Coordinator          string                             `json:"coordinator"`
+	CoordinatorCodeHash  string                             `json:"coordinator_code_hash"`
 }
 
 type economicConservationEntitlementPolicy struct {
@@ -38,6 +40,9 @@ type economicConservationEntitlementPolicy struct {
 // and the root-authenticated receipt inclusion remain explicitly different
 // authority from independent consensus finality or measured provider usage.
 type economicConservationEntitlementCensus struct {
+	ProviderOriginals        *economicProviderOriginals               `json:"original_provider_evidence,omitempty"`
+	ProviderMeasurements     *economicConservationProviderMeasurement `json:"original_provider_measurements,omitempty"`
+	providerAttempts         *validator.VerifiedProviderAttemptMeasurement
 	WindowClock              *payoutartifact.ClosedWorkWindowClock `json:"original_window_clock,omitempty"`
 	Schema                   string                                `json:"schema"`
 	Entitlement              string                                `json:"entitlement"`
@@ -65,14 +70,15 @@ type economicConservationEntitlementCensus struct {
 // active. The exact original snapshot supplies the receipt and leaf index at
 // admission; this compact head is never accepted without that held archive.
 type economicConservationEntitlementReference struct {
-	ClosedWork           economicConservationClosedWork `json:"original_closed_work,omitzero"`
-	Original             monitorHistoryReference        `json:"original"`
-	ContentHash          string                         `json:"content_hash"`
-	FundingHash          string                         `json:"funding_hash"`
-	Providers            uint64                         `json:"providers"`
-	Leaves               uint64                         `json:"leaves"`
-	LeafObligationsAlpha string                         `json:"leaf_obligations_alpha"`
-	FloorResidueAlpha    string                         `json:"floor_residue_alpha"`
+	ProviderMeasurements economicConservationProviderMeasurement `json:"original_provider_measurements,omitzero"`
+	ClosedWork           economicConservationClosedWork          `json:"original_closed_work,omitzero"`
+	Original             monitorHistoryReference                 `json:"original"`
+	ContentHash          string                                  `json:"content_hash"`
+	FundingHash          string                                  `json:"funding_hash"`
+	Providers            uint64                                  `json:"providers"`
+	Leaves               uint64                                  `json:"leaves"`
+	LeafObligationsAlpha string                                  `json:"leaf_obligations_alpha"`
+	FloorResidueAlpha    string                                  `json:"floor_residue_alpha"`
 }
 
 func (self economicConservationEntitlement) censusHash() string {
@@ -104,10 +110,18 @@ func (self *economicConservationEntitlement) retireCensus(reference monitorHisto
 	if value.ClosedWork != nil {
 		self.CensusReference.ClosedWork = *value.ClosedWork
 	}
+	if value.ProviderMeasurements != nil {
+		self.CensusReference.ProviderMeasurements = *value.ProviderMeasurements
+	}
 	self.Census = nil
 }
 
 type economicConservationEntitlementSummary struct {
+	ProviderMeasurementRoots          uint64  `json:"original_provider_measurement_roots,omitempty"`
+	ProviderMeasurementProviders      uint64  `json:"original_provider_measurement_providers,omitempty"`
+	ProviderMeasurementBytes          string  `json:"original_provider_completed_bytes,omitempty"`
+	ProviderMeasurementAssignments    string  `json:"original_provider_assignments,omitempty"`
+	ProviderMeasurementConfirmations  string  `json:"original_provider_confirmations,omitempty"`
 	ClosedWorkWindows                 uint64  `json:"closed_work_windows,omitempty"`
 	ClockMatchedWindows               uint64  `json:"clock_matched_windows,omitempty"`
 	CompleteReportInventories         uint64  `json:"complete_report_inventories,omitempty"`
@@ -149,6 +163,9 @@ func (self economicConservationPolicy) validateEntitlementSources() error {
 	}
 	seen := map[string]bool{}
 	for _, source := range sources {
+		if err := source.ProviderMeasurements.validate(self); err != nil {
+			return err
+		}
 		if !slices.Contains(self.Vault.PoolIds, source.PoolId) || seen[source.PoolId] || !monitorEvmAddress(source.Coordinator) || !rootCanonicalHash(source.CoordinatorCodeHash) || source.Coordinator == self.Vault.Address {
 			return errors.New("economic entitlement source changed original pool or contract identity")
 		}
@@ -213,7 +230,7 @@ func (self *economicConservationEntitlementCensus) validate(ctx context.Context,
 	if err := payoutartifact.VerifyWithContext(ctx, artifact); err != nil {
 		return err
 	}
-	if err := self.validateClosedWork(ctx); err != nil {
+	if err := self.validateClosedWork(ctx, source.ProviderMeasurements != nil); err != nil {
 		return err
 	}
 	total, err := monitorEconomicInteger(*record.Total)
@@ -397,6 +414,15 @@ func (self economicConservationState) entitlementCensusFacts() uint64 {
 	for _, record := range self.Entitlements {
 		if record.Census != nil {
 			count += 1 + uint64(max(len(record.Census.Artifact.Providers), len(record.Census.Artifact.Leaves)))
+			if originals := record.Census.ProviderOriginals; originals != nil {
+				count += uint64(len(originals.Wallets))
+				for _, wallet := range originals.Wallets {
+					count += uint64(len(wallet.Originals))
+				}
+				if originals.Work != nil {
+					count += uint64(len(originals.Work.Owners))
+				}
+			}
 			if record.Census.Artifact.ClosedWork != nil {
 				count += uint64(len(record.Census.Artifact.ClosedWork.Records))
 			}
@@ -412,6 +438,18 @@ func (self economicConservationState) entitlementCensusFacts() uint64 {
 func (self *economicConservationState) entitlementCensusSummary(ctx context.Context, policy economicConservationPolicy) (*economicConservationEntitlementSummary, error) {
 	if policy.EntitlementSources == nil {
 		return nil, nil
+	}
+	providerSelected := false
+	for _, source := range policy.EntitlementSources.Sources {
+		providerSelected = providerSelected || source.ProviderMeasurements != nil
+	}
+	if providerSelected {
+		if self.archiveView == nil {
+			return nil, errors.New("economic provider summary lacks its admitted original owner")
+		}
+		if err := errors.Join(ctx.Err(), self.archiveView.checkAdmission()); err != nil {
+			return nil, err
+		}
 	}
 	result := &economicConservationEntitlementSummary{SelectedPools: uint64(len(policy.EntitlementSources.Sources)), LeafObligationsAlpha: "0", FloorResidueAlpha: "0", Authority: "committed-original-artifact-and-rpc-pinned-authorized-receipts", FundingComposition: "vault-obligations-observed-native-income-capital-deposits-and-refunds-unresolved"}
 	add := func(record economicConservationEntitlement) error {
@@ -442,6 +480,9 @@ func (self *economicConservationState) entitlementCensusSummary(ctx context.Cont
 			return nil
 		}
 		result.CompleteRoots++
+		if err := result.addProviderMeasurement(record.providerMeasurement()); err != nil {
+			return err
+		}
 		result.addClosedWork(record.closedWork())
 		leaves, obligations, residue := record.censusSummary()
 		result.Leaves += leaves
@@ -468,6 +509,9 @@ func (self *economicConservationState) entitlementCensusSummary(ctx context.Cont
 		result.UnknownOriginalRoots += cold.UnknownOriginalRoots
 		result.RootsWithUnattributedFunding += cold.RootsWithUnattributedFunding
 		result.Leaves += cold.Leaves
+		if err := result.mergeProviderMeasurements(cold); err != nil {
+			return nil, err
+		}
 		result.mergeClosedWork(cold)
 		var err error
 		result.LeafObligationsAlpha, err = economicConservationSum(result.LeafObligationsAlpha, cold.LeafObligationsAlpha)
@@ -480,6 +524,12 @@ func (self *economicConservationState) entitlementCensusSummary(ctx context.Cont
 		}
 	}
 	result.CompleteObservedCensus = result.FinalizedRoots > 0 && result.PendingRoots == 0 && result.UnknownOriginalRoots == 0
+	result.ProviderMeasurementsAuthenticated = result.CompleteObservedCensus && result.ProviderMeasurementRoots == result.FinalizedRoots
+	if providerSelected {
+		if err := errors.Join(ctx.Err(), self.archiveView.checkAdmission()); err != nil {
+			return nil, err
+		}
+	}
 	return result, nil
 }
 
@@ -523,6 +573,17 @@ func (self *economicConservationArchiveView) admitEntitlementCensuses(ctx contex
 	if err := self.checkAdmission(); err != nil {
 		return err
 	}
+	providerSelected := false
+	if policy.EntitlementSources != nil {
+		for _, source := range policy.EntitlementSources.Sources {
+			providerSelected = providerSelected || source.ProviderMeasurements != nil
+		}
+	}
+	if providerSelected && state.entitlementIds == nil {
+		if err := state.index(); err != nil {
+			return err
+		}
+	}
 	if err := self.requireOriginalEntitlementCensuses(state); err != nil {
 		return err
 	}
@@ -533,7 +594,11 @@ func (self *economicConservationArchiveView) admitEntitlementCensuses(ctx contex
 			return err
 		}
 	}
-	for _, record := range state.Entitlements {
+	records := state.Entitlements
+	if providerSelected {
+		records = economicProviderAdmissionOrder(records)
+	}
+	for _, record := range records {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -553,6 +618,22 @@ func (self *economicConservationArchiveView) admitEntitlementCensuses(ctx contex
 		}
 		if err := record.Census.validate(ctx, policy, record); err != nil {
 			return err
+		}
+		if source, _ := policy.entitlementSource(record.PoolId); source.ProviderMeasurements != nil || record.Census.ProviderOriginals != nil || record.Census.ProviderMeasurements != nil {
+			known := self.providerCensuses[key]
+			if known == nil {
+				var err error
+				known, err = self.verifyProviderOriginals(ctx, policy, state, record)
+				if err != nil {
+					return err
+				}
+			}
+			if known == nil || record.Census.ProviderMeasurements == nil || *record.Census.ProviderMeasurements != known.Measurement || record.Census.ClosedWork == nil || *record.Census.ClosedWork != known.ClosedWork {
+				return errors.New("economic original provider projection differs from complete original witnesses")
+			}
+			if err := self.retainProviderOriginals(ctx, key, known); err != nil {
+				return err
+			}
 		}
 		leaves := make(map[string]string, len(record.Census.Artifact.Leaves))
 		for _, leaf := range record.Census.Artifact.Leaves {
@@ -699,6 +780,9 @@ func (self *economicConservationArchiveView) indexColdEntitlement(record economi
 		return nil
 	}
 	value.CompleteRoots++
+	if err := value.addProviderMeasurement(record.providerMeasurement()); err != nil {
+		return err
+	}
 	value.addClosedWork(record.closedWork())
 	leaves, obligations, residue := record.censusSummary()
 	value.Leaves += leaves
@@ -716,6 +800,9 @@ func (self *economicConservationArchiveView) indexColdEntitlement(record economi
 func economicEntitlementEvidenceError(err error) error {
 	if err == nil || errors.Is(err, errMonitorEconomicCapacity) || monitorOnlyCancellationCauses(err, 0) {
 		return err
+	}
+	if errors.Is(err, payoutartifact.ErrClosedWorkUnavailable) || errors.Is(err, protocol.ErrProviderAttemptsUnavailable) || errors.Is(err, protocol.ErrWalletMappingUnavailable) {
+		return economicProviderEvidenceError(err)
 	}
 	return errors.Join(errRpcIntegrity, err)
 }

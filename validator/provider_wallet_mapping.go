@@ -38,6 +38,12 @@ func NewHttpWalletMappingReader(apiUrl string) (*HttpWalletMappingReader, error)
 // Only a selected complete original head can authorize acquisition. A missing
 // head remains unknown before any request; every attempt owns its body close.
 func (self *HttpWalletMappingReader) Read(ctx context.Context, expected protocol.WalletMappingHistoryExpectation) ([]protocol.WalletMappingConsent, *protocol.VerifiedWalletMapping, error) {
+	return self.ReadBounded(ctx, expected, uint64(protocol.MaxWalletMappingHistory)*protocol.MaxWalletMappingConsentBytes+1024)
+}
+
+// A containing multi-provider owner reserves its remaining original-byte
+// allowance before the request; remote length cannot multiply that allowance.
+func (self *HttpWalletMappingReader) ReadBounded(ctx context.Context, expected protocol.WalletMappingHistoryExpectation, maximumBytes uint64) ([]protocol.WalletMappingConsent, *protocol.VerifiedWalletMapping, error) {
 	if ctx == nil || self == nil || self.client == nil || self.wait == nil || expected.Generation == 0 || expected.Generation > protocol.MaxWalletMappingHistory || expected.HeadHash == ([32]byte{}) || expected.ClientId == ([16]byte{}) {
 		return nil, nil, protocol.ErrWalletMappingUnavailable
 	}
@@ -56,6 +62,12 @@ func (self *HttpWalletMappingReader) Read(ctx context.Context, expected protocol
 		return nil, nil, err
 	}
 	maximum := int64(expected.Generation)*protocol.MaxWalletMappingConsentBytes + 1024
+	if maximumBytes == 0 {
+		return nil, nil, protocol.ErrWalletMappingCapacity
+	}
+	if maximumBytes < uint64(maximum) {
+		maximum = int64(maximumBytes)
+	}
 	for {
 		originals, err := self.read(owner, requestBody, maximum)
 		if err == nil {
@@ -96,14 +108,14 @@ func (self *HttpWalletMappingReader) read(ctx context.Context, body []byte, maxi
 		return nil, &clientKeyObservationHttpStatusError{status: response.StatusCode, operation: "wallet mapping"}
 	}
 	if response.ContentLength > maximum {
-		return nil, protocol.ErrWalletMappingIntegrity
+		return nil, protocol.ErrWalletMappingCapacity
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maximum+1))
 	if err != nil {
 		return nil, err
 	}
 	if int64(len(raw)) > maximum {
-		return nil, protocol.ErrWalletMappingIntegrity
+		return nil, protocol.ErrWalletMappingCapacity
 	}
 	if err := protocol.ValidateUniqueJsonKeys(raw); err != nil {
 		return nil, errors.Join(protocol.ErrWalletMappingIntegrity, err)
@@ -120,4 +132,11 @@ func (self *HttpWalletMappingReader) read(ctx context.Context, body []byte, maxi
 		return nil, protocol.ErrWalletMappingIntegrity
 	}
 	return result.Originals, nil
+}
+
+// Release idle transport connections after the containing evidence owner joins.
+func (self *HttpWalletMappingReader) CloseIdleConnections() {
+	if self != nil && self.client != nil {
+		self.client.CloseIdleConnections()
+	}
 }

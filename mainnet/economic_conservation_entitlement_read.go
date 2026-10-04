@@ -211,7 +211,12 @@ func readEconomicEntitlementCensus(ctx context.Context, policy economicConservat
 		return nil, err
 	}
 	defer artifactReader.CloseIdleConnections()
-	artifact, err := artifactReader.ReadProviderCensus(ctx, epoch.Uint64(), pool.Uint64(), maximumEconomicEntitlementProviders)
+	var artifact *payoutartifact.Artifact
+	if source.ProviderMeasurements == nil {
+		artifact, err = artifactReader.ReadProviderCensus(ctx, epoch.Uint64(), pool.Uint64(), maximumEconomicEntitlementProviders)
+	} else {
+		artifact, err = artifactReader.ReadProviderOriginalCensus(ctx, epoch.Uint64(), pool.Uint64(), maximumEconomicEntitlementProviders)
+	}
 	if err != nil {
 		if errors.Is(err, validator.ErrArtifactCapacity) || errors.Is(err, payoutartifact.ErrClosedWorkCapacity) {
 			return nil, errMonitorEconomicCapacity
@@ -243,12 +248,18 @@ func readEconomicEntitlementCensus(ctx context.Context, policy economicConservat
 	}
 	result.LeafObligationsAlpha = allocated.String()
 	result.FloorResidueAlpha = new(big.Int).Sub(total, allocated).String()
-	result.ClosedWork, err = readEconomicClosedWork(ctx, artifact, committer, windowClock)
-	if result.ClosedWork != nil && result.ClosedWork.WindowHash != "" {
-		result.WindowClock = windowClock
+	if source.ProviderMeasurements == nil {
+		result.ClosedWork, err = readEconomicClosedWork(ctx, artifact, committer, windowClock)
+		if result.ClosedWork != nil && result.ClosedWork.WindowHash != "" {
+			result.WindowClock = windowClock
+		}
+		if err != nil {
+			return nil, economicEntitlementEvidenceError(err)
+		}
 	}
+	result.ProviderOriginals, result.providerAttempts, err = readEconomicProviderOriginals(ctx, source, result, coordinatorReader)
 	if err != nil {
-		return nil, economicEntitlementEvidenceError(err)
+		return nil, economicProviderEvidenceError(err)
 	}
 	result.ContentHash = result.hash()
 	if err := result.validate(ctx, policy, record); err != nil {

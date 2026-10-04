@@ -196,7 +196,10 @@ func applyEconomicEntitlementResult(ctx context.Context, policy economicConserva
 			err = monitorEvmIntegrity("economic artifact handoff replaced retained original census")
 		} else {
 			record.Census = result.census
-			err = result.census.validate(ctx, policy, *record)
+			err = next.archiveView.sealProviderOriginals(ctx, policy, next, record)
+			if err == nil {
+				err = result.census.validate(ctx, policy, *record)
+			}
 			if err == nil {
 				operating, policyErr := next.operatingPolicy(policy)
 				err = policyErr

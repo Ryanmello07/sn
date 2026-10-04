@@ -195,7 +195,7 @@ func artifactObjectHash(object artifactHistoryObject) (string, error) {
 // individually valid: a signed operator equivocation cannot pick a winner by
 // object-list ordering.
 func (self *HTTPArtifactReader) Read(ctx context.Context, epoch uint64, noID uint64) (*payoutartifact.Artifact, error) {
-	return self.read(ctx, epoch, noID, 0)
+	return self.read(ctx, epoch, noID, 0, true)
 }
 
 // A selected consumer may enforce its admitted resident census before costly
@@ -204,12 +204,22 @@ func (self *HTTPArtifactReader) ReadProviderCensus(ctx context.Context, epoch ui
 	if maximumProviders <= 0 {
 		return nil, ErrArtifactCapacity
 	}
-	return self.read(ctx, epoch, noID, maximumProviders)
+	return self.read(ctx, epoch, noID, maximumProviders, true)
+}
+
+// ReadProviderOriginalCensus authenticates the exact signed artifact/history
+// and finite provider frame. Its optional closed-work component is still raw:
+// only the containing independently selected whole-provider owner may admit it.
+func (self *HTTPArtifactReader) ReadProviderOriginalCensus(ctx context.Context, epoch uint64, noID uint64, maximumProviders int) (*payoutartifact.Artifact, error) {
+	if maximumProviders <= 0 {
+		return nil, ErrArtifactCapacity
+	}
+	return self.read(ctx, epoch, noID, maximumProviders, false)
 }
 
 var ErrArtifactCapacity = errors.New("original artifact exceeds the consumer's admitted provider census")
 
-func (self *HTTPArtifactReader) read(ctx context.Context, epoch uint64, noID uint64, maximumProviders int) (*payoutartifact.Artifact, error) {
+func (self *HTTPArtifactReader) read(ctx context.Context, epoch uint64, noID uint64, maximumProviders int, closedWork bool) (*payoutartifact.Artifact, error) {
 	if noID == 0 {
 		return nil, errors.New("artifact no_id is zero")
 	}
@@ -289,7 +299,7 @@ func (self *HTTPArtifactReader) read(ctx context.Context, epoch uint64, noID uin
 	}
 	// Optional original rows are independently reconstructed in both live and
 	// retained HTTP observation readers. Missing/foreign components stay unknown.
-	if artifact.ClosedWork != nil {
+	if closedWork && artifact.ClosedWork != nil {
 		if _, err := payoutartifact.VerifyClosedWorkReports(ctx, artifact, common.Address{}); err != nil && !errors.Is(err, payoutartifact.ErrClosedWorkUnavailable) {
 			return nil, err
 		}

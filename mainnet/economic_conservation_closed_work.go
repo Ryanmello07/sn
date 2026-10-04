@@ -47,6 +47,15 @@ func readEconomicClosedWork(ctx context.Context, artifact *payoutartifact.Artifa
 	if err != nil {
 		return nil, err
 	}
+	return economicClosedWorkProjection(ctx, artifact, reports, clocks...)
+}
+
+// Only a verifier's actual original report result may populate these counters.
+// The complete provider path supplies its independent expected zero-row roster.
+func economicClosedWorkProjection(ctx context.Context, artifact *payoutartifact.Artifact, reports *payoutartifact.VerifiedClosedWorkReports, clocks ...*payoutartifact.ClosedWorkWindowClock) (*economicConservationClosedWork, error) {
+	if reports == nil {
+		return nil, payoutartifact.ErrClosedWorkUnavailable
+	}
 	value := reports.ClosedWork
 	result := &economicConservationClosedWork{Hash: value.CensusHash, Contracts: value.Contracts, Providers: value.Providers, UsageBytes: value.UsageBytes, OrdinarySnapshots: value.OrdinarySnapshots, ExpiredSnapshots: value.ExpiredSnapshots, UncreditedLegacySnapshots: value.UncreditedLegacySnapshots, SignedCloseReports: reports.SignedReports, RegisteredCloseReports: reports.RegisteredReports, CloseAmountJoins: reports.AmountJoins, CompleteReportInventories: reports.CompleteReportInventories, InventoryReports: reports.InventoryReports}
 	if reports.Window != nil {
@@ -66,7 +75,15 @@ func readEconomicClosedWork(ctx context.Context, artifact *payoutartifact.Artifa
 
 // Only recomputed original rows can populate retained counters. A caller's
 // self-sealed counters, or dropping known evidence, cannot manufacture truth.
-func (self *economicConservationEntitlementCensus) validateClosedWork(ctx context.Context) error {
+func (self *economicConservationEntitlementCensus) validateClosedWork(ctx context.Context, selectedProviderAuthority bool) error {
+	if selectedProviderAuthority {
+		// This path is completed by verifyProviderOriginals under the held parent
+		// owner. Raw acquisition cannot choose expected providers or seal counters.
+		if self.ProviderOriginals == nil || self.ProviderOriginals.Work == nil {
+			return payoutartifact.ErrClosedWorkUnavailable
+		}
+		return ctx.Err()
+	}
 	known, err := readEconomicClosedWork(ctx, &self.Artifact, common.HexToAddress(self.RootSigner), self.WindowClock)
 	if err != nil {
 		return err
