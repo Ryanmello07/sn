@@ -21,6 +21,7 @@ import (
 const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
+	Progress                       *economicConservationProgressSummary        `json:"operational_progress,omitempty"`
 	OriginalFees                   *economicWholeFeeSummary                    `json:"original_complete_fee_census,omitempty"`
 	OriginalFinality               *economicConservationFinalitySummary        `json:"original_consensus_coverage,omitempty"`
 	Funding                        *economicConservationFundingSummary         `json:"original_funding_composition,omitempty"`
@@ -666,6 +667,11 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	if hooks.syncDirectory != nil {
 		owner.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(economicConservationRole, "checkpoint", file) }
 	}
+	progress := newEconomicConservationProgress(state, owner.path, now())
+	nextSample := time.Duration(0)
+	if *follow {
+		nextSample = *interval
+	}
 	for ctx.Err() == nil {
 		if err := nativeWorker.start(state); err != nil {
 			return refuse(err)
@@ -708,6 +714,7 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		if err != nil {
 			return refuse(err)
 		}
+		summary.Progress = progress.observe(state, summary, now(), nextSample)
 		metricsAcknowledged := true
 		if metrics != nil {
 			if err := owner.requireOwner(); err != nil {

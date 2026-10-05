@@ -122,5 +122,10 @@ func renderEconomicConservationMetrics(summary *economicConservationSummary) ([]
 	} {
 		fmt.Fprintf(&output, "# HELP sn_mainnet_conservation_%s %s\n# TYPE sn_mainnet_conservation_%s gauge\nsn_mainnet_conservation_%s %d\n", metric.name, metric.help, metric.name, metric.name, metric.value)
 	}
+	// Short TYPE records preserve the original 16 KiB owner profile. Exact
+	// source/known semantics for this fixed extension live in the command docs.
+	for _, metric := range economicConservationProgressMetrics(value) {
+		fmt.Fprintf(&output, "# TYPE sn_mainnet_conservation_%s gauge\nsn_mainnet_conservation_%s %d\n", metric.name, metric.name, metric.value)
+	}
 	return []byte(output.String()), nil
 }
