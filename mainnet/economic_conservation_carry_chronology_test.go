@@ -161,8 +161,11 @@ func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *
 	f, entitlement := newEconomicCarryChronologyArchiveFixture(t, true)
 	summary := f.sample(t, monitorServiceHooks{})
 	record := economicEntitlementRecord(t, f.source)
-	if record.Census == nil || record.Epoch != "3" || record.Funded != "0" || record.Total == nil || *record.Total != "50" || len(record.Sources) != 3 || record.Sources[2].Id != "4/1" || record.Sources[2].Amount != "20" || record.PayoutRoot != common.Hash(entitlement.committedRoot).Hex() || summary.Funding == nil || summary.Funding.OriginalCaptures != 1 || summary.Funding.OriginalClaims != 2 || summary.Funding.OriginalPayments != 1 || summary.TargetMet != nil {
+	if record.Census == nil || record.Epoch != "3" || record.Funded != "0" || record.Total == nil || *record.Total != "50" || len(record.Sources) != 3 || record.Sources[2].Id != "4/1" || record.Sources[2].Amount != "20" || record.PayoutRoot != common.Hash(entitlement.committedRoot).Hex() || summary.Funding == nil || summary.Funding.OriginalCaptures != 1 || summary.Funding.OriginalClaims != 2 || summary.Funding.OriginalPayments != 1 {
 		t.Fatal("public delayed root rejected, relabelled or recounted its original carry", summary, record)
+	}
+	if summary.Funding.NoNonIncomeProviderCredit == nil || *summary.Funding.NoNonIncomeProviderCredit || summary.TargetMet == nil || *summary.TargetMet {
+		t.Fatal("proved original capital lost its contradiction through delayed finalization", summary)
 	}
 	state := f.source.state(t)
 	if err := state.index(); err != nil {
@@ -194,8 +197,11 @@ func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *
 	}
 	reopened := f.sample(t, monitorServiceHooks{})
 	after := economicEntitlementRecord(t, f.source)
-	if after.Census != nil || after.CensusReference == nil || after.censusHash() != beforeCensus || economicEntitlementFundingHash(after) != beforeFunding || after.Sources[2].Id != "4/1" || reopened.Funding == nil || reopened.Funding.Captured != summary.Funding.Captured || reopened.Funding.Accepted != summary.Funding.Accepted || reopened.Funding.Paid != summary.Funding.Paid || reopened.Funding.OriginalCaptures != 1 || reopened.Funding.OriginalClaims != 2 || reopened.Funding.OriginalPayments != 1 || reopened.TargetMet != nil {
+	if after.Census != nil || after.CensusReference == nil || after.censusHash() != beforeCensus || economicEntitlementFundingHash(after) != beforeFunding || after.Sources[2].Id != "4/1" || reopened.Funding == nil || reopened.Funding.Captured != summary.Funding.Captured || reopened.Funding.Accepted != summary.Funding.Accepted || reopened.Funding.Paid != summary.Funding.Paid || reopened.Funding.OriginalCaptures != 1 || reopened.Funding.OriginalClaims != 2 || reopened.Funding.OriginalPayments != 1 {
 		t.Fatal("cold delayed root changed original source or repeated economic effects", reopened, after)
+	}
+	if reopened.Funding.NoNonIncomeProviderCredit == nil || *reopened.Funding.NoNonIncomeProviderCredit || reopened.TargetMet == nil || *reopened.TargetMet {
+		t.Fatal("cold delayed root erased its original capital contradiction", reopened)
 	}
 }
 
