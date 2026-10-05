@@ -231,6 +231,16 @@ fn bodies(wasm: &[u8]) -> Result<BTreeMap<u32, Vec<u8>>, ProbeError> {
     Ok(result)
 }
 
+/// Static profile construction shares the replay admission checks without
+/// exposing an observer or conferring execution/semantic approval.
+pub(crate) fn validate_profile(
+    profile: ObservationProfile,
+    code_hash: [u8; 32],
+    wasm: &[u8],
+) -> Result<(), ProbeError> {
+    HistoricalObserver::new(profile, code_hash, wasm, None).map(|_| ())
+}
+
 impl HistoricalObserver {
     pub(super) fn new(
         profile: ObservationProfile,

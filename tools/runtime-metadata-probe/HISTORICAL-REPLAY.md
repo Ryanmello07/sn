@@ -127,3 +127,34 @@ refuses attribution. Unlabelled same-phase balance events are not selected as
 gas. These facts still do not prove a complete failed-refund branch or establish
 cryptographic source review/finality. The top-level native fee authority remains
 false/null, including when a candidate pair is present.
+
+## Constructing an original callsite profile
+
+`runtime-observation-profile inspect WASM 0xSHA256 [FUNCTION_INDEX ...]` reads the
+exact original artifact, decompresses it within the existing 32 MiB bound, and
+emits a function/import/global census. Up to 32 selected functions also retain
+instruction bytes, function-relative offsets, and complete direct/indirect call
+operands (tail calls are distinct). This command does not instantiate Wasm. A
+name is a navigation aid; it is never evidence that a function has an economic
+meaning.
+
+`runtime-observation-profile assemble WASM PROPOSAL_JSON 0xPROPOSAL_SHA256` emits
+the existing compact `ObservationProfile` bytes, without a wrapper or trailing
+newline. The proposal has schema `urnetwork-original-wasm-profile-proposal-v1`,
+`profile` containing the intended original profile, and `reviewed_calls` with
+one entry per rule in the same order. Each entry repeats `function_index`,
+`offset_start`, `offset_end` and every call in that range from the inspection.
+Ranges must start and end at decoded instruction boundaries; code and body
+hashes, callees, original exported i32 memory bases, replay memory limits and
+all existing capture bounds must match. The output retains the separately
+supplied review digest; it does not create a reviewer signature or admission.
+
+The original runtime473 artifact has an unexported mutable i32 global0 and only
+`__data_end` and `__heap_base` global exports. The compiler therefore refuses a
+recipe that invents an exported `__stack_pointer`. Its instruction listing can
+support review of the actual stack/heap layouts, but does not derive a memory
+recipe, a financial label, or an approved production profile automatically.
+Original economic call ranges and layouts, complete principal storage/cause
+coverage, original-block replay and independent signed producer authority are
+still required before production observations can be admitted. No synthetic
+fixture address or whole-function name match substitutes for those inputs.

@@ -171,7 +171,7 @@ fn scale_exact<T: Decode + Encode>(label: &str, raw: &[u8]) -> Result<T, ProbeEr
 
 /// Refuse oversized initial/imported memories before Wasmtime compilation.
 /// The executor additionally caps dynamic growth. Heap pages are proved state.
-fn memory_bound(wasm: &[u8], heap_pages: Option<u64>) -> Result<(), ProbeError> {
+pub(crate) fn memory_bound(wasm: &[u8], heap_pages: Option<u64>) -> Result<(), ProbeError> {
     let mut memories = 0;
     let mut check = |memory: wasmparser::MemoryType| -> Result<(), ProbeError> {
         memories += 1;
