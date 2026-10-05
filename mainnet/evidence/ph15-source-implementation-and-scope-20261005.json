@@ -7,6 +7,131 @@
     "lists": 0
   },
   "consumer": {
+    "actual": {
+      "counts": {
+        "fail": 0,
+        "pass": 12,
+        "run": 12,
+        "skip": 0
+      },
+      "elapsed_seconds": 6.981,
+      "exit": 0,
+      "outer_terminal": {
+        "active_state": "inactive",
+        "cgroup_absent": true,
+        "exit": 0,
+        "main_pid": 0
+      },
+      "prior_loader_failures_preserved": [
+        {
+          "attempt": 1,
+          "classification": "LOADER_ONLY_INTERPRETER_DEPENDENCY_FAILURE",
+          "loader_error_records": 12,
+          "missing_import": "yaml",
+          "original_failure_preserved": true,
+          "receipt": {
+            "bytes": 8617,
+            "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v1.receipt.json",
+            "sha256": "7c9487f5e6bdae27571acfdc97291ddb71700a4b52f1c0dcae0c059f50258fd8"
+          },
+          "selected_test_bodies_run": 0,
+          "stderr": {
+            "bytes": 10675,
+            "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v1.stderr",
+            "sha256": "334ad14ef62e028c60886847b92e3b0439be66bcc2d7bfd0948605373a15ffcb"
+          },
+          "user_terminal": {
+            "bytes": 1425,
+            "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v1-user-terminal-readback.json",
+            "sha256": "19532fb437522af21f2dd8ec6a1b06607ff4dc636d0479edc06a6284721ff81b"
+          }
+        },
+        {
+          "attempt": 2,
+          "classification": "LOADER_ONLY_INTERPRETER_DEPENDENCY_FAILURE",
+          "loader_error_records": 12,
+          "missing_import": "ansible",
+          "original_failure_preserved": true,
+          "receipt": {
+            "bytes": 8532,
+            "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v2.receipt.json",
+            "sha256": "bc26b19e8c847c7575a3aab072010465638f31687a9c19522801ff446176ef67"
+          },
+          "selected_test_bodies_run": 0,
+          "stderr": {
+            "bytes": 13003,
+            "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v2.stderr",
+            "sha256": "cef2755c0a0e392cfef12dcd30e218b0a808fe4d559d6476b21667a0647ea277"
+          },
+          "user_terminal": {
+            "bytes": 1420,
+            "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v2-user-terminal-readback.json",
+            "sha256": "ddadb921ccf2d456d45298054a4249be8e30d2b2098512a3fb37eb56ff1c0936"
+          }
+        }
+      ],
+      "producer624_files_match_sn14a": true,
+      "promtool": {
+        "path": "/mnt/data/sn-testnet/mainnet-monitor-deployment-20261002/tools/promtool",
+        "sha256": "e59210d5474e2c811a4460fb1593d708b94d58107ae62e9d44e88029bb7e5805"
+      },
+      "python": "/home/by/urnetwork/.virtualenv/brien/bin/python3",
+      "receipt": {
+        "bytes": 8724,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v3.receipt.json",
+        "sha256": "ceccdbdfa45f6167dc585da8d9d49cf655a86169bff2b2e0b7b8dbc376a31734"
+      },
+      "required_environment": {
+        "SN_MAINNET_PROMTOOL": "/mnt/data/sn-testnet/mainnet-monitor-deployment-20261002/tools/promtool",
+        "SN_MAINNET_SOURCE": "/home/by/urnetwork/sn"
+      },
+      "scope_limit": "Only twelve PH15 dashboard Python/actual-Promtool tests. Prior conservation33 was not repeated. No Go producer normal/race or four Go control results, live ingestion/on-call/drill or deployment outcome follows. V3 uses the existing qualified virtual environment; no source change or dependency installation.",
+      "selected_names_match_intake12": true,
+      "source_heads": {
+        "/home/by/urnetwork/sn": "14a4bef86f63a9a67ce637aa8ddc4422c798f189",
+        "/home/by/urnetwork/xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
+      },
+      "source_pins": [
+        {
+          "path": "/home/by/urnetwork/xops/grafana/sn-mainnet-domain.json",
+          "sha256": "fa67ee7f427cc117bee59e8f2faaf312dfa67fcdea1731219563f12ec20f55c0"
+        },
+        {
+          "path": "/home/by/urnetwork/xops/main/ansible/SN-MAINNET-DASHBOARD.md",
+          "sha256": "27dd77d9813f501d058444f5c458f1855137ad1d38d40702f65b68e180f8814c"
+        },
+        {
+          "path": "/home/by/urnetwork/xops/main/ansible/files/sn-mainnet-dashboard/dashboard.py",
+          "sha256": "82847d295f321dc9ba62b9b1b12057ae8c64308911907871494680cdb46042ae"
+        },
+        {
+          "path": "/home/by/urnetwork/xops/main/ansible/files/sn-mainnet-dashboard/metrics-contract.json",
+          "sha256": "523a786bec3d19168cdc7102a421f87a902ebd9bce28d904c4ff165ddb12596b"
+        },
+        {
+          "path": "/home/by/urnetwork/xops/main/ansible/tests/test_sn_mainnet_dashboard.py",
+          "sha256": "f5758497f6a61c55e5862540c9d2dd3d1876989511c3b79eff1d5d715c4647d2"
+        }
+      ],
+      "source_unchanged": true,
+      "status": "PASS_XOPS_PH15_12",
+      "stderr": {
+        "bytes": 2369,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v3.stderr",
+        "sha256": "6bd9f157dbd0bb9c35487477110aaa6ae35fc1c4dfa5b84098e72312e079ba72"
+      },
+      "tree_joined": true,
+      "user_terminal": {
+        "bytes": 1471,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v3-user-terminal-readback.json",
+        "sha256": "2199c59fe71e8d0916f4fc3c835dc1f033e15791280c7319e390fe76149d082a"
+      },
+      "wait": {
+        "bytes": 3406,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v3.process-result.json",
+        "sha256": "f41a3c0abb6cfca5717522f7d36f4250aef2c4f2b007e044c5fc8f7b0736d1a5"
+      }
+    },
     "intake": {
       "bytes": 13215,
       "path": "/mnt/data/sn-testnet/mainnet-parallel-20261004/domain-dashboard-ph15-9a37239e-intake.json",
@@ -59,7 +184,7 @@
       "test_sn_mainnet_dashboard.MainnetDashboardSourceTests.test_every_queried_metric_has_an_original_public_producer",
       "test_sn_mainnet_dashboard.MainnetDashboardTests.test_export_matches_closed_metric_contract_and_keeps_all_fourteen_chain_gauges"
     ],
-    "status": "UNEXECUTED",
+    "status": "PASS_XOPS_PH15_12",
     "targeted_tests": 12,
     "tree": "860774c4594761e42a6efe910051eeffac0e2ee6"
   },
@@ -74,7 +199,7 @@
     "sn_connect_vless": 730,
     "vlessinterop": 8
   },
-  "documentation_base": "dddd686da6bcd66598f27c5176b406387fda1750",
+  "documentation_base": "14a4bef86f63a9a67ce637aa8ddc4422c798f189",
   "preserved_all38_original_outcomes": true,
   "previous_go_roots_per_mode": 2733,
   "previous_source_control_groups": 259,
@@ -95,11 +220,11 @@
     "total_fixed_gauges": 72
   },
   "remaining_original_ph15": [
-    "Normal/race and original four producer control executions; twelve targeted consumer tests with real Promtool/source gates.",
+    "All32 producer roots in normal/race and four original producer control groups remain unexecuted. The twelve targeted consumer tests have passed with actual Promtool/source gates; preserve their separate component receipt.",
     "Other owners actual submission/finalization receipts and durable incident recurrence/resolution histories.",
     "Original provider/window inputs, deployed measured rates, collector/receiver ingestion, on-call delivery and outage/deadlock rehearsals."
   ],
-  "schema": "ph15-merged-source-unqualified-progress-v1",
+  "schema": "ph15-source-and-consumer-actual-progress-v2",
   "scope": {
     "bytes": 2109,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/SCOPE-HANDOFF.json",
@@ -113,5 +238,5 @@
     "Merged source does not establish active collector ingestion, alert delivery, live operation or complete PH15."
   ],
   "source_control_groups": 263,
-  "status": "SUPPORTED_OBSERVER_AND_DASHBOARD_SOURCE_IMPLEMENTED_UNQUALIFIED"
+  "status": "DASHBOARD_CONSUMER12_PASS_PRODUCER_NORMAL_RACE_CONTROLS_PENDING"
 }
