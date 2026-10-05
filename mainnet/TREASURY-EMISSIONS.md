@@ -82,7 +82,7 @@ would require separately qualified ownership, precompile and withdrawal behavior
 
 ## Public configuration contract
 
-For a destination with no registered recipients, the [runtime-473 setup note](TREASURY-RECEIVE-SETUP.md) separates receiving from one-time registration. The observed separate-coldkey transfer delay is 36,000 blocks; direct reserve-origin registration instead requires an explicit TAO-funded setup decision. Neither makes reserve signatories a routing-configuration requirement.
+For a destination with no registered recipients, the [runtime-473 setup note](TREASURY-RECEIVE-SETUP.md) describes the selected separately funded source-account setup. The reserve makes no outgoing payments, including setup fees; reserve-funded registration is unselected. A fresh source-coldkey transfer has the observed 36,000-block delay. Preserve its destination eligibility by leaving interim alpha stake deposits out of the setup. Receiving requires no reserve signatory configuration.
 
 The [public destination reader](treasury_destination.go) opens an explicitly selected absolute file path
 under an independently accepted SHA-256 pin. Use the mainnet tool's
