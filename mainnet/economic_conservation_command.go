@@ -621,7 +621,7 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 			metrics.syncDirectory = func(file *os.File) error { return hooks.syncDirectory(economicConservationRole, "metrics", file) }
 		}
 		if err := initializeEconomicConservationMetrics(metrics); err != nil {
-			return refuse(err)
+			return startupRefuse(err)
 		}
 	}
 
@@ -708,30 +708,41 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		if err != nil {
 			return refuse(err)
 		}
+		metricsAcknowledged := true
 		if metrics != nil {
 			if err := owner.requireOwner(); err != nil {
 				return refuse(err)
 			}
 			if err := saveEconomicConservationMetrics(metrics, &summary); err != nil {
-				return refuse(err)
+				if !*follow || ctx.Err() != nil || !economicConservationStartupPending(err) {
+					return refuse(err)
+				}
+				// The financial checkpoint is already acknowledged. A known
+				// textfile I/O outage must not stop its healthy read workers or
+				// replay those retained effects. Retry on the next bounded
+				// sample, without emitting success for this failed publication.
+				fmt.Fprintln(stderr, "economic metrics publication pending:", err)
+				metricsAcknowledged = false
 			}
 		}
-		encoded, err := json.Marshal(summary)
-		if err != nil {
-			fmt.Fprintln(stderr, err)
-			return 3
-		}
-		encoded = append(encoded, '\n')
-		written, err := stdout.Write(encoded)
-		if err == nil && written != len(encoded) {
-			err = io.ErrShortWrite
-		}
-		if err != nil {
-			fmt.Fprintln(stderr, err)
-			return 3
-		}
-		if hooks.afterEvent != nil {
-			hooks.afterEvent(ctx, economicConservationRole)
+		if metricsAcknowledged {
+			encoded, err := json.Marshal(summary)
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 3
+			}
+			encoded = append(encoded, '\n')
+			written, err := stdout.Write(encoded)
+			if err == nil && written != len(encoded) {
+				err = io.ErrShortWrite
+			}
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 3
+			}
+			if hooks.afterEvent != nil {
+				hooks.afterEvent(ctx, economicConservationRole)
+			}
 		}
 		if *follow {
 			feeWorker.start(state)
