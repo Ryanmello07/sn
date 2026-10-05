@@ -47,6 +47,15 @@ fn historical_extrinsics_root_uses_sdk_system_version_scope() {
     for unsupported in 2..=u8::MAX {
         assert!(extrinsics_root_state_version(unsupported).is_err());
     }
+    // The SDK's storage enum itself accepts raw two. The v1 product wire
+    // deliberately has a narrower scope, and must not confuse these policies.
+    assert_eq!(StateVersion::try_from(2).unwrap(), StateVersion::V1);
+    let future = RuntimeVersion {
+        system_version: 2,
+        ..RuntimeVersion::default()
+    };
+    assert_eq!(future.state_version(), StateVersion::V1);
+    assert_eq!(future.extrinsics_root_state_version(), StateVersion::V1);
 }
 
 #[test]
@@ -136,15 +145,56 @@ fn historical_extrinsics_root_original_order_bytes_and_prefixes_remain_required(
 
 #[test]
 fn historical_extrinsics_root_preserves_actual_runtime_version_guard() {
-    let mut input = long_body_job();
-    // Both declared values select body V0; original Core_version must still
-    // refuse the wrong system/storage version before block execution.
-    input.execution_state_version = 0;
-    let error = run(&input).expect_err("body-layout agreement hid a runtime version contradiction");
-    assert!(
-        error.to_string().contains("executing state version"),
-        "{error}"
-    );
+    for (actual, declared) in [(1, 0), (2, 1)] {
+        let code = wasm_with_version("", "", 8192, actual);
+        let mut input = job(&code, |_| {});
+        let body = input
+            .extrinsics_hex
+            .iter()
+            .map(|value| hex_bytes("fixture extrinsic", value, MAXIMUM_BLOCK_BYTES).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            BlakeTwo256::ordered_trie_root(body.clone(), StateVersion::V0),
+            BlakeTwo256::ordered_trie_root(body, StateVersion::V1),
+        );
+        // The short body has the same root under both layouts. Original code
+        // is proved at the parent and returns the distinct actual raw version.
+        input.execution_state_version = declared;
+        let mut results = vec![run(&input).map(|_| ())];
+        // The critical raw1/raw2 case also shares storage V1, and the block
+        // makes no writes. Capture reaches strict replay's raw-version guard
+        // without a different storage layout masking the intended refusal.
+        if actual == 2 {
+            results.push(capture_tests::collect(&input).map(|_| ()));
+        }
+        for result in results {
+            let error =
+                result.expect_err("body-layout agreement hid a runtime version contradiction");
+            assert!(
+                error.to_string().contains("executing state version"),
+                "actual {actual}, declared {declared}: {error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn historical_extrinsics_root_capture_and_replay_refuse_unsupported_raw_wire() {
+    let original = long_body_job();
+    for declared in 2..=u8::MAX {
+        let mut input = original.clone();
+        input.execution_state_version = declared;
+        for result in [
+            run(&input).map(|_| ()),
+            capture_tests::collect(&input).map(|_| ()),
+        ] {
+            let error = result.expect_err("unsupported raw system version entered the v1 wire");
+            assert!(
+                error.to_string().contains("state version unsupported"),
+                "{error}"
+            );
+        }
+    }
 }
 
 // Read the two original RPC aliases without depending on an optional serde

@@ -95,12 +95,17 @@ const MAXIMUM_BLOCK_BYTES: usize = 8 * 1024 * 1024;
 const MAXIMUM_HEADER_BYTES: usize = 64 * 1024;
 type NativeHeader = Header<u32, BlakeTwo256>;
 
-/// The wire admits raw system versions zero and one. Their storage layouts
-/// differ, but the pinned SDK selects extrinsics layout zero for both. Replay
-/// separately requires the original Core_version to match this declared value.
+/// The v1 wire retains the raw stateVersion/systemVersion RPC alias, not a
+/// normalized trie layout. It admits only zero and one, as the Go request and
+/// job validators do. Their storage layouts differ, but the SDK selects body
+/// layout zero for both. Replay separately requires the original Core_version
+/// to match this raw value exactly; equal storage layouts are not sufficient.
 fn extrinsics_root_state_version(system_version: u8) -> Result<StateVersion, ProbeError> {
-    StateVersion::try_from(system_version)
-        .map_err(|_| ProbeError::new("historical state version unsupported"))?;
+    // StateVersion::try_from also accepts raw two as V1. That conversion must
+    // not silently expand this versioned job grammar or reinterpret old pins.
+    if system_version > 1 {
+        return Err(ProbeError::new("historical state version unsupported"));
+    }
     Ok(RuntimeVersion {
         system_version,
         ..RuntimeVersion::default()

@@ -51,12 +51,16 @@ fn wasm(imports: &str, body: &str) -> Vec<u8> {
 }
 
 fn wasm_with_heap(imports: &str, body: &str, heap: u32) -> Vec<u8> {
+    wasm_with_version(imports, body, heap, 1)
+}
+
+fn wasm_with_version(imports: &str, body: &str, heap: u32, system_version: u8) -> Vec<u8> {
     let version = RuntimeVersion {
         spec_name: Cow::Borrowed("synthetic-historical-runtime"),
         spec_version: 1,
         apis: Cow::Owned(vec![(sp_core::hashing::blake2_64(b"Core"), 4)]),
         transaction_version: 1,
-        system_version: 1,
+        system_version,
         ..RuntimeVersion::default()
     }
     .encode();
