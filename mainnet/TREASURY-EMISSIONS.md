@@ -1,10 +1,12 @@
-# Treasury emission proposal — October 5, 2026
+# Native treasury emissions — October 5, 2026
 
 The selected launch policy is **10% of the native miner allocation for providers
 and 90% retained for future network improvements**. This supersedes the September
 27 owner-recycle choice. Retain the full miner tranche for distribution instead
-of deliberately recycling its remainder. This document defines the successor;
-implementation, qualification, key provisioning and activation remain pending.
+of deliberately recycling its remainder. This document defines the explicit
+successor and its custody command interface. The source changes are being
+integrated; execution qualification, actual identity provisioning and activation
+remain pending.
 
 ## Native routing and custody
 
@@ -56,17 +58,19 @@ would require separately qualified ownership, precompile and withdrawal behavior
 
 ## Public configuration contract
 
-The proposed custody reader uses the existing environment resolver convention:
-`Vault.SimpleResource("sn.yml")` in environment `main` resolves the selected vault
-resource. Its physical identity and exact bytes must then be retained for the
-operation; an environment fallback cannot select another network or custody.
-No such treasury consumer exists in the reviewed baseline. The independent
-`Config.SimpleResource("sn.yml")` reader in Server already parses the public
-earnings schedule strictly. Do not insert the following fields into
+The [custody reader](treasury_config.go) opens an explicitly selected absolute
+file path under an independently accepted SHA-256 pin. Use the mainnet tool's
+`treasury describe --custody FILE --custody-sha256 HASH` command, with `FILE` set
+to the actual absolute path of the anticipated `vault/main/sn.yml`. The CLI has
+no `Vault.SimpleResource("sn.yml")` lookup or environment fallback. Describe
+validates only the public descriptor and does not open its device references.
+
+The independent `Config.SimpleResource("sn.yml")` reader in Server parses the
+public earnings schedule strictly. Do not insert the following fields into
 `config/main/sn.yml`, replace that schedule, or reuse `st.yml`'s legacy
 `treasury_hotkey` deposit-staging field.
 
-This non-secret template defines the custody parser being implemented. Empty
+This non-secret template matches the custody parser. Empty
 identities, zero threshold and empty file references are deliberately invalid;
 they are not runnable defaults or an assertion about the user's threshold.
 
@@ -85,7 +89,7 @@ multisig:
     - account_id: ""
       signature_scheme: ed25519
       device_config: {path: "", bytes: 0, sha256: ""}
-recipient_hotkeys:
+recipient_hotkeys:                     # sorted by raw AccountId32
   - account_id: ""
     device_config: {path: "", bytes: 0, sha256: ""}
   - account_id: ""
@@ -100,8 +104,11 @@ exact byte count and canonical `0x`-prefixed SHA-256. They reference public
 Ledger configuration and are never executable commands, seeds or validator
 signing files. No validator export includes these local device paths.
 
-The separate signed economic policy binds these public fields; the custody file
-cannot authorize emissions or spending by itself:
+The descriptor admits two through 100 recipient hotkeys, distinct from the
+multisig account and every signatory. The signed validator policy has its own
+bounded roster validation; parsing a custody descriptor is not equivalent to
+admitting that policy. The separate signed economic policy binds these public
+fields; the custody file cannot authorize emissions or spending by itself:
 
 | Public policy field | Required meaning |
 | --- | --- |
@@ -111,6 +118,7 @@ cannot authorize emissions or spending by itself:
 | Allocation denominator | Full actual native miner allocation before distribution, excluding other emission tranches and principal |
 | Distribution fractions | `1/1` distributed: providers `1/10`, treasury `9/10`; no deliberate owner recycle or deferred provider liability |
 | Per-recipient cap and assurance | Existing `32768/65535` cap and observed-native-target with exact runtime tolerance; theta applies only to providers |
+| Auto-stake destination | Omitted means authenticated absence; a supplied public AccountId32 must match original native storage exactly |
 
 Owner-set exclusion, multisig derivation, identity uniqueness and cap checks are
 mandatory validation, never caller-disableable flags. Reject unknown fields,
@@ -137,9 +145,34 @@ maximum weight, deposit/fee allowances and initial approval timepoint. Preserve
 pending approvals and unknown results across restart; cancellation belongs to
 the original depositor. An outer successful extrinsic is insufficient: require
 the matching `MultisigExecuted` inner result and actual registration/ownership
-or spending readback. Hardware signing, wrapper submission and recovery need
-their own production implementation and qualification; a descriptor parser does
-not supply them.
+or spending readback.
+
+The [treasury commands](treasury_command.go) implement this separation:
+
+| Stage | Commands and retained authority |
+| --- | --- |
+| Read and review | `describe` validates the pinned descriptor. `observe`, `plan` and `policy-plan` consume an explicit `--input` JSON, optionally binding that same descriptor with `--custody` and `--custody-sha256`. Observation pins native finality; plans remain unsigned. `policy-plan` returns `approved: false`. |
+| Permanent host custody | `reserve`, `export`, `import-reply`, `status`, `reconcile` and `submit` require the original signed `--config`, independent `--approval-key`, `--accept-action-hash` and `--production-authority-hash`. Export retains original metadata; imported replies require an exact file pin. Unknown outcomes retain the original request and bounded submission allowance. |
+| Owner-local Ledger | `inspect-request`, `ledger-plan` and `sign` require the original `--request`, independently accepted request hash, signatory account, genesis and approval key. `sign` additionally requires the descriptor's exact `--device-config` and permanent `--owner-state`; no host private key is accepted. |
+
+The device reference resolves to a public
+`urnetwork-native-treasury-ledger-device-v1` JSON containing the expected account,
+derivation path, absolute Python/helper/backend paths, helper/backend SHA-256
+pins and app version. The supported signing path is Ed25519 at
+`m/44'/354'/account'/0'/index'`. The local journal retains a returned signature;
+an unresolved device issuance cannot trigger a fresh signing call. A verified
+signature alone does not prove Ledger provenance; qualify the actual device
+workflow before use.
+
+Supported inner calls are bounded SN25 `register_limit`, `remove_stake_limit`
+with partial execution disabled, and `transfer_keep_alive`, wrapped in native
+`approve_as_multi`, `as_multi` or `cancel_as_multi`. Liquidation checks both the
+selected stake position and coldkey-wide availability, including collateral.
+Cancellation retains the original depositor and timepoint. There is no
+auto-stake setter in this command path: begin with an absent destination or
+separately authorize its native management, then bind its exact observed value
+in the economic policy. Source implementation does not establish successful
+hardware signing, native execution or launch authority.
 
 ## Allocation and evidence
 
@@ -152,6 +185,16 @@ Exclude owner cuts, validator/root dividends, deposits and existing principal
 from `M`. Separate earned collateral capture, truncation dust and any actual
 unplanned recipient or owner-withholding outcome.
 
+The [original native availability query](historical_principal.go) retains the
+runtime API's raw SCALE response and coldkey-wide total, locked and available
+alpha at both boundaries. `StakeInfo.locked` alone is insufficient on v470.
+Captured rewards are already staked and must not be added to principal twice;
+available alpha also accounts for collateral. Deduplicate a shared coldkey's
+availability across recipient queries. Complete custody reconciliation requires
+the retained stake positions and original causes to cover that coldkey's total;
+untracked positions leave the custody conclusion unqualified. Later liquidation
+and spending are separate native outflows, never negative provider earnings.
+
 The submitted 90/10 row is a target. Yuma masks, other validators, clipping,
 normalization and integer rounding determine actual incentive. Preserve the
 observed-native-target assurance and runtime-derived tolerance; no hard payout
@@ -163,31 +206,28 @@ and emission gating still determine the subnet's allocation.
 
 ## Implementation and launch consequence
 
-1. Add a distinct signed economic successor and treasury recipient role to the
-   [proposal/admission path](../validator/recycle_planner.go). Current validation
-   accepts only recognized-owner recycling. Preserve old signed bytes, pending
-   work and archive interpretation; they cannot acquire treasury authority.
-   The validator lane owns this policy and producer integration; the bootstrap
-   lane owns the public custody parser, pure native multisig derivation and
-   owner-local hardware transaction lifecycle.
-2. Join the new policy through production measurement, weight preparation,
-   approvals, bootstrap and reset. Bind exact coldkey ownership, UID/hotkey
-   generations, owner-set exclusion, masks and caps at the applicable native
-   execution boundary. Ordinary treasury registrations lack owner immunity:
-   monitor pruning, re-registration, ownership changes and permit effects.
-   Missing recipients must not silently renormalize 90% onto providers or the
-   remaining treasury UID. Reconcile original pending work before replacement.
-3. Extend [native references](economic_reference.go),
-   [execution accounting](economic_native_accounting.go),
-   [recipient attribution](economic_native_attribution.go), conservation and
-   monitoring with authenticated treasury earnings, locked/liquid stake and
-   later outflows. Current code fixes reserve credit at zero, expects 90% recycle
-   and classifies nonprovider miner credits as residual. Do not rename those
-   historical amounts into treasury credit. Prove provider and treasury outcomes
-   independently, with exact native receipts and custody reconciliation.
-   The native-accounting lane owns these projections and their explicit schema
-   successor, with absent optional fields preserving legacy hashes and replay.
-4. Qualify the changed path, ownership/generation failures, pruning/recovery,
+The frozen [validator successor](../validator/TREASURY-PRODUCTION.md) uses an
+explicit `treasury_approval` selector, distinct signed domains and the complete
+ordinary recipient roster through measured preparation, submission and recovery.
+It preserves original owner-recycle bytes and read-only historical authority.
+The frozen multisig implementation supplies the public parser and the custody
+commands above. Native accounting and monitoring add explicit treasury schemas;
+legacy recycling and residual amounts must retain their historical meaning.
+These source changes and the original availability capture/replay fixture still
+require integration and execution qualification together.
+
+1. Bind exact coldkey ownership, UID/hotkey generations, owner-set exclusion,
+   masks and caps at the applicable native execution boundary. Ordinary treasury
+   registrations lack owner immunity: monitor pruning, re-registration,
+   ownership changes and permit effects. Missing recipients must fail the
+   complete row. Retain prior stake positions through recipient replacement or
+   destination rotation; reconcile pending work before replacing its authority.
+2. Prove provider and treasury outcomes independently using
+   [execution accounting](economic_native_accounting.go), original native
+   receipts, collateral and custody reconciliation. A synthetic original
+   capture/replay fixture qualifies mechanics only; it does not admit the live
+   runtime or demonstrate a mainnet 10/90 outcome.
+3. Qualify the changed path, ownership/generation failures, pruning/recovery,
    cap/mask failures, consensus divergence and treasury conservation. The owner
    recycle-mode transition is no longer a prerequisite for the ordinary treasury
    remainder; any actual withholding remains measured. Reassess deployment and
