@@ -30,6 +30,9 @@ TRUST_PROFILE = "trusted-local-exclusive-source-owner-v1"
 MAXIMUM_FILES = 100000
 MAXIMUM_DIRECTORIES = 100000
 MAXIMUM_DIRECTORY_DEPTH = 256
+MAXIMUM_DIRECTORY_ENTRIES = 900000
+MAXIMUM_CENSUS_BYTES = 64 * 1024**2
+MAXIMUM_CENSUS_LEAVES = 800000
 MAXIMUM_FILE_BYTES = 2 * 1024**3
 MAXIMUM_TOTAL_BYTES = 32 * 1024**3
 MAXIMUM_PROOF_BYTES = 96 * 1024**2
@@ -161,7 +164,7 @@ def _request(files, directory_inventories, context):
         _require(isinstance(names, list) and all(isinstance(n, str) for n in names)
                  and names == sorted(set(names)), "closed names must be sorted and unique")
         count += len(names)
-        _require(count <= MAXIMUM_FILES * 8, "closed filename census exceeds bound")
+        _require(count <= MAXIMUM_CENSUS_LEAVES, "closed filename census exceeds bound")
         for name in names:
             p = Path(name)
             _require(name and p.parts and not p.is_absolute() and str(p) == name
@@ -298,8 +301,17 @@ def _directory(path, owner):
         def names():
             # A transient partial readdir must retry the complete same namespace.
             os.lseek(descriptor, 0, os.SEEK_SET)
+            result, used = [], 0
             with os.scandir(descriptor) as entries:
-                return sorted(entry.name for entry in entries)
+                for entry in entries:
+                    owner.check()
+                    _require(len(result) < MAXIMUM_DIRECTORY_ENTRIES,
+                             "closed directory entry count exceeds bound")
+                    used += len(os.fsencode(entry.name))
+                    _require(used <= MAXIMUM_CENSUS_BYTES,
+                             "closed directory name bytes exceed bound")
+                    result.append(entry.name)
+            return sorted(result)
 
         result = owner.call(names)
         _require(_identity(owner.call(os.fstat, descriptor)) == before
@@ -335,20 +347,30 @@ class SourceVerification:
             before, names = _directory(root, owner)
             _require(len(data["directories"]) < MAXIMUM_DIRECTORIES, "directory proof exceeds bound")
             data["directories"][root] = before
-            leaves = []
+            leaves, used = [], 0
+
+            def append(leaf):
+                nonlocal used
+                _require(len(leaves) < MAXIMUM_CENSUS_LEAVES,
+                         "closed filename leaf count exceeds bound")
+                used += len(os.fsencode(leaf))
+                _require(used <= MAXIMUM_CENSUS_BYTES, "closed filename bytes exceed bound")
+                leaves.append(leaf)
+
             for name in names:
                 path = str(Path(root) / name)
                 info = _observe(path, owner)
                 if info["type"] == stat.S_IFDIR:
-                    leaves.extend(name + "/" + leaf for leaf in walk(path, depth + 1))
+                    for leaf in walk(path, depth + 1):
+                        owner.check()
+                        append(name + "/" + leaf)
                 else:
                     _require(info["type"] in (stat.S_IFREG, stat.S_IFLNK),
                              "closed census contains a special file")
-                    leaves.append(name)
+                    append(name)
                     if info["type"] == stat.S_IFLNK:
                         data["links"][path] = info
             _require(_observe(root, owner) == before, "closed directory changed during census")
-            _require(len(leaves) <= MAXIMUM_FILES * 8, "closed filename census exceeds bound")
             visited[root] = sorted(leaves)
             return visited[root]
 
@@ -411,13 +433,13 @@ class SourceVerification:
 
     def _verify_with_lock(self, context):
         if self._invalid is not None:
-            raise SourceIntegrityError(self._invalid)
+            raise SourceIntegrityError("source proof already invalid: " + str(self._invalid)) from self._invalid
         try:
             _require(_canonical(context) == _canonical(self._data["request"]["context"]),
                      "source verification context changed")
             self._verify(self._policy.owner())
         except SourceIntegrityError as error:
-            self._invalid = str(error)
+            self._invalid = error
             raise
 
     def summary(self):

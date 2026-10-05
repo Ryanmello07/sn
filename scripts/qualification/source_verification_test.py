@@ -310,8 +310,9 @@ class SourceVerificationTests(unittest.TestCase):
                 proof.verify(self.context)
         self.assertEqual(len(attempts), 2)
         self.assertEqual(caught.exception.__cause__.exceptions, tuple(failures))
-        with self.assertRaises(source.SourceIntegrityError):
+        with self.assertRaises(source.SourceIntegrityError) as repeated:
             proof.verify(self.context)
+        self.assertIs(repeated.exception.__cause__, caught.exception)
 
     def test_cancellation_and_deadline_do_not_publish_equality(self):
         canceled = threading.Event()
@@ -437,6 +438,80 @@ class SourceVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(source.SourceIntegrityError, "exclusive source-owner profile"):
             source.SourceVerification.load(reference, self.files, self.census, context,
                                            retry=self.retry)
+
+    def test_directory_entry_count_and_bytes_stop_before_iterator_overrun(self):
+        for kind, limit, names, expected_calls in (
+                ("MAXIMUM_DIRECTORY_ENTRIES", 2, ["one", "two", "three"], 3),
+                ("MAXIMUM_CENSUS_BYTES", 2, ["three"], 1)):
+            calls = []
+
+            class Entries:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    pass
+
+                def __iter__(self):
+                    return self
+
+                def __next__(self):
+                    if len(calls) == len(names):
+                        raise AssertionError("enumeration exceeded admitted bound")
+                    entry = mock.Mock()
+                    entry.name = names[len(calls)]
+                    calls.append(entry.name)
+                    return entry
+
+            with mock.patch.object(source, kind, limit):
+                with mock.patch.object(source.os, "scandir", return_value=Entries()):
+                    with self.assertRaisesRegex(source.SourceIntegrityError, "exceeds bound"):
+                        self.capture()
+            self.assertEqual(len(calls), expected_calls)
+
+    def test_directory_enumeration_observes_owner_cancellation(self):
+        canceled = threading.Event()
+        calls = []
+
+        class Entries:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if len(calls) == 2:
+                    raise AssertionError("enumeration continued after cancellation")
+                entry = mock.Mock()
+                entry.name = "synthetic-name"
+                calls.append(entry.name)
+                if len(calls) == 2:
+                    canceled.set()
+                return entry
+
+        policy = source.ReadPolicy(delay_seconds=0, cancel_event=canceled)
+        with mock.patch.object(source.os, "scandir", return_value=Entries()):
+            with self.assertRaisesRegex(source.SourceUnavailableError, "canceled"):
+                self.capture(retry=policy)
+        self.assertEqual(len(calls), 2)
+
+    def test_recursive_filename_append_is_bounded_before_census_comparison(self):
+        (self.stage / "third.go").write_bytes(b"unexpected source")
+        with mock.patch.object(source, "MAXIMUM_CENSUS_LEAVES", 2):
+            with self.assertRaisesRegex(source.SourceIntegrityError, "leaf count exceeds bound"):
+                self.capture()
+        (self.stage / "third.go").unlink()
+        self.first.unlink()
+        (self.stage / "empty").rmdir()
+        self.files = {str(self.second): self.files[str(self.second)]}
+        self.census = {str(self.stage): ["nested/second.h"]}
+        with mock.patch.object(source, "MAXIMUM_CENSUS_BYTES", 10):
+            with self.assertRaisesRegex(source.SourceIntegrityError, "filename bytes exceed bound"):
+                self.capture()
 
 
 if __name__ == "__main__":
