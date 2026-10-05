@@ -105,8 +105,13 @@ func TestEconomicCarryChronologyChecksSameBlockTransactionAndLogOrder(t *testing
 // Select the newer source epoch before any reader starts. Original capture
 // execution proves the fourteen units of opening stock, while the receipt-only
 // variant deliberately retains that unresolved difference as an active source.
-func newEconomicCarryChronologyArchiveFixture(t *testing.T, originalCapture bool) (*economicConservationArchiveFixture, *economicEntitlementFixture) {
+// The selected leaf is explicit: six percent need not spend capital, whereas
+// ninety-nine percent consumes at least thirteen units of original stock.
+func newEconomicCarryChronologyArchiveFixture(t *testing.T, originalCapture bool, share uint64) (*economicConservationArchiveFixture, *economicEntitlementFixture) {
 	t.Helper()
+	if share != 6 && share != 99 {
+		t.Fatal("carry chronology fixture requires an explicit small or capital-consuming leaf")
+	}
 	var entitlement *economicEntitlementFixture
 	configure := func(source *economicConservationFixture) {
 		vault := source.vault
@@ -123,7 +128,20 @@ func newEconomicCarryChronologyArchiveFixture(t *testing.T, originalCapture bool
 		})
 		vault.blocks[11].funded["4/1"] = vault.blocks[11].funded["2/1"]
 		delete(vault.blocks[11].funded, "2/1")
-		entitlement = configureEconomicEntitlementFixture(t, source)
+		entitlement = configureEconomicEntitlementFixture(t, source, share)
+		if share == 99 {
+			for _, number := range []uint64{12, 13} {
+				vault.blocks[number].snapshot = monitorEvmVaultSnapshot("120", "61", "0", "59", "79", "0", "0", vault.policy.Coldkeys[0])
+			}
+			economicConservationTestEvmRehash(t, vault, func(number uint64, receipt *types.Receipt) {
+				if number != 12 {
+					return
+				}
+				sender := common.HexToAddress(vault.policy.FeePayers[0])
+				receipt.Logs[1] = monitorEvmTestLog(t, vault.contract, common.HexToAddress(vault.policy.Address), "Claimed", big.NewInt(3), big.NewInt(1), [32]byte(common.HexToHash(vault.policy.Coldkeys[0])), big.NewInt(9900), big.NewInt(49), sender)
+				receipt.Logs[2] = monitorEvmTestLog(t, vault.contract, common.HexToAddress(vault.policy.Address), "ClaimPaid", [32]byte(common.HexToHash(vault.policy.Coldkeys[0])), big.NewInt(61), sender)
+			})
+		}
 	}
 	if !originalCapture {
 		f := newEconomicConservationArchiveFixture(t, false, configure)
@@ -156,14 +174,16 @@ func newEconomicCarryChronologyArchiveFixture(t *testing.T, originalCapture bool
 
 // Use the actual public receipt, original native capture, artifact, archive
 // and restart owners. The source remains epoch four and the target epoch three;
-// all original capture, carry, entitlement and claim amounts stay unchanged.
+// the large accepted leaf proves necessary capital use across cold retirement.
 func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *testing.T) {
-	f, entitlement := newEconomicCarryChronologyArchiveFixture(t, true)
+	f, entitlement := newEconomicCarryChronologyArchiveFixture(t, true, 99)
 	summary := f.sample(t, monitorServiceHooks{})
 	record := economicEntitlementRecord(t, f.source)
-	if record.Census == nil || record.Epoch != "3" || record.Funded != "0" || record.Total == nil || *record.Total != "50" || len(record.Sources) != 3 || record.Sources[2].Id != "4/1" || record.Sources[2].Amount != "20" || record.PayoutRoot != common.Hash(entitlement.committedRoot).Hex() || summary.Funding == nil || summary.Funding.OriginalCaptures != 1 || summary.Funding.OriginalClaims != 2 || summary.Funding.OriginalPayments != 1 {
+	if record.Census == nil || record.Census.LeafObligationsAlpha != "49" || record.Census.FloorResidueAlpha != "1" || record.Epoch != "3" || record.Funded != "0" || record.Total == nil || *record.Total != "50" || len(record.Sources) != 3 || record.Sources[2].Id != "4/1" || record.Sources[2].Amount != "20" || record.PayoutRoot != common.Hash(entitlement.committedRoot).Hex() || summary.Funding == nil || summary.Funding.OriginalCaptures != 1 || summary.Funding.OriginalClaims != 2 || summary.Funding.OriginalPayments != 1 {
 		t.Fatal("public delayed root rejected, relabelled or recounted its original carry", summary, record)
 	}
+	economicFundingTestRange(t, summary.Funding.Accepted, "56", "5", "43", "13", "51", false)
+	economicFundingTestRange(t, summary.Funding.Paid, "61", "5", "48", "13", "56", false)
 	if summary.Funding.NoNonIncomeProviderCredit == nil || *summary.Funding.NoNonIncomeProviderCredit || summary.TargetMet == nil || *summary.TargetMet {
 		t.Fatal("proved original capital lost its contradiction through delayed finalization", summary)
 	}
@@ -205,11 +225,44 @@ func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *
 	}
 }
 
+// Proving original capital does not prove that every partial payment used it.
+// A three-unit leaf fits within the possible income of its fifty-unit root;
+// actual archive/restart must preserve that ambiguity and the source identity.
+func TestEconomicCarryChronologyPublicSmallCreditKeepsCapitalUseUnknown(t *testing.T) {
+	f, _ := newEconomicCarryChronologyArchiveFixture(t, true, 6)
+	before := f.sample(t, monitorServiceHooks{})
+	record := economicEntitlementRecord(t, f.source)
+	if before.Funding == nil || record.Census == nil || record.Census.LeafObligationsAlpha != "50" || record.Census.FloorResidueAlpha != "0" || record.Epoch != "3" || record.Total == nil || *record.Total != "50" || len(record.Sources) != 3 || record.Sources[2].Id != "4/1" || record.Sources[2].Amount != "20" || before.Funding.OriginalCaptures != 1 || before.Funding.OriginalClaims != 2 || before.Funding.OriginalPayments != 1 {
+		t.Fatal("small-credit control lost its original capture, claim or source census", before, record)
+	}
+	economicFundingTestRange(t, before.Funding.Captured, "20", "6", "6", "14", "14", true)
+	economicFundingTestRange(t, before.Funding.Accepted, "10", "0", "10", "0", "10", false)
+	economicFundingTestRange(t, before.Funding.Paid, "15", "0", "15", "0", "15", false)
+	if before.Funding.NoNonIncomeProviderCredit != nil || before.TargetMet != nil || before.Conformance == nil || len(before.Conformance.Contradictions) != 0 || before.Funding.CapitalSubsidyAuthorized {
+		t.Fatal("small fungible credit invented income-only or definite capital authority", before)
+	}
+	beforeCensus, beforeFunding := record.censusHash(), economicEntitlementFundingHash(record)
+	f.reset(t)
+	_, args := f.plan(t)
+	if code, issue := f.apply(t, args, &bytes.Buffer{}, monitorServiceHooks{}); code != 0 {
+		t.Fatal("small-credit archive refused the original causal capture", code, issue)
+	}
+	retired := f.source.state(t)
+	if len(retired.Captures) != 0 || len(retired.Claims) != 0 || len(retired.Payments) != 0 || retired.Archive == nil || retired.Archive.Counts.Captures != 1 || retired.Archive.Counts.CausalCaptures != 1 || retired.Archive.Counts.Claims != 2 || retired.Archive.Counts.Payments != 1 {
+		t.Fatal("small-credit control did not retire its actual causal source and payments", retired)
+	}
+	after := f.sample(t, monitorServiceHooks{})
+	reopened := economicEntitlementRecord(t, f.source)
+	if after.Funding == nil || after.Funding.Captured != before.Funding.Captured || after.Funding.Accepted != before.Funding.Accepted || after.Funding.Paid != before.Funding.Paid || after.Funding.OriginalCaptures != 1 || after.Funding.OriginalClaims != 2 || after.Funding.OriginalPayments != 1 || after.Funding.NoNonIncomeProviderCredit != nil || after.TargetMet != nil || after.Conformance == nil || len(after.Conformance.Contradictions) != 0 || reopened.Census != nil || reopened.CensusReference == nil || reopened.censusHash() != beforeCensus || economicEntitlementFundingHash(reopened) != beforeFunding || len(reopened.Sources) != 3 || reopened.Sources[2].Id != "4/1" {
+		t.Fatal("cold small credit changed its original amounts, source or ambiguity", after, reopened)
+	}
+}
+
 // The same receipt chronology cannot retire an unexplained source. Its paid
 // claims and missed-root obligation can become cold while the original capture
 // remains active, without converting the fourteen-unit difference into income.
 func TestEconomicCarryChronologyPublicUnprovedSourceRemainsActiveAfterArchive(t *testing.T) {
-	f, _ := newEconomicCarryChronologyArchiveFixture(t, false)
+	f, _ := newEconomicCarryChronologyArchiveFixture(t, false, 6)
 	before := f.sample(t, monitorServiceHooks{})
 	state := f.source.state(t)
 	if before.Funding == nil || len(state.Captures) != 1 || state.Captures[0].causalComplete() || state.Captures[0].PrincipalEffects != nil || state.Captures[0].AmountDifferenceAlpha == nil || *state.Captures[0].AmountDifferenceAlpha != "14" || state.Captures[0].Event.Values["epoch"] != "4" {
