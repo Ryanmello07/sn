@@ -294,7 +294,7 @@ func buildBootstrapPlan(config bootstrapPlanConfig, snapshot finalizedSnapshotEn
 		Economics: planEconomics{Denominator: "native_miner_allocation_before_withholding", ProviderNumerator: 1, FractionDenominator: 10, RemainderNumerator: 9, Remainder: "owner-recycle", Assurance: "observed-native-target"},
 		ExecutionBlockers: []string{
 			"Semantic validators for every supplied review manifest are required; byte identity does not satisfy a capability or custody gate",
-			"Exact per-action origin/payload/nonce/address/postcondition adapters and bounded lifetime ledger are not implemented by this planner",
+			"Execution requires the separate signed bootstrap and owner workflows, with exact action adapters, lifetime ceilings and retained journals",
 			"This review-only graph cannot authorize the separate executable local-custody bootstrap phase or any chain phase; each chain phase needs its own signed action, ceilings and expiry",
 			"Revalidate current identity, runtime, generations and retained receipts at execution; an offline snapshot cannot establish present readiness",
 		},

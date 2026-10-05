@@ -238,9 +238,9 @@ func readRetainedOwnerRecycleApproval(ctx context.Context, cfg *ReleaseConfig) (
 	return decodeOwnerRecycleApproval(cfg, raw)
 }
 
-// A selected successor is never permission to send the parent's unchanged row.
-// Reconciliation may authenticate original receipts, but new sends remain shut
-// until measurement/envelope/intent/archive authority is migrated together.
+// Current schema-3 writers require the independently authenticated production
+// authority and its history. Legacy observation approvals remain read-only;
+// neither they nor a historical production owner can open a current writer.
 func ownerRecycleProductionBoundary(cfg *ReleaseConfig) error {
 	if isOwnerRecycleProductionConfig(cfg) {
 		if err := validateReleaseProductionAuthorityHistory(cfg); err != nil {
@@ -252,7 +252,7 @@ func ownerRecycleProductionBoundary(cfg *ReleaseConfig) error {
 		return nil
 	}
 	if cfg != nil && (cfg.Policy.NetworkProfile == "mainnet" || cfg.ChainID == 964 || cfg.OwnerRecycleApproval != nil) {
-		return errors.New("owner-recycle successor activation is blocked: authenticated measurement, envelope, intent and archive transition is not implemented; final native allocation remains unobserved")
+		return errors.New("owner-recycle successor activation is blocked for this legacy configuration: current writes require independently authenticated schema-3 production authority and the concrete V2 measurement, envelope, durable intent and archive owners")
 	}
 	return nil
 }
