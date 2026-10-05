@@ -267,7 +267,7 @@ func TestHistoricalArchiveCaptureKeepsExplicitPrincipalInputAndParentDeadline(t 
 }
 
 func TestHistoricalArchiveCaptureRefusesUndeclaredBusyOrExhaustedCache(t *testing.T) {
-	for _, fault := range []string{"undeclared", "busy", "bytes", "entries", "full-cache", "foreign-member"} {
+	for _, fault := range []string{"undeclared", "busy", "bytes", "entries", "full-cache", "foreign-member", "shared-directory"} {
 		f := newHistoricalArchiveCaptureFixture(t, "success")
 		ctx := f.ctx
 		var held *nativeProducerFiles
@@ -292,9 +292,25 @@ func TestHistoricalArchiveCaptureRefusesUndeclaredBusyOrExhaustedCache(t *testin
 			if err := errors.Join(file.Truncate(int64(f.request.MaximumBytes-nativeProducerBoundaryReserve+1)), file.Close()); err != nil {
 				t.Fatal(err)
 			}
-		case "foreign-member":
-			if err := os.WriteFile(filepath.Join(f.request.CacheDirectory, "unprotected"), []byte{1}, 0644); err != nil {
+		case "foreign-member", "shared-directory":
+			path := filepath.Join(f.request.CacheDirectory, "unprotected")
+			mode := os.FileMode(0644)
+			if fault == "shared-directory" {
+				mode = 0755
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.WriteFile(path, []byte{1}, 0600); err != nil {
 				t.Fatal(err)
+			}
+			// The qualified owner uses umask 077. Establish the actual fault on
+			// this test-owned inode; a requested creation mode is not evidence.
+			if err := os.Chmod(path, mode); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Lstat(path)
+			if err != nil || info.Mode().Perm() != mode || info.IsDir() != (fault == "shared-directory") || !info.IsDir() && !info.Mode().IsRegular() {
+				t.Fatal("cache custody fixture did not establish its actual permission fault", fault, info, err)
 			}
 		}
 		started := false
