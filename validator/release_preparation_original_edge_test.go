@@ -62,7 +62,7 @@ func TestReleasePreIntentPreparationKeepsFirstObservedHardCause(t *testing.T) {
 		}
 		probe = &releasePreparationChangingCause{first: hard, later: later}
 		original := fmt.Errorf("original assembly: %w", probe)
-		if result := classifyProvisionalNativeRead(true, 7, original); result != original || probe.observations != 1 {
+		if result := classifyProvisionalNativeRead(true, 7, original); !errors.Is(result, original) || releaseErrorMarker[*provisionalNativeReadInterruption](result) != nil || probe.observations != 1 {
 			t.Fatalf("pre-intent owner minted authority from a replacement edge: observations=%d", probe.observations)
 		}
 	}
@@ -117,21 +117,21 @@ func TestReleasePreparationCannotBorrowTransportOwnerCancellation(t *testing.T) 
 	}
 }
 
-// The retained-read owner must also bound its marker search after the original
-// transport observation. A later cyclic edge is refused by the actual loop.
-func TestProductionRetainedReadFailureBoundsChangedMarkerObservation(t *testing.T) {
+// The retained-read owner shares its first valid transport observation with
+// marker search and the actual loop; a hypothetical later edge is never read.
+func TestProductionRetainedReadFailurePreservesFirstMarkerObservation(t *testing.T) {
 	cycle := &releaseCauseJoin{}
 	cycle.causes = []error{cycle}
 	probe := &releasePreparationChangingCause{first: context.DeadlineExceeded, later: cycle}
 	self := &ReleaseSteerer{cfg: &ReleaseConfig{SchemaVersion: ReleaseMainnetProductionSchemaVersion}}
 	result := self.productionRetainedReadFailure(t.Context(), productionReadReceipt, nil, probe)
 	retained, ok := result.(*productionSteeringReadWait)
-	if !ok || retained.cause != probe || probe.observations != 2 || cycle.visits > 33 {
-		t.Fatal("retained read marker search escaped its finite original-cause boundary")
+	if !ok || !errors.Is(retained.cause, probe) || probe.observations != 1 || cycle.visits != 0 {
+		t.Fatal("retained read marker search changed its first complete original")
 	}
 	submissions := 0
 	err := runReleaseProductionSteeringLoopWithWait(t.Context(), func() error { submissions++; return result }, func() bool { return false }, nil)
-	if err == nil || submissions != 1 {
-		t.Fatal("a changed cyclic original became an indefinite production wait")
+	if err != nil || submissions != 1 || probe.observations != 1 || cycle.visits != 0 {
+		t.Fatal("production discarded or reread the first complete transport original")
 	}
 }

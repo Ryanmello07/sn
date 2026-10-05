@@ -21,7 +21,7 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 		if err := ctx.Err(); err != nil {
 			return releaseRuntimeError(ctx, errors.Join(pendingErr, err))
 		}
-		err := submit()
+		err := observeReleaseError(submit())
 		if ctx.Err() != nil {
 			return releaseRuntimeError(ctx, errors.Join(pendingErr, err, ctx.Err()))
 		}

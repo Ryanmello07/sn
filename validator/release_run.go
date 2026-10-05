@@ -135,6 +135,7 @@ func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyT
 // inspect each original edge once. A failed transport pass cannot ask a mutable
 // wrapper for a replacement cause in a second cut pass.
 func classifyReleaseRetryBounded(err error, siblingCancellation, legacyText, transportOrigin, preparation bool, depth int, remaining *int) (bool, bool) {
+	err = releaseObservedValue(err)
 	if err == nil || depth > 32 || *remaining <= 0 {
 		return false, false
 	}
@@ -147,8 +148,14 @@ func classifyReleaseRetryBounded(err error, siblingCancellation, legacyText, tra
 		}
 	}
 	switch err.(type) {
-	case *os.PathError, *os.LinkError, *TrailFatalError:
+	case *os.PathError, *os.LinkError, *TrailFatalError, *releaseObservedHard, *releaseObservedRefusal:
 		return false, false
+	}
+	switch cause := err.(type) {
+	case *releaseObservedNativeRead:
+		return cause.retryable, cause.retryable
+	case *releaseObservedNetworkRead:
+		return cause.retryable, cause.retryable
 	}
 	if crv4.IsSubstrateReadTransportCause(err) {
 		retryable := crv4.RetryableSubstrateReadTransportError(err)

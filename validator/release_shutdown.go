@@ -71,6 +71,10 @@ func releaseErrorMarker[T error](err error) T {
 			}
 			return true
 		}
+		switch cause.(type) {
+		case *releaseObservedNativeRead, *releaseObservedNetworkRead:
+			return true
+		}
 		if _, joined := cause.(interface{ Unwrap() []error }); joined {
 			return false
 		}
@@ -90,6 +94,7 @@ func releaseErrorMarker[T error](err error) T {
 // state errors remain hard before unwrapping their cancellation causes. Nil
 // children, typed nils, cycles and oversized joins never become pure success.
 func releaseErrorGraph(err error, accept func(error) bool, depth int, remaining *int) bool {
+	err = releaseObservedValue(err)
 	if err == nil || depth > 32 || *remaining <= 0 {
 		return false
 	}
@@ -102,8 +107,10 @@ func releaseErrorGraph(err error, accept func(error) bool, depth int, remaining 
 		}
 	}
 	switch cause := err.(type) {
-	case *os.PathError, *os.LinkError, *TrailFatalError:
+	case *os.PathError, *os.LinkError, *TrailFatalError, *releaseObservedHard, *releaseObservedRefusal:
 		return false
+	case *releaseObservedNativeRead, *releaseObservedNetworkRead:
+		return accept(err)
 	case *net.DNSError:
 		if cause.IsNotFound {
 			return false
@@ -140,6 +147,7 @@ func releaseErrorGraph(err error, accept func(error) bool, depth int, remaining 
 // Ordinary owner cancellation is not a service failure. Independent errors,
 // including a cancellation joined with failed I/O, remain supervisor-visible.
 func releaseRuntimeError(ctx context.Context, err error) error {
+	err = observeReleaseError(err)
 	if err != nil && ctx != nil && ctx.Err() != nil && releaseOnlyErrors(err, context.Canceled, context.DeadlineExceeded) {
 		return nil
 	}

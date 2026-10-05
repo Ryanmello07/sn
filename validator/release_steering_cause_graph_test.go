@@ -122,7 +122,7 @@ func TestReleasePreIntentWeightOwnerBoundsMarkerSearch(t *testing.T) {
 	wrapped := fmt.Errorf("original pre-intent assembly: %w", original)
 	result := classifyProvisionalNativeWeights(t.Context(), true, 7, 9, wrapped)
 	rejected, ok := result.(*provisionalNativeWeightRejection)
-	if !ok || rejected.nativeEpoch != 7 || rejected.settlementEpoch != 9 || rejected.cause != wrapped {
+	if !ok || rejected.nativeEpoch != 7 || rejected.settlementEpoch != 9 || !errors.Is(rejected.cause, wrapped) {
 		t.Fatal("actual weight rejection lost its original pre-intent scope")
 	}
 	cycle := &releaseCauseJoin{}
@@ -133,7 +133,7 @@ func TestReleasePreIntentWeightOwnerBoundsMarkerSearch(t *testing.T) {
 		&releaseCauseJoin{causes: []error{original, nil}},
 		errors.Join(original, &os.PathError{Op: "write", Path: "synthetic-native-intent", Err: context.Canceled}),
 	} {
-		if result := classifyProvisionalNativeWeights(t.Context(), true, 7, 9, cause); result != cause {
+		if result := classifyProvisionalNativeWeights(t.Context(), true, 7, 9, cause); !errors.Is(result, cause) || releaseErrorMarker[*provisionalNativeWeightRejection](result) != nil {
 			t.Fatal("pre-intent marker search downgraded an incomplete or hard original")
 		}
 	}

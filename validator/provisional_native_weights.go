@@ -50,6 +50,7 @@ func classifyProvisionalNativeWeights(ctx context.Context, enabled bool, nativeE
 	if !enabled || err == nil || ctx == nil || ctx.Err() != nil {
 		return err
 	}
+	err = observeReleaseError(err)
 	infeasible := releaseErrorMarker[*crv4.InfeasibleWeightLimitError](err)
 	if releaseOnlyErrors(err, errNoPositiveUnmaskedWeights) || (infeasible != nil && releaseOnlyErrors(err, infeasible)) {
 		return &provisionalNativeWeightRejection{nativeEpoch: nativeEpoch, settlementEpoch: settlementEpoch, cause: err}

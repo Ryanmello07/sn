@@ -43,6 +43,7 @@ func retryableProductionSteeringRead(err error) bool {
 // and joined reader consumes this same allowance before a leaf can authorize
 // retry, so cycles, nil branches and timeout wrappers cannot hide hard causes.
 func retryableProductionSteeringReadBounded(err error, transportOrigin bool, depth int, remaining *int) bool {
+	err = releaseObservedValue(err)
 	if err == nil || depth > 32 || *remaining <= 0 {
 		return false
 	}
@@ -61,8 +62,12 @@ func retryableProductionSteeringReadBounded(err error, transportOrigin bool, dep
 		return true
 	}
 	switch cause := err.(type) {
-	case *os.PathError, *os.LinkError, *TrailFatalError:
+	case *os.PathError, *os.LinkError, *TrailFatalError, *releaseObservedHard, *releaseObservedRefusal:
 		return false
+	case *releaseObservedNativeRead:
+		return cause.retryable
+	case *releaseObservedNetworkRead:
+		return cause.retryable
 	case *url.Error:
 		return retryableProductionSteeringReadBounded(cause.Err, true, depth+1, remaining)
 	case *net.OpError:
@@ -130,6 +135,7 @@ func (self *productionSteeringReadWait) Unwrap() error { return self.cause }
 // here. A pure remote read failure defers to the next normal custody read;
 // filesystem/custody/contradiction leaves still force an explicit hard result.
 func (self *ReleaseSteerer) productionRetainedReadFailure(ctx context.Context, phase productionSteeringReadPhase, intent *SteeringIntent, err error) error {
+	err = observeReleaseError(err)
 	if !isOwnerRecycleProductionConfig(self.cfg) || err == nil || errors.Is(ctx.Err(), context.Canceled) || !retryableProductionSteeringRead(err) {
 		return err
 	}
@@ -179,7 +185,7 @@ func (self *ReleaseSteerer) productionRead(ctx context.Context, phase production
 			break
 		}
 		attempt, attemptCancel := withTimeout(operation, productionSteeringReadAttemptTimeout)
-		lastErr = errors.Join(read(attempt), attempt.Err())
+		lastErr = observeReleaseError(errors.Join(read(attempt), attempt.Err()))
 		attemptCancel()
 		if lastErr == nil {
 			return ctx.Err()

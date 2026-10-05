@@ -1055,6 +1055,7 @@ func runReleaseSteeringLoopWithWaitAndPermissions(ctx context.Context, epoch fun
 			return releaseRuntimeError(ctx, errors.Join(pendingErr, schedulerErr))
 		}
 		currentEpoch, err := epoch()
+		err = observeReleaseError(err)
 		if ctx.Err() != nil {
 			return releaseRuntimeError(ctx, errors.Join(pendingErr, schedulerErr, err))
 		}
@@ -1081,7 +1082,7 @@ func runReleaseSteeringLoopWithWaitAndPermissions(ctx context.Context, epoch fun
 				pendingErr = nil
 			}
 			if !completed && !deferred {
-				err = submit()
+				err = observeReleaseError(submit())
 				closedInput := releaseErrorMarker[*provisionalClosedNativeInput](err)
 				rejected := releaseErrorMarker[*provisionalNativeWeightRejection](err)
 				interrupted := releaseErrorMarker[*provisionalNativeReadInterruption](err)
