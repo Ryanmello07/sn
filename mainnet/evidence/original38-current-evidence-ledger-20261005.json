@@ -1579,8 +1579,9 @@
     "sha256": "93e2a4594185a1b455c05d7e8435a1309f18cce76516c71f5e9e1bfd56384beb"
   },
   "execution_priority": {
-    "deadline_utc": "2026-10-05T16:26:00Z",
-    "strategy": "Usefully parallel focused compilers and tests first; full suites afterward. Preserve original obligations, exact source inputs and component evidence. Full catalog/controls are not prerequisites for focused validation."
+    "checkpoint_utc": "2026-10-05T16:26:00Z",
+    "strategy": "Compile deployable binaries early; continue useful parallel focused validation and remaining suites. Full catalog/controls are not a prerequisite for focused work. Preserve every original obligation and exact component evidence.",
+    "timing_lesson": "A readiness ETA must not become a timer that kills a healthy phase. Keep measured physical timeouts and adequate resource/cleanup horizons; continue authorized work after the reporting checkpoint."
   },
   "external_authority_never_supplied_by_software_tests": [
     "Independently approved genesis/runtime/code/checkpoint/finality and true deployed route/identity.",
@@ -2010,11 +2011,26 @@
       }
     }
   },
-  "known_pending_source_work": [],
+  "focused_window_terminal_actual": {
+    "database": "Cancellation6 observer refused DB startup; owner-child-9/joined, exactPG/network removed;0LIST/0bodies. Preserve recorded observation errors.",
+    "deployable_build": "Server621 go build ./... cutoff after221s; exit-15/joined; four SN binary phases unstarted.",
+    "evidence": {
+      "bytes": 19651,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-802-focused-build-lessons/sn/mainnet/evidence/focused-window-terminal-and-treasury-status-20261005.json",
+      "sha256": "cb51a8bf9db4365cb5f2c395f0a8ac98a87c2c15edc10cc0c65259bc0338969d"
+    },
+    "forge": "Normal compile53files PASS65.83s; LIST began10more files then20s timeout-15/joined;0carry bodies/0control bodies.",
+    "scope_limit": "These are actual scoped outcomes, not package, treasury, deployment or overall readiness qualification. Existing counts are unchanged historical catalog/evidence fields.",
+    "separate_observer_cases": "DBv4 four deterministic new harness cases PASS; no DB integration/body credit.",
+    "sn_normal3": "802 mainnet compile and fullLIST2413 PASS;34 selected bodies clipped to3s:2PASS/1SKIP/1timeout-fail/30unrun. Validator compile55s cutoff-15/joined; miner unstarted."
+  },
+  "known_pending_source_work": [
+    "Implement and qualify the selected10%provider/90%native-treasury successor with hardware-Ledger multisig custody. Existing owner-recycle evidence supplies no treasury authority."
+  ],
   "latest_checkpoint": {
-    "bytes": 12390,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-802-focused-build-lessons/sn/mainnet/evidence/focused-sdk23-core-race-and-build-lessons-20261005.json",
-    "sha256": "93e2a4594185a1b455c05d7e8435a1309f18cce76516c71f5e9e1bfd56384beb"
+    "bytes": 19651,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-802-focused-build-lessons/sn/mainnet/evidence/focused-window-terminal-and-treasury-status-20261005.json",
+    "sha256": "cb51a8bf9db4365cb5f2c395f0a8ac98a87c2c15edc10cc0c65259bc0338969d"
   },
   "latest_operational_lessons": [
     {
@@ -2036,6 +2052,16 @@
     {
       "finding": "An implemented launch adapter and software test passes do not provide actual owner approval, device custody, funding or deployment. Postactivation interval outcomes remain separate from prelaunch adapter completeness.",
       "kind": "activation_authority"
+    },
+    {
+      "continuation": "Continue authorized work after the reporting checkpoint. Retain completed images, source bindings, LIST results and exact waits; run only unfinished or affected work under the next admitted scope.",
+      "evidence": {
+        "bytes": 19651,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-802-focused-build-lessons/sn/mainnet/evidence/focused-window-terminal-and-treasury-status-20261005.json",
+        "sha256": "cb51a8bf9db4365cb5f2c395f0a8ac98a87c2c15edc10cc0c65259bc0338969d"
+      },
+      "finding": "Readiness ETA is a planning/reporting estimate, not a physical timeout. Keep adequate measured compiler/body timeouts and their cleanup/lease horizons; do not shrink a healthy phase to the remainder of an estimate.",
+      "kind": "readiness_eta_not_execution_timeout"
     }
   ],
   "latest_published_addendum": {
@@ -2207,6 +2233,11 @@
     "bytes": 10148,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-58b-focused-normal14/sn/mainnet/evidence/focused-core14-and-current-server-compile-20261005.json",
     "sha256": "166810c5ea661d8b7df22990b3beb8f40d76ba6f684b65b05d9891c38f66f85b"
+  },
+  "prior_focused_window_checkpoint_preserved": {
+    "bytes": 12390,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-802-focused-build-lessons/sn/mainnet/evidence/focused-sdk23-core-race-and-build-lessons-20261005.json",
+    "sha256": "93e2a4594185a1b455c05d7e8435a1309f18cce76516c71f5e9e1bfd56384beb"
   },
   "prior_full_requirement_mapping": {
     "bytes": 152568,
@@ -4175,11 +4206,20 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v22",
+  "schema": "original38-current-evidence-ledger-v23",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
     "sha256": "4187085b66193dc9e7f0496ec9c90c6c820a88bf3ce3da43e391b63dc9e222a9"
+  },
+  "selected_economic_successor": {
+    "authority": "The proposal supplies no keys, signatures, deployed identity, funding or activation. User preparation of public configuration does not establish execution.",
+    "custody": "User-confirmed hardware-Ledger multisig. Private keys never leave Ledger devices. vault/main/sn.yml carries only public account/signatory/threshold/device references; validators receive public inputs only.",
+    "design_commit": "522ebae04f524c6c736207c495676de018d401aa",
+    "historical_limit": "Preserve owner-recycle implementation and receipts as historical evidence. They do not qualify the treasury successor; all 38 original requirement rows remain intact.",
+    "policy": "10% native miner allocation to providers; 90% retained in a spendable native network-improvement treasury.",
+    "proposal": "mainnet/TREASURY-EMISSIONS.md",
+    "status": "SELECTED_DESIGN_IMPLEMENTATION_AND_QUALIFICATION_PENDING"
   },
   "separate_async_debit_pending_scope": {
     "designated_failures_per_mode": 11,
@@ -4631,7 +4671,7 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/SCOPE-HANDOFF.json",
     "sha256": "56e941cb7ed0c664ee8986feebcf292eba5ecc6d218cd355a99eeaa37fce4027"
   },
-  "status": "All38 original outcomes and2863/393 product scope counts remain unchanged. Core11f99 focused14 now pass in both normal and race modes; eleven controls and broader Core qualification remain pending. SDK18/Core11 focused23 normal passes, with seven joined waits and closed owner; SDK race/generator/12controls remain separate. Original SDKv2 annotation refusal launched no stage/compiler/body. SN mainnet34 compiler failed on a canonical unused miner import; exact one-deletion fix802 is merged, with no new root/control or inferred successful rebuild. Retain the incomplete d64 fullmodel and all earlier failures. Compile deployable binaries early, then focused assertions and broader suites; provenance annotations cannot replace or invalidate identical substantive approval bindings.",
+  "status": "All38 original outcomes and2863/393 catalog counts remain unchanged. The final-window Server build and validator compile were cutoff-terminated; mainnet compile/LIST passed but its3s body is partial; Forge compiled but its LIST timed out; cancellation6 stopped at DB startup. Retain all completed artifacts and prior focused passes, preserve every failure/skip/unstarted obligation, and continue adequate-timeout validation. The selected10%provider/90%native-treasury policy is a design successor pending implementation and qualification with hardware-Ledger multisig custody; no activation authority is supplied.",
   "supersedes": {
     "bytes": 124390,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",
