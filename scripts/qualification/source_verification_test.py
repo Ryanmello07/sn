@@ -465,7 +465,7 @@ class SourceVerificationTests(unittest.TestCase):
 
             with mock.patch.object(source, kind, limit):
                 with mock.patch.object(source.os, "scandir", return_value=Entries()):
-                    with self.assertRaisesRegex(source.SourceIntegrityError, "exceeds bound"):
+                    with self.assertRaisesRegex(source.SourceIntegrityError, "exceeds? bound"):
                         self.capture()
             self.assertEqual(len(calls), expected_calls)
 
