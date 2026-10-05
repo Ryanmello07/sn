@@ -1,0 +1,1139 @@
+{
+  "author_execution": {
+    "binary_lists": 0,
+    "compilers": 0,
+    "database": 0,
+    "production_changes": 0,
+    "test_bodies": 0
+  },
+  "confirmed_current_failure_classification": [
+    {
+      "evidence_id": "nativefee11_direct",
+      "failed_root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
+      "finding": "The actual nativefee cancellation-after-output root returned nil error and accepted completed-looking bytes; the other ten normal roots passed. Exact fixture-versus-production root cause and corrective source remain owned by NativeWitness.",
+      "fix_or_requalification_proven": false,
+      "fix_owner": "/root/astra_native_witness_review",
+      "kind": "product_boundary_test_failure",
+      "product_failure_proven": true
+    },
+    {
+      "evidence_id": "compiler_observation_failure",
+      "finding": "Compiler process can exit between census reads and be refused as unobservable. Preserve original PID/start identity while reconciling exit.",
+      "kind": "qualification_harness_defect",
+      "product_failure_proven": false
+    },
+    {
+      "evidence_id": "compiler_observation_failure",
+      "finding": "Exceptional guard exit joined internally without preserving durable child Wait; completion evidence must survive the failure path.",
+      "kind": "qualification_harness_defect",
+      "product_failure_proven": false
+    },
+    {
+      "evidence_id": "independent_peer_failure",
+      "finding": "Healthy nativefee peer was refused after independent compiler failure; resource reservation release must depend on stopped ownership, not peer test success.",
+      "kind": "qualification_harness_defect",
+      "product_failure_proven": false
+    },
+    {
+      "evidence": {
+        "bytes": 2869,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
+        "sha256": "4187085b66193dc9e7f0496ec9c90c6c820a88bf3ce3da43e391b63dc9e222a9"
+      },
+      "finding": "Five required long roots were omitted; additive2508 fixes selection. Whole-root900s cannot cover two900s reads; assertions/populations unchanged, larger finite mode budgets required.",
+      "kind": "qualification_selection_and_budget_gap",
+      "product_failure_proven": false
+    }
+  ],
+  "corrected_failures_not_reopened_as_code_bugs": [
+    "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
+    "Original Rust renewal fixture failure corrected and exact normal1PASS plus causal omitted-read kill retained.",
+    "Original xops32PASS1FAIL formatting control corrected; canonical482 control1 then33PASS retained.",
+    "Original joint-adapter29PASS1FAIL corrected; canonical33PASS retained, separate later observation/peer defects still need qualification.",
+    "Historical owner fixture, signed-NUL model indexing, stale ClosedWork API and carry6%-vs99% fixture failures retain their original receipts and named source corrections; only their exact later passed subsets are credited."
+  ],
+  "counts": {
+    "actual_nativefee_normal_roots": {
+      "fail": 1,
+      "pass": 10,
+      "run": 11,
+      "skip": 0
+    },
+    "current_go_roots_per_mode": 2508,
+    "current_server_full_model": 1824,
+    "original_requirements": 38,
+    "outcomes_closed": 0,
+    "retained_control_groups": 227,
+    "rows_demonstrated_to_have_only_deployment_work_left": 0
+  },
+  "current_default_product_tuple": {
+    "core": "026b850248352b72255be7a966e391e0a15e74c1",
+    "server": "c198263137730fe7fce7e9b83b6b6c298b3f9eba",
+    "sn": "fcfd5acde5c0a77eaedcbc2f39ce35f5f53052f4"
+  },
+  "current_portable_evidence": {
+    "bytes": 41675,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/current-portable-evidence-catalog-v2.json",
+    "sha256": "988955c17bd0842a4447093dd0ae281733aa0606ab057cfa2642e217f062328f"
+  },
+  "external_authority_never_supplied_by_software_tests": [
+    "Independently approved genesis/runtime/code/checkpoint/finality and true deployed route/identity.",
+    "Owner-local Ledger originals with no Snow access; separately identified root coldkey/hotkey and device custody for actual mutations.",
+    "Installed contracts/Safe/vault and actual reserves; both active root role and two UR instances.",
+    "Both operator/host/client-key domains and all old payout planners replaced before relying on new lock.",
+    "October6 inclusive new earnings while all pre-cutoff USDC obligations/retries remain payable without conversion/double pay; activation blocked until real fields/authority supplied.",
+    "Real backup/media recovery, production sizing, deployment rollback/outage, monitoring ingestion/delivery, deadman and on-call/repair drills.",
+    "After authorized activation: three complete native emission intervals and one full50400-block UR settlement/claim cycle."
+  ],
+  "old_sol_audit": {
+    "bytes": 75710,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261004/sol-final-coverage-audit-20261004.json",
+    "sha256": "12cdefbefbe1b671da91c2e27350e8bcda2af7c53fa231083c671fe8729d7559"
+  },
+  "prior_full_requirement_mapping": {
+    "bytes": 152568,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/main-published-verification/requirements-and-retained-evidence.json",
+    "sha256": "6e5a764298868912e8bcab8b42dd3015ab399c95c56c32a1639a9e68a967e547"
+  },
+  "result_reuse": {
+    "claim129_restore129": "Four actual historical normal/racePASS remain valid. Complete current-input equality is disproven by changed imported Core inventory; Restore fixture also changed. Do not relabel or weaken scale.",
+    "nativefee11": "Retained Main9 normal image has exact executable-component applicability to current default nativefee under60de. Actual direct11 normal result is10PASS1FAIL0SKIP with no resource errors and completed Wait. Preserve ten individual passes and the failing cancellation boundary; do not claim package PASS or transfer to a future corrective source without a new dependency/source assessment.",
+    "scope_rule": "Execute each selected root/mode once on current applicable image. Do not repeat successful work solely for receipt/harness bookkeeping; preserve actual prior Waits/LIST/exports.",
+    "three2048": "No complete current-sourcePASS supplied; exact originals are prerequisites, not consumer results. Run retained full2048 cases normally/race."
+  },
+  "retained_nativefee_normal_applicability": {
+    "bytes": 1263838,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/nativefee-main9-to-default-current-applicability.json",
+    "sha256": "60de07a44585f9ea32d1641514203bf35cab4e615216ce0fb930cb982b48f493"
+  },
+  "reviewed_documentation_commit": "46ec54fd21e97c31c62aa9124d5d54fa3c9dabd8",
+  "rows": [
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Production custody and restore rehearsal.",
+      "id": "PH-01",
+      "implementation": "Durable journals, separate runtime/audit owners, public archive and restore mechanisms are on main.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Final all-owner cross-volume restore, interrupted publication/restart, independent healthy-role progress and production recovery rehearsal.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Execute current all-owner/cross-volume restore, interrupted publication/restart and independent healthy-owner progress; include long5.",
+      "required_outcome": "Operator, validators, bootstrap: durable recovery with independent audit and runtime owners",
+      "retained_component_evidence": {
+        "bytes": 4116,
+        "checkpoint_declared_sha256": "dbfa1b79b1795cd9fe0ec6d4003939924a7c815430abc1eaf0ffe631c6e2da68",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/paired-metadata-sn-qualification-20261003.json",
+        "sha256": "dbfa1b79b1795cd9fe0ec6d4003939924a7c815430abc1eaf0ffe631c6e2da68"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Global signer/device custody; no live payment tests.",
+      "id": "PH-02",
+      "implementation": "Signed-attempt custody, replacement/cancellation lineage and uncertain-outcome reconciliation are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Final signed-attempt census, nonce/outcome reconciliation and exact-byte/no-duplicate-spend behavior across all deployed owners.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Execute current all-owner original/replacement/cancel census, nonce/outcome and duplicate-effect tests.",
+      "required_outcome": "Native/EVM submitters: one logical action, reconciled signed attempts and exact custody",
+      "retained_component_evidence": {
+        "bytes": 5266,
+        "checkpoint_declared_sha256": "138253034e509103211bf57f10a61b999ef3d59c19eb6286b30fa0d5e6322513",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/customer-final-race-qualification-20261003.json",
+        "sha256": "138253034e509103211bf57f10a61b999ef3d59c19eb6286b30fa0d5e6322513"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Real endpoint outage rehearsal separate from accelerated clocks.",
+      "id": "PH-03",
+      "implementation": "Bounded complete-cause RPC/HTTP/DNS recovery, hard-cause precedence and joined close/cancellation are implemented; current Core adds affected transport code.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Every public read boundary must recover within its original budget without retrying ambiguous writes or masking hard causes.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Execute current affected SN/Core224/VLESS8/evmrpc24 and causal guards; prior components do not cover changed transport imports.",
+      "required_outcome": "RPC, artifact and HTTP clients: bounded transient recovery without duplicate writes",
+      "retained_component_evidence": {
+        "bytes": 27345,
+        "checkpoint_declared_sha256": "5cee15514cae38a39ffe021c489f57ffaa93346701754b353a7be823d663e5cd",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/monitor-policy-renewal-qualification-20261003.json",
+        "sha256": "5cee15514cae38a39ffe021c489f57ffaa93346701754b353a7be823d663e5cd"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "rust38_original",
+        "renewal_normal",
+        "renewal_control"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Reviewed source/semantic authority for observed runtime472 remains absent.",
+      "id": "PH-04",
+      "implementation": "Purpose/runtime-bound historical reads, upgrade renewal and native replay mechanisms are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass.",
+      "original_complete_requirement": "Approved actual runtime/code/finality; upgrade-block signing, execution-parent and post-state consumers, including both validator roles.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Execute current Go historical/renewal/finality consumers using retained actual originals; retain new Rust results.",
+      "required_outcome": "Native-chain consumers: compatible upgrades and block-correct historical decoding",
+      "retained_component_evidence": {
+        "bytes": 8321,
+        "checkpoint_declared_sha256": "acd2d3098954a2af1c6785685423d0e4087c67687881b5f60c758c942ccf172a",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/native-runtime-renewal-qualification-20261003.json",
+        "sha256": "acd2d3098954a2af1c6785685423d0e4087c67687881b5f60c758c942ccf172a"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Independent canonical/runtime authority still required.",
+      "id": "PH-05",
+      "implementation": "Immutable dependency-bound proof/cache and archive reuse mechanisms are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Complete nonempty-head lineage, invalidation, cold/warm replay and work-count qualification on the final graph.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Qualify nonempty immutable lineage, invalidation and cold/warm reuse/work counts on current inputs.",
+      "required_outcome": "Historical verifiers: durable, dependency-bound successful proof reuse",
+      "retained_component_evidence": {
+        "bytes": 14760,
+        "checkpoint_declared_sha256": "f4688f15922041c002852f265b9ccc6026d070911d225ae1347483bf5fa1bd70",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/validatorb6-selected-component-qualified-20261004.json",
+        "sha256": "f4688f15922041c002852f265b9ccc6026d070911d225ae1347483bf5fa1bd70"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "adapter33",
+        "compiler_observation_failure",
+        "independent_peer_failure"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Compiler provenance, reviewed config and deployment acceptance.",
+      "id": "PH-06",
+      "implementation": "Reviewed code is published on main; default sibling module declarations/checksums are repaired and all four actual graphs resolve.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "One immutable final source/module/generated/schema/config/contract manifest, reproducible selected artifacts and accepted production identity.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Compile current default graphs once, reconcile actual image lists, execute affected normal/race/control and lossless plan migration.",
+      "required_outcome": "Release/configuration tooling: explicit release identity and lossless plan migration",
+      "retained_component_evidence": {
+        "bytes": 10136,
+        "checkpoint_declared_sha256": "635d14b205062de12e6cf1127485376f47a594cad2d70ed66c3be4beea84b096",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/common-twelve-compiles-readback-20261003.json",
+        "sha256": "635d14b205062de12e6cf1127485376f47a594cad2d70ed66c3be4beea84b096"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Actual unit/cgroup and host readiness rehearsal.",
+      "id": "PH-07",
+      "implementation": "Independent supervisors, heartbeat/readiness and metrics-only recovery mechanisms are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "All deployed role startup, readiness, dependency recovery, single ownership and host restart/stop rehearsal.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Qualify actual public startup/recovery/heartbeat/metrics-only continuation and hard-refusal isolation.",
+      "required_outcome": "Service supervision: independent restart, single ownership and meaningful readiness",
+      "retained_component_evidence": {
+        "bytes": 3746,
+        "checkpoint_declared_sha256": "9c5bfb2b558419c363e670e8b1e0d643f2cc8f3db8da6f0bad44a3f149cc62be",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/0e5-mainnet-normal-independent-readback-20261003.json",
+        "sha256": "9c5bfb2b558419c363e670e8b1e0d643f2cc8f3db8da6f0bad44a3f149cc62be"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Chosen fleet size and production resource envelope.",
+      "id": "PH-08",
+      "implementation": "Bounded foreground projection and immutable Claim replay indexes are implemented; composed contention/headroom remains unmeasured.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Bind the completed long-history gate to the final changed/unchanged closure; still measure composed foreground latency, bounded memory and realistic dense native replay.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Bind long-history proof to current compiled inputs or rerun exact long roots; measure bounded work/memory/foreground latency under composed load.",
+      "required_outcome": "Replay and workload scheduling: bounded work, memory and foreground latency",
+      "retained_component_evidence": {
+        "bytes": 2891,
+        "checkpoint_declared_sha256": "f8e974b65e620bbeb08d07c4dc2f83cf755ab74cccd2e1c7fb9afe2fb3005056",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/0e5-validator-foreground-failure-source-review-20261003.json",
+        "sha256": "f8e974b65e620bbeb08d07c4dc2f83cf755ab74cccd2e1c7fb9afe2fb3005056"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Production volumes, backup inventory and actual restore rehearsal.",
+      "id": "PH-09",
+      "implementation": "Durable-volume preparation, complete-owner adapters, physical large heads and archive/restore mechanisms are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Complete accepted owner/segment union, original authority, disk/inode forecasts, failure-safe cross-volume restore and production backup recovery.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Execute physical2048 plus complete producer active/cold restore, original owner/segment census and physical forecasts.",
+      "required_outcome": "State and artifact storage: explicit durable volume, atomic publication and recovery",
+      "retained_component_evidence": {
+        "bytes": 46733,
+        "checkpoint_declared_sha256": "28538670d86e156b462fb3f26c30816f5c5732f37f9c72869cb4f5410ce5e66d",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/native-cohort63-scoped-qualification-20261003.json",
+        "sha256": "28538670d86e156b462fb3f26c30816f5c5732f37f9c72869cb4f5410ce5e66d"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "rust38_original",
+        "renewal_normal",
+        "renewal_control"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Actual epoch boundary and approved renewal authority.",
+      "id": "PH-10",
+      "implementation": "Original-epoch renewal and completed-work retention are implemented; corrected renewal fixture preserves actual read/write observations.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass.",
+      "original_complete_requirement": "Partial fleet renewal, delayed review, interrupted epoch progress and exact final boundary behavior without repeating completed work.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Run four current public Go renewal consumers against all five repaired original exports; test partial/delayed/interrupted renewal.",
+      "required_outcome": "Epoch, fleet and evidence scheduling: resumable partial renewals and correct windows",
+      "retained_component_evidence": {
+        "bytes": 8321,
+        "checkpoint_declared_sha256": "acd2d3098954a2af1c6785685423d0e4087c67687881b5f60c758c942ccf172a",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/native-runtime-renewal-qualification-20261003.json",
+        "sha256": "acd2d3098954a2af1c6785685423d0e4087c67687881b5f60c758c942ccf172a"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "rust38_original",
+        "renewal_normal",
+        "renewal_control",
+        "nativefee11_direct"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Funded reserves and authentic native fee witness.",
+      "id": "PH-11",
+      "implementation": "Conserved source accounting, shared claim/carry bounds, signed gas ceilings and native-fee originals/denomination settlement are implemented.",
+      "known_product_boundary_failure": {
+        "evidence_id": "nativefee11_direct",
+        "root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
+        "state": "Root cause/correction and exact targeted positive/causal qualification pending NativeWitness."
+      },
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee11 normal is10PASS1FAIL0SKIP: cancellation-after-output failed with nil error; current component applicability is proven separately.",
+      "original_complete_requirement": "Complete native-income versus opening-capital accounting, actual fees/refunds, funding bounds and 10/90 conformance under authentic authority.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Correct and qualify the demonstrated nativefee cancellation-after-output boundary. Complete current original native-fee and shared funding bounds, denomination, liability retention/refund and10/90 tests/controls.",
+      "required_outcome": "Treasury and bootstrap: conserved lifetime spend, reserve and funding semantics",
+      "retained_component_evidence": {
+        "bytes": 17304,
+        "checkpoint_declared_sha256": "612478dafb348da0311e8fc4c8b63aeb2a276936fda24fa7b428b61f12b94b4f",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/capture-currentad0-qualification-20261003.json",
+        "sha256": "612478dafb348da0311e8fc4c8b63aeb2a276936fda24fa7b428b61f12b94b4f"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "rust38_original",
+        "renewal_normal",
+        "renewal_control",
+        "nativefee11_direct"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Authenticated chain/code/credit history and observed settlement cycle.",
+      "id": "PH-12",
+      "implementation": "Original entitlement/recipient, carry, Claim and legacy settlement mechanisms are implemented; capital-use fixture correction is on main.",
+      "known_product_boundary_failure": {
+        "evidence_id": "nativefee11_direct",
+        "root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
+        "state": "Root cause/correction and exact targeted positive/causal qualification pending NativeWitness."
+      },
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee11 normal is10PASS1FAIL0SKIP: cancellation-after-output failed with nil error; current component applicability is proven separately.",
+      "original_complete_requirement": "Complete deposits/capture/carry/claims, original earning attribution, immutable vault liabilities and actual runtime rollback/transfer behavior.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Correct and qualify the demonstrated nativefee cancellation-after-output boundary. Run corrected large-claim carry and small-credit neighbor, actual original capture/replay and Solidity/control scopes.",
+      "required_outcome": "Contracts, operator and claims: complete settlement conservation and authorization",
+      "retained_component_evidence": {
+        "bytes": 7092,
+        "checkpoint_declared_sha256": "3a42e698575b353be08e817a508b945355beeb5db8bce934b81d0dd42d9208ea",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/native-evm-current0f-qualification-20261003.json",
+        "sha256": "3a42e698575b353be08e817a508b945355beeb5db8bce934b81d0dd42d9208ea"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Real expected roster, keys and endpoint identity.",
+      "id": "PH-13",
+      "implementation": "Original creation/session/open receipts, participant replay and payout consumers are implemented; canceled historical attribution remains explicitly unknown.",
+      "known_source_or_composition_limit": "Canceled historical work is still unknown; a missing original disposition/time cannot be promoted to complete payout attribution.",
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Join actual producers, SDK, Server and validator consumers; prove complete paid/free/companion work, two-origin replay and immutable identity histories.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Prove nonempty actual ingress\u2192creation/session/work\u2192payout\u2192provider-window/Claim; establish original canceled-work evidence without inventing completeness.",
+      "required_outcome": "Provider, operator and validator protocol: identity isolation and durable proof progress",
+      "retained_component_evidence": {
+        "bytes": 12882,
+        "checkpoint_declared_sha256": "d46aadd282bea0eb7b129d05c38e7a7ec23eac909829ab3742da2af396bbe620",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/native-signed-catalog1b5-qualification-20261003.json",
+        "sha256": "d46aadd282bea0eb7b129d05c38e7a7ec23eac909829ab3742da2af396bbe620"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Signed production policy, role devices and installed contracts.",
+      "id": "PH-14",
+      "implementation": "Owner-local Ledger workflow and root/two-UR role configuration/admission are implemented; passive monitoring is not live participation proof.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Actual capabilities/contracts and owner approvals, admitted active root and UR participants, independently identified root coldkey/hardware custody for required lifecycle actions, and observed native behavior.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Execute current owner/bootstrap normal/race and independent controls; retain original75 normal component.",
+      "required_outcome": "Governance/bootstrap: actual capabilities, activated policy and both validator roles",
+      "retained_component_evidence": null
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "xops33"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Alert delivery/on-call and measured work-rate ETA.",
+      "id": "PH-15",
+      "implementation": "Chain/conservation/controller metrics and dashboard/rules are implemented; reliability/provider-window coverage remains explicitly unknown.",
+      "known_source_or_composition_limit": "Reliability/provider-window metric domains are still explicitly unknown; conservation gauges alone do not supply complete status/ETA coverage.",
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Published xops482 conservation33/33 PASS plus separate control invocation; prior311 retained. Current Go producer/monitor/repair normal remains pending.",
+      "original_complete_requirement": "Complete status domains, truthful progress/ETA, independent missing-host detection and observed operational signals.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Qualify remaining current metric producers/status domains; supply truthful reliability/provider-window coverage and progress/ETA evidence.",
+      "required_outcome": "Status/operations: actionable failure classes, progress and evidence-based ETA",
+      "retained_component_evidence": {
+        "bytes": 1968,
+        "checkpoint_declared_sha256": "43c7e0562327d6c834678bd3ea64c2730ec5972c895cd5fa94adaf5d7fc5dd84",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/claim-consumer-qualification-20261003.json",
+        "sha256": "43c7e0562327d6c834678bd3ea64c2730ec5972c895cd5fa94adaf5d7fc5dd84"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "adapter33",
+        "compiler_observation_failure",
+        "independent_peer_failure",
+        "nativefee11_direct"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Independent build provenance and production-path rehearsal.",
+      "id": "PH-16",
+      "implementation": "Deterministic normal/race/control selections and protected execution mechanisms exist; current harness observation/recovery defects still block execution.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Product nativefee11 actually ran after the earlier peer refusal:10PASS1FAIL; that original peer interruption is historical, not evidence that no bodies have now run.",
+      "original_complete_requirement": "Deterministic causal controls, affected normal/race/vet and actual complete release/rollout/restore/recovery qualification with exact custody.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Fix and qualify three observed harness seams, complete2508 normal/race and existing227 controls, plus retained wider requirement scopes.",
+      "required_outcome": "Qualification and evidence: deterministic faults, composed coverage and independent replay",
+      "retained_component_evidence": {
+        "bytes": 6133,
+        "checkpoint_declared_sha256": "6d50c84803b4586dda4c7130fee293054ced5a3c72135c107feb9044c3f5ee72",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/server1709-complete-model-body-root-review-20261004.json",
+        "sha256": "6d50c84803b4586dda4c7130fee293054ced5a3c72135c107feb9044c3f5ee72"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "None blocks offline causal work.",
+      "id": "PH-17",
+      "implementation": "Cached indexes bind original immutable plan/generation and retained prior creation authority.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Final composed index invalidation, original-plan authentication and unchanged-history reuse without stale authority.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Qualify current authenticated prior lookups, generation invalidation, wallet/roster and economic index lineage.",
+      "required_outcome": "Plan-derived indexes: bind cached lookup structures to their immutable plan/generation owner",
+      "retained_component_evidence": {
+        "bytes": 7684,
+        "checkpoint_declared_sha256": "05c8a8a1e74081acb18e3e6873cb961a6e574201604fa2e306ed828a016d66b8",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/validator-cache-permission0b58-qualification-20261003.json",
+        "sha256": "05c8a8a1e74081acb18e3e6873cb961a6e574201604fa2e306ed828a016d66b8"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Authentic chain identity/checkpoint.",
+      "id": "PH-18",
+      "implementation": "Public strict readers close exact finality and connection/runtime authority after provisional work.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Every affected public consumer must reauthorize after provisional work and reconnect without borrowing stale or foreign authority.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Run complete current post-provisional/reconnect/finality read roots and hard-vs-pending controls.",
+      "required_outcome": "Strict readers: re-authorize connection/runtime provenance at every boundary after provisional work",
+      "retained_component_evidence": {
+        "bytes": 27681,
+        "checkpoint_declared_sha256": "7eb71d1db11448cdee7e8f7a38644a668f1708d2fea0d2b9d67bcc51a9394ceb",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/runtime-observation6fa-short-partition-root-review-20261004.json",
+        "sha256": "7eb71d1db11448cdee7e8f7a38644a668f1708d2fea0d2b9d67bcc51a9394ceb"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "rust38_original",
+        "renewal_normal",
+        "renewal_control"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Reviewed historical and current runtime sources.",
+      "id": "PH-19",
+      "implementation": "Historical runtime and approved ancestry remain distinct from current signing authority.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass.",
+      "original_complete_requirement": "Actual approved upgrade-boundary execution and post-state replay without weakening current signing or rewriting historical proof.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Run original-runtime upgrade-boundary signing/execution-parent/post-state consumers without current-authority substitution.",
+      "required_outcome": "Historical snapshots: use the reviewed historical runtime authority without weakening current writes",
+      "retained_component_evidence": {
+        "bytes": 8321,
+        "checkpoint_declared_sha256": "acd2d3098954a2af1c6785685423d0e4087c67687881b5f60c758c942ccf172a",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/native-runtime-renewal-qualification-20261003.json",
+        "sha256": "acd2d3098954a2af1c6785685423d0e4087c67687881b5f60c758c942ccf172a"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Chosen capacity and resource measurement.",
+      "id": "PH-20",
+      "implementation": "Slots, history, scan pages and resident/physical dimensions have separate capacity admission.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Final aggregate funded-slot/history/byte/descriptor/RPC limits and realistic populated fleet headroom.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Exercise combined populated slot/history/byte/inode/descriptor/RPC bounds; sparse/zero-stake2048 is not dense sizing.",
+      "required_outcome": "Relay capacity: distinguish funded slots, retained history, scan pages and resident bytes",
+      "retained_component_evidence": {
+        "bytes": 9818,
+        "checkpoint_declared_sha256": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/capacity-public-completion-qualification-20261003.json",
+        "sha256": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Approved repair envelope and real manager transport.",
+      "id": "PH-21",
+      "implementation": "Bounded root/operator/validator repair dispatch, durable partial outcomes and strict source admission are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Bounded parallel all-component dispatch, operator adapter composition, interrupted recovery and original cumulative allowances.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Run actual public multi-component repair routes, interrupted journals, cumulative allowance and hard/availability controls.",
+      "required_outcome": "Fault controller: bounded parallel, idempotent component control with durable partial recovery",
+      "retained_component_evidence": {
+        "bytes": 3435,
+        "checkpoint_declared_sha256": "01553d3648dbbfe05ae488b35cb1aa8b6042e0907bd24b9d37c64bc064c47198",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/miner-manager-composition549-source-root-review-20261004.json",
+        "sha256": "01553d3648dbbfe05ae488b35cb1aa8b6042e0907bd24b9d37c64bc064c47198"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Real network incident rehearsal.",
+      "id": "PH-22",
+      "implementation": "Service-client read ownership, cause retention and retry/close/cancellation mechanisms are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Actual service transport incidents and final deadlines must retain the triggering cause, join owned work and leave unaffected roles progressing.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Run all current actual-client transient, joined hard, deadline and unaffected-peer scenarios.",
+      "required_outcome": "Service clients: retryable transport incidents, connection recovery and final error budgets",
+      "retained_component_evidence": {
+        "bytes": 17838,
+        "checkpoint_declared_sha256": "5e318923b0d571329f1dc80ea72131a17c576706532622935dc8e0279253620b",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/monitor-progress-body-qualification-20261003.json",
+        "sha256": "5e318923b0d571329f1dc80ea72131a17c576706532622935dc8e0279253620b"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Reviewed proposed capacity/retention policy.",
+      "id": "PH-23",
+      "implementation": "Signed monotonic capacity revisions retain original history/heads and two-times physical forecasts.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Actual signed revision adoption and complete combined storage/resource dimensions on the final source and proposed hosts.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Execute signed revision adoption plus full combined large-profile restore without shrinking original history.",
+      "required_outcome": "Capacity revisions: bind funded slots, history horizon and every finite storage dimension",
+      "retained_component_evidence": {
+        "bytes": 9818,
+        "checkpoint_declared_sha256": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/capacity-public-completion-qualification-20261003.json",
+        "sha256": "90b753f6610be6766faebb62d73e80381fa4449264d8e2b5e6d6f30d9fec58bf"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "None blocks offline source instrumentation.",
+      "id": "PH-24",
+      "implementation": "Immutable replay indexes authenticate retained plan lineage once; completed Claim129 component proofs are retained.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Retain exact passed source/peers and prove final changed-closure reuse or affected reruns; qualify composed original-plan authentication and foreground work.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Current Claim129 normal/race remains required because imported Core inventory bytes changed; prove immutable admission/work bounds.",
+      "required_outcome": "Recovery performance: authenticate each retained plan once per immutable lineage",
+      "retained_component_evidence": {
+        "bytes": 7684,
+        "checkpoint_declared_sha256": "05c8a8a1e74081acb18e3e6873cb961a6e574201604fa2e306ed828a016d66b8",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/validator-cache-permission0b58-qualification-20261003.json",
+        "sha256": "05c8a8a1e74081acb18e3e6873cb961a6e574201604fa2e306ed828a016d66b8"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "nativefee11_direct"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Actual deployment/unit/cgroup stop rehearsal.",
+      "id": "PH-25",
+      "implementation": "Lifecycle owners retain original SDK close/publication and join owned children on stop.",
+      "known_product_boundary_failure": {
+        "evidence_id": "nativefee11_direct",
+        "root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
+        "state": "Root cause/correction and exact targeted positive/causal qualification pending NativeWitness."
+      },
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Actual nativefee11 normal is10PASS1FAIL0SKIP: cancellation-after-output failed with nil error; current component applicability is proven separately.",
+      "original_complete_requirement": "Deployment stop joins every owned child and pending publication without callback self-join or lost original liability; actual cgroup/unit rehearsal.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Correct and qualify the demonstrated nativefee cancellation-after-output boundary. Run current actual public close, original publication custody, cancellation and stop/join tests and controls.",
+      "required_outcome": "Supervisor lifecycle: explicit deployment stop joins every owned workload child",
+      "retained_component_evidence": {
+        "bytes": 32739,
+        "checkpoint_declared_sha256": "f1cdf74d4f34e2ca463ae1c2b5facf33ed777e294890d43e2ba1a0eaa26813bd",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/replay-output-caller1b3f-qualification-20261003.json",
+        "sha256": "f1cdf74d4f34e2ca463ae1c2b5facf33ed777e294890d43e2ba1a0eaa26813bd"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Selected evidence/fleet size and endpoints.",
+      "id": "PH-26",
+      "implementation": "Bounded typed/cancellable large-frame and complete-original transport mechanisms are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Actual aggregate-size transport/replay, cancellation and complete namespace coverage under original signed admission.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Run actual maximum aggregate transport/replay and complete namespace restoration with cancellation.",
+      "required_outcome": "Large evidence transport: typed, cancellable public replay with finite admission",
+      "retained_component_evidence": null
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Actual owner approvals and two operator identities.",
+      "id": "PH-27",
+      "implementation": "Canonical October6 earning identity, original eligibility/wallet history, serialized planner and migration780 are implemented.",
+      "known_source_or_composition_limit": "Complete nonempty two-domain original participant/payout/Claim composition is not yet demonstrated.",
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Both operators and all validator/provider consumers must join original eligibility, binding, wallet consent and policy authority through rollover.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Run full model1824 and current controller/monitor/whole-work eligibility, wallet consent, first-partial and rollover controls.",
+      "required_outcome": "Policy activation: coherent validator evidence and client-key domains across operators",
+      "retained_component_evidence": null
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "xops33"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Independent roster, deployment, ingestion, delivered alerts and on-call exercise.",
+      "id": "PH-28",
+      "implementation": "Independent monitoring rosters, bounded repair and operations configuration exist; live operations have not been exercised.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Published xops482 conservation33/33 PASS plus separate control invocation; prior311 retained. Current Go producer/monitor/repair normal remains pending.",
+      "original_complete_requirement": "Complete economic/role monitoring, real alert routing, distinct primary/backup on-call, external deadman and exercised bounded repair.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Qualify current producer/repair paths and missing-host/outcome-freshness behavior; retain xops33.",
+      "required_outcome": "Continuous operations: independent monitoring, bounded authorized repair and exercised on-call",
+      "retained_component_evidence": {
+        "bytes": 27345,
+        "checkpoint_declared_sha256": "5cee15514cae38a39ffe021c489f57ffaa93346701754b353a7be823d663e5cd",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/monitor-policy-renewal-qualification-20261003.json",
+        "sha256": "5cee15514cae38a39ffe021c489f57ffaa93346701754b353a7be823d663e5cd"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Independent genesis/checkpoint, reviewed472 source, owned synced node.",
+      "id": "MG-01",
+      "implementation": "Explicit genesis/runtime/code/finality reader and admission mechanisms exist.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Approved genesis/runtime/code/checkpoint and exact current consumer admission; endpoint ownership is not finality authority.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Qualify exact current public identity/runtime/finality admission and refusal controls.",
+      "required_outcome": "Mainnet identity",
+      "retained_component_evidence": null
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "adapter33",
+        "compiler_observation_failure",
+        "independent_peer_failure",
+        "nativefee11_direct"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Independent compiler/dependency provenance and distribution approval.",
+      "id": "MG-02",
+      "implementation": "Current mains and default sibling graphs are bound; prior workspace nine-package compilers passed.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Product nativefee11 actually ran after the earlier peer refusal:10PASS1FAIL; that original peer interruption is historical, not evidence that no bodies have now run.",
+      "original_complete_requirement": "Integrate, qualify and reproducibly build one exact accepted production tuple, then bind published/running artifact identity.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Complete current default-module compilers and normal/race/control validation; preserve original source/generated/schema/config identities.",
+      "required_outcome": "Reproducible production release",
+      "retained_component_evidence": {
+        "bytes": 2341,
+        "checkpoint_declared_sha256": "1b19e31af362d8b8488530a4656240f764656b7c4f9d07c99eb1ccaec5d5db66",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/capture-currentad0-main-merge-20261003.json",
+        "sha256": "1b19e31af362d8b8488530a4656240f764656b7c4f9d07c99eb1ccaec5d5db66"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Authentic execution/runtime/finality witness and global signer custody.",
+      "id": "MG-03",
+      "implementation": "Original signature/outcome journals, receipt verification, creation namespace and archive/restore mechanisms exist.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Complete original signature/outcome/evidence census, independent owner continuation, stop/join and production restore/restart without duplicate effects.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Complete all-original namespace and outcome census plus long5/cross-owner recovery and stop/join proof.",
+      "required_outcome": "Durable recovery and complete evidence",
+      "retained_component_evidence": {
+        "bytes": 17304,
+        "checkpoint_declared_sha256": "612478dafb348da0311e8fc4c8b63aeb2a276936fda24fa7b428b61f12b94b4f",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/capture-currentad0-qualification-20261003.json",
+        "sha256": "612478dafb348da0311e8fc4c8b63aeb2a276936fda24fa7b428b61f12b94b4f"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "rust38_original",
+        "renewal_normal",
+        "renewal_control"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Independent semantic/source authority for selected runtime.",
+      "id": "MG-04",
+      "implementation": "Purpose-scoped native continuity, exact historical runtime and renewal/replay mechanisms exist.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass.",
+      "original_complete_requirement": "Approved actual runtime and complete signing/execution/history behavior across simulator-independent production roles and both validators.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Complete current Go native consumers and required Rust/control scope; targeted renewal pass is not full113 suite.",
+      "required_outcome": "Runtime and native continuity",
+      "retained_component_evidence": null
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Hosts, devices, credentials, eligible validators and network paths.",
+      "id": "MG-05",
+      "implementation": "Earning/identity rollover and complete migration780 schema/catalog are on main.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Actual two-operator host, credential, network and policy topology; fresh processed-key/proof progress through the production transition.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Execute full current model1824 plus controller/monitor catalog/identity/Oct6 transitions and controls.",
+      "required_outcome": "Policy and identity rollover",
+      "retained_component_evidence": null
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "rust38_original",
+        "renewal_normal",
+        "renewal_control",
+        "nativefee11_direct"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Approved economics, reserves, deposits and actual observed native/settlement outcomes.",
+      "id": "MG-06",
+      "implementation": "Original-work,10/90 entitlement, conserved funding, gas and native-fee original settlement mechanisms are implemented.",
+      "known_product_boundary_failure": {
+        "evidence_id": "nativefee11_direct",
+        "root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
+        "state": "Root cause/correction and exact targeted positive/causal qualification pending NativeWitness."
+      },
+      "known_source_or_composition_limit": "Complete original-work/reliability-to-recipient economic composition is not demonstrated; synthetic receipts do not create live authority.",
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee11 normal is10PASS1FAIL0SKIP: cancellation-after-output failed with nil error; current component applicability is proven separately.",
+      "original_complete_requirement": "Exact original-work/reliability and recipient lineage, native 10/90 conformance, real reserves/deposits/claims and owner/operator custody; observe first-send outcomes prospectively.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Correct and qualify the demonstrated nativefee cancellation-after-output boundary. Qualify actual nonempty participant-to-payout, corrected carry, native proof/denomination and immutable recipient/liability paths.",
+      "required_outcome": "Economics, settlement and custody",
+      "retained_component_evidence": {
+        "bytes": 1814,
+        "checkpoint_declared_sha256": "1e2a599a48145641e656263f85f2b43e606a16d32bb8cd9c21d43d793be37c1b",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/native-split-conformance-source-finding-20261003.json",
+        "sha256": "1e2a599a48145641e656263f85f2b43e606a16d32bb8cd9c21d43d793be37c1b"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "xops33"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Live ingestion, alert delivery and on-call/repair exercise.",
+      "id": "MG-07",
+      "implementation": "Independent roster, conservation monitoring, alert rules and bounded repair are implemented.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Published xops482 conservation33/33 PASS plus separate control invocation; prior311 retained. Current Go producer/monitor/repair normal remains pending.",
+      "original_complete_requirement": "Approved service SLOs, real routing/on-call/deadman, continuous conservation and exercised root/operator/validator repair.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Execute current monitor22/repair/producer consumers and remaining rule/operations scopes; xops33 already retained.",
+      "required_outcome": "Continuous monitoring and bounded repair",
+      "retained_component_evidence": {
+        "bytes": 15116,
+        "checkpoint_declared_sha256": "c4976da650c0fc4c0d8007ce977f6ad0379c54d5d9e826b94b91478acbd7a187",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/conservation-claim-window7dc-source-root-review-20261004.json",
+        "sha256": "c4976da650c0fc4c0d8007ce977f6ad0379c54d5d9e826b94b91478acbd7a187"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Installed contracts, Safe authority, owner devices/signatures and funded accounts.",
+      "id": "MG-08",
+      "implementation": "Owner device workflow, contract/bootstrap configuration and root/two-UR launch paths exist.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "original_complete_requirement": "Actual census/reset disposition, signed owner action, installed contracts/Safe/funding, independent custody and actual admitted/active root and UR roles, and separately authorized root custody/transport for any required current lifecycle mutation.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Qualify current complete owner/bootstrap/contract/root/UR public software paths and controls.",
+      "required_outcome": "Mainnet bootstrap and both validator roles",
+      "retained_component_evidence": {
+        "bytes": 4880,
+        "checkpoint_declared_sha256": "105d0dcc0378b014f9fd33dadfa1f1bf3ec0d54921e4a70fc780b8d5dd641cd2",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/safe-state-read-joined-qualification-20261003.json",
+        "sha256": "105d0dcc0378b014f9fd33dadfa1f1bf3ec0d54921e4a70fc780b8d5dd641cd2"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Production volume/backup inventory, explicit rebind and sizing rehearsal.",
+      "id": "MG-09",
+      "implementation": "Explicit capacity/retention/restore mechanisms exist; dense sustained sizing and complete namespace proof remain required.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
+      "original_complete_requirement": "Realistic sustained dense workload, complete accepted archive/owner restore, backup/media integrity and measured host headroom.",
+      "outcome_complete": false,
+      "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
+      "remaining_software_evidence": "Execute long5/current capacity restoration and sustained dense workload/memory/disk/foreground-headroom measurements.",
+      "required_outcome": "Sustained resource and storage capacity",
+      "retained_component_evidence": {
+        "bytes": 19624,
+        "checkpoint_declared_sha256": "040b9e1c7b6f47b930a580e01b747d54e2c5fadb547fa98c38ca59cc470d3e9b",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/native-adoptionade5-original-terminal-root-readback-20261004.json",
+        "sha256": "040b9e1c7b6f47b930a580e01b747d54e2c5fadb547fa98c38ca59cc470d3e9b"
+      }
+    },
+    {
+      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "current_evidence_ids": [
+        "default_metadata",
+        "main9_compile",
+        "adapter33",
+        "compiler_observation_failure",
+        "independent_peer_failure",
+        "nativefee11_direct"
+      ],
+      "deployment_only_remaining_established": false,
+      "external_live_authority_or_rehearsal": "Controlled activation, three native emission intervals and full settlement/claim cycle.",
+      "id": "MG-10",
+      "implementation": "Release/rollout/acceptance requirements and blocked October6 policy exist; no activation or production acceptance is established.",
+      "known_source_or_composition_limit": null,
+      "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Product nativefee11 actually ran after the earlier peer refusal:10PASS1FAIL; that original peer interruption is historical, not evidence that no bodies have now run.",
+      "original_complete_requirement": "Complete prelaunch qualification and rollout/rollback/outage rehearsal; after approved activation observe three complete native emission intervals and a full 50,400-block UR settlement/claim cycle.",
+      "outcome_complete": false,
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "remaining_software_evidence": "Complete software scope including2508 modes,227 controls, original wider gates and composed recovery/rollback/outage rehearsal.",
+      "required_outcome": "Qualification, rollout and actual acceptance",
+      "retained_component_evidence": {
+        "bytes": 920,
+        "checkpoint_declared_sha256": "f9689f1953a29e7c8d4b69fcbcd4f588740706c645a09412bb9e698b144e154c",
+        "hash_matches_checkpoint": true,
+        "path": "/home/by/urnetwork/sn/mainnet/evidence/current-cutoff-readiness-config-20261003.json",
+        "sha256": "f9689f1953a29e7c8d4b69fcbcd4f588740706c645a09412bb9e698b144e154c"
+      }
+    }
+  ],
+  "schema": "original38-current-evidence-ledger-v2",
+  "scope2508": {
+    "bytes": 2869,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
+    "sha256": "4187085b66193dc9e7f0496ec9c90c6c820a88bf3ce3da43e391b63dc9e222a9"
+  },
+  "status": "EVIDENCE_RECONCILED;38 original outcomes remain open; actual nativefee cancellation boundary failure separated from harness failures and missing qualification",
+  "supersedes": {
+    "bytes": 83040,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/original38-current-evidence-ledger.json",
+    "sha256": "7dd3ba11492799c2b7b4498c0dd33ef33e79bf6604cd058726a19f58c4b5e63f"
+  }
+}
