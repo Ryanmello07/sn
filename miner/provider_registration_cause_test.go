@@ -215,3 +215,58 @@ func TestProviderRegistrationRunRetainsWrappedAvailabilityReplay(t *testing.T) {
 		t.Fatal("successful registration replay did not retain its client credential")
 	}
 }
+
+// A local filesystem operation stays a custody failure even when its retained
+// child describes API availability. Neither concrete wrapper may admit replay.
+func TestProviderRegistrationRunRefusesLocalCustodyWrappers(t *testing.T) {
+	for _, link := range []bool{false, true} {
+		fixture := newProviderRegistrationFixture(t)
+		fixture.statuses = []int{http.StatusServiceUnavailable, 0}
+		var original map[string][]byte
+		var captureErr, attemptCause, localCause error
+		var attempts, authenticated atomic.Int32
+		var joined atomic.Bool
+		err := fixture.run(t.Context(), true, providerRegistrationHooks{
+			additionalAttemptError: func(attemptErr error) error {
+				attempts.Add(1)
+				attemptCause = attemptErr
+				original, captureErr = providerRegistrationOriginalFiles(fixture.dir)
+				if captureErr != nil {
+					return captureErr
+				}
+				if !providerRegistrationRetryable(attemptErr, 0) {
+					return errors.New("synthetic local fault did not follow real registration availability")
+				}
+				localCause = &os.PathError{Op: "read", Path: "synthetic-registration-custody", Err: attemptErr}
+				if link {
+					localCause = &os.LinkError{Op: "rename", Old: "synthetic-registration-old", New: "synthetic-registration-new", Err: attemptErr}
+				}
+				return localCause
+			},
+			afterAuthenticated: func(string, connect.Id, []byte) error {
+				authenticated.Add(1)
+				return errors.New("synthetic unexpected local-failure replay")
+			},
+			afterApiJoined: func() { joined.Store(true) },
+		})
+		posts, legacy, allocations, _ := fixture.counts()
+		if err == nil || captureErr != nil || attemptCause == nil || localCause == nil || attempts.Load() != 1 || authenticated.Load() != 0 || !joined.Load() || posts != 1 || legacy != 0 || allocations != 1 {
+			t.Fatal("local custody failure retried or escaped the joined provider owner", link)
+		}
+		if !errors.Is(err, attemptCause) || !errors.Is(err, localCause) {
+			t.Fatal("provider refusal discarded the original local or API cause", link)
+		}
+		retained, readErr := providerRegistrationOriginalFiles(fixture.dir)
+		if readErr != nil || len(original) != 4 || len(retained) != len(original) {
+			t.Fatal("local registration refusal lost original custody", link)
+		}
+		for name, raw := range original {
+			if !bytes.Equal(raw, retained[name]) {
+				t.Fatal("local registration refusal changed original custody", link, name)
+			}
+		}
+		if _, tokenErr := os.Stat(filepath.Join(fixture.dir, ".provider.jwt")); !errors.Is(tokenErr, os.ErrNotExist) {
+			t.Fatal("local registration refusal installed a client credential", link)
+		}
+	}
+}

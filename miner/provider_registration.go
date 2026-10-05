@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/urnetwork/connect"
@@ -72,6 +73,8 @@ func providerRegistrationRetryCause(err error, depth int, budget *minerReadCause
 		return false
 	}
 	switch err.(type) {
+	case *os.PathError, *os.LinkError:
+		return false
 	case *sdk.NetworkClientRegistrationUnavailableError, *clientauth.RegistrationRefreshUnavailableError:
 		return true
 	}
