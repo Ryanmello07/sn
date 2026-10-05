@@ -18,6 +18,9 @@ mod capture_tests;
 #[path = "historical_global_alias_tests.rs"]
 mod global_alias_tests;
 
+#[path = "historical_host_snapshot_tests.rs"]
+mod host_snapshot_tests;
+
 #[path = "historical_native_execution_tests.rs"]
 mod native_execution_tests;
 
@@ -244,6 +247,7 @@ fn observation_profile(code: &[u8], export: &str, purpose: &str) -> observer::Ob
             offset_start: 0,
             offset_end: body.len() as u32,
             memory: Vec::new(),
+            host_snapshot: None,
         }],
         metadata_sha256: None,
         principal_storage_prefixes: None,

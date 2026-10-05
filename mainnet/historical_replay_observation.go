@@ -41,6 +41,7 @@ type historicalReplayHookRule struct {
 	OffsetStart        uint32                    `json:"offset_start"`
 	OffsetEnd          uint32                    `json:"offset_end"`
 	Memory             []historicalNativeCapture `json:"memory,omitempty"`
+	HostSnapshot       *string                   `json:"host_snapshot,omitempty"`
 }
 
 type historicalNativeCapture struct {
@@ -185,6 +186,9 @@ func (self *historicalReplayObservationProfile) validate(job historicalReplayJob
 		if !(historicalReplayPurpose(rule.Purpose) || self.Schema == historicalNativeProfileSchema && historicalNativePurpose(rule.Purpose)) || rule.FunctionBodySha256 == (historicalReplayDigest{}) || rule.OffsetStart >= rule.OffsetEnd {
 			return errors.New("historical observation rule identity or range differs")
 		}
+		if err := validateHistoricalHostSnapshotRule(self, rule); err != nil {
+			return err
+		}
 		if err := validateHistoricalNativeCaptures(rule); err != nil {
 			return err
 		}
@@ -264,7 +268,7 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 			if observation.ValueHex == nil {
 				return errors.New("historical value-bearing observation omits bytes")
 			}
-		case "get", "read", "clear", "clear_prefix", "exists", "next_key":
+		case "get", "read", "clear", "clear_prefix", "exists", "next_key", "host":
 			if observation.ValueHex != nil {
 				return errors.New("historical request-only observation invents a value")
 			}
@@ -273,8 +277,11 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 		}
 		matches := 0
 		for _, rule := range profile.Rules {
-			for _, frame := range observation.Stack {
+			for frameIndex, frame := range observation.Stack {
 				if rule.FunctionIndex == frame.FunctionIndex && frame.FunctionOffset >= rule.OffsetStart && frame.FunctionOffset < rule.OffsetEnd {
+					if err := validateHistoricalHostSnapshotRecord(profile, rule, observation, frameIndex); err != nil {
+						return err
+					}
 					if rule.Purpose != observation.Purpose {
 						return errors.New("historical observation purpose contradicts original profile")
 					}

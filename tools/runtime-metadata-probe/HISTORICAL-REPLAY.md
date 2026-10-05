@@ -176,3 +176,19 @@ a layout must account for the actual nested-call frames at that exact original
 host call. The focused Wasmtime regression checks a precise decoded call range
 and live original memory; actual runtime473 ranges and field layouts remain a
 separate review and execution obligation.
+
+A native epoch rule may explicitly set `host_snapshot` to
+`ext_allocator_malloc_version_1` or `ext_allocator_free_version_1`. The original
+range must be exactly one decoded direct call to that `env` import, with the
+original allocator ABI. It cannot select an indirect call, a wrapper function,
+or an ancestor frame. At that boundary the observer reads the selected memory
+before invoking the unchanged SDK allocator once. The resulting `host` record
+names the original host in `key_hex` and contains neither storage value nor
+storage-return fields. Existing transactions discard these records on rollback,
+cumulative evidence bounds remain charged, and an incomplete replay releases
+no report. Without this optional field, storage-only profiles retain their old
+serialization and behavior.
+
+This permits review of an original epoch vector that remains live after the
+last storage callback. It supplies no allocation amounts, UID mapping, epoch
+identity, or economic interpretation beyond the explicitly captured bytes.
