@@ -398,6 +398,7 @@ func TestHistoricalArchiveCaptureCommandRejectsMixedModesAndUnboundedCache(t *te
 	for _, extra := range [][]string{
 		{"--nodes", f.request.CacheDirectory, "--rpc", f.request.Rpc},
 		{"--nodes", f.request.CacheDirectory, "--cache-max-entries", "1"},
+		{"--nodes", f.request.CacheDirectory, "--owner-local-cache"},
 		{"--cache-dir", f.request.CacheDirectory},
 		{"--rpc", f.request.Rpc, "--cache-dir", f.request.CacheDirectory, "--expected-chain", f.request.Expected.NativeChain, "--expected-genesis", f.request.Expected.GenesisHash, "--expected-evm-chain-id", "964", "--cache-max-bytes", "18446744073709551615"},
 	} {
@@ -408,5 +409,59 @@ func TestHistoricalArchiveCaptureCommandRejectsMixedModesAndUnboundedCache(t *te
 	}
 	if f.original.artifactReads.Load() != 0 || f.proofs.Load() != 0 {
 		t.Fatal("invalid CLI input acquired a network route")
+	}
+}
+
+func TestHistoricalArchiveCaptureExplicitOwnerLocalCommandRetainsUnsignedEvidence(t *testing.T) {
+	f := newHistoricalArchiveCaptureFixture(t, "success")
+	ctx := ownerLocalDurableTestContext(t, f.request.CacheDirectory)
+	request := f.request
+	var output, diagnostic bytes.Buffer
+	code := runMain(ctx, []string{"capture-historical-execution", "--engine", request.Capture.Engine.Path, "--engine-sha256", request.Capture.Engine.Sha256, "--request", request.Capture.Input.Path, "--request-sha256", request.Capture.Input.Sha256, "--rpc", request.Rpc, "--cache-dir", request.CacheDirectory, "--owner-local-cache", "--expected-chain", request.Expected.NativeChain, "--expected-genesis", request.Expected.GenesisHash, "--expected-evm-chain-id", "964"}, &output, &diagnostic)
+	var report historicalCaptureReport
+	if code != 0 || decodePlanJson(output.Bytes(), &report) != nil || f.proofs.Load() != 1 || report.Replay.RuntimeAdmitted || report.Replay.AnchorAuthority != "caller-supplied-unapproved" {
+		t.Fatal("explicit owner-local evidence capture failed or granted authority", code, diagnostic.String())
+	}
+	jobPath := filepath.Join(request.CacheDirectory, "jobs", strings.TrimPrefix(monitorReadDigest([]byte(report.JobJSON)), "sha256:")+".json")
+	raw, err := os.ReadFile(jobPath)
+	if err != nil || string(raw) != report.JobJSON {
+		t.Fatal("owner-local capture lost exact original job", err)
+	}
+	files, err := openNativeEvidenceFilesInScope(ctx, request.CacheDirectory, request.MaximumBytes, request.MaximumEntries, true)
+	if err != nil {
+		t.Fatal("owner-local capture did not release original custody", err)
+	}
+	if err := files.close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHistoricalArchiveCaptureOwnerLocalCannotRelabelDaemonProducer(t *testing.T) {
+	for _, fault := range []string{"owner-declaration-default-archive", "daemon-declaration-local-archive", "owner-declaration-producer"} {
+		f := newHistoricalArchiveCaptureFixture(t, "success")
+		ctx := ownerLocalDurableTestContext(t, f.request.CacheDirectory)
+		started := false
+		var err error
+		if fault == "owner-declaration-producer" {
+			files, openErr := openNativeProducerFiles(ctx, &nativeExecutionPolicy{Directory: f.request.CacheDirectory, Producer: &nativeExecutionProducerPolicy{MaximumBytes: f.request.MaximumBytes, MaximumEntries: f.request.MaximumEntries}})
+			err = openErr
+			if files != nil {
+				_ = files.close()
+				t.Fatal("owner-local declaration acquired signed-producer storage")
+			}
+		} else {
+			if fault == "daemon-declaration-local-archive" {
+				ctx = f.ctx
+				f.request.OwnerLocalCache = true
+			}
+			report, captureErr := runHistoricalArchiveCapture(ctx, f.request, historicalReplayHooks{beforeStart: func(context.Context, *os.File) { started = true }})
+			err = captureErr
+			if report != nil {
+				t.Fatal("wrong storage scope returned evidence")
+			}
+		}
+		if err == nil || started || f.original.artifactReads.Load() != 0 || f.proofs.Load() != 0 {
+			t.Fatal("declaration filename silently changed storage authority", fault, started, err)
+		}
 	}
 }

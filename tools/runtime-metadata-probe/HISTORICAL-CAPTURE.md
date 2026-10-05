@@ -57,6 +57,13 @@ raw nodes and successful `jobs/<job-sha256>.json`. The stdout report still
 uses the original capture grammar. Files from an incomplete attempt are not
 completed jobs and remain subject to the same capacity and custody checks.
 
+For a cache on the operator's local disk, explicitly add `--owner-local-cache`
+and supply its separately scoped `urnetwork-owner-local-volumes-v2` declaration.
+This uses the existing owner-local descriptor, identity, capacity and lease
+checks. It does not relabel an owner-local declaration as daemon storage or
+change the signed production producer's filesystem admission. The default
+archive mode continues to require the ordinary daemon-volume declaration.
+
 The request uses schema `urnetwork-historical-execution-capture-v1`. It pins
 the SCALE parent and child headers and their hashes, the complete SCALE
 extrinsic body, both original runtime-code digests, execution state version,

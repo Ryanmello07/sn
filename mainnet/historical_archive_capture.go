@@ -18,12 +18,13 @@ import (
 const historicalArchiveObservationLimit = 64 * 1024 * 1024
 
 type historicalArchiveCaptureRequest struct {
-	Capture        historicalCaptureRequest
-	Rpc            string
-	Expected       identityExpectation
-	CacheDirectory string
-	MaximumBytes   uint64
-	MaximumEntries uint64
+	Capture         historicalCaptureRequest
+	Rpc             string
+	Expected        identityExpectation
+	CacheDirectory  string
+	OwnerLocalCache bool
+	MaximumBytes    uint64
+	MaximumEntries  uint64
 }
 
 // One deadline covers immutable input admission, all RPC reads, cache custody,
@@ -65,7 +66,7 @@ func runHistoricalArchiveCapture(ctx context.Context, request historicalArchiveC
 		return nil, err
 	}
 	defer client.httpClient.CloseIdleConnections()
-	files, err := openNativeEvidenceFiles(owner, request.CacheDirectory, request.MaximumBytes, request.MaximumEntries)
+	files, err := openNativeEvidenceFilesInScope(owner, request.CacheDirectory, request.MaximumBytes, request.MaximumEntries, request.OwnerLocalCache)
 	if err != nil {
 		return nil, err
 	}
