@@ -45,6 +45,10 @@ original native Wasm engine, signed production policy or live fee outcome.
 `TestNativeFeeOutcomeExportSettlementFixtures` supplies the explicit Server
 public-model join fixture. For qualification, select an existing private
 persistent directory with `URNETWORK_NATIVE_FEE_EXPORT_DIRECTORY`; the exporter
-publishes `pair.json` and `missing.json`. An ordinary package test uses its own
+publishes `pair.json`, `missing.json` and `fractional-conflict.json`. All three
+retain the same original signed transaction. The third supplies a contradictory
+complete native debit of 751 Rao so the public settlement test can retain a
+conservative hold when a signed denomination requires exact division by two.
+An ordinary package test uses its own
 temporary directory and performs the same proof and original-custody checks.
 The Server consumer separately pins the selected `mainnet.test` ELF.

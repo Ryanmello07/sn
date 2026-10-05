@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -28,7 +29,8 @@ func TestNativeFeeOutcomeExportSettlementFixtures(t *testing.T) {
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 		t.Fatal("native fee fixture output must already be a private directory", err)
 	}
-	for _, mode := range []string{"pair", "missing"} {
+	var original []byte
+	for _, mode := range []string{"pair", "missing", "fractional-conflict"} {
 		exportNativeFeeSettlementFixture(t, directory, mode)
 		raw, err := os.ReadFile(filepath.Join(directory, mode+".json"))
 		if err != nil {
@@ -37,6 +39,11 @@ func TestNativeFeeOutcomeExportSettlementFixtures(t *testing.T) {
 		var manifest nativeFeeSettlementFixtureManifest
 		if err := decodePlanJson(raw, &manifest); err != nil {
 			t.Fatal(err)
+		}
+		if original == nil {
+			original = bytes.Clone(manifest.RawTransaction)
+		} else if !bytes.Equal(original, manifest.RawTransaction) {
+			t.Fatal("exported outcomes changed the original signed transaction")
 		}
 		verified, err := nativefee.Invoke(t.Context(), manifest.Authority, manifest.Request, manifest.TransactionHash, time.Minute)
 		if mode == "missing" {
@@ -48,7 +55,12 @@ func TestNativeFeeOutcomeExportSettlementFixtures(t *testing.T) {
 		if err != nil {
 			t.Fatal("exported original proof does not execute", err)
 		}
-		if verified.Facts().TransactionHash != manifest.TransactionHash || verified.Facts().DebitRao != "750" || len(verified.Facts().Originals) != 7 {
+		withdrawal, debit := "1000", "750"
+		if mode == "fractional-conflict" {
+			withdrawal, debit = "1001", "751"
+		}
+		facts := verified.Facts()
+		if facts.TransactionHash != manifest.TransactionHash || facts.WithdrawalRao != withdrawal || facts.RefundRao != "250" || facts.DebitRao != debit || len(facts.Originals) != 7 {
 			t.Fatal("exported original outcome differs")
 		}
 		retained := 0
