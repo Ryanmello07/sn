@@ -113,6 +113,14 @@ func (self economicConservationState) treasurySummary(policy economicConservatio
 		}
 		current, result.Through = archive.After, archive.Through
 	}
+	if self.Archive != nil && self.Archive.PrincipalRetained != nil {
+		head := self.Archive.PrincipalRetained
+		if err := appendPools(head.Pools); err != nil {
+			return nil, err
+		}
+		result.CauseCensusComplete = result.CauseCensusComplete && head.UnresolvedBlocks == 0
+		current, result.Through = head.After, head.Through
+	}
 	for _, value := range self.PrincipalExecutions {
 		reconciliation, err := value.Projection.reconcile(value.Outcome)
 		if err != nil {

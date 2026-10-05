@@ -139,7 +139,7 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 	}
 	if self.archiveView != nil {
 		result.ArchiveIndexEntries = self.archiveView.entries + self.archiveView.claimBasisEntries
-		result.ArchiveIndexBytes = self.archiveView.bytes + self.archiveView.claimBasisBytes
+		result.ArchiveIndexBytes = self.archiveView.bytes + self.archiveView.claimBasisBytes + self.archiveView.principalReservedBytes
 	}
 	for _, state := range self.ClaimStates {
 		result.ClaimStatuses = append(result.ClaimStatuses, state.Status)
@@ -239,6 +239,7 @@ func cloneEconomicConservation(value *economicConservationState, policies ...eco
 		return nil, err
 	}
 	result.archiveView = value.archiveView
+	result.principalProvisional = value.principalProvisional
 	result.Native.runtimeAdmission = value.Native.runtimeAdmission
 	return &result, nil
 }
@@ -284,6 +285,9 @@ func loadEconomicConservation(ctx context.Context, owner *monitorCheckpointStore
 }
 
 func saveEconomicConservation(ctx context.Context, owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+	if state.principalProvisional != nil {
+		return errors.New("economic publication requires retained principal snapshot custody, not a provisional plan")
+	}
 	if err := state.validateClaimCheckpointPath(owner.path); err != nil {
 		return err
 	}
@@ -621,6 +625,9 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 	if err := state.validateClaimCheckpointPath(owner.path); err != nil {
 		return refuse(err)
 	}
+	if err := policy.PrincipalRetention.validatePaths(owner.path, *policyPath, *metricsPath, *feeRequest); err != nil {
+		return refuse(err)
+	}
 	if *metricsPath != "" {
 		metrics, err = openMonitorMetrics(*metricsPath, ctx)
 		if err != nil {
@@ -681,6 +688,15 @@ func runEconomicConservationCommand(ctx context.Context, args []string, stdout, 
 		nextSample = *interval
 	}
 	for ctx.Err() == nil {
+		// Principal facts advance only when this owner takes a completed native
+		// attempt. Compact before its successor starts; never replace a live
+		// worker's original cursor or discard its pending result.
+		if nativeWorker == nil || !nativeWorker.active {
+			state, archive, err = maintainEconomicPrincipalArchive(ctx, policy, owner, state, archive, hooks)
+			if err != nil {
+				return refuse(err)
+			}
+		}
 		if err := nativeWorker.start(state); err != nil {
 			return refuse(err)
 		}
