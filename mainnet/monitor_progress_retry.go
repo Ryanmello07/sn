@@ -84,13 +84,13 @@ func monitorProgressRetryCause(err error, depth int, remaining *int) bool {
 		return true
 	}
 	if dns, ok := err.(*net.DNSError); ok {
-		if dns.IsNotFound || !dns.IsTimeout && !dns.IsTemporary {
+		if dns.IsNotFound {
 			return false
 		}
 		if cause := dns.Unwrap(); cause != nil {
 			return monitorProgressRetryCause(cause, depth+1, remaining)
 		}
-		return true
+		return dns.IsTimeout || dns.IsTemporary
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
 		return monitorProgressRetryCause(wrapped.Unwrap(), depth+1, remaining)
