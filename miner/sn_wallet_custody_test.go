@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -348,15 +349,19 @@ func TestSnWalletConsentLeaseExcludesOtherProcesses(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = owner.close() }()
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancel()
-	child := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestSnWalletConsentLeaseExcludesOtherProcesses$", "-test.count=1")
-	child.Env = append(os.Environ(), childPathVariable+"="+path)
-	child.WaitDelay = 5 * time.Second
-	// Nil stdout/stderr discard child output without an unbounded buffer. Run
-	// joins the child; this deadline is only a blocking-lock regression backstop.
-	if err := child.Run(); err != nil {
-		t.Fatalf("second process lease assertion failed: %v (context: %v)", err, ctx.Err())
+	result := runSnWalletConsentTestChild(t.Context(), t.Name(), childPathVariable+"="+path)
+	if result.contextErr != nil || result.outputExceeded {
+		// A canceled or truncated child cannot supply an attributable assertion.
+		t.Fatalf("second process lease observation incomplete: %v (context: %v, output exceeded: %v)", result.processErr, result.contextErr, result.outputExceeded)
+	}
+	if result.processErr != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(result.processErr, &exitErr) || exitErr.ExitCode() != 1 {
+			t.Fatalf("second process lease test did not exit with an assertion: %v", result.processErr)
+		}
+		// Preserve the child assertion's own file, line and exact cause. A setup
+		// failure or panic must not earn credit from the generic parent exit.
+		t.Fatalf("second process lease assertion failed: %v\n%s", result.processErr, result.output)
 	}
 	if err := owner.close(); err != nil {
 		t.Fatal(err)
@@ -364,5 +369,98 @@ func TestSnWalletConsentLeaseExcludesOtherProcesses(t *testing.T) {
 	owner, err = openSnWalletConsent(t.Context(), path, snWalletConsentTestApiUrl)
 	if err != nil {
 		t.Fatal("lease did not end with its owner", err)
+	}
+}
+
+const snWalletConsentTestChildOutputLimit = 32 * 1024
+
+// Drain both child streams while retaining a fixed prefix. Run joins their
+// writers before the caller reads the result; overflow is always explicit.
+type snWalletConsentTestChildOutput struct {
+	mutex    sync.Mutex
+	buffer   [snWalletConsentTestChildOutputLimit]byte
+	size     int
+	exceeded bool
+}
+
+func (self *snWalletConsentTestChildOutput) Write(value []byte) (int, error) {
+	self.mutex.Lock()
+	defer self.mutex.Unlock()
+	count := copy(self.buffer[self.size:], value)
+	self.size += count
+	self.exceeded = self.exceeded || count != len(value)
+	return len(value), nil
+}
+
+type snWalletConsentTestChildResult struct {
+	output         string
+	outputExceeded bool
+	processErr     error
+	contextErr     error
+}
+
+func runSnWalletConsentTestChild(parent context.Context, root string, childEnvironment string) snWalletConsentTestChildResult {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	child := exec.CommandContext(ctx, os.Args[0], "-test.run=^"+root+"$", "-test.count=1")
+	child.Env = append(os.Environ(), childEnvironment)
+	child.WaitDelay = 5 * time.Second
+	output := &snWalletConsentTestChildOutput{}
+	child.Stdout, child.Stderr = output, output
+	processErr := child.Run()
+	output.mutex.Lock()
+	defer output.mutex.Unlock()
+	return snWalletConsentTestChildResult{
+		output: string(output.buffer[:output.size]), outputExceeded: output.exceeded,
+		processErr: processErr, contextErr: ctx.Err(),
+	}
+}
+
+// This deliberately failing child checks the same bounded process owner used
+// by the real lease assertion, including both independently written streams.
+func TestSnWalletConsentChildAssertionDiagnosticsRemainObservable(t *testing.T) {
+	const childVariable = "SN_WALLET_CONSENT_TEST_DIAGNOSTIC_CHILD"
+	const stdoutMessage = "synthetic wallet child stdout"
+	const stderrMessage = "synthetic wallet child stderr"
+	const assertionMessage = "synthetic wallet child assertion"
+	if os.Getenv(childVariable) == "1" {
+		if _, err := os.Stdout.WriteString(stdoutMessage + "\n"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stderr.WriteString(stderrMessage + "\n"); err != nil {
+			t.Fatal(err)
+		}
+		t.Fatal(assertionMessage)
+	}
+	result := runSnWalletConsentTestChild(t.Context(), t.Name(), childVariable+"=1")
+	var exitErr *exec.ExitError
+	if result.contextErr != nil || result.outputExceeded || !errors.As(result.processErr, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatal("diagnostic fixture child did not join its deliberate assertion", result.processErr, result.contextErr, result.outputExceeded)
+	}
+	for _, message := range []string{stdoutMessage, stderrMessage, assertionMessage} {
+		if strings.Count(result.output, message) != 1 {
+			t.Fatal("joined child diagnostic was lost or duplicated", message, result.output)
+		}
+	}
+}
+
+// Excess child output is drained without allocation growth and cannot be
+// mistaken for a complete causal diagnostic by the owning lease test.
+func TestSnWalletConsentChildAssertionDiagnosticsAreBounded(t *testing.T) {
+	const childVariable = "SN_WALLET_CONSENT_TEST_LARGE_DIAGNOSTIC_CHILD"
+	if os.Getenv(childVariable) == "1" {
+		payload := strings.Repeat("x", 2*snWalletConsentTestChildOutputLimit)
+		if count, err := os.Stdout.WriteString(payload); err != nil || count != len(payload) {
+			t.Fatal("synthetic child output did not reach its boundary", count, err)
+		}
+		t.Fatal("synthetic assertion after oversized output")
+	}
+	result := runSnWalletConsentTestChild(t.Context(), t.Name(), childVariable+"=1")
+	var exitErr *exec.ExitError
+	if result.contextErr != nil || !errors.As(result.processErr, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatal("bounded diagnostic fixture child did not join", result.processErr, result.contextErr)
+	}
+	if !result.outputExceeded || result.output != strings.Repeat("x", snWalletConsentTestChildOutputLimit) {
+		t.Fatal("child output limit was not retained as an explicit incomplete observation", len(result.output), result.outputExceeded)
 	}
 }
