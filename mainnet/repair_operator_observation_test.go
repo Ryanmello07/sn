@@ -77,3 +77,104 @@ func TestRepairOperatorResourceContradictionDominatesCloseFailure(t *testing.T) 
 		t.Fatal("close unavailability hid the observed resource contradiction", faults, err, disposition, cause)
 	}
 }
+
+// A completed Stat result remains evidence even if its caller is canceled or
+// another observation fails immediately afterward. Unknown Stat results remain
+// covered by the independent unavailable-observation cases above.
+func TestRepairOperatorObservedMetadataContradictionDominatesReadFailure(t *testing.T) {
+	for _, test := range []struct {
+		kind   string
+		cancel bool
+	}{{"file", false}, {"file", true}, {"directory", false}, {"directory", true}, {"quota", false}, {"quota", true}} {
+		f := newRepairOperatorFixture(t)
+		ctx, cancel := context.WithCancel(f.ctx())
+		t.Cleanup(cancel)
+		faults := 0
+		fail := func() error {
+			faults++
+			if test.cancel {
+				cancel()
+				return nil
+			}
+			return syscall.EIO
+		}
+		var err error
+		switch test.kind {
+		case "file":
+			path := filepath.Join(f.envelope.original.Plan.env("WARP_VAULT_HOME"), "main", "1.0.0", "st.yml")
+			if err := os.Chmod(path, 0622); err != nil {
+				t.Fatal(err)
+			}
+			ctx = context.WithValue(ctx, repairValidatorObservationKey{}, func(operation string) error {
+				if operation == "operator-resource-open-stat" {
+					return fail()
+				}
+				return nil
+			})
+			_, _, err = readRepairOperatorFile(ctx, f.base.host, path, f.base.host.rootUid, 2*1024*1024)
+		case "directory":
+			root := f.envelope.original.Plan.env("WARP_VAULT_HOME")
+			if err := os.Chmod(filepath.Join(root, "main", "1.0.0"), 0777); err != nil {
+				t.Fatal(err)
+			}
+			observed := 0
+			ctx = context.WithValue(ctx, repairValidatorObservationKey{}, func(operation string) error {
+				if operation == "operator-resource-directory-stat" {
+					observed++
+					if observed == 3 {
+						return fail()
+					}
+				}
+				return nil
+			})
+			for _, tree := range f.envelope.original.Plan.Resources {
+				if tree.Path == root {
+					_, err = inspectRepairOperatorTree(ctx, f.base.host, tree, f.envelope.original.Plan)
+				}
+			}
+		case "quota":
+			var quota repairOperatorRetainedFile
+			for _, file := range f.envelope.approval.Plan.OriginalFiles {
+				if file.Quota {
+					quota = file
+					break
+				}
+			}
+			if quota.File.Path == "" {
+				t.Fatal("fixture has no original quota")
+			}
+			replaced := false
+			ctx = context.WithValue(ctx, repairValidatorObservationKey{}, func(operation string) error {
+				if operation == "operator-resource-close" && !replaced {
+					// Keep the old inode alive so allocation cannot reuse it.
+					if err := os.Rename(quota.File.Path, filepath.Join(f.base.directory, "retained-quota-before-observation")); err != nil {
+						return err
+					}
+					if err := os.WriteFile(quota.File.Path, nil, 0600); err != nil {
+						return err
+					}
+					if os.Geteuid() == 0 {
+						plan := f.envelope.original.Plan
+						if err := os.Chown(quota.File.Path, int(plan.Uid), int(plan.Gid)); err != nil {
+							return err
+						}
+					}
+					replaced = true
+				}
+				if operation == "operator-quota-open-stat" {
+					return fail()
+				}
+				return nil
+			})
+			err = inspectRepairOperatorRetained(ctx, f.base.host, f.envelope.original.Plan, []repairOperatorRetainedFile{quota}, true)
+		}
+		expected := error(syscall.EIO)
+		if test.cancel {
+			expected = context.Canceled
+		}
+		disposition, cause := repairControllerCause(err)
+		if faults != 1 || !errors.Is(err, expected) || !errors.Is(err, errRpcIntegrity) || disposition != "held" || cause != "integrity" {
+			t.Fatal("late observation failure hid completed original metadata contradiction", test, faults, err, disposition, cause)
+		}
+	}
+}
