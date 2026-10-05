@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/urfoundation/sn/internal/durablefixture"
+	"github.com/urfoundation/sn/internal/durablepath"
 	"golang.org/x/sys/unix"
 )
 
@@ -256,9 +257,13 @@ func TestRootPassiveHostInstallsStartsAndRecovers(t *testing.T) {
 	}
 	// The actual observer can use this exact private runtime and isolated path;
 	// the synthetic host acknowledgment itself never claims monitor health.
+	// Dispatch the approved unit arguments so its original volume declaration
+	// enters through the same public parser used by the installed service.
 	p := f.approval.Plan
-	if code := runRootPassiveServiceCommand(t.Context(), []string{"run", "--config", p.Runtime.Path, "--accept-runtime-sha256", p.Runtime.Sha256}, io.Discard, io.Discard); code != 0 {
-		t.Fatal("installed runtime cannot read original authority", code)
+	ctx := durablepath.WithHost(t.Context(), f.chain.root.storage.Host)
+	var diagnostic bytes.Buffer
+	if code := runMain(ctx, strings.Fields(p.arguments()), io.Discard, &diagnostic); code != 0 {
+		t.Fatal("installed runtime cannot read original authority", code, diagnostic.String())
 	}
 	if _, err := os.Stat(f.chain.root.plan.PassiveService.CheckpointPath); err != nil {
 		t.Fatal(err)
@@ -274,6 +279,45 @@ func TestRootPassiveHostInstallsStartsAndRecovers(t *testing.T) {
 	}
 	if _, code, _ := f.command("start"); code == 0 || f.starts != 1 {
 		t.Fatal("finite exit renewed initial start")
+	}
+}
+
+// An already admitted store cannot lend its declaration to an undeclared
+// caller. Both public runtime entry and direct start preserve original state.
+func TestRootPassiveHostUndeclaredStoragePreservesAllowance(t *testing.T) {
+	f := newRootPassiveHostFixture(t)
+	f.require("claim", "claimed")
+	f.require("install", "installed")
+	p := f.approval.Plan
+	store := f.store()
+	defer store.close()
+	original, err := os.ReadFile(p.StatePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := mainnetNamespaceTest(t, p.CheckpointDirectory)
+	ctx := durablepath.WithHost(t.Context(), f.chain.root.storage.Host)
+	var diagnostic bytes.Buffer
+	args := []string{"run", "--config", p.Runtime.Path, "--accept-runtime-sha256", p.Runtime.Sha256}
+	if code := runRootPassiveServiceCommand(ctx, args, io.Discard, &diagnostic); code != 2 || !strings.Contains(diagnostic.String(), "explicit durable-volume declaration and hash are required") {
+		t.Fatal("undeclared runtime did not stop at storage admission", code, diagnostic.String())
+	}
+	if _, err := advanceRootPassiveHost(ctx, store, f.host, f.chain.preparation, "start", func() time.Time { return f.now }); err == nil || !strings.Contains(err.Error(), "explicit durable-volume declaration and hash are required") {
+		t.Fatal("undeclared direct start did not stop at storage admission", err)
+	}
+	retained, err := os.ReadFile(p.StatePath)
+	if err != nil || !bytes.Equal(original, retained) || f.starts != 0 || f.reloads != 1 {
+		t.Fatal("undeclared caller consumed original host allowance", err, f.starts, f.reloads)
+	}
+	if !reflect.DeepEqual(checkpoint, mainnetNamespaceTest(t, p.CheckpointDirectory)) {
+		t.Fatal("undeclared runtime changed prepared checkpoint custody")
+	}
+	if err := store.close(); err != nil {
+		t.Fatal(err)
+	}
+	f.require("start", "acknowledged-running")
+	if f.starts != 1 {
+		t.Fatal("storage refusal changed the original single start", f.starts)
 	}
 }
 
@@ -382,7 +426,7 @@ func TestRootPassiveHostPublicationFailureConsumesWithoutStarting(t *testing.T) 
 		}
 		return directory.Sync()
 	}
-	_, err := advanceRootPassiveHost(t.Context(), store, f.host, f.chain.preparation, "start", func() time.Time { return f.now })
+	_, err := advanceRootPassiveHost(f.chain.storageContext(t.Context()), store, f.host, f.chain.preparation, "start", func() time.Time { return f.now })
 	store.close()
 	if err == nil || !fired || f.starts != 0 {
 		t.Fatal("ambiguous reservation reached systemd", err, fired, f.starts)
@@ -414,7 +458,7 @@ func TestRootPassiveHostPostSyncExpiryConsumesWithoutStarting(t *testing.T) {
 		}
 		return directory.Sync()
 	}
-	_, err := advanceRootPassiveHost(t.Context(), store, f.host, f.chain.preparation, "start", func() time.Time { return f.now })
+	_, err := advanceRootPassiveHost(f.chain.storageContext(t.Context()), store, f.host, f.chain.preparation, "start", func() time.Time { return f.now })
 	store.close()
 	if err == nil || !fired || f.starts != 0 {
 		t.Fatal("expired durable reservation reached systemd", err, fired, f.starts)
