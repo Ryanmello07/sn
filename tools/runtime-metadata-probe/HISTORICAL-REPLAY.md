@@ -209,8 +209,9 @@ A selected drain may declare exactly two canonical `state_reads` keys (at most
 64 bytes each). They are observer reads of the current proof-backed execution
 overlay at that callback, retained separately as `execution_state` with explicit
 presence/absence; they are never labeled as Wasm memory or original runtime
-gets. Capture preloads those parent inclusion/absence paths into its existing
-bounded recorder so strict replay can sample the actual overlay. Replay charges
+gets. Capture retains those parent inclusion/absence paths and executes the
+same bounded observer against its recorder, including the original execution
+phase. Strict replay independently samples the actual overlay. Replay charges
 key/value reads to the shared work budget, bounds each returned value to eight
 bytes, and preserves transaction rollback. Registration must be observed present;
 generation absence may use only the independently authenticated metadata default.
@@ -221,3 +222,37 @@ provenance: a source variable need not survive in a stack slot, and a pure late
 vector need not coincide with a storage callback. These capabilities and their
 synthetic tests do not supply a complete runtime-473 economic profile, successful
 original-block replay or independent authority approval.
+
+
+A rule may restrict its semantic caller with `storage_call`: `operation` is
+`get`, `set` or `append`, and `path` is an innermost-first prefix of at most
+eight original call frames. Every frame pins `function_index`,
+`function_body_sha256`, `offset_start` and `offset_end`. The final frame equals
+the rule's semantic caller; each range is exactly one decoded direct call to
+the next inner function, ending at the exact original `env` host and ABI.
+The observer matches the full prefix before reading any memory. Sibling hosts
+with different stack frames cannot borrow a capture. Intersecting prefixes are
+refused even when their semantic callers have different depths; disjoint
+get/set prefixes may share one semantic caller. Unselected writes still enter
+the independent complete principal mutation census.
+
+`recipient_layout: "original-storage-credit-pairs-v1"` joins actual recipient
+storage reads and writes. Collateral and liquid amounts are separate causal
+pool deltas; fully captured recipients need no invented liquid callback.
+Original Owner, SubnetOwnerHotkey and AutoStakeDestination gets preserve actual
+presence and ordinals, including a zero-entitlement Owner read without a fake
+write. The owner-recycle branch skips its ordinary Owner get, so its exact
+get/set rules must explicitly set `recipient_owner: true`. This one fixed
+recipe reads `Owner(original captured hotkey)` through the live overlay and
+retains one `execution_state` key with null or exactly 32 bytes. It cannot
+select arbitrary keys or borrow a stale coldkey stack slot. Initial capture
+runs the same observer to retain this dynamic proof path; its temporary trace
+is discarded after the original post-state agrees. Only independent strict
+replay can publish observations. Missing proof remains refusal, not absence.
+
+An original `metadata_sha256` pin validates the runtime-generated layout even
+when fee accounting is unselected. Only explicit fee event callsite rules
+request fee candidate decoding; complete fee authority still requires the
+metadata pin. Full Yuma input capture is a separate optional profile extension,
+requiring authenticated settings, effective stake relations, weight/bond rows
+and commit queues when selected. Output vectors alone do not provide it.

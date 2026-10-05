@@ -31,6 +31,11 @@ mod epoch_layout;
 pub mod fee_events;
 #[path = "historical_global_alias.rs"]
 pub mod global_alias;
+#[path = "historical_recipient_layout.rs"]
+mod recipient_layout;
+#[path = "historical_storage_call.rs"]
+mod storage_call;
+
 #[path = "historical_host_snapshot.rs"]
 mod host_snapshot;
 #[path = "historical_hosts.rs"]
