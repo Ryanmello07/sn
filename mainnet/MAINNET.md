@@ -1,5 +1,13 @@
 # Mainnet launch and operations plan
 
+## Code frozen on main — October 5
+
+The reviewed mainnet code is committed, merged and pushed in all four repositories. The [code freeze manifest](evidence/main-code-freeze-20261005.json) records SN `babb0af5`, Connect `7ca8e222`, Server `3e1fe2d7` and xops `482050c3`, with independently checked remote heads. This is a code freeze, not a verified release or deployment.
+
+Verification now runs against these combined main versions. Collect ordinary failures across the complete normal, race, model and causal-control scopes; fix them in targeted commits on main. Retain successful results when their complete source, dependency, tool and configuration inputs are unchanged. Do not require separate branch qualification before merging reviewed fixes. Deployment and signing retain their own approval and readiness requirements.
+
+All seven compilers on the retained SN475/Core07/Server87d inputs passed. SN application code matches that selected source; additional upstream Connect and Server changes require verification of the final main dependency graph. The historical results and all 38 outcome requirements below remain intact.
+
 ## Current status after the missed deadline — October 5
 
 **The October 5 01:00 UTC deadline was missed. All 38 original outcomes remain open.** This [source/receipt checkpoint](evidence/carry-compiler-checkpoint-20261005.json), frozen at 04:47 UTC, supersedes the earlier current-state summaries. No deployment, live signing authority, October 6 transition or final acceptance is established.
