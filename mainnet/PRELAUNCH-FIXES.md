@@ -1,5 +1,11 @@
 # Mainnet prelaunch fixes
 
+## Continuous observation and qualification storage — October 5
+
+Incomplete principal causes must remain unknown without exhausting the observer's hot memory. The current retention path stops retirement at the first incomplete block and eventually reaches `MaximumFacts`, even when later native rewards are authentic. The pending fix must preserve exact original segments and their hash chain in bounded durable storage, keep `CauseCensusComplete` false and spendable bounds absent, and hydrate verified evidence for later replay. Maintenance must compact before the hot limit is reached; adding only a manual command does not establish continuous operation. This is an implementation gap, not completed qualification or permission to discard unresolved evidence.
+
+Unsigned archive qualification must select its storage mode explicitly. Reusing the daemon constructor rejected the healthy internal-root fallback before real capture. The pending narrow correction selects the existing owner-local storage API only for an explicitly declared unsigned cache. Preserve daemon restrictions, exact path/filesystem custody, capacity bounds and one inherited execution deadline; never silently fall back to another filesystem. The original archive-command focused run continues separately from the new owner-local regression checks.
+
 ## Focused hardening results — October 5
 
 The [source49 checkpoint](evidence/focused-qualification-source49-20261005.json) binds the completed focused results and their original source, image and wait records. The mainnet work uses SN `49ccc424b6dbe64166e28b3ecb87449f2c94774e`; the Server result retains its separately recorded compiler and model source scope.
