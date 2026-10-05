@@ -215,7 +215,11 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 		}
 		self.Allocations = append(self.Allocations, nativeYumaAllocation{Uid: node.Uid, Hotkey: node.Hotkey, Registered: node.Registered, ActualMiner: amount.String(), ActualValidator: fixed.validatorAlpha[index].Num().String(), ReferenceMiner: reference.serverAlpha[index].RatString(), ReferenceValidator: reference.validatorAlpha[index].RatString(), AbsoluteMinerError: difference.RatString()})
 	}
-	amounts, err := economicConservationSum(outcome.ProviderEntitlement, outcome.OwnerRecycled, outcome.ResidualEntitlement)
+	treasury := "0"
+	if outcome.Treasury != nil {
+		treasury = outcome.Treasury.Gross
+	}
+	amounts, err := economicConservationSum(outcome.ProviderEntitlement, outcome.OwnerRecycled, outcome.ResidualEntitlement, treasury)
 	if err != nil || amounts != denominator.String() {
 		return errors.New("native Yuma full denominator contradicts original recipient effects")
 	}

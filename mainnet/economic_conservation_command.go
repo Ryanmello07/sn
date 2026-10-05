@@ -21,6 +21,7 @@ import (
 const economicConservationRole = "economic-conservation"
 
 type economicConservationSummary struct {
+	Treasury                       *economicConservationTreasurySummary        `json:"original_treasury_custody,omitempty"`
 	Progress                       *economicConservationProgressSummary        `json:"operational_progress,omitempty"`
 	OriginalFees                   *economicWholeFeeSummary                    `json:"original_complete_fee_census,omitempty"`
 	OriginalFinality               *economicConservationFinalitySummary        `json:"original_consensus_coverage,omitempty"`
@@ -113,6 +114,13 @@ func (self *economicConservationState) summary(ctx context.Context, policy econo
 	result.PrincipalEffects, err = self.principalEffectsSummary(policy)
 	if err != nil {
 		return result, err
+	}
+	result.Treasury, err = self.treasurySummary(policy)
+	if err != nil {
+		return result, err
+	}
+	if result.Treasury != nil {
+		result.Schema = "urnetwork-economic-conservation-sample-v2"
 	}
 	result.OpeningPrincipals, err = self.principalSummary(policy)
 	if err != nil {

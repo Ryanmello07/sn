@@ -7,33 +7,41 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+
+	"github.com/urfoundation/sn/validator"
 )
 
 const economicReferenceInputSchema = "urnetwork-native-miner-reference-input-v1"
 const economicReferenceSchema = "urnetwork-native-miner-reference-v1"
+const economicTreasuryReferenceInputSchema = "urnetwork-native-miner-reference-input-v2"
+const economicTreasuryReferenceSchema = "urnetwork-native-miner-reference-v2"
 const maximumReferenceIntervals = 10000
 
 // Each input is one native interval's pre-withholding miner tranche in alpha
 // atomic units. It excludes owner/validator emission and custody principal.
 type economicReferenceInput struct {
-	Schema                 string   `json:"schema"`
-	NativeMinerAllocations []string `json:"native_miner_allocations_alpha"`
+	TreasuryPolicy         *validator.TreasuryPolicy `json:"treasury_policy,omitempty"`
+	Schema                 string                    `json:"schema"`
+	NativeMinerAllocations []string                  `json:"native_miner_allocations_alpha"`
 }
 
 // Cumulative division carries policy rounding between intervals. The reference
 // remainder is not runtime truncation dust or a future provider liability.
 type economicReferenceInterval struct {
-	Index                  int    `json:"index"`
-	NativeMinerAlpha       string `json:"native_miner_alpha"`
-	ProviderAlpha          string `json:"provider_reference_alpha"`
-	OwnerRecycleAlpha      string `json:"owner_recycle_reference_alpha"`
-	NativeMinerTotalAlpha  string `json:"native_miner_total_alpha"`
-	ProviderTotalAlpha     string `json:"provider_reference_total_alpha"`
-	OwnerRecycleTotalAlpha string `json:"owner_recycle_reference_total_alpha"`
+	TreasuryAlpha          *string `json:"treasury_reference_alpha,omitempty"`
+	TreasuryTotalAlpha     *string `json:"treasury_reference_total_alpha,omitempty"`
+	Index                  int     `json:"index"`
+	NativeMinerAlpha       string  `json:"native_miner_alpha"`
+	ProviderAlpha          string  `json:"provider_reference_alpha"`
+	OwnerRecycleAlpha      string  `json:"owner_recycle_reference_alpha"`
+	NativeMinerTotalAlpha  string  `json:"native_miner_total_alpha"`
+	ProviderTotalAlpha     string  `json:"provider_reference_total_alpha"`
+	OwnerRecycleTotalAlpha string  `json:"owner_recycle_reference_total_alpha"`
 }
 
 // Reference success never certifies a native outcome or authorizes activation.
 type economicReference struct {
+	TreasuryPolicyHash             *[32]byte                   `json:"treasury_policy_hash,omitempty"`
 	Schema                         string                      `json:"schema"`
 	InputHash                      string                      `json:"input_hash"`
 	Units                          string                      `json:"units"`
@@ -49,7 +57,11 @@ type economicReference struct {
 // Runtime AlphaBalance inputs fit u64; cumulative totals use arbitrary-precision
 // integers so a long observation window cannot wrap at the per-interval width.
 func calculateEconomicReference(input economicReferenceInput, inputHash string) (economicReference, error) {
-	if input.Schema != economicReferenceInputSchema || len(input.NativeMinerAllocations) == 0 || len(input.NativeMinerAllocations) > maximumReferenceIntervals {
+	expectedSchema := economicReferenceInputSchema
+	if input.TreasuryPolicy != nil {
+		expectedSchema = economicTreasuryReferenceInputSchema
+	}
+	if input.Schema != expectedSchema || len(input.NativeMinerAllocations) == 0 || len(input.NativeMinerAllocations) > maximumReferenceIntervals {
 		return economicReference{}, errors.New("reference requires its exact schema and 1..10000 native miner interval amounts")
 	}
 	reference := economicReference{
@@ -57,6 +69,13 @@ func calculateEconomicReference(input economicReferenceInput, inputHash string) 
 		Intervals:          make([]economicReferenceInterval, 0, len(input.NativeMinerAllocations)),
 		ReserveCreditAlpha: "0", DeferredProviderLiabilityAlpha: "0",
 		ActualNativeOutcomeVerified: false, QuantizationToleranceKnown: false, ActivationReady: false,
+	}
+	if input.TreasuryPolicy != nil {
+		hash, err := input.TreasuryPolicy.Hash()
+		if err != nil {
+			return economicReference{}, err
+		}
+		reference.Schema, reference.RemainderPolicy, reference.TreasuryPolicyHash = economicTreasuryReferenceSchema, "ordinary-native-treasury", &hash
 	}
 	nativeTotal := new(big.Int)
 	priorProviderTotal := new(big.Int)
@@ -75,6 +94,12 @@ func calculateEconomicReference(input economicReferenceInput, inputHash string) 
 			NativeMinerTotalAlpha: nativeTotal.String(), ProviderTotalAlpha: providerTotal.String(),
 			OwnerRecycleTotalAlpha: new(big.Int).Sub(nativeTotal, providerTotal).String(),
 		})
+		if input.TreasuryPolicy != nil {
+			interval := &reference.Intervals[len(reference.Intervals)-1]
+			amount, total := interval.OwnerRecycleAlpha, interval.OwnerRecycleTotalAlpha
+			interval.TreasuryAlpha, interval.TreasuryTotalAlpha = &amount, &total
+			interval.OwnerRecycleAlpha, interval.OwnerRecycleTotalAlpha = "0", "0"
+		}
 		priorProviderTotal.Set(providerTotal)
 	}
 	return reference, nil

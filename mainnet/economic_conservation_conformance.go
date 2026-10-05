@@ -10,6 +10,10 @@ import (
 
 // A measured contradiction is distinct from missing approval or source evidence.
 type economicConservationConformance struct {
+	TreasuryWithinTolerance     *bool    `json:"original_treasury_ninety_within_tolerance,omitempty"`
+	TreasuryDeviationNumerator  *string  `json:"treasury_deviation_times_ten_alpha,omitempty"`
+	TreasuryCustodyComplete     *bool    `json:"original_treasury_custody_complete,omitempty"`
+	TreasuryIncomeSpendable     *bool    `json:"original_treasury_income_unlocked_or_spent,omitempty"`
 	NativeSplitWithinTolerance  *bool    `json:"native_ten_ninety_within_tolerance"`
 	OwnerRecycleWithinTolerance *bool    `json:"original_owner_ninety_within_tolerance"`
 	ProviderDeviationNumerator  *string  `json:"provider_deviation_times_ten_alpha"`
@@ -86,6 +90,13 @@ func (self *economicConservationSummary) assessConformance() error {
 	}
 	if self.Execution != nil && self.Execution.Through == self.NativeCursor && self.Yuma != nil && self.Yuma.Current && self.Yuma.Through == self.NativeCursor && self.Yuma.MinerDenominator != nil && self.Yuma.FullQuantizationTolerance != nil {
 		within, pd, od, q, err := economicNativeSplit(*self.Yuma.MinerDenominator, self.Execution.ProviderEntitlement, self.Execution.OwnerRecycled, *self.Yuma.FullQuantizationTolerance)
+		if self.Execution.Treasury != nil {
+			allocated, sumErr := economicConservationSum(self.Execution.ProviderEntitlement, self.Execution.OwnerRecycled, self.Execution.ResidualEntitlement, self.Execution.Treasury.Gross)
+			if sumErr != nil || *self.Yuma.MinerDenominator != allocated {
+				return errors.Join(errors.New("treasury conformance changed the original complete miner allocation"), sumErr)
+			}
+			within, pd, od, q, err = economicTreasurySplit(*self.Execution, *self.Yuma.FullQuantizationTolerance)
+		}
 		if err != nil {
 			return err
 		}
@@ -96,17 +107,44 @@ func (self *economicConservationSummary) assessConformance() error {
 			return err
 		}
 		result.OwnerRecycleWithinTolerance = &ownerWithin
+		if self.Execution.Treasury != nil {
+			result.OwnerRecycleWithinTolerance, result.OwnerDeviationNumerator = nil, nil
+			result.TreasuryWithinTolerance, result.TreasuryDeviationNumerator = &ownerWithin, &od
+			if self.Execution.OwnerRecycled != "0" {
+				within = false
+				result.NativeSplitWithinTolerance = &within
+			}
+		}
 		if self.Execution.ResidualEntitlement != "0" {
 			result.NativeSplitWithinTolerance = nil
 			result.Missing = append(result.Missing, "complete-original-provider-recipient-membership")
 		}
-		if !ownerWithin || self.Execution.ResidualEntitlement == "0" && !within {
+		if !ownerWithin || self.Execution.ResidualEntitlement == "0" && !within || self.Execution.Treasury != nil && self.Execution.OwnerRecycled != "0" {
 			value := false
 			result.NativeSplitWithinTolerance = &value
-			result.Contradictions = append(result.Contradictions, "complete-native-miner-allocation-contradicts-provider-ten-owner-ninety")
+			label := "complete-native-miner-allocation-contradicts-provider-ten-owner-ninety"
+			if self.Execution.Treasury != nil {
+				label = "complete-native-miner-tranche-contradicts-provider-ten-treasury-remainder"
+			}
+			result.Contradictions = append(result.Contradictions, label)
 		}
 	} else {
 		result.Missing = append(result.Missing, "complete-original-miner-denominator-and-all-quantization-stages")
+	}
+	if self.Execution != nil && self.Execution.Treasury != nil {
+		complete := self.Treasury != nil && self.Treasury.Through == self.NativeCursor && self.Treasury.CauseCensusComplete && self.Treasury.StockCovered && self.Treasury.AvailabilityKnown
+		result.TreasuryCustodyComplete = &complete
+		if !complete {
+			result.Missing = append(result.Missing, "complete-current-original-treasury-custody-and-availability")
+		}
+		if self.Treasury != nil {
+			result.TreasuryIncomeSpendable = self.Treasury.IncomeUnlockedOrSpent
+		}
+		if result.TreasuryIncomeSpendable == nil {
+			result.Missing = append(result.Missing, "original-treasury-income-unlocked-or-spent")
+		} else if !*result.TreasuryIncomeSpendable {
+			result.Contradictions = append(result.Contradictions, "original-treasury-native-income-remains-locked")
+		}
 	}
 	if !self.NativeCurrent || !self.VaultCurrent || self.NativeHeld || self.VaultHeld || self.JoinIssue != "" {
 		result.Missing = append(result.Missing, "current-original-native-and-vault-boundaries")
@@ -159,4 +197,31 @@ func (self *economicConservationSummary) assessConformance() error {
 	// Activation has its own reviewed deployment gate. This observational
 	// predicate does not send funds, sign a contract action or launch a service.
 	return nil
+}
+
+// Treasury reference rounding carries across the complete original miner
+// tranche, including emission redirected to validators. Gross already contains
+// collateral; current spendability is checked separately from this split.
+func economicTreasurySplit(window nativeExecutionWindow, tolerance string) (bool, string, string, string, error) {
+	if window.Treasury == nil {
+		return false, "", "", "", errors.New("treasury split lacks original income")
+	}
+	if err := window.validate(); err != nil {
+		return false, "", "", "", err
+	}
+	provider, ok := new(big.Int).SetString(window.ProviderDeviation, 10)
+	if !ok || window.TreasuryDeviation == nil {
+		return false, "", "", "", errors.New("treasury split lacks exact cumulative reference")
+	}
+	treasury, ok := new(big.Int).SetString(*window.TreasuryDeviation, 10)
+	if !ok {
+		return false, "", "", "", errors.New("treasury split deviation differs")
+	}
+	pd, td := provider.Mul(provider, big.NewInt(10)).String(), treasury.Mul(treasury, big.NewInt(10)).String()
+	providerWithin, err := economicNativeDeviationWithin(pd, tolerance)
+	if err != nil {
+		return false, "", "", "", err
+	}
+	treasuryWithin, err := economicNativeDeviationWithin(td, tolerance)
+	return providerWithin && treasuryWithin && window.OwnerRecycled == "0", pd, td, tolerance, err
 }

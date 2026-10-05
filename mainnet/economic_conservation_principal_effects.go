@@ -50,7 +50,7 @@ func (self *economicConservationState) appendPrincipalEffects(policy economicCon
 		return err
 	}
 	for _, query := range outcome.PrincipalEffects.Authority.Queries {
-		matched := false
+		matched := nativeTreasuryPrincipalQuery(policy.Native.Observation.Execution.Treasury, query, policy.Native.Observation.Netuid)
 		for _, route := range policy.Routes {
 			if route.Kind != "tail-pool" {
 				continue
@@ -120,6 +120,15 @@ func (self economicConservationState) validatePrincipalEffects(policy economicCo
 			if pool.Query != authority.Queries[index] || !pool.Complete || pool.Before == nil || pool.After == nil || pool.Residual == nil || *pool.Residual != "0" {
 				return errors.New("economic principal archive summarized unknown effects")
 			}
+			treasury := nativeTreasuryPrincipalQuery(policy.Native.Observation.Execution.Treasury, pool.Query, policy.Native.Observation.Netuid)
+			if treasury != (pool.CapturedEarnings != nil) {
+				return errors.New("principal archive changed treasury collateral role")
+			}
+			if pool.CapturedEarnings != nil {
+				if _, err := monitorEconomicInteger(*pool.CapturedEarnings); err != nil {
+					return err
+				}
+			}
 			for _, amount := range []string{pool.Deposits, pool.Withdrawals, pool.Refunds, pool.VaultCaptures, pool.NativeEarnings} {
 				if _, err := monitorEconomicInteger(amount); err != nil {
 					return err
@@ -171,6 +180,16 @@ func mergeEconomicPrincipalArchive(archive *economicConservationPrincipalArchive
 		prior, pool := archive.Pools[index], &next.Pools[index]
 		if prior.Query != pool.Query {
 			return nil, errors.New("economic principal retirement changed original query")
+		}
+		if (pool.CapturedEarnings == nil) != (prior.CapturedEarnings == nil) {
+			return nil, errors.New("principal retirement changed treasury collateral authority")
+		}
+		if pool.CapturedEarnings != nil {
+			total, err := economicConservationSum(*pool.CapturedEarnings, *prior.CapturedEarnings)
+			if err != nil {
+				return nil, err
+			}
+			pool.CapturedEarnings = &total
 		}
 		pool.Before = prior.Before
 		for _, pair := range []struct {

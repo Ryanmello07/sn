@@ -238,10 +238,10 @@ func validateStorageNativeProducerHistory(ctx context.Context, scope storageNati
 		admission := completion.Admission
 		// The final synced completion may not yet be in the acknowledged chain.
 		// Its complete economic policy still comes from the original signer.
-		if !reflect.DeepEqual(admission.Yuma, admitted.Yuma) || !reflect.DeepEqual(admission.FeeCensus, admitted.FeeCensus) {
+		if !reflect.DeepEqual(admission.Treasury, admitted.Treasury) || !reflect.DeepEqual(admission.Yuma, admitted.Yuma) || !reflect.DeepEqual(admission.FeeCensus, admitted.FeeCensus) {
 			return errors.New("native restored completion changed original allocation or fee authority")
 		}
-		if admission.Schema != nativeExecutionAdmissionSchema || admission.Network != scope.Policy.Network || admission.Netuid != scope.Policy.Netuid || admission.Registration != admitted.Registration || admission.Generation != admitted.Generation || admission.ReviewSha256 != admitted.ReviewSha256 || admission.ProfileSha256 != monitorReadDigest(profile) || admission.EngineSha256 != admitted.ReplayEngine.Sha256 || !reflect.DeepEqual(admission.Principal, admitted.Principal) || admission.Signature != "" || admission.FinalityAuthority != "approved-anchor-and-verified-grandpa-original-execution" {
+		if admission.Schema != nativeTreasurySchema(admitted.Treasury, nativeExecutionAdmissionSchema, nativeTreasuryExecutionAdmissionSchema) || admission.Network != scope.Policy.Network || admission.Netuid != scope.Policy.Netuid || admission.Registration != admitted.Registration || admission.Generation != admitted.Generation || admission.ReviewSha256 != admitted.ReviewSha256 || admission.ProfileSha256 != monitorReadDigest(profile) || admission.EngineSha256 != admitted.ReplayEngine.Sha256 || !reflect.DeepEqual(admission.Principal, admitted.Principal) || admission.Signature != "" || admission.FinalityAuthority != "approved-anchor-and-verified-grandpa-original-execution" {
 			return errors.New("native restored completion changed runtime, engine or economic authority")
 		}
 		if completion.Input.Path != filepath.Join(scope.Policy.Execution.Directory, filepath.Dir(path), "input.json") || admission.Job.Path != filepath.Join(scope.Policy.Execution.Directory, filepath.Dir(path), "job.json") || sequence > admitted.MaximumJobs {
