@@ -825,6 +825,9 @@
     "separate_existing_completion_adjacent_roots_per_mode": 54,
     "separate_existing_identity_adjacent_roots_per_mode": 28,
     "separate_existing_repair_adjacent_roots_per_mode": 14,
+    "separate_sdk_existing_adjacent_roots_per_mode": 3,
+    "separate_sdk_new_roots_per_mode": 9,
+    "separate_sdk_targeted_roots_per_mode": 12,
     "source_catalog_control_groups": 283
   },
   "current_default_product_tuple": {
@@ -1021,7 +1024,7 @@
     },
     {
       "component": "PH12 earning-wallet producer/SDK",
-      "issue": "Explicit WalletMappingConsent path is under correction; generic login proof alone is insufficient. No new source roots or qualification are credited here."
+      "issue": "SDKc53 API surface is merged but unqualified. Miner producer and Server explicit consent integration remain under correction; generic login proof alone does not authorize an earning mapping."
     },
     {
       "component": "ARIN full-population model fixtures",
@@ -1683,6 +1686,24 @@
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-evm-current0f-qualification-20261003.json",
         "sha256": "3a42e698575b353be08e817a508b945355beeb5db8bce934b81d0dd42d9208ea"
       },
+      "separate_sdk_source_update": {
+        "evidence": {
+          "bytes": 6529,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/sn/mainnet/evidence/sdk-c53-consent-api-source-scope-20261005.json",
+          "sha256": "062ab95f55eb27678c6138d672d826b06a2e42dadf3a038b56562f31f4e96522"
+        },
+        "generator_currentness": "UNEXECUTED",
+        "master2776_unchanged": true,
+        "master283_controls_unchanged": true,
+        "merged_sdk_commit": "c53cd78a43608daf8ff4f24f4800b509ca2f6087",
+        "normal": "UNEXECUTED",
+        "race": "UNEXECUTED",
+        "selection": {
+          "bytes": 17041,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/SDK-SELECTION.json",
+          "sha256": "23b44d9c40557bab20dae2fcbf5630298c336c2ca5013784c820112155ca5db2"
+        }
+      },
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
@@ -1722,6 +1743,24 @@
           "bytes": 28937,
           "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/identity-successor/adjacent-existing28-recipe.json",
           "sha256": "227f751e4c600fa6e23512b6302773138d37ec62b16f348aa4cd7794095af3a3"
+        }
+      },
+      "separate_sdk_source_update": {
+        "evidence": {
+          "bytes": 6529,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/sn/mainnet/evidence/sdk-c53-consent-api-source-scope-20261005.json",
+          "sha256": "062ab95f55eb27678c6138d672d826b06a2e42dadf3a038b56562f31f4e96522"
+        },
+        "generator_currentness": "UNEXECUTED",
+        "master2776_unchanged": true,
+        "master283_controls_unchanged": true,
+        "merged_sdk_commit": "c53cd78a43608daf8ff4f24f4800b509ca2f6087",
+        "normal": "UNEXECUTED",
+        "race": "UNEXECUTED",
+        "selection": {
+          "bytes": 17041,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/SDK-SELECTION.json",
+          "sha256": "23b44d9c40557bab20dae2fcbf5630298c336c2ca5013784c820112155ca5db2"
         }
       },
       "source_limit_audit": {
@@ -1829,6 +1868,24 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/server1709-complete-model-body-root-review-20261004.json",
         "sha256": "6d50c84803b4586dda4c7130fee293054ced5a3c72135c107feb9044c3f5ee72"
+      },
+      "separate_sdk_source_update": {
+        "evidence": {
+          "bytes": 6529,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/sn/mainnet/evidence/sdk-c53-consent-api-source-scope-20261005.json",
+          "sha256": "062ab95f55eb27678c6138d672d826b06a2e42dadf3a038b56562f31f4e96522"
+        },
+        "generator_currentness": "UNEXECUTED",
+        "master2776_unchanged": true,
+        "master283_controls_unchanged": true,
+        "merged_sdk_commit": "c53cd78a43608daf8ff4f24f4800b509ca2f6087",
+        "normal": "UNEXECUTED",
+        "race": "UNEXECUTED",
+        "selection": {
+          "bytes": 17041,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/SDK-SELECTION.json",
+          "sha256": "23b44d9c40557bab20dae2fcbf5630298c336c2ca5013784c820112155ca5db2"
+        }
       }
     },
     {
@@ -2417,6 +2474,24 @@
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-split-conformance-source-finding-20261003.json",
         "sha256": "1e2a599a48145641e656263f85f2b43e606a16d32bb8cd9c21d43d793be37c1b"
       },
+      "separate_sdk_source_update": {
+        "evidence": {
+          "bytes": 6529,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/sn/mainnet/evidence/sdk-c53-consent-api-source-scope-20261005.json",
+          "sha256": "062ab95f55eb27678c6138d672d826b06a2e42dadf3a038b56562f31f4e96522"
+        },
+        "generator_currentness": "UNEXECUTED",
+        "master2776_unchanged": true,
+        "master283_controls_unchanged": true,
+        "merged_sdk_commit": "c53cd78a43608daf8ff4f24f4800b509ca2f6087",
+        "normal": "UNEXECUTED",
+        "race": "UNEXECUTED",
+        "selection": {
+          "bytes": 17041,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/SDK-SELECTION.json",
+          "sha256": "23b44d9c40557bab20dae2fcbf5630298c336c2ca5013784c820112155ca5db2"
+        }
+      },
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
@@ -2563,14 +2638,50 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/current-cutoff-readiness-config-20261003.json",
         "sha256": "f9689f1953a29e7c8d4b69fcbcd4f588740706c645a09412bb9e698b144e154c"
+      },
+      "separate_sdk_source_update": {
+        "evidence": {
+          "bytes": 6529,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/sn/mainnet/evidence/sdk-c53-consent-api-source-scope-20261005.json",
+          "sha256": "062ab95f55eb27678c6138d672d826b06a2e42dadf3a038b56562f31f4e96522"
+        },
+        "generator_currentness": "UNEXECUTED",
+        "master2776_unchanged": true,
+        "master283_controls_unchanged": true,
+        "merged_sdk_commit": "c53cd78a43608daf8ff4f24f4800b509ca2f6087",
+        "normal": "UNEXECUTED",
+        "race": "UNEXECUTED",
+        "selection": {
+          "bytes": 17041,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/SDK-SELECTION.json",
+          "sha256": "23b44d9c40557bab20dae2fcbf5630298c336c2ca5013784c820112155ca5db2"
+        }
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v13",
+  "schema": "original38-current-evidence-ledger-v14",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
     "sha256": "4187085b66193dc9e7f0496ec9c90c6c820a88bf3ce3da43e391b63dc9e222a9"
+  },
+  "separate_sdk_source_scope": {
+    "evidence": {
+      "bytes": 6529,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/sn/mainnet/evidence/sdk-c53-consent-api-source-scope-20261005.json",
+      "sha256": "062ab95f55eb27678c6138d672d826b06a2e42dadf3a038b56562f31f4e96522"
+    },
+    "generator_currentness": "UNEXECUTED",
+    "master2776_unchanged": true,
+    "master283_controls_unchanged": true,
+    "merged_sdk_commit": "c53cd78a43608daf8ff4f24f4800b509ca2f6087",
+    "normal": "UNEXECUTED",
+    "race": "UNEXECUTED",
+    "selection": {
+      "bytes": 17041,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/SDK-SELECTION.json",
+      "sha256": "23b44d9c40557bab20dae2fcbf5630298c336c2ca5013784c820112155ca5db2"
+    }
   },
   "source_fixed_awaiting_qualification": [
     {
@@ -2740,6 +2851,21 @@
       "normal": "UNEXECUTED",
       "race": "UNEXECUTED",
       "status": "MERGED_DIAGNOSTIC_AND_TEST_SOURCE_UNQUALIFIED"
+    },
+    {
+      "component": "SDK explicit consent API and legacy proof selector",
+      "evidence": {
+        "bytes": 6529,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/sn/mainnet/evidence/sdk-c53-consent-api-source-scope-20261005.json",
+        "sha256": "062ab95f55eb27678c6138d672d826b06a2e42dadf3a038b56562f31f4e96522"
+      },
+      "existing_sdk_neighbors": 3,
+      "generator_currentness": "UNEXECUTED",
+      "new_sdk_roots": 9,
+      "normal": "UNEXECUTED",
+      "race": "UNEXECUTED",
+      "scope": "Separate SDK modules; not part of the unchanged2776 master selection.",
+      "status": "MERGED_SDK_SOURCE_TARGETED_QUALIFICATION_PENDING"
     }
   ],
   "source_selection": {
@@ -2747,7 +2873,7 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/launch-boundary-successor/SCOPE-HANDOFF.json",
     "sha256": "33e52004ffad05bb5a7766526f8de3135299dbe3a7e32ce97f7d626c4565c4d5"
   },
-  "status": "All38 original outcomes remain open. Current master2776 roots/mode preserves every prior2757 tuple and adds19 new roots:operator10, identity7, boundary2. SN517/mainnet302/validator68, Core224, VLESS8 and Server2027/controller95/fullmodel1865 remain selected; all283 source control groups and separately named adjacent completion obligations remain required. These three source additions are unqualified. Actual nativefee13 normal/race, PH15 producer32 normal, dashboard12, Rust113 and named tooling scopes retain their original receipts. Current624/Core026/d64 mainnet/miner2 and Server8 normal compilers passed with joined waits; the fullmodel1865 normal body was actually running at12:17:22UTC with exact LIST1865, and its terminal is pending in this checkpoint. Three named ARIN full-population roots have since failed with PostgreSQL SQLSTATE53200; source diagnosis is ongoing and no fullmodel PASS is claimed. Original Rust controls, current Go native86, producer race/controls and live authority/rehearsal outcomes remain separate. Finite contract review found no confirmed source defect within its scope. Known upload lower-finality and PH12 earning-wallet consent corrections remain in progress and are excluded from source/result counts. No whole-current-graph PASS or deployment readiness is claimed.",
+  "status": "All38 original outcomes remain open. Current master2776 roots/mode preserves every prior2757 tuple and adds19 new roots:operator10, identity7, boundary2. SN517/mainnet302/validator68, Core224, VLESS8 and Server2027/controller95/fullmodel1865 remain selected; all283 source control groups and separately named adjacent completion obligations remain required. These three source additions are unqualified. Actual nativefee13 normal/race, PH15 producer32 normal, dashboard12, Rust113 and named tooling scopes retain their original receipts. Current624/Core026/d64 mainnet/miner2 and Server8 normal compilers passed with joined waits; the fullmodel1865 normal body was actually running at12:17:22UTC with exact LIST1865, and its terminal is pending in this checkpoint. Three named ARIN full-population roots have since failed with PostgreSQL SQLSTATE53200; source diagnosis is ongoing and no fullmodel PASS is claimed. Original Rust controls, current Go native86, producer race/controls and live authority/rehearsal outcomes remain separate. Finite contract review found no confirmed source defect within its scope. Known upload lower-finality and PH12 earning-wallet consent corrections remain in progress and are excluded from source/result counts. No whole-current-graph PASS or deployment readiness is claimed. Separately, merged SDKc53 adds9 new HTTP/API roots plus2 existing API neighbors and1 nested-C-binding generator-currentness root; all12 targeted normal/race obligations and generator consistency remain pending. The master2776/283 and frozen older-SDK fullmodel inputs are unchanged; no SDK or end-to-end PH12 PASS is inferred.",
   "supersedes": {
     "bytes": 124390,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",
