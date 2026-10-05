@@ -35,6 +35,46 @@ func TestProviderStartupWalletUsesProxyCredential(t *testing.T) {
 	providerStartupWalletUsesAuthenticatedSlot(t, true)
 }
 
+// A retained direct credential without its shared key is recovery work, even
+// when a fresh proxy slot and wallet handoff were explicitly requested.
+func TestProviderStartupWalletRefusesProxyWhenRetainedKeyIsMissing(t *testing.T) {
+	fixture := newProviderRegistrationFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	unrelated := providerRegistrationTestToken(t, "00000000-0000-0000-0000-000000000999", "unrelated-direct")
+	directPath := filepath.Join(fixture.dir, ".provider.jwt")
+	if err := clientauth.WriteToken(directPath, unrelated); err != nil {
+		t.Fatal(err)
+	}
+	proxy := &connect.ProxySettings{Network: "tcp", Address: "192.0.2.25:1080"}
+	selectedPath, err := providerClientJwtPath(proxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := fixture.settings(true, proxy)
+	settings.wallet, settings.walletProof = testAliceAddress, &snWalletProof{SeedFile: writeTestSeedFile(t, testAliceSeedHex)}
+	stop := errors.New("synthetic unexpected provider authentication")
+	var authenticated atomic.Bool
+	hooks := providerRegistrationHooks{afterAuthenticated: func(string, connect.Id, []byte) error {
+		authenticated.Store(true)
+		return stop
+	}}
+	err = settings.run(context.WithValue(ctx, providerRegistrationHooksKey{}, hooks), &providerRefusedWriter{})
+	var refused *clientauth.RegistrationRefusedError
+	posts, legacy, allocations, refreshes := fixture.counts()
+	if !errors.As(err, &refused) || refused.Code != "provider_key_missing_with_retained_history" || authenticated.Load() || posts != 0 || legacy != 0 || allocations != 0 || refreshes != 0 {
+		t.Fatal("proxy wallet startup bypassed original provider key recovery", err, posts, legacy, allocations, refreshes)
+	}
+	for _, path := range []string{filepath.Join(fixture.dir, ".provider.key"), filepath.Join(fixture.dir, ".provider.key.identity"), selectedPath, selectedPath + ".registration", selectedPath + ".wallet-consent"} {
+		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("refused proxy wallet startup created replacement custody", filepath.Base(path), err)
+		}
+	}
+	if retained, err := clientauth.ReadToken(directPath); err != nil || retained != unrelated {
+		t.Fatal("refused proxy wallet startup changed the retained direct credential", err)
+	}
+}
+
 // This helper runs one complete independent startup per top-level root.
 func providerStartupWalletUsesAuthenticatedSlot(t *testing.T, proxySlot bool) {
 	t.Helper()
@@ -42,10 +82,21 @@ func providerStartupWalletUsesAuthenticatedSlot(t *testing.T, proxySlot bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	var proxy *connect.ProxySettings
+	var originalSeed, originalMarker []byte
 	unrelated := providerRegistrationTestToken(t, "00000000-0000-0000-0000-000000000999", "unrelated-direct")
 	if proxySlot {
 		proxy = &connect.ProxySettings{Network: "tcp", Address: "192.0.2.25:1080"}
-		if err := clientauth.WriteToken(filepath.Join(fixture.dir, ".provider.jwt"), unrelated); err != nil {
+		// Existing credentials require their original shared key and marker.
+		keyOwner, err := clientauth.OpenProviderClientKey(ctx, filepath.Join(fixture.dir, ".provider.key"), clientauth.ProviderClientKeyOptions{AllowCreate: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		originalSeed = keyOwner.Seed()
+		if err := errors.Join(keyOwner.PersistClientJwt(filepath.Join(fixture.dir, ".provider.jwt"), unrelated), keyOwner.Close()); err != nil {
+			t.Fatal(err)
+		}
+		originalMarker, err = os.ReadFile(filepath.Join(fixture.dir, ".provider.key.identity"))
+		if err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -145,6 +196,10 @@ func providerStartupWalletUsesAuthenticatedSlot(t *testing.T, proxySlot bool) {
 		t.Fatal("wallet changed provider key custody", err)
 	}
 	if proxySlot {
+		marker, err := os.ReadFile(filepath.Join(fixture.dir, ".provider.key.identity"))
+		if err != nil || !bytes.Equal(seed, originalSeed) || !bytes.Equal(marker, originalMarker) {
+			t.Fatal("proxy wallet replaced the existing provider key or identity", err)
+		}
 		other, err := os.ReadFile(filepath.Join(fixture.dir, ".provider.jwt"))
 		if err != nil || strings.TrimSpace(string(other)) != unrelated {
 			t.Fatal("proxy wallet rewrote unrelated direct credential", err)

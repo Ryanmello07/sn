@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -448,8 +449,9 @@ func TestSnWalletConsentChildAssertionDiagnosticsRemainObservable(t *testing.T) 
 // mistaken for a complete causal diagnostic by the owning lease test.
 func TestSnWalletConsentChildAssertionDiagnosticsAreBounded(t *testing.T) {
 	const childVariable = "SN_WALLET_CONSENT_TEST_LARGE_DIAGNOSTIC_CHILD"
+	const payloadMarker = "\nsynthetic wallet child bounded payload\n"
 	if os.Getenv(childVariable) == "1" {
-		payload := strings.Repeat("x", 2*snWalletConsentTestChildOutputLimit)
+		payload := payloadMarker + strings.Repeat("x", 2*snWalletConsentTestChildOutputLimit)
 		if count, err := os.Stdout.WriteString(payload); err != nil || count != len(payload) {
 			t.Fatal("synthetic child output did not reach its boundary", count, err)
 		}
@@ -460,7 +462,43 @@ func TestSnWalletConsentChildAssertionDiagnosticsAreBounded(t *testing.T) {
 	if result.contextErr != nil || !errors.As(result.processErr, &exitErr) || exitErr.ExitCode() != 1 {
 		t.Fatal("bounded diagnostic fixture child did not join", result.processErr, result.contextErr)
 	}
-	if !result.outputExceeded || result.output != strings.Repeat("x", snWalletConsentTestChildOutputLimit) {
+	if !result.outputExceeded || len(result.output) != snWalletConsentTestChildOutputLimit {
 		t.Fatal("child output limit was not retained as an explicit incomplete observation", len(result.output), result.outputExceeded)
+	}
+	// Package initialization may write diagnostics before the selected test.
+	// Retain that prefix and verify the actual payload at its explicit boundary.
+	markerIndex := strings.Index(result.output, payloadMarker)
+	if markerIndex < 0 || strings.Count(result.output, payloadMarker) != 1 {
+		t.Fatal("bounded child observation did not retain its synthetic payload boundary")
+	}
+	tail := result.output[markerIndex+len(payloadMarker):]
+	if len(tail) == 0 || tail != strings.Repeat("x", len(tail)) {
+		t.Fatal("bounded child observation changed its retained payload suffix")
+	}
+}
+
+// Exact-boundary admission retains the entire original prefix; later writes
+// are drained, set sticky overflow and cannot replace any retained diagnostic.
+func TestSnWalletConsentChildOutputRetainsExactPrefixAtBoundary(t *testing.T) {
+	output := &snWalletConsentTestChildOutput{}
+	preamble := "synthetic process initialization\n"
+	if count, err := output.Write([]byte(preamble)); err != nil || count != len(preamble) {
+		t.Fatal("child output recorder lost the initialization prefix", count, err)
+	}
+	payload := strings.Repeat("x", snWalletConsentTestChildOutputLimit-len(preamble))
+	if count, err := io.Copy(output, strings.NewReader(payload)); err != nil || count != int64(len(payload)) {
+		t.Fatal("child output recorder did not drain its exact-boundary payload", count, err)
+	}
+	expected := preamble + payload
+	if output.size != snWalletConsentTestChildOutputLimit || output.exceeded || string(output.buffer[:output.size]) != expected {
+		t.Fatal("exact child output boundary was truncated or changed")
+	}
+	for _, later := range []string{"synthetic first overflow", "", strings.Repeat("y", 2*snWalletConsentTestChildOutputLimit)} {
+		if count, err := output.Write([]byte(later)); err != nil || count != len(later) {
+			t.Fatal("child output recorder stopped draining after its fixed limit", count, err)
+		}
+		if output.size != snWalletConsentTestChildOutputLimit || !output.exceeded || string(output.buffer[:output.size]) != expected {
+			t.Fatal("child output overflow changed or concealed its retained prefix")
+		}
 	}
 }
