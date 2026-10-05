@@ -16,7 +16,8 @@ import (
 )
 
 // Each case retains the public reader's real signed fixture and finality checks.
-// Only the raw RPC reply is varied; no retry or authority verdict is substituted.
+// The original mock owns reply instrumentation even when the installed client
+// wraps its route; no retry or authority verdict is substituted.
 type runtimeNetworkIdentityFixture struct {
 	client    *validatorRuntimeIdentityTestClient
 	native    *crv4.Chain
@@ -37,6 +38,7 @@ func newRuntimeNetworkIdentityFixture(t *testing.T, reader string) *runtimeNetwo
 			t.Fatal(err)
 		}
 		self.native = fixture.native
+		self.client = fixture.client
 		self.read = func(ctx context.Context) error {
 			result, err := ObserveMainnetRuntimeAtContext(ctx, fixture.native, cfg, mainnetRuntimeTestBlock(100))
 			if err != nil {
@@ -54,6 +56,7 @@ func newRuntimeNetworkIdentityFixture(t *testing.T, reader string) *runtimeNetwo
 	case "production artifact":
 		fixture := newProductionRuntimeTestFixture(t, true)
 		self.native = fixture.rpc.native
+		self.client = fixture.rpc.client
 		self.read = func(ctx context.Context) error {
 			result, number, err := authenticateOwnerRecycleProductionArtifactAtContext(ctx, fixture.rpc.native, fixture.cfg, mainnetRuntimeTestBlock(100), true)
 			if err != nil {
@@ -71,6 +74,7 @@ func newRuntimeNetworkIdentityFixture(t *testing.T, reader string) *runtimeNetwo
 	case "runtime continuity":
 		fixture := newProductionContinuityPolicyTestFixture(t)
 		self.native = fixture.owner.rpc.native
+		self.client = fixture.owner.rpc.client
 		self.read = func(ctx context.Context) error {
 			result, err := InspectProductionRuntimeContinuityContext(ctx, fixture.owner.rpc.native, fixture.owner.cfg, fixture.hashes[150], fixture.policyRaw, fixture.certificateRaw)
 			if err != nil {
@@ -89,6 +93,7 @@ func newRuntimeNetworkIdentityFixture(t *testing.T, reader string) *runtimeNetwo
 		fixture := newRecycleAdmissionFixture(t, nil)
 		fixture.retain(t)
 		self.native = fixture.chain
+		self.client = fixture.client
 		self.read = func(ctx context.Context) error {
 			result, err := ObserveOwnerRecycleAdmissionAt(ctx, fixture.cfg, fixture.chain, [32]byte(fixture.finalized))
 			if err != nil {
@@ -107,6 +112,7 @@ func newRuntimeNetworkIdentityFixture(t *testing.T, reader string) *runtimeNetwo
 		fixture := newValidatorUploadProductionTestFixture(t)
 		owner := fixture.owner(t)
 		self.native = fixture.production.rpc.native
+		self.client = fixture.production.rpc.client
 		self.read = func(ctx context.Context) error {
 			result, err := ValidatorUploadNativeObserverContext(ctx, self.native, owner.config.Deployment)
 			if err != nil {
@@ -124,8 +130,54 @@ func newRuntimeNetworkIdentityFixture(t *testing.T, reader string) *runtimeNetwo
 	default:
 		t.Fatal("unknown runtime identity reader", reader)
 	}
-	self.client = self.native.API.Client.(*validatorRuntimeIdentityTestClient)
 	return self
+}
+
+// Fault injection reaches the installed transport without replacing its route
+// wrapper or guessing the concrete type exposed through the client interface.
+func TestRuntimeNetworkIdentityFixtureRetainsInstalledClientInstrumentation(t *testing.T) {
+	for _, reader := range []string{"mainnet observation", "production artifact", "runtime continuity", "recycle census", "upload observer"} {
+		fixture := newRuntimeNetworkIdentityFixture(t, reader)
+		installed := fixture.native.API.Client
+		route := installed.URL()
+		failure := errors.New("synthetic fixture instrumentation")
+		calls := 0
+		fixture.client.callContext = func(_ context.Context, _ any, method string, _ ...any) error {
+			calls++
+			if method != "synthetic_fixture_probe" {
+				t.Fatalf("%s changed the instrumented method: %s", reader, method)
+			}
+			return failure
+		}
+		err := installed.CallContext(t.Context(), nil, "synthetic_fixture_probe")
+		if err != failure || calls != 1 || fixture.native.API.Client != installed || installed.URL() != route {
+			t.Fatalf("%s lost its installed client or instrumentation: calls=%d route=%s error=%v", reader, calls, installed.URL(), err)
+		}
+	}
+}
+
+// Independent recycle fixtures retain their own mock while the approved route
+// remains visible to the actual public reader through each installed wrapper.
+func TestRuntimeNetworkIdentityFixtureKeepsIndependentWrappedClients(t *testing.T) {
+	first := newRuntimeNetworkIdentityFixture(t, "recycle census")
+	second := newRuntimeNetworkIdentityFixture(t, "recycle census")
+	if first.client == second.client || first.native.API.Client == first.client || second.native.API.Client == second.client {
+		t.Fatal("recycle fixtures shared a mock or discarded their route wrapper")
+	}
+	failure := errors.New("synthetic first fixture failure")
+	first.client.callContext = func(context.Context, any, string, ...any) error { return failure }
+	var chain string
+	if err := first.native.API.Client.CallContext(t.Context(), &chain, "system_chain"); err != failure {
+		t.Fatalf("first fixture lost its injected error: %v", err)
+	}
+	if err := second.native.API.Client.CallContext(t.Context(), &chain, "system_chain"); err != nil || chain == "" {
+		t.Fatalf("first fixture changed its independent peer: chain=%q error=%v", chain, err)
+	}
+	for _, fixture := range []*runtimeNetworkIdentityFixture{first, second} {
+		if fixture.native.API.Client.URL() != "wss://recycle.example" {
+			t.Fatalf("instrumentation changed the approved recycle route: %s", fixture.native.API.Client.URL())
+		}
+	}
 }
 
 // The genesis method is also used for closing canonical witnesses. Only the

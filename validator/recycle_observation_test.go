@@ -90,9 +90,11 @@ func recycleAdmissionTestMetadata(t *testing.T, mutate func(*types.Metadata)) (s
 
 // One instance owns its RPC transcript and approval material. Tests mutate it
 // only before a synchronous observation, or across an explicit joined barrier.
+// The retained mock stays instrumentable through the approved route wrapper.
 type recycleAdmissionFixture struct {
 	cfg        *ReleaseConfig
 	chain      *crv4.Chain
+	client     *validatorRuntimeIdentityTestClient
 	approval   OwnerRecycleApproval
 	private    ed25519.PrivateKey
 	raw        []byte
@@ -258,6 +260,7 @@ func newRecycleAdmissionFixture(t *testing.T, mutate func(*types.Metadata)) *rec
 			return fmt.Errorf("unexpected owner-recycle RPC %s", method)
 		}
 	}}
+	fixture.client = client
 	fixture.chain = &crv4.Chain{API: &gsrpc.SubstrateAPI{Client: &recycleAdmissionRouteClient{validatorRuntimeIdentityTestClient: client, route: cfg.Substrate[0]}}, GenesisHash: types.Hash(proposal.Runtime.GenesisHash)}
 	fixture.sign(t)
 	return fixture

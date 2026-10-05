@@ -94,8 +94,8 @@ func newValidatorUploadProductionTestFixture(t *testing.T) *validatorUploadProdu
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := production.rpc.native.API.Client.(*validatorRuntimeIdentityTestClient).callContext
-	production.rpc.native.API.Client.(*validatorRuntimeIdentityTestClient).callContext = func(ctx context.Context, result any, method string, args ...any) error {
+	original := production.rpc.client.callContext
+	production.rpc.client.callContext = func(ctx context.Context, result any, method string, args ...any) error {
 		if method == "state_getStorage" || method == "state_call" {
 			if len(args) == 0 {
 				return errors.New("production upload storage omits its block")
@@ -213,7 +213,7 @@ func TestValidatorUploadProductionRuntimeRetainsRenewedAuthorityWindow(t *testin
 		t.Fatal(err)
 	}
 	fixture.config.ProductionRuntimeConfig = mainnetRuntimeTestWriteBytes(t, filepath.Join(identityTestStateDir(t), "renewed-production.yml"), raw)
-	client := production.rpc.native.API.Client.(*validatorRuntimeIdentityTestClient)
+	client := production.rpc.client
 	original := client.callContext
 	client.callContext = func(ctx context.Context, result any, method string, args ...any) error {
 		// The synthetic registrations/stake are unchanged from block 100 to
@@ -391,7 +391,7 @@ func TestValidatorUploadProductionRuntimeRejectsAuthorityAndRouteSubstitution(t 
 		case "evm":
 			fixture.production.rpc.evmChainId = "0x999"
 		case "route":
-			native.API.Client = &recycleAdmissionRouteClient{validatorRuntimeIdentityTestClient: priorClient.(*validatorRuntimeIdentityTestClient), route: "wss://unapproved-upload.example"}
+			native.API.Client = &recycleAdmissionRouteClient{validatorRuntimeIdentityTestClient: fixture.production.rpc.client, route: "wss://unapproved-upload.example"}
 		}
 		if observation, err := ValidatorUploadNativeObserverContext(t.Context(), native, owner.config.Deployment); err == nil || observation != (ValidatorUploadNativeObserver{}) {
 			t.Fatalf("cached native identity concealed %s substitution: %v", fault, err)
