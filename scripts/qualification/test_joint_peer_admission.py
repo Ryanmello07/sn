@@ -376,6 +376,57 @@ class JointAdmissionTests(unittest.TestCase):
             with self.assertRaisesRegex(admission.Refused, 'PID reused'):
                 admission.process(424242)
 
+    def test_process_exit_during_snapshot_is_not_live_workload(self):
+        cases = [(['S', 'Z'], [b'synthetic\0']),
+                 (['S', 'S', 'Z'], [b'synthetic\0', b'']),
+                 (['S', 'S', 'Z'], [b'synthetic\0'] * 3)]
+        for states, arguments in cases:
+            observed = iter(states)
+            def text(path, *unused, **kwargs):
+                if path.name == 'stat':
+                    fields = ['0'] * 20
+                    fields[0], fields[1], fields[19] = next(observed), '7', '123'
+                    return '424242 (synthetic) ' + ' '.join(fields)
+                if path.name == 'status':
+                    return 'Uid:\t1000\t1000\t1000\t1000\n'
+                if path.name == 'cgroup':
+                    return '0::/synthetic.scope\n'
+                raise AssertionError(str(path))
+            with mock.patch.object(admission.child, 'compiler_census', return_value={}), \
+                    mock.patch.object(admission.Path, 'iterdir', return_value=iter([Path('/proc/424242')])), \
+                    mock.patch.object(admission.Path, 'read_text', autospec=True, side_effect=text), \
+                    mock.patch.object(admission.Path, 'read_bytes', side_effect=arguments), \
+                    mock.patch.object(admission.os, 'readlink', return_value='/synthetic/body'):
+                self.assertEqual(self.read_workloads(self.members, {}), [])
+
+    def test_empty_live_process_resnapshots_without_accepting_unknown_or_reused_pid(self):
+        cases = [(['123'] * 4, [b'', b'synthetic\0', b'synthetic\0'], None),
+                 (['123'] * 6, [b''] * 3, 'unstable after bounded'),
+                 (['123', '124'], [b''], 'PID reused')]
+        for starts, arguments, refusal in cases:
+            observed = iter(starts)
+            def text(path, *unused, **kwargs):
+                if path.name == 'stat':
+                    fields = ['0'] * 20
+                    fields[0], fields[1], fields[19] = 'S', '7', next(observed)
+                    return '424242 (synthetic) ' + ' '.join(fields)
+                if path.name == 'status':
+                    return 'Uid:\t1000\t1000\t1000\t1000\n'
+                if path.name == 'cgroup':
+                    return '0::/synthetic.scope\n'
+                raise AssertionError(str(path))
+            with mock.patch.object(admission.Path, 'read_text', autospec=True, side_effect=text), \
+                    mock.patch.object(admission.Path, 'read_bytes', side_effect=arguments), \
+                    mock.patch.object(admission.os, 'readlink', return_value='/synthetic/body') as readlink:
+                if refusal:
+                    with self.assertRaisesRegex(admission.Refused, refusal):
+                        admission.process(424242)
+                    readlink.assert_not_called()
+                else:
+                    row = admission.process(424242)
+                    self.assertEqual((row['pid'], row['start'], row['argv']),
+                                     (424242, '123', ['synthetic']))
+
     def test_repeated_unstable_live_process_remains_refused(self):
         parents = iter([7, 8, 8, 9, 9, 10])
         def text(path, *unused, **kwargs):

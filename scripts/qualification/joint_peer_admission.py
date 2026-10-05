@@ -105,18 +105,27 @@ def process(pid):
         fields = (directory / "stat").read_text().rsplit(")", 1)[1].split()
         require(original_start is None or original_start == fields[19], "joint process PID reused during read")
         original_start = fields[19]
+        if fields[0] == "Z":
+            raise ProcessLookupError("joint observed process has exited")
         status = (directory / "status").read_text()
         uids = next([int(value) for value in line.split()[1:]] for line in status.splitlines() if line.startswith("Uid:"))
         group_raw = (directory / "cgroup").read_text()
         groups = [line[3:] for line in group_raw.splitlines() if line.startswith("0::")]
         argv = (directory / "cmdline").read_bytes()
-        require(len(groups) == 1 and argv.endswith(b"\0"), "joint process observation incomplete")
+        if len(groups) != 1 or not argv.endswith(b"\0"):
+            after = (directory / "stat").read_text().rsplit(")", 1)[1].split()
+            require(fields[19] == after[19], "joint process PID reused during read")
+            if after[0] == "Z":
+                raise ProcessLookupError("joint observed process has exited")
+            continue
         executable = os.readlink(directory / "exe")
         after_executable = os.readlink(directory / "exe")
         after_argv = (directory / "cmdline").read_bytes()
         after_group = (directory / "cgroup").read_text()
         after = (directory / "stat").read_text().rsplit(")", 1)[1].split()
         require(fields[19] == after[19], "joint process PID reused during read")
+        if after[0] == "Z":
+            raise ProcessLookupError("joint observed process has exited")
         if fields[1] == after[1] and argv == after_argv and executable == after_executable and group_raw == after_group:
             return {"pid": pid, "ppid": int(fields[1]), "start": fields[19], "state": after[0],
                     "uid": uids[0], "euid": uids[1], "cgroup": groups[0], "executable": executable,
