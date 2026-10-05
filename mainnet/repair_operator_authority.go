@@ -27,7 +27,7 @@ const repairOperatorSchema = "urnetwork-mainnet-operator-repair-v1"
 const repairOperatorDomain = "urnetwork-mainnet-operator-repair-approval-v1"
 
 var repairOperatorEnvironmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,95}$`)
-var repairOperatorEnvironmentValue = regexp.MustCompile(`^[a-zA-Z0-9_./:@,+-]{1,2048}$`)
+var repairOperatorEnvironmentValue = regexp.MustCompile(`^[a-zA-Z0-9_./:@,+-]+$`)
 
 // The sorted literal environment is the manager's complete explicit Environment
 // property. Values cannot contain shell, systemd expansion or quoting syntax.
@@ -240,7 +240,7 @@ func (self repairOperatorHostApproval) validate(key string) error {
 	}
 	previous := ""
 	for _, value := range p.Environment {
-		if !repairOperatorEnvironmentName.MatchString(value.Name) || !repairOperatorEnvironmentValue.MatchString(value.Value) || value.Name <= previous {
+		if !repairOperatorEnvironmentName.MatchString(value.Name) || len(value.Value) < 1 || len(value.Value) > 2048 || !repairOperatorEnvironmentValue.MatchString(value.Value) || value.Name <= previous {
 			return errors.New("operator environment is not an exact canonical literal census")
 		}
 		previous = value.Name
