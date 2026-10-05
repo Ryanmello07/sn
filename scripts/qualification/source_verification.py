@@ -198,20 +198,25 @@ def _descriptor(path, flags, owner):
             raise SourceIntegrityError("source descriptor close refused") from error
 
 
+def _mountinfo(owner):
+    chunks, used = [], 0
+    with _descriptor("/proc/self/mountinfo", os.O_RDONLY | os.O_NOFOLLOW, owner) as descriptor:
+        while used <= MAXIMUM_MOUNT_BYTES:
+            chunk = owner.call(os.read, descriptor, min(65536, MAXIMUM_MOUNT_BYTES - used + 1))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            used += len(chunk)
+    raw = b"".join(chunks)
+    _require(len(raw) <= MAXIMUM_MOUNT_BYTES, "mount table exceeds bound")
+    return raw
+
+
 class _Mounts:
     """Pin the actual mount mapping; unrelated new mounts do not poison reuse."""
 
     def __init__(self, owner):
-        chunks, used = [], 0
-        with _descriptor("/proc/self/mountinfo", os.O_RDONLY | os.O_NOFOLLOW, owner) as descriptor:
-            while used <= MAXIMUM_MOUNT_BYTES:
-                chunk = owner.call(os.read, descriptor, min(65536, MAXIMUM_MOUNT_BYTES - used + 1))
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                used += len(chunk)
-        raw = b"".join(chunks)
-        _require(len(raw) <= MAXIMUM_MOUNT_BYTES, "mount table exceeds bound")
+        raw = _mountinfo(owner)
         self.rows = []
         try:
             for line in raw.decode().splitlines():
@@ -223,8 +228,9 @@ class _Mounts:
                                   "source": _mount_path(b[1]), "super_options": b[2:]})
         except (ValueError, IndexError) as error:
             raise SourceIntegrityError("kernel mount table is malformed") from error
-        self.by_path = {row["path"]: row for row in self.rows}
-        _require(len(self.by_path) == len(self.rows), "ambiguous stacked mount mapping")
+        self.by_path = {}
+        for row in self.rows:
+            self.by_path.setdefault(row["path"], []).append(row)
         self.selected = {}
         self.checked = set()
 
@@ -233,8 +239,12 @@ class _Mounts:
             return self.selected[path]
         parent = path
         while True:
-            row = self.by_path.get(parent)
-            if row is not None:
+            rows = self.by_path.get(parent)
+            if rows is not None:
+                # Namespace stacks elsewhere do not alter this selected path.
+                # Never infer a visible winner when this path's mapping is stacked.
+                _require(len(rows) == 1, "ambiguous selected stacked mount mapping: " + parent)
+                row = rows[0]
                 _require(row["filesystem"] in LOCAL_FILESYSTEMS,
                          "source reuse requires a supported trusted local filesystem")
                 self.selected[path] = row
