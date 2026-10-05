@@ -124,15 +124,15 @@ func retryableEthRpcCause(err error, transportOrigin bool, depth int, budget *mi
 	case *net.OpError:
 		return retryableEthRpcCause(cause.Err, true, depth+1, budget)
 	case *net.DNSError:
-		// A standard DNS leaf has an optional wrapped cause. Permanent
-		// metadata cannot borrow a transient child or sibling's authority.
-		if cause.IsNotFound || !cause.IsTimeout && !cause.IsTemporary {
+		// Explicit absence stays hard. A wrapped cause retains its own
+		// verdict; availability flags decide only a leaf without a child.
+		if cause.IsNotFound {
 			return false
 		}
 		if cause.UnwrapErr != nil {
 			return retryableEthRpcCause(cause.UnwrapErr, transportOrigin, depth+1, budget)
 		}
-		return true
+		return cause.IsTimeout || cause.IsTemporary
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		causes := joined.Unwrap()

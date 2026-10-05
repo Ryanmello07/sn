@@ -144,6 +144,8 @@ func TestMinerReadHttpRecoversCompleteDnsCauses(t *testing.T) {
 			&net.DNSError{Err: "synthetic timeout", Name: "timeout.example", IsTimeout: true},
 			&net.DNSError{Err: "synthetic outage", Name: "temporary.example", IsTemporary: true},
 			&net.DNSError{Err: "synthetic outage", Name: "temporary.example", IsTemporary: true, UnwrapErr: syscall.ECONNRESET},
+			&net.DNSError{Err: "synthetic wrapped outage", Name: "reset.example", UnwrapErr: syscall.ECONNRESET},
+			&net.DNSError{Err: "synthetic wrapped deadline", Name: "deadline.example", UnwrapErr: context.DeadlineExceeded},
 			errors.Join(context.DeadlineExceeded, &net.DNSError{Err: "synthetic timeout", Name: "timeout.example", IsTimeout: true}),
 		} {
 			runMinerDnsReadHttpTest(t, claim, cause, true, false)
@@ -160,7 +162,9 @@ func TestMinerReadHttpKeepsDnsAndLinkHardCauses(t *testing.T) {
 			link, errors.Join(context.DeadlineExceeded, link),
 			&net.DNSError{Err: "synthetic absent name", Name: "absent.example", IsTimeout: true, IsNotFound: true},
 			&net.DNSError{Err: "synthetic absent name", Name: "absent.example", IsTemporary: true, IsNotFound: true, UnwrapErr: syscall.ECONNRESET},
-			&net.DNSError{Err: "synthetic permanent resolver refusal", Name: "permanent.example", UnwrapErr: syscall.ECONNRESET},
+			&net.DNSError{Err: "synthetic unclassified resolver result", Name: "unknown.example"},
+			&net.DNSError{Err: "synthetic absent name", Name: "absent.example", IsNotFound: true, UnwrapErr: syscall.ECONNRESET},
+			&net.DNSError{Err: "synthetic wrapped custody failure", Name: "custody.example", UnwrapErr: link},
 			&net.DNSError{Err: "synthetic timeout", Name: "timeout.example", IsTimeout: true, UnwrapErr: link},
 			&net.DNSError{Err: "synthetic timeout", Name: "timeout.example", IsTimeout: true, UnwrapErr: &os.PathError{Op: "read", Path: "synthetic-dns-custody", Err: context.DeadlineExceeded}},
 			&net.DNSError{Err: "synthetic timeout", Name: "timeout.example", IsTimeout: true, UnwrapErr: errors.Join(syscall.ECONNRESET, context.Canceled)},
