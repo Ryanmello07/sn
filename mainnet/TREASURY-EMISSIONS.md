@@ -4,9 +4,10 @@ The selected launch policy is **10% of the native miner allocation for providers
 and 90% retained for future network improvements**. This supersedes the September
 27 owner-recycle choice. Retain the full miner tranche for distribution instead
 of deliberately recycling its remainder. This document defines the explicit
-successor and its custody command interface. The source changes are being
-integrated; execution qualification, actual identity provisioning and activation
-remain pending.
+successor and its custody command interface. Treasury validator approvals and
+steering, native multisig bootstrap and lifecycle, and native accounting and monitoring
+are implemented in merged source. Execution qualification, actual identity
+provisioning, deployment and activation remain pending.
 
 ## Native routing and custody
 
@@ -218,15 +219,17 @@ and emission gating still determine the subnet's allocation.
 
 ## Implementation and launch consequence
 
-The frozen [validator successor](../validator/TREASURY-PRODUCTION.md) uses an
+The merged [validator successor](../validator/TREASURY-PRODUCTION.md) uses an
 explicit `treasury_approval` selector, distinct signed domains and the complete
 ordinary recipient roster through measured preparation, submission and recovery.
 It preserves original owner-recycle bytes and read-only historical authority.
-The frozen multisig implementation supplies the public parser and the custody
-commands above. Native accounting and monitoring add explicit treasury schemas;
-legacy recycling and residual amounts must retain their historical meaning.
-These source changes and the original availability capture/replay fixture still
-require integration and execution qualification together.
+The merged multisig implementation supplies the public parser and the custody
+commands above. Merged native accounting and monitoring add explicit treasury
+schemas; legacy recycling and residual amounts retain their historical meaning.
+The integrated treasury source and original availability capture/replay fixture
+still require execution qualification together. Existing owner-recycle results
+remain evidence for their original scope; they do not qualify treasury execution
+or establish a live treasury outcome.
 
 1. Bind exact coldkey ownership, UID/hotkey generations, owner-set exclusion,
    masks and caps at the applicable native execution boundary. Ordinary treasury
