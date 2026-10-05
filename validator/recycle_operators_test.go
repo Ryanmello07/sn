@@ -104,7 +104,9 @@ func (self *recycleOperatorFixture) GetBlockByNumber(ctx context.Context, number
 	count := func() int { self.stateLock.Lock(); defer self.stateLock.Unlock(); return self.routeReads }()
 	if self.retargetDecision && count >= 2 && uint64(number) == self.finalized {
 		hash := result["hash"].(common.Hash)
-		hash[0] ^= 1
+		// Keep this a valid fork of the original single-byte fixture identity.
+		// Zero would stop at header decoding before the canonical route check.
+		hash[len(hash)-1] ^= 1
 		result["hash"] = hash
 	}
 	return result, ctx.Err()
@@ -342,8 +344,12 @@ func TestOwnerRecycleOperatorsRejectLateRouteRetarget(t *testing.T) {
 		fixture.retargetChain = fault == "chain"
 		fixture.retargetGenesis = fault == "genesis"
 		fixture.retargetDecision = fault == "decision"
-		if owner, err := fixture.observe(t); err == nil || owner != nil {
+		owner, err := fixture.observe(t)
+		if err == nil || owner != nil || RetryableEvidenceTransportError(err) {
 			t.Fatalf("%s late route replacement admitted: %v", fault, err)
+		}
+		if fault == "decision" && !strings.Contains(err.Error(), "operator canonical decision changed before retention") {
+			t.Fatal("late decision fork did not reach the canonical route check", err)
 		}
 		if fixture.count("rootCommitments") != 2 {
 			t.Fatalf("%s test did not reach complete source census", fault)

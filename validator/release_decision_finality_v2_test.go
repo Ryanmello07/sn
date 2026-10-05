@@ -185,7 +185,9 @@ func (self *releaseDecisionFinalityTestTransport) header(selector string, closin
 		return nil, errors.New("synthetic finality requested an unowned block")
 	}
 	if changed {
-		hash[0] ^= 1
+		// Fixture identities occupy the first byte. A fork changes an unused
+		// byte so it stays nonzero and cannot alias another retained height.
+		hash[len(hash)-1] ^= 1
 	}
 	return map[string]any{"number": hexutil.EncodeUint64(number), "hash": common.Hash(hash)}, nil
 }
@@ -329,8 +331,12 @@ func TestOwnerRecycleOperatorsFinalityConflictPrecedesLaterAbsence(t *testing.T)
 func TestOwnerRecycleOperatorsOriginalFinalityForkPrecedesLaterAbsence(t *testing.T) {
 	for _, mode := range []string{"original-fork", "advanced-original-fork"} {
 		fixture, transport := newOwnerRecycleFinalityFixture(t, mode)
+		closing := transport.opening - 1
+		if mode == "advanced-original-fork" {
+			closing = transport.opening + 1
+		}
 		owner, err := fixture.observe(t)
-		if owner != nil || err == nil || !strings.Contains(err.Error(), "canonical finality witness changed") || RetryableEvidenceTransportError(err) || transport.waits != 0 || transport.finalized != 2 || transport.canonical[transport.opening] != 1 || transport.canonical[transport.decision] != 0 {
+		if owner != nil || err == nil || !strings.Contains(err.Error(), "canonical finality witness changed") || RetryableEvidenceTransportError(err) || transport.waits != 0 || transport.finalized != 2 || transport.canonical[closing] != 1 || transport.canonical[transport.opening] != 1 || transport.canonical[transport.decision] != 0 {
 			t.Fatal("original canonical finality conflict was hidden by a later missing pin", mode, err)
 		}
 		assertOwnerRecycleFinalityReadOnly(t, fixture, transport)
@@ -342,7 +348,7 @@ func TestOwnerRecycleOperatorsOriginalFinalityForkPrecedesLaterAbsence(t *testin
 func TestOwnerRecycleOperatorsDecisionForkPrecedesLaterAbsence(t *testing.T) {
 	fixture, transport := newOwnerRecycleFinalityFixture(t, "decision-fork")
 	owner, err := fixture.observe(t)
-	if owner != nil || err == nil || !strings.Contains(err.Error(), "canonical finality witness changed") || RetryableEvidenceTransportError(err) || transport.waits != 0 || transport.finalized != 2 || transport.canonical[transport.decision] != 1 {
+	if owner != nil || err == nil || !strings.Contains(err.Error(), "canonical finality witness changed") || RetryableEvidenceTransportError(err) || transport.waits != 0 || transport.finalized != 2 || transport.canonical[transport.opening-1] != 1 || transport.canonical[transport.opening] != 1 || transport.canonical[transport.decision] != 1 {
 		t.Fatal("decision canonical contradiction was promoted to transient lag", err)
 	}
 	assertOwnerRecycleFinalityReadOnly(t, fixture, transport)
