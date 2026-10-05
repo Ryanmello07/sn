@@ -1,4 +1,47 @@
 {
+  "actual_current2_compilers": {
+    "complete_evidence": {
+      "bytes": 15540,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/current-compilers-and-ph15-producer-normal-20261005.json",
+      "sha256": "6621b9b30449b527ce8799248e33509fe8d2902c30475250e2c57eb0bb586ee5"
+    },
+    "normal_compilers_passed": 2,
+    "receipt": {
+      "bytes": 25503,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-mainnet-miner2-normal-v1.receipt.json",
+      "sha256": "6dc7ec68a1579dbef8b9460838ccbd18d92359d847417802a637b165a1458afc"
+    },
+    "source_tuple": {
+      "core": "026b850248352b72255be7a966e391e0a15e74c1",
+      "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
+      "sn": "624cf1e00f45dac61bc5675e4a21eb2a8dd121e5"
+    },
+    "user_terminal": {
+      "bytes": 1708,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-mainnet-miner2-normal-v1-user-terminal-readback.json",
+      "sha256": "a603368aeb8b3449516319a5ad1a18e875eeb23803d99f5b0ca5c4e4b3fe6075"
+    }
+  },
+  "actual_current_tooling38": {
+    "complete_evidence": {
+      "bytes": 15540,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/current-compilers-and-ph15-producer-normal-20261005.json",
+      "sha256": "6621b9b30449b527ce8799248e33509fe8d2902c30475250e2c57eb0bb586ee5"
+    },
+    "fail": 0,
+    "owner_readback": {
+      "bytes": 2210,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-interpreter37-source1-v1-user-terminal-readback.json",
+      "sha256": "2ca160b9b8ced4f1253a9cc372e2a04a55822326d4ce5eb880d5974fcb1b25ec"
+    },
+    "pass": 38,
+    "receipt": {
+      "bytes": 3791,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-interpreter37-source1-v1.receipt.json",
+      "sha256": "b4712010b1601acdb85605845d46083bc4097d83137f3bbc5308ef25f8de35ca"
+    },
+    "skip": 0
+  },
   "actual_ph15_consumer12": {
     "complete_evidence": {
       "bytes": 11997,
@@ -28,6 +71,35 @@
       "bytes": 3406,
       "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v3.process-result.json",
       "sha256": "f41a3c0abb6cfca5717522f7d36f4250aef2c4f2b007e044c5fc8f7b0736d1a5"
+    }
+  },
+  "actual_ph15_producer32_normal": {
+    "complete_evidence": {
+      "bytes": 15540,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/current-compilers-and-ph15-producer-normal-20261005.json",
+      "sha256": "6621b9b30449b527ce8799248e33509fe8d2902c30475250e2c57eb0bb586ee5"
+    },
+    "counts": {
+      "fail": 0,
+      "pass": 32,
+      "run": 32,
+      "skip": 0
+    },
+    "outer_terminal": {
+      "active_state": "inactive",
+      "exit": 0,
+      "main_pid": 0,
+      "readback": {
+        "bytes": 1631,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-ph15-producer32-normal-v1-user-terminal-readback.json",
+        "sha256": "26ded585ac82deedff9bdbe6f178be8e291b02ec76243bb8ddb8b6378d4f54a1"
+      },
+      "status": "EXECUTOR_ARTIFACT_VERIFIED"
+    },
+    "receipt": {
+      "bytes": 15742,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-ph15-producer32-normal-v1.receipt.json",
+      "sha256": "172a513c62bd3723a7dfd24633b67d3df977fd73d40fcc7a441ce1488085485b"
     }
   },
   "actual_results_addendum": {
@@ -389,7 +461,7 @@
     }
   ],
   "confirmed_current_implementation_work": {
-    "classification": "DASHBOARD_CONSUMER12_PASS_PRODUCER_NORMAL_RACE_CONTROLS_PENDING",
+    "classification": "PRODUCER32_NORMAL_AND_CONSUMER12_PASS_RACE_CONTROLS_PENDING",
     "consumer": {
       "actual": {
         "complete_evidence": {
@@ -468,6 +540,35 @@
     },
     "limit": "The narrow supported-observer gap is implemented. Full PH15 is not declared complete, and unsupported facts do not become authority.",
     "producer": {
+      "actual_normal": {
+        "complete_evidence": {
+          "bytes": 15540,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/current-compilers-and-ph15-producer-normal-20261005.json",
+          "sha256": "6621b9b30449b527ce8799248e33509fe8d2902c30475250e2c57eb0bb586ee5"
+        },
+        "counts": {
+          "fail": 0,
+          "pass": 32,
+          "run": 32,
+          "skip": 0
+        },
+        "outer_terminal": {
+          "active_state": "inactive",
+          "exit": 0,
+          "main_pid": 0,
+          "readback": {
+            "bytes": 1631,
+            "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-ph15-producer32-normal-v1-user-terminal-readback.json",
+            "sha256": "26ded585ac82deedff9bdbe6f178be8e291b02ec76243bb8ddb8b6378d4f54a1"
+          },
+          "status": "EXECUTOR_ARTIFACT_VERIFIED"
+        },
+        "receipt": {
+          "bytes": 15742,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-ph15-producer32-normal-v1.receipt.json",
+          "sha256": "172a513c62bd3723a7dfd24633b67d3df977fd73d40fcc7a441ce1488085485b"
+        }
+      },
       "causal_controls": "4_GROUPS_UNEXECUTED",
       "commit": "624cf1e00f45dac61bc5675e4a21eb2a8dd121e5",
       "intake": {
@@ -477,14 +578,14 @@
       },
       "merged_sn_main": "dddd686da6bcd66598f27c5176b406387fda1750",
       "new_coverage_progress_gauges": 36,
-      "normal": "UNEXECUTED",
+      "normal": "PASS_32_RUN_32_PASS_0_FAIL_0_SKIP",
       "old_financial_gauges_preserved": 36,
       "race": "UNEXECUTED",
       "status_output": "operational_progress after original durable acknowledgment",
       "total_fixed_gauges": 72
     },
     "remaining_original_ph15": [
-      "All32 producer roots in normal/race and four original producer control groups remain unexecuted. The twelve targeted consumer tests have passed with actual Promtool/source gates; preserve their separate component receipt.",
+      "Producer32 race and four original producer control groups remain unexecuted. Producer32 normal and twelve targeted consumers have separately passed; retain their actual scopes and component receipts.",
       "Other owners actual submission/finalization receipts and durable incident recurrence/resolution histories.",
       "Original provider/window inputs, deployed measured rates, collector/receiver ingestion, on-call delivery and outage/deadlock rehearsals."
     ]
@@ -512,6 +613,13 @@
     "Historical owner fixture, signed-NUL model indexing, stale ClosedWork API and carry6%-vs99% fixture failures retain their original receipts and named source corrections; only their exact later passed subsets are credited."
   ],
   "counts": {
+    "actual_current2_normal_compilers_passed": 2,
+    "actual_current_tooling_python_tests": {
+      "fail": 0,
+      "pass": 38,
+      "run": 38,
+      "skip": 0
+    },
     "actual_frozen_server_normal_compilers_passed": 8,
     "actual_nativefee_normal_roots": {
       "fail": 0,
@@ -531,6 +639,12 @@
       "run": 12,
       "skip": 0
     },
+    "actual_ph15_producer_normal_roots": {
+      "fail": 0,
+      "pass": 32,
+      "run": 32,
+      "skip": 0
+    },
     "actual_rust_full_suite_exports": 61,
     "actual_rust_full_suite_normal": {
       "fail": 0,
@@ -542,9 +656,11 @@
       "skip": 0
     },
     "additive_control_groups": 36,
-    "current_go_roots_per_mode": 2755,
+    "current_go_roots_per_mode": 2757,
     "current_mainnet_roots_per_mode": 292,
+    "current_server_controller_roots_per_mode": 95,
     "current_server_full_model": 1865,
+    "current_server_roots_per_mode": 2027,
     "current_sn_roots_per_mode": 498,
     "original_native_overlap_with_prior2637": 0,
     "original_requirements": 38,
@@ -557,6 +673,7 @@
     "ph15_targeted_producer_roots": 32,
     "ready_native86_originals": 38,
     "ready_native86_profiles": 9,
+    "restored_existing_payment_neighbors": 2,
     "restored_original_native_roots_per_mode": 86,
     "retained_control_groups": 227,
     "rows_demonstrated_to_have_only_deployment_work_left": 0,
@@ -565,7 +682,7 @@
   "current_default_product_tuple": {
     "connect": "026b850248352b72255be7a966e391e0a15e74c1",
     "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
-    "sn": "dddd686da6bcd66598f27c5176b406387fda1750",
+    "sn": "1af1e92b2e810c42131832afde744676cb291b6c",
     "xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
   },
   "current_portable_evidence": {
@@ -583,9 +700,9 @@
     "After authorized activation: three complete native emission intervals and one full50400-block UR settlement/claim cycle."
   ],
   "latest_checkpoint": {
-    "bytes": 11997,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/ph15-consumer12-actual-docs/ph15-source-and-consumer-actual-v2.json",
-    "sha256": "76fd5d673b0491efd379464a17b5aeb76242b48fae8d30e6a972b3a4db967b78"
+    "bytes": 15540,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/current-compilers-and-ph15-producer-normal-20261005.json",
+    "sha256": "6621b9b30449b527ce8799248e33509fe8d2902c30475250e2c57eb0bb586ee5"
   },
   "native86_asset_mapping": {
     "map": {
@@ -632,9 +749,9 @@
     "sha256": "12cdefbefbe1b671da91c2e27350e8bcda2af7c53fa231083c671fe8729d7559"
   },
   "prior_checkpoint_preserved": {
-    "bytes": 6027,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/ph15-source-implementation-and-scope-20261005.json",
-    "sha256": "25f139de56c4103db606a3aed406defc1cb6d102cdef6b21f88f67424fe7e074"
+    "bytes": 11997,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/ph15-consumer12-actual-docs/ph15-source-and-consumer-actual-v2.json",
+    "sha256": "76fd5d673b0491efd379464a17b5aeb76242b48fae8d30e6a972b3a4db967b78"
   },
   "prior_failure_classification_preserved": [
     {
@@ -798,7 +915,7 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/nativefee-main9-to-default-current-applicability.json",
     "sha256": "60de07a44585f9ea32d1641514203bf35cab4e615216ce0fb930cb982b48f493"
   },
-  "reviewed_documentation_commit": "14a4bef86f63a9a67ce637aa8ddc4422c798f189",
+  "reviewed_documentation_commit": "1af1e92b2e810c42131832afde744676cb291b6c",
   "rows": [
     {
       "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
@@ -1229,10 +1346,10 @@
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Alert delivery/on-call and measured work-rate ETA.",
       "id": "PH-15",
-      "implementation": "Merged SN624 producer and Xops9a37239 consumer implement supported provider/window coverage and acknowledged conservation progress/ETA. The original36 financial gauges remain, with36 new fixed scalars and operational_progress JSON. Its12 targeted dashboard consumer tests pass; Go producer qualification remains pending; local observed cadence and target-only ETA do not create future/repair estimates or financial authority.",
-      "known_source_or_composition_limit": "No remaining source defect is asserted for the narrow merged extension. The12 dashboard consumers passed, while32 Go producer roots in normal/race and four Go controls remain unrun. Full PH15 other-owner status/history and live evidence remain separate obligations.",
+      "implementation": "Merged SN624 producer and Xops9a37239 consumer implement supported provider/window coverage and acknowledged conservation progress/ETA. The original36 financial gauges remain, with36 new fixed scalars and operational_progress JSON. Its12 targeted dashboard consumer tests pass; all32 Go producer normal tests pass, while race/control qualification remains pending; local observed cadence and target-only ETA do not create future/repair estimates or financial authority.",
+      "known_source_or_composition_limit": "No remaining source defect is asserted for the narrow merged extension. Producer32 normal and dashboard12 have passed; producer32 race and four Go controls remain unrun. Full PH15 other-owner status/history and live evidence remain separate obligations.",
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Original Xops482 conservation33/33 PASS plus separate control invocation and prior311 remain retained. Current Xops9a PH15 consumer12/12 actually PASS with zero failures/skips in6.981s, original wait joined and USER inactive/PID0. The32 Go producer roots remain UNEXECUTED. Earlier loader-only YAML/Ansible import failures are preserved; no source change or dependency installation was needed.",
+      "normal": "Original Xops482 conservation33/33 PASS plus separate control invocation and prior311 remain retained. Current Xops9a PH15 consumer12/12 actually PASS with zero failures/skips in6.981s, original wait joined and USER inactive/PID0. All32 Go producer normal roots now PASS with zero failures/skips/resource errors on the current624/Core026b/Serverd64 mainnet image; original selected LIST/body waits are joined. Earlier loader-only YAML/Ansible import failures are preserved; no source change or dependency installation was needed.",
       "original_complete_requirement": "Complete status domains, truthful progress/ETA, independent missing-host detection and observed operational signals.",
       "outcome_complete": false,
       "ph15_consumer_actual": {
@@ -1240,13 +1357,18 @@
         "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-xops-ph15-12-v3.receipt.json",
         "sha256": "ceccdbdfa45f6167dc585da8d9d49cf655a86169bff2b2e0b7b8dbc376a31734"
       },
+      "ph15_producer_normal_actual": {
+        "bytes": 15742,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-ph15-producer32-normal-v1.receipt.json",
+        "sha256": "172a513c62bd3723a7dfd24633b67d3df977fd73d40fcc7a441ce1488085485b"
+      },
       "ph15_source_and_scope": {
-        "bytes": 11997,
-        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/ph15-consumer12-actual-docs/ph15-source-and-consumer-actual-v2.json",
-        "sha256": "76fd5d673b0491efd379464a17b5aeb76242b48fae8d30e6a972b3a4db967b78"
+        "bytes": 13411,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/ph15-actual-progress-v3.json",
+        "sha256": "a1b9c4720e22817e763513e72eb8d15caf1cae93fc2424394f5dffd456b69d3d"
       },
       "race": "PH15 producer32 current race qualification is UNEXECUTED; prior component race receipts retain their original scopes.",
-      "remaining_software_evidence": "Execute all32 selected PH15 producer roots per normal/race mode and four operative control groups. The twelve targeted Xops consumer tests passed with actual source/Promtool prerequisites. Preserve other owners transaction/finalization and incident-history requirements; live ingestion/on-call delivery and measured operational rates remain separate.",
+      "remaining_software_evidence": "Execute all32 selected PH15 producer roots in race mode and four operative control groups; all32 normal roots have passed. The twelve targeted Xops consumer tests passed with actual source/Promtool prerequisites. Preserve other owners transaction/finalization and incident-history requirements; live ingestion/on-call delivery and measured operational rates remain separate.",
       "required_outcome": "Status/operations: actionable failure classes, progress and evidence-based ETA",
       "retained_component_evidence": {
         "bytes": 1968,
@@ -1882,7 +2004,7 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v9",
+  "schema": "original38-current-evidence-ledger-v10",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
@@ -1921,7 +2043,7 @@
       "correction": {
         "commit": "598f7ebf54a63d407ed13e54839c2f4e9d64dc05",
         "merged_main": "5b873c942c57ff2a47ad9a896a529bf59e9ec5e6",
-        "qualification": "One affected-root retest pending. Original31 and latest34 failed receipts remain unchanged.",
+        "qualification": "The sole corrected assertion now actually passes within current tooling38. Original31/34 failed receipts remain unchanged; no new full34 rerun or transfer of prior33 passes is asserted. Original18 controls remain pending.",
         "scope": "Exact count and byte census diagnostic assertions only; production helper unchanged by this follow-up."
       },
       "counts": {
@@ -1956,6 +2078,11 @@
         "bytes": 7214,
         "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification34-v1.stderr",
         "sha256": "3ff34b9a662b7067e083d537669f1cdfe2ff2cc0026b5b4d55a90edde17b1078"
+      },
+      "targeted_corrected_test_actual": {
+        "bytes": 3791,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-interpreter37-source1-v1.receipt.json",
+        "sha256": "b4712010b1601acdb85605845d46083bc4097d83137f3bbc5308ef25f8de35ca"
       }
     },
     {
@@ -1970,25 +2097,30 @@
       "consumer_status": "PASS_XOPS_PH15_12",
       "controls": 4,
       "evidence": {
-        "bytes": 11997,
-        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/ph15-consumer12-actual-docs/ph15-source-and-consumer-actual-v2.json",
-        "sha256": "76fd5d673b0491efd379464a17b5aeb76242b48fae8d30e6a972b3a4db967b78"
+        "bytes": 13411,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/ph15-actual-progress-v3.json",
+        "sha256": "a1b9c4720e22817e763513e72eb8d15caf1cae93fc2424394f5dffd456b69d3d"
       },
-      "normal": "UNEXECUTED",
+      "normal": "PASS_32_RUN_32_PASS_0_FAIL_0_SKIP",
+      "normal_actual": {
+        "bytes": 15742,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-ph15-producer32-normal-v1.receipt.json",
+        "sha256": "172a513c62bd3723a7dfd24633b67d3df977fd73d40fcc7a441ce1488085485b"
+      },
       "producer_new_roots": 17,
       "producer_preselected_neighbors": 10,
       "producer_restored_existing_roots": 5,
       "producer_selected_roots": 32,
       "race": "UNEXECUTED",
-      "status": "MERGED_PRODUCER_QUALIFICATION_PENDING_CONSUMER12_ACTUAL_PASS"
+      "status": "PRODUCER32_NORMAL_AND_CONSUMER12_PASS_RACE_CONTROLS_PENDING"
     }
   ],
   "source_selection": {
-    "bytes": 2109,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/SCOPE-HANDOFF.json",
-    "sha256": "dab70e37f307df0f8793d2fd95deea25961f435ce31b925a92359b862544ec11"
+    "bytes": 1545,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/SCOPE-HANDOFF.json",
+    "sha256": "2724795fa61afc5034bb727f5f20081c03ebbe5a263fe46360373474c6f99007"
   },
-  "status": "All38 original outcomes remain open. Eight normal Server compilers actually pass on frozen f0b/026/983 with joined waits and protected images; their bodies/race/controls and later payment graph remain separate. Full Rust113 including ignored roots actually passes113/113 with zero failures/skips/not-run,61 exports and closed outer process. All9 native fixture profiles/38 originals are ready; original Rust controls and current Go native86 consumers remain unqualified. PH13 canceled attribution remains honestly unknown without an authorizer; PH15 source is merged; all12 targeted dashboard consumer tests actually pass with zero failures/skips. Its32 Go producer roots per mode, four Go controls and live operational evidence remain pending. Preserve original2733 Go roots and259 controls;17 new roots plus5 previously omitted existing neighbors give2755 Go roots per mode, and4 new controls give263 source groups. Retained component receipts do not qualify these changes.",
+  "status": "All38 original outcomes remain open. Eight normal Server compilers actually pass on frozen f0b/026/983 with joined waits and protected images; their bodies/race/controls and later payment graph remain separate. Full Rust113 including ignored roots actually passes113/113 with zero failures/skips/not-run,61 exports and closed outer process. All9 native fixture profiles/38 originals are ready; original Rust controls and current Go native86 consumers remain unqualified. PH13 canceled attribution remains honestly unknown without an authorizer; PH15 source is merged; all12 targeted dashboard consumer tests actually pass with zero failures/skips. Its32 Go producer normal roots also pass with zero failures/skips/resource errors; producer race, four Go controls and live operational evidence remain pending. Current624/Core026b/Serverd64 mainnet and miner normal compilers pass with joined waits and protected images. Preserve original2733 Go roots and259 controls;17 new roots plus5 previously omitted existing neighbors give2755 Go roots per mode. Restoring two previously requested existing payment neighbors gives2757 (Server2027/controller95); mainnet292 and263 controls are unchanged. Retained results qualify only their named component/mode scopes.",
   "supersedes": {
     "bytes": 124390,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",

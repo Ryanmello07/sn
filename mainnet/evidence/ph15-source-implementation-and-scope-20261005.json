@@ -189,21 +189,55 @@
     "tree": "860774c4594761e42a6efe910051eeffac0e2ee6"
   },
   "counts_per_mode": {
-    "all_go": 2755,
+    "all_go": 2757,
     "connect": 224,
     "mainnet": 292,
-    "server": 2025,
-    "server_controller": 93,
+    "server": 2027,
+    "server_controller": 95,
     "server_full_model": 1865,
     "sn": 498,
     "sn_connect_vless": 730,
     "vlessinterop": 8
   },
-  "documentation_base": "14a4bef86f63a9a67ce637aa8ddc4422c798f189",
+  "documentation_base": "1af1e92b2e810c42131832afde744676cb291b6c",
   "preserved_all38_original_outcomes": true,
+  "previous_2755_scope_preserved": {
+    "bytes": 2109,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/SCOPE-HANDOFF.json",
+    "sha256": "dab70e37f307df0f8793d2fd95deea25961f435ce31b925a92359b862544ec11"
+  },
   "previous_go_roots_per_mode": 2733,
   "previous_source_control_groups": 259,
   "producer": {
+    "actual_normal": {
+      "complete_evidence": {
+        "bytes": 15540,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/current-compilers-and-ph15-producer-normal-20261005.json",
+        "sha256": "6621b9b30449b527ce8799248e33509fe8d2902c30475250e2c57eb0bb586ee5"
+      },
+      "counts": {
+        "fail": 0,
+        "pass": 32,
+        "run": 32,
+        "skip": 0
+      },
+      "outer_terminal": {
+        "active_state": "inactive",
+        "exit": 0,
+        "main_pid": 0,
+        "readback": {
+          "bytes": 1631,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-ph15-producer32-normal-v1-user-terminal-readback.json",
+          "sha256": "26ded585ac82deedff9bdbe6f178be8e291b02ec76243bb8ddb8b6378d4f54a1"
+        },
+        "status": "EXECUTOR_ARTIFACT_VERIFIED"
+      },
+      "receipt": {
+        "bytes": 15742,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-ph15-producer32-normal-v1.receipt.json",
+        "sha256": "172a513c62bd3723a7dfd24633b67d3df977fd73d40fcc7a441ce1488085485b"
+      }
+    },
     "causal_controls": "4_GROUPS_UNEXECUTED",
     "commit": "624cf1e00f45dac61bc5675e4a21eb2a8dd121e5",
     "intake": {
@@ -213,22 +247,22 @@
     },
     "merged_sn_main": "dddd686da6bcd66598f27c5176b406387fda1750",
     "new_coverage_progress_gauges": 36,
-    "normal": "UNEXECUTED",
+    "normal": "PASS_32_RUN_32_PASS_0_FAIL_0_SKIP",
     "old_financial_gauges_preserved": 36,
     "race": "UNEXECUTED",
     "status_output": "operational_progress after original durable acknowledgment",
     "total_fixed_gauges": 72
   },
   "remaining_original_ph15": [
-    "All32 producer roots in normal/race and four original producer control groups remain unexecuted. The twelve targeted consumer tests have passed with actual Promtool/source gates; preserve their separate component receipt.",
+    "Producer32 race and four original producer control groups remain unexecuted. Producer32 normal and twelve targeted consumers have separately passed; retain their actual scopes and component receipts.",
     "Other owners actual submission/finalization receipts and durable incident recurrence/resolution histories.",
     "Original provider/window inputs, deployed measured rates, collector/receiver ingestion, on-call delivery and outage/deadlock rehearsals."
   ],
-  "schema": "ph15-source-and-consumer-actual-progress-v2",
+  "schema": "ph15-consumer-and-producer-normal-actual-progress-v3",
   "scope": {
-    "bytes": 2109,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/SCOPE-HANDOFF.json",
-    "sha256": "dab70e37f307df0f8793d2fd95deea25961f435ce31b925a92359b862544ec11"
+    "bytes": 1545,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/SCOPE-HANDOFF.json",
+    "sha256": "2724795fa61afc5034bb727f5f20081c03ebbe5a263fe46360373474c6f99007"
   },
   "semantics": [
     "Original36 financial gauges and original custody/signing authority are preserved.",
@@ -238,5 +272,5 @@
     "Merged source does not establish active collector ingestion, alert delivery, live operation or complete PH15."
   ],
   "source_control_groups": 263,
-  "status": "DASHBOARD_CONSUMER12_PASS_PRODUCER_NORMAL_RACE_CONTROLS_PENDING"
+  "status": "PRODUCER32_NORMAL_AND_CONSUMER12_PASS_RACE_CONTROLS_PENDING"
 }
