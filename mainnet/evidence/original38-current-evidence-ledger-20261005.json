@@ -32,13 +32,19 @@
     "invocation_id": "cf41e3aee35245a1b037cf956b0fe8f2",
     "known_failed_root_names": [
       "TestArinRemoteFullPopulationActualPGAndTwentyUnixOwners",
+      "TestArinRemoteFullPopulationTwoHostPipesRolloverAndLatency",
       "TestArinRemoteFullPopulationEightHostsWithinTwoPipes",
-      "TestArinRemoteFullPopulationTwoHostPipesRolloverAndLatency"
+      "TestFp2BucketMembershipAndCommonGates"
     ],
     "known_failure_observation": {
-      "bytes": 2039,
-      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/fullmodel-live-known-failures.json",
-      "sha256": "c9565ba855103c3789b0f8e83ef290ddf33d49d2f0c98e7e22dd2458a8ba96dd"
+      "bytes": 1607,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/fullmodel-live-observation.json",
+      "sha256": "acae1b6febbea5d6fe9224a13c516c01b910e220bbfcb8855609bcf88161e803"
+    },
+    "known_skip": {
+      "bytes": 1119,
+      "path": "/mnt/data/sn-testnet/sol-server-final-f67-20261004/evidence/current-624-d64-fullmodel1865-live-first-skip-audit-v1.json",
+      "sha256": "8e6b3b48cb928e1d748ce0abdc19ae9546f10d9d9e95100052f60a94cf112b2e"
     },
     "normal_body_passes_claimed": 0,
     "observation": {
@@ -53,7 +59,7 @@
       "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
       "sn": "624cf1e00f45dac61bc5675e4a21eb2a8dd121e5"
     },
-    "status": "ACTUAL_LAUNCHED_KNOWN_FAILURES_TERMINAL_PENDING",
+    "status": "NORMAL_BODY_LIVE_WITH_KNOWN_FAILURES_AND_FIXTURE_SKIP_NO_TERMINAL",
     "terminal_result": null
   },
   "actual_current_server8_compilers": {
@@ -585,6 +591,16 @@
     "production_changes": 0,
     "test_bodies": 0
   },
+  "completion_complement": {
+    "combined_deduplicated_obligations_per_mode": 2981,
+    "master_per_mode": 2824,
+    "scope_limit": "The master2824 remains unchanged. Companion obligations retain exact scopes and cannot be silently dropped; this arithmetic grants no execution result or whole-current-source census.",
+    "sdk_separate_per_mode": 15,
+    "separate_existing_per_mode": 109,
+    "separate_upstream_required": 51,
+    "upstream_additional_disjoint_per_mode": 33,
+    "upstream_already_master": 18
+  },
   "confirmed_current_failure_classification": [
     {
       "actual": {
@@ -737,10 +753,35 @@
       "sha256": "ee132cc26c8434c79e6da20e94c0481c0f2e72fcd4b2468e04d03ca0e74b2bc5"
     }
   },
+  "contract_reuse_assessment": {
+    "actual_forge_roots_retained": 226,
+    "actual_forge_suites": 20,
+    "assessment": {
+      "bytes": 11025,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/reuse-assessment.json",
+      "sha256": "398df4384bbd20c57df2ad6e4f5219e981c646b855da8c87bf9f418bb344a437"
+    },
+    "fail": 0,
+    "five_artifact_readback": {
+      "bytes": 48299,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/five-artifact-input-readback.json",
+      "sha256": "a950d1b02e8389a92df7cc6c839df77531d088a7f413c46bf969c7fb1ab20d14"
+    },
+    "historical_origin": "41f996083f5e6910e639a093da0bb63e4e860222",
+    "input_readback_applies_through_current_sn": true,
+    "limit": "Preserve actual historical origins and exact two-root recovery causal pair/four catalogue Go controls. No229PASS, newbuild, deployment, actual native10/90 or live authority is inferred.",
+    "remaining_solidity_controls": 1,
+    "remaining_solidity_roots": [
+      "test_lateRootConsumesNewerMissedEpochWithoutRelabellingItsFunding",
+      "test_lateRootConsumesNewerExpiredRemainderWithoutRepeatingAcceptedClaim",
+      "test_earlierFinalizationCannotConsumeCarryCreatedAfterItsReceipt"
+    ],
+    "skip": 0
+  },
   "controls_preservation_and_delta": {
-    "bytes": 81944,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-02e507-upload-finality/control-catalog-addendum.json",
-    "sha256": "e87c425bce5332745e19af66c3ea1d0e26de0dd26ed9680497433a07413f2ea4"
+    "bytes": 260366,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/control-catalog-addendum.json",
+    "sha256": "9b6a7ca66af2b60060b69d9c4b94107a6917bb083f34b310072723d771a6110f"
   },
   "corrected_failures_not_reopened_as_code_bugs": [
     "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
@@ -793,18 +834,29 @@
       "run": 113,
       "skip": 0
     },
-    "additive_control_groups": 63,
-    "current_go_roots_per_mode": 2787,
+    "additive_control_groups": 130,
+    "arin_new_fixture_control_groups": 3,
+    "arin_new_model_roots": 1,
+    "current_go_roots_per_mode": 2824,
     "current_mainnet_roots_per_mode": 302,
-    "current_server_controller_roots_per_mode": 95,
-    "current_server_full_model": 1865,
-    "current_server_roots_per_mode": 2027,
-    "current_sn_roots_per_mode": 528,
+    "current_server_api_handlers": 10,
+    "current_server_controller_roots_per_mode": 101,
+    "current_server_full_model": 1866,
+    "current_server_roots_per_mode": 2044,
+    "current_sn_roots_per_mode": 548,
     "current_validator_roots_per_mode": 79,
+    "fp2_new_control_groups": 4,
     "original_native_overlap_with_prior2637": 0,
     "original_requirements": 38,
     "outcomes_closed": 0,
     "pending_native86_originals": 0,
+    "ph12_new_server_control_groups": 27,
+    "ph12_new_server_roots": 16,
+    "ph12_new_sn_diagnostic_groups": 1,
+    "ph12_new_sn_intended_failure_groups": 33,
+    "ph12_new_sn_overlays_including_diagnostic": 34,
+    "ph12_new_sn_roots": 20,
+    "ph12_new_sn_source_control_groups": 33,
     "ph15_consumer_python_roots_unrun": 0,
     "ph15_existing_neighbors_not_recounted": 10,
     "ph15_new_go_roots": 17,
@@ -822,26 +874,32 @@
     "rows_demonstrated_to_have_only_deployment_work_left": 0,
     "runtime_identity_new_control_groups": 11,
     "runtime_identity_new_go_roots": 7,
-    "separate_existing_completion_adjacent_roots_per_mode": 55,
+    "separate_existing_completion_adjacent_roots_per_mode": 109,
     "separate_existing_identity_adjacent_roots_per_mode": 28,
     "separate_existing_repair_adjacent_roots_per_mode": 14,
+    "separate_sdk_control_groups": 12,
     "separate_sdk_existing_adjacent_roots_per_mode": 3,
-    "separate_sdk_new_roots_per_mode": 9,
-    "separate_sdk_targeted_roots_per_mode": 12,
-    "source_catalog_control_groups": 290,
+    "separate_sdk_new_roots_per_mode": 12,
+    "separate_sdk_targeted_roots_per_mode": 15,
+    "separate_upstream_already_master_roots_per_mode": 18,
+    "separate_upstream_outside_master_roots_per_mode": 33,
+    "separate_upstream_required_roots_per_mode": 51,
+    "source_catalog_control_groups": 357,
+    "source_control_groups_including_separate_sdk": 369,
     "upload_finality_new_control_groups": 7,
     "upload_finality_new_go_roots": 11
   },
   "current_default_product_tuple": {
     "connect": "026b850248352b72255be7a966e391e0a15e74c1",
-    "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
-    "sn": "02e507ee631aca4d142225cc9d15e93a51f5e353",
+    "sdk": "e3f4f3fb56e59eb9fdb12c1f87594209c505e5e9",
+    "server": "67467b263ff311da66ec96b3e9d007850bbfc627",
+    "sn": "5e71e63c8d56418d389e8fa9a7e0f2c1310e1fcf",
     "xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
   },
   "current_portable_evidence": {
-    "bytes": 41675,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/current-portable-evidence-catalog-v2.json",
-    "sha256": "988955c17bd0842a4447093dd0ae281733aa0606ab057cfa2642e217f062328f"
+    "bytes": 12621,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
+    "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
   },
   "external_authority_never_supplied_by_software_tests": [
     "Independently approved genesis/runtime/code/checkpoint/finality and true deployed route/identity.",
@@ -1025,22 +1083,14 @@
       "issue": "Lower-only fresh finalized coverage still receives a generic hard error; WholeFee owns a separate unmerged correction. No new root/control or closure credit is included."
     },
     {
-      "component": "SDK mapping-generation wire compatibility",
-      "issue": "Server mapping-generation NoId is serialized as a string while the selected SDK field is int64; a separate SDK correction is underway. SDKc53 remains source-only and no new successor is counted."
-    },
-    {
-      "component": "PH12 earning-wallet producer and Server consent",
-      "issue": "Explicit mapping-consent integration remains separately under implementation; generic login proof does not authorize earning-wallet publication."
-    },
-    {
-      "component": "ARIN full-population model fixtures",
-      "issue": "Previously observed SQLSTATE53200 setup failures remain actual; source correction is separate, and this checkpoint makes no fullmodel terminal or PASS claim."
+      "component": "Server upstream ac53 review",
+      "issue": "Finite review of38 paths found no confirmed mainnet regression. Exact relevant roots and affected existing neighbors remain separate pending obligations; no runtime qualification is inferred."
     }
   ],
   "latest_checkpoint": {
-    "bytes": 11092,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-02e507-upload-finality/sn/mainnet/evidence/upload-finality-source-and-scope-20261005.json",
-    "sha256": "b2e0eade7a71779c94c180f2a3e05c53b4ec139440906e782261631a9f4ee96e"
+    "bytes": 12621,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
+    "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
   },
   "native86_asset_mapping": {
     "map": {
@@ -1087,11 +1137,11 @@
     "sha256": "12cdefbefbe1b671da91c2e27350e8bcda2af7c53fa231083c671fe8729d7559"
   },
   "prior_checkpoint_preserved": {
-    "bytes": 11997,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/ph15-consumer12-actual-docs/ph15-source-and-consumer-actual-v2.json",
-    "sha256": "76fd5d673b0491efd379464a17b5aeb76242b48fae8d30e6a972b3a4db967b78"
+    "bytes": 41675,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/current-portable-evidence-catalog-v2.json",
+    "sha256": "988955c17bd0842a4447093dd0ae281733aa0606ab057cfa2642e217f062328f"
   },
-  "prior_checkpoint_status_preserved": "All38 original outcomes remain open. Current master2776 roots/mode preserves every prior2757 tuple and adds19 new roots:operator10, identity7, boundary2. SN517/mainnet302/validator68, Core224, VLESS8 and Server2027/controller95/fullmodel1865 remain selected; all283 source control groups and separately named adjacent completion obligations remain required. These three source additions are unqualified. Actual nativefee13 normal/race, PH15 producer32 normal, dashboard12, Rust113 and named tooling scopes retain their original receipts. Current624/Core026/d64 mainnet/miner2 and Server8 normal compilers passed with joined waits; the fullmodel1865 normal body was actually running at12:17:22UTC with exact LIST1865, and its terminal is pending in this checkpoint. Three named ARIN full-population roots have since failed with PostgreSQL SQLSTATE53200; source diagnosis is ongoing and no fullmodel PASS is claimed. Original Rust controls, current Go native86, producer race/controls and live authority/rehearsal outcomes remain separate. Finite contract review found no confirmed source defect within its scope. Known upload lower-finality and PH12 earning-wallet consent corrections remain in progress and are excluded from source/result counts. No whole-current-graph PASS or deployment readiness is claimed. Separately, merged SDKc53 adds9 new HTTP/API roots plus2 existing API neighbors and1 nested-C-binding generator-currentness root; all12 targeted normal/race obligations and generator consistency remain pending. The master2776/283 and frozen older-SDK fullmodel inputs are unchanged; no SDK or end-to-end PH12 PASS is inferred.",
+  "prior_checkpoint_status_preserved": "All38 original outcomes remain open. Master2787 roots/mode preserves all2776 prior tuples and appends11 validator upload-finality roots:SN528/mainnet302/validator79, Core224,VLESS8,Server2027/controller95/fullmodel1865. All290 controls and separately named existing-adjacent obligations remain required. Upload02e507 is source implemented/unqualified, alongside the prior merged operator/identity/boundary source scopes. The separate SDK12 obligations remain unexecuted and are not counted in the master. Frozen624/Core026/d64 compiler/body provenance and prior targeted passes remain unchanged. Fullmodel normal was observed live with actual ARIN SQLSTATE53200 failures; no terminal or package PASS is claimed here. Separate EVM closing-finality, SDK NoId wire compatibility, PH12 producer/Server consent and ARIN setup corrections remain outside this source-count checkpoint. No deployment authority or whole-current-graph qualification is inferred.",
   "prior_failure_classification_preserved": [
     {
       "evidence_id": "nativefee11_direct",
@@ -1257,7 +1307,7 @@
   "reviewed_documentation_commit": "8776b03884fcca74d827dc613bd8233d2dc5f7a3",
   "rows": [
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1297,7 +1347,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1311,6 +1361,15 @@
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
       "original_complete_requirement": "Final signed-attempt census, nonce/outcome reconciliation and exact-byte/no-duplicate-spend behavior across all deployed owners.",
       "outcome_complete": false,
+      "ph12_source_update": {
+        "evidence": {
+          "bytes": 12621,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
+          "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
+        },
+        "implementation": "Merged provider credentials, original contribution selection, explicit prospective consent and retained identical replay; exact SDK string/integer NoId decoding preserves public int64 ABI.",
+        "qualification": "20newSN+16newServer and separateSDK15 normal/race/generator remain unexecuted. Existing adjacent obligations are explicit; no live authorization is inferred."
+      },
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Execute current all-owner original/replacement/cancel census, nonce/outcome and duplicate-effect tests.",
       "repair_dispatch_source_update": {
@@ -1338,7 +1397,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1387,7 +1446,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1444,7 +1503,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1470,7 +1529,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1499,7 +1558,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1539,7 +1598,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1565,7 +1624,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1579,6 +1638,15 @@
       "normal": "Claim1291694.27s and Restore1291973.82s PASS retained on original inputs; long5 current normal remains pending.",
       "original_complete_requirement": "Complete accepted owner/segment union, original authority, disk/inode forecasts, failure-safe cross-volume restore and production backup recovery.",
       "outcome_complete": false,
+      "ph12_source_update": {
+        "evidence": {
+          "bytes": 12621,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
+          "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
+        },
+        "implementation": "Merged provider credentials, original contribution selection, explicit prospective consent and retained identical replay; exact SDK string/integer NoId decoding preserves public int64 ABI.",
+        "qualification": "20newSN+16newServer and separateSDK15 normal/race/generator remain unexecuted. Existing adjacent obligations are explicit; no live authorization is inferred."
+      },
       "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
       "remaining_software_evidence": "Execute physical2048 plus complete producer active/cold restore, original owner/segment census and physical forecasts.",
       "required_outcome": "State and artifact storage: explicit durable volume, atomic publication and recovery",
@@ -1591,7 +1659,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1625,7 +1693,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1669,7 +1737,32 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
+      "contract_reuse_update": {
+        "actual_forge_roots_retained": 226,
+        "actual_forge_suites": 20,
+        "assessment": {
+          "bytes": 11025,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/reuse-assessment.json",
+          "sha256": "398df4384bbd20c57df2ad6e4f5219e981c646b855da8c87bf9f418bb344a437"
+        },
+        "fail": 0,
+        "five_artifact_readback": {
+          "bytes": 48299,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/five-artifact-input-readback.json",
+          "sha256": "a950d1b02e8389a92df7cc6c839df77531d088a7f413c46bf969c7fb1ab20d14"
+        },
+        "historical_origin": "41f996083f5e6910e639a093da0bb63e4e860222",
+        "input_readback_applies_through_current_sn": true,
+        "limit": "Preserve actual historical origins and exact two-root recovery causal pair/four catalogue Go controls. No229PASS, newbuild, deployment, actual native10/90 or live authority is inferred.",
+        "remaining_solidity_controls": 1,
+        "remaining_solidity_roots": [
+          "test_lateRootConsumesNewerMissedEpochWithoutRelabellingItsFunding",
+          "test_lateRootConsumesNewerExpiredRemainderWithoutRepeatingAcceptedClaim",
+          "test_earlierFinalizationCannotConsumeCarryCreatedAfterItsReceipt"
+        ],
+        "skip": 0
+      },
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1700,6 +1793,15 @@
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
       "original_complete_requirement": "Complete deposits/capture/carry/claims, original earning attribution, immutable vault liabilities and actual runtime rollback/transfer behavior.",
       "outcome_complete": false,
+      "ph12_source_update": {
+        "evidence": {
+          "bytes": 12621,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
+          "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
+        },
+        "implementation": "Merged provider credentials, original contribution selection, explicit prospective consent and retained identical replay; exact SDK string/integer NoId decoding preserves public int64 ABI.",
+        "qualification": "20newSN+16newServer and separateSDK15 normal/race/generator remain unexecuted. Existing adjacent obligations are explicit; no live authorization is inferred."
+      },
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
       "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Run corrected large-claim carry and small-credit neighbor, actual original capture/replay and Solidity/control scopes. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Contracts, operator and claims: complete settlement conservation and authorization",
@@ -1731,7 +1833,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1745,6 +1847,15 @@
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
       "original_complete_requirement": "Join actual producers, SDK, Server and validator consumers; prove complete paid/free/companion work, two-origin replay and immutable identity histories.",
       "outcome_complete": false,
+      "ph12_source_update": {
+        "evidence": {
+          "bytes": 12621,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
+          "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
+        },
+        "implementation": "Merged provider credentials, original contribution selection, explicit prospective consent and retained identical replay; exact SDK string/integer NoId decoding preserves public int64 ABI.",
+        "qualification": "20newSN+16newServer and separateSDK15 normal/race/generator remain unexecuted. Existing adjacent obligations are explicit; no live authorization is inferred."
+      },
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Prove nonempty actual ingress\u2192creation/session/work\u2192payout\u2192provider-window/Claim using independently admitted originals. Preserve existing canceled-work unknown/refusal coverage; the source audit adds no authorizer or new qualification gate.",
       "required_outcome": "Provider, operator and validator protocol: identity isolation and durable proof progress",
@@ -1794,7 +1905,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1823,7 +1934,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1865,7 +1976,23 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "arin_source_update": {
+        "adjacent_existing": 4,
+        "affected_existing": 3,
+        "controls": 3,
+        "intake": {
+          "bytes": 13118,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/arin-remote-population-transactions/evidence/HANDOFF.json",
+          "sha256": "8e9b9e79312b3aa29f62ee9029bd753327914715c5e60b3fae53200661c766d8"
+        },
+        "lesson": "Setup inserts100000 synthetic clients in512-row committed statements to release per-client transaction locks. Keep the original public triggers, actual population, twenty owners, timing and collection assertions; no PostgreSQL setting or live fixture is changed.",
+        "merged_ancestor": "0f2dc8071658a2612bc1f8a6fd67f87ebf07a25d",
+        "new_roots": 1,
+        "normal": "UNEXECUTED",
+        "race": "UNEXECUTED",
+        "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
+      },
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1874,6 +2001,11 @@
         "independent_peer_failure",
         "nativefee11_direct"
       ],
+      "current_frozen_fullmodel_observation": {
+        "bytes": 1607,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/fullmodel-live-observation.json",
+        "sha256": "acae1b6febbea5d6fe9224a13c516c01b910e220bbfcb8855609bcf88161e803"
+      },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Independent build provenance and production-path rehearsal.",
       "id": "PH-16",
@@ -1884,7 +2016,7 @@
       "original_complete_requirement": "Deterministic causal controls, affected normal/race/vet and actual complete release/rollout/restore/recovery qualification with exact custody.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
-      "remaining_software_evidence": "Complete current2637 normal/race and original227 plus3 additive causal obligations, reusing verified component results. Preserve all wider original requirements and qualify the Circle continuity correction. Complete the optional helper targeted diagnostic retest and original controls before adoption; active full hashing remains available.",
+      "remaining_software_evidence": "Complete the preserved2824 master normal/race selection, separate109 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all357 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate.",
       "required_outcome": "Qualification and evidence: deterministic faults, composed coverage and independent replay",
       "retained_component_evidence": {
         "bytes": 6133,
@@ -1913,7 +2045,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1939,7 +2071,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2002,7 +2134,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2036,7 +2168,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2062,7 +2194,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2102,7 +2234,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2128,7 +2260,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2154,7 +2286,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2180,7 +2312,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2215,7 +2347,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2235,7 +2367,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2264,7 +2396,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2305,7 +2437,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2339,7 +2471,32 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
+      "contract_reuse_update": {
+        "actual_forge_roots_retained": 226,
+        "actual_forge_suites": 20,
+        "assessment": {
+          "bytes": 11025,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/reuse-assessment.json",
+          "sha256": "398df4384bbd20c57df2ad6e4f5219e981c646b855da8c87bf9f418bb344a437"
+        },
+        "fail": 0,
+        "five_artifact_readback": {
+          "bytes": 48299,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/five-artifact-input-readback.json",
+          "sha256": "a950d1b02e8389a92df7cc6c839df77531d088a7f413c46bf969c7fb1ab20d14"
+        },
+        "historical_origin": "41f996083f5e6910e639a093da0bb63e4e860222",
+        "input_readback_applies_through_current_sn": true,
+        "limit": "Preserve actual historical origins and exact two-root recovery causal pair/four catalogue Go controls. No229PASS, newbuild, deployment, actual native10/90 or live authority is inferred.",
+        "remaining_solidity_controls": 1,
+        "remaining_solidity_roots": [
+          "test_lateRootConsumesNewerMissedEpochWithoutRelabellingItsFunding",
+          "test_lateRootConsumesNewerExpiredRemainderWithoutRepeatingAcceptedClaim",
+          "test_earlierFinalizationCannotConsumeCarryCreatedAfterItsReceipt"
+        ],
+        "skip": 0
+      },
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2369,7 +2526,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2395,7 +2552,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2455,7 +2612,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2475,7 +2632,32 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
+      "contract_reuse_update": {
+        "actual_forge_roots_retained": 226,
+        "actual_forge_suites": 20,
+        "assessment": {
+          "bytes": 11025,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/reuse-assessment.json",
+          "sha256": "398df4384bbd20c57df2ad6e4f5219e981c646b855da8c87bf9f418bb344a437"
+        },
+        "fail": 0,
+        "five_artifact_readback": {
+          "bytes": 48299,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/five-artifact-input-readback.json",
+          "sha256": "a950d1b02e8389a92df7cc6c839df77531d088a7f413c46bf969c7fb1ab20d14"
+        },
+        "historical_origin": "41f996083f5e6910e639a093da0bb63e4e860222",
+        "input_readback_applies_through_current_sn": true,
+        "limit": "Preserve actual historical origins and exact two-root recovery causal pair/four catalogue Go controls. No229PASS, newbuild, deployment, actual native10/90 or live authority is inferred.",
+        "remaining_solidity_controls": 1,
+        "remaining_solidity_roots": [
+          "test_lateRootConsumesNewerMissedEpochWithoutRelabellingItsFunding",
+          "test_lateRootConsumesNewerExpiredRemainderWithoutRepeatingAcceptedClaim",
+          "test_earlierFinalizationCannotConsumeCarryCreatedAfterItsReceipt"
+        ],
+        "skip": 0
+      },
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2506,6 +2688,15 @@
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
       "original_complete_requirement": "Exact original-work/reliability and recipient lineage, native 10/90 conformance, real reserves/deposits/claims and owner/operator custody; observe first-send outcomes prospectively.",
       "outcome_complete": false,
+      "ph12_source_update": {
+        "evidence": {
+          "bytes": 12621,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
+          "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
+        },
+        "implementation": "Merged provider credentials, original contribution selection, explicit prospective consent and retained identical replay; exact SDK string/integer NoId decoding preserves public int64 ABI.",
+        "qualification": "20newSN+16newServer and separateSDK15 normal/race/generator remain unexecuted. Existing adjacent obligations are explicit; no live authorization is inferred."
+      },
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
       "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Qualify actual nonempty participant-to-payout, corrected carry, native proof/denomination and immutable recipient/liability paths. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Economics, settlement and custody",
@@ -2537,7 +2728,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2578,7 +2769,32 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
+      "contract_reuse_update": {
+        "actual_forge_roots_retained": 226,
+        "actual_forge_suites": 20,
+        "assessment": {
+          "bytes": 11025,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/reuse-assessment.json",
+          "sha256": "398df4384bbd20c57df2ad6e4f5219e981c646b855da8c87bf9f418bb344a437"
+        },
+        "fail": 0,
+        "five_artifact_readback": {
+          "bytes": 48299,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-qualification-reuse-02e507ee/five-artifact-input-readback.json",
+          "sha256": "a950d1b02e8389a92df7cc6c839df77531d088a7f413c46bf969c7fb1ab20d14"
+        },
+        "historical_origin": "41f996083f5e6910e639a093da0bb63e4e860222",
+        "input_readback_applies_through_current_sn": true,
+        "limit": "Preserve actual historical origins and exact two-root recovery causal pair/four catalogue Go controls. No229PASS, newbuild, deployment, actual native10/90 or live authority is inferred.",
+        "remaining_solidity_controls": 1,
+        "remaining_solidity_roots": [
+          "test_lateRootConsumesNewerMissedEpochWithoutRelabellingItsFunding",
+          "test_lateRootConsumesNewerExpiredRemainderWithoutRepeatingAcceptedClaim",
+          "test_earlierFinalizationCannotConsumeCarryCreatedAfterItsReceipt"
+        ],
+        "skip": 0
+      },
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2627,11 +2843,32 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "arin_source_update": {
+        "adjacent_existing": 4,
+        "affected_existing": 3,
+        "controls": 3,
+        "intake": {
+          "bytes": 13118,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/arin-remote-population-transactions/evidence/HANDOFF.json",
+          "sha256": "8e9b9e79312b3aa29f62ee9029bd753327914715c5e60b3fae53200661c766d8"
+        },
+        "lesson": "Setup inserts100000 synthetic clients in512-row committed statements to release per-client transaction locks. Keep the original public triggers, actual population, twenty owners, timing and collection assertions; no PostgreSQL setting or live fixture is changed.",
+        "merged_ancestor": "0f2dc8071658a2612bc1f8a6fd67f87ebf07a25d",
+        "new_roots": 1,
+        "normal": "UNEXECUTED",
+        "race": "UNEXECUTED",
+        "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
+      },
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
       ],
+      "current_frozen_fullmodel_observation": {
+        "bytes": 1607,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/fullmodel-live-observation.json",
+        "sha256": "acae1b6febbea5d6fe9224a13c516c01b910e220bbfcb8855609bcf88161e803"
+      },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Production volume/backup inventory, explicit rebind and sizing rehearsal.",
       "id": "MG-09",
@@ -2653,7 +2890,23 @@
       }
     },
     {
-      "causal_controls": "Prior exact evidence retained; original227 plus all prior56 additions and7 native-upload-finality groups remain required (290 distinct source groups), without blanket current control-kill credit.",
+      "arin_source_update": {
+        "adjacent_existing": 4,
+        "affected_existing": 3,
+        "controls": 3,
+        "intake": {
+          "bytes": 13118,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/arin-remote-population-transactions/evidence/HANDOFF.json",
+          "sha256": "8e9b9e79312b3aa29f62ee9029bd753327914715c5e60b3fae53200661c766d8"
+        },
+        "lesson": "Setup inserts100000 synthetic clients in512-row committed statements to release per-client transaction locks. Keep the original public triggers, actual population, twenty owners, timing and collection assertions; no PostgreSQL setting or live fixture is changed.",
+        "merged_ancestor": "0f2dc8071658a2612bc1f8a6fd67f87ebf07a25d",
+        "new_roots": 1,
+        "normal": "UNEXECUTED",
+        "race": "UNEXECUTED",
+        "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
+      },
+      "causal_controls": "Prior exact evidence retained; original227 plus all prior63 and67 new operative source groups total357. The additional PH12SN redundant-defense diagnostic and SDK12 groups are separate. No blanket current causal-kill credit.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2662,6 +2915,11 @@
         "independent_peer_failure",
         "nativefee11_direct"
       ],
+      "current_frozen_fullmodel_observation": {
+        "bytes": 1607,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/fullmodel-live-observation.json",
+        "sha256": "acae1b6febbea5d6fe9224a13c516c01b910e220bbfcb8855609bcf88161e803"
+      },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Controlled activation, three native emission intervals and full settlement/claim cycle.",
       "id": "MG-10",
@@ -2672,7 +2930,7 @@
       "original_complete_requirement": "Complete prelaunch qualification and rollout/rollback/outage rehearsal; after approved activation observe three complete native emission intervals and a full 50,400-block UR settlement/claim cycle.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
-      "remaining_software_evidence": "Complete remaining software scope across2733 selected roots per mode and259 distinct source-control groups, all original wider gates and composed recovery/rollback/outage rehearsal. Current Server continuation remains frozen983; published paymentd64 requires targeted current-input qualification. Reuse unchanged complete-input positives without duplicate bodies.",
+      "remaining_software_evidence": "Complete the preserved2824 master normal/race selection, separate109 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all357 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate.",
       "required_outcome": "Qualification, rollout and actual acceptance",
       "retained_component_evidence": {
         "bytes": 920,
@@ -2701,33 +2959,56 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v15",
+  "schema": "original38-current-evidence-ledger-v16",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
     "sha256": "4187085b66193dc9e7f0496ec9c90c6c820a88bf3ce3da43e391b63dc9e222a9"
   },
   "separate_sdk_source_scope": {
+    "controls": {
+      "count": 12,
+      "excluded_from_core357": true,
+      "intake": {
+        "bytes": 19133,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-claim-auth/sdk-evidence/SDK-CONTROLS-HANDOFF.json",
+        "sha256": "3883880bf8b9e653d9990cda766ba1a8017e85593b7a2904dc04950dd3d3822f"
+      },
+      "normal": "UNEXECUTED",
+      "race": "UNEXECUTED"
+    },
     "evidence": {
-      "bytes": 6529,
-      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/sn/mainnet/evidence/sdk-c53-consent-api-source-scope-20261005.json",
-      "sha256": "062ab95f55eb27678c6138d672d826b06a2e42dadf3a038b56562f31f4e96522"
+      "bytes": 12621,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
+      "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
     },
+    "existing_neighbors": 3,
     "generator_currentness": "UNEXECUTED",
-    "known_wire_issue_pending": {
-      "component": "SDK mapping-generation wire compatibility",
-      "issue": "Server mapping-generation NoId is serialized as a string while the selected SDK field is int64; a separate SDK correction is underway. SDKc53 remains source-only and no new successor is counted."
+    "generator_source_review": {
+      "actual_generator_currentness": "UNEXECUTED",
+      "finding": "SnEpochResult remains nonbehavioral kindJson; generator method-set emission is skipped for this data type and its tagged int64 field is unchanged.",
+      "review": {
+        "bytes": 2759,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-claim-auth/sdk-evidence/JSON-METHOD-GENERATOR-SOURCE-REVIEW.json",
+        "sha256": "b70a305e97fcca2211a90a649bbff00bf5b2866c71a67ea19752c6d472f133ea"
+      }
     },
-    "master2776_unchanged": true,
-    "master283_controls_unchanged": true,
-    "merged_sdk_commit": "c53cd78a43608daf8ff4f24f4800b509ca2f6087",
+    "master_scope_excludes_sdk": true,
+    "merged_sdk_commit": "e3f4f3fb56e59eb9fdb12c1f87594209c505e5e9",
+    "new_roots": 12,
+    "noid_wire_issue": "SOURCE_FIXED_UNQUALIFIED",
     "normal": "UNEXECUTED",
     "race": "UNEXECUTED",
     "selection": {
-      "bytes": 17041,
-      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/sdk-c53-additive-docs/SDK-SELECTION.json",
-      "sha256": "23b44d9c40557bab20dae2fcbf5630298c336c2ca5013784c820112155ca5db2"
+      "bytes": 28605,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/SDK-SELECTION.json",
+      "sha256": "cab0e820cc3c5748958e8051a433d18b814804e718a26df037d382f1324d42ec"
     }
+  },
+  "separate_upstream_required_scope": {
+    "bytes": 40944,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/UPSTREAM-REQUIRED-RECIPE.json",
+    "sha256": "c997297ec0ebe25b0bde5e1973da6ed6e7a8ef50b4dd1aee0173a7a9aad97cd3"
   },
   "source_fixed_awaiting_qualification": [
     {
@@ -2927,14 +3208,82 @@
       "normal": "UNEXECUTED",
       "race": "UNEXECUTED",
       "status": "MERGED_SOURCE_FIXED_TARGETED_QUALIFICATION_PENDING"
+    },
+    {
+      "component": "PH12 SN/provider Server/SDK integration",
+      "diagnostic_groups": 1,
+      "expected_causal_groups": 60,
+      "generator": "UNEXECUTED",
+      "intakes": [
+        {
+          "bytes": 27556,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-claim-auth/SN-HANDOFF.json",
+          "sha256": "2db91c6836aea09294973f7da55c50be5f5184cdad418685ed68cf66acc7433b"
+        },
+        {
+          "bytes": 82080,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-claim-auth/SERVER-HANDOFF.json",
+          "sha256": "f93668508b5d17f6db32e56fba802f7f3b1cc6a9b246e0e34e2b38c459bc4363"
+        },
+        {
+          "bytes": 2116,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-claim-auth/SDK-NOID-INTAKE.json",
+          "sha256": "8c807942e051e9e50f1379ca33e859bff5660d284a1595324913d5145072c08a"
+        }
+      ],
+      "new_master_roots": 36,
+      "normal": "UNEXECUTED",
+      "race": "UNEXECUTED",
+      "sdk_separate_roots": 15,
+      "source_overlays": 61,
+      "source_tuple": {
+        "connect": "026b850248352b72255be7a966e391e0a15e74c1",
+        "sdk": "e3f4f3fb56e59eb9fdb12c1f87594209c505e5e9",
+        "server": "67467b263ff311da66ec96b3e9d007850bbfc627",
+        "sn": "5e71e63c8d56418d389e8fa9a7e0f2c1310e1fcf",
+        "xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
+      }
+    },
+    {
+      "component": "ARIN population transaction setup",
+      "controls": 3,
+      "intake": {
+        "bytes": 13118,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/arin-remote-population-transactions/evidence/HANDOFF.json",
+        "sha256": "8e9b9e79312b3aa29f62ee9029bd753327914715c5e60b3fae53200661c766d8"
+      },
+      "new_roots": 1,
+      "normal": "UNEXECUTED",
+      "original_failures_preserved": true,
+      "race": "UNEXECUTED"
+    },
+    {
+      "component": "FP2 discovery oracle",
+      "controls": 4,
+      "intake": {
+        "bytes": 3259,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/fp2-bucket-oracle/HANDOFF.json",
+        "sha256": "13c0f931b8ab773295801e25e697616b104ef918a252b08c7c8a0d0b5aa9edfd"
+      },
+      "lesson": "The documented discovery policy can return native Quality plus a lower-priority Speed borrower and Online members. Strengthen exact identities and tiers while retaining strict named/forced Quality. Production and economics remain unchanged; preserve the original frozen-model failure.",
+      "new_roots": 0,
+      "normal": "UNEXECUTED",
+      "race": "UNEXECUTED",
+      "review": {
+        "bytes": 1424,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/fp2-bucket-oracle/evidence/independent-source-review-v1.json",
+        "sha256": "4e850d1ea715d3c548f784d49c8992fad626ff02525d0337b058f54958fd5338"
+      },
+      "source_commit": "67467b263ff311da66ec96b3e9d007850bbfc627",
+      "strengthened_existing_roots": 1
     }
   ],
   "source_selection": {
-    "bytes": 2454,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-02e507-upload-finality/SCOPE-HANDOFF.json",
-    "sha256": "27e95021b1ede330f3c37fc03722859bf76d2697dca1767608e328d77d04575a"
+    "bytes": 6238,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/SCOPE-HANDOFF.json",
+    "sha256": "519c64b38e1aaa0183a16497b3e7af63ed68f8d6d648dee584c146b45e1cf10d"
   },
-  "status": "All38 original outcomes remain open. Master2787 roots/mode preserves all2776 prior tuples and appends11 validator upload-finality roots:SN528/mainnet302/validator79, Core224,VLESS8,Server2027/controller95/fullmodel1865. All290 controls and separately named existing-adjacent obligations remain required. Upload02e507 is source implemented/unqualified, alongside the prior merged operator/identity/boundary source scopes. The separate SDK12 obligations remain unexecuted and are not counted in the master. Frozen624/Core026/d64 compiler/body provenance and prior targeted passes remain unchanged. Fullmodel normal was observed live with actual ARIN SQLSTATE53200 failures; no terminal or package PASS is claimed here. Separate EVM closing-finality, SDK NoId wire compatibility, PH12 producer/Server consent and ARIN setup corrections remain outside this source-count checkpoint. No deployment authority or whole-current-graph qualification is inferred.",
+  "status": "All38 original outcomes remain open. Master2824 roots/mode preserves prior2787 and adds37 owned merged roots:SNminer20, Serverhandlers10/controller6/model1. SN548/mainnet302/validator79, Core224,VLESS8,Server2044/controller101/model1866 selected. All357 operative source groups remain required:prior290 plus67 additions. The extra SN redundant-defense diagnostic and SDK12 controls are separately preserved. Separate existing109 and SDK15 obligations remain explicit. PH12 provider credentials/original consent/retained replay, SDK exact NoId decoding and ARIN transaction setup are source fixed and unqualified. The upstream ac53 finite source review found no confirmed regression; its relevant roots remain a separate pending recipe. Thus1866 is the maintained owned model selection, not an exhaustive current model census. The frozen624/Core026/d64 fullmodel run has known four failures and one unallowed GeoLite2 fixture skip; no terminal or current-module PASS is claimed. Retained Forge226/five-artifact evidence applies only under its exact input proof; carry3 and original prior-carry control remain pending. Actual targeted passes and every original authority/rehearsal requirement remain unchanged. The upstream recipe preserves51 relevant roots:18 already master and33 disjoint additions, while three diagnostic declarations are not new mainnet obligations. The original2824 master, separate109 neighbors and SDK15 are unchanged. FP2 source674 strengthens one existing oracle and adds four pending controls, without a new root or production change. SDK12 controls are separate from core357; combined operative groups369 exclude the one extra SN diagnostic.",
   "supersedes": {
     "bytes": 124390,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",
