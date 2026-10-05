@@ -477,12 +477,12 @@ func TestValidatorActivationAdmissionRejectsExpiredObservationAndRollback(t *tes
 	for _, change := range []string{"age", "rollback", "advance"} {
 		f := newValidatorActivationFixture(t)
 		f.installed()
-		store, err := openValidatorActivationStore(t.Context(), f.approval, f.key, false, f.now)
+		store, err := openValidatorActivationStore(f.chain.storageContext(t.Context()), f.approval, f.key, false, f.now)
 		if err != nil {
 			t.Fatal(err)
 		}
 		calls := 0
-		result, err := advanceValidatorActivation(t.Context(), store, f.host, nil, "admit", func() time.Time {
+		result, err := advanceValidatorActivation(f.chain.storageContext(t.Context()), store, f.host, nil, "admit", func() time.Time {
 			calls++
 			if change == "advance" && calls >= 3 {
 				return f.now.Add(time.Second)
@@ -515,7 +515,7 @@ func TestValidatorActivationAdmissionPostSyncFreshness(t *testing.T) {
 	for _, change := range []string{"age", "rollback", "cancel"} {
 		f := newValidatorActivationFixture(t)
 		f.installed()
-		ctx, cancel := context.WithCancel(t.Context())
+		ctx, cancel := context.WithCancel(f.chain.storageContext(t.Context()))
 		store, err := openValidatorActivationStore(ctx, f.approval, f.key, false, f.now)
 		if err != nil {
 			cancel()
@@ -527,6 +527,9 @@ func TestValidatorActivationAdmissionPostSyncFreshness(t *testing.T) {
 		}
 		reached := false
 		store.syncDirectory = func(file *os.File) error {
+			if err := file.Sync(); err != nil {
+				return err
+			}
 			raw, err := os.ReadFile(store.path)
 			if err != nil {
 				return err
@@ -535,7 +538,7 @@ func TestValidatorActivationAdmissionPostSyncFreshness(t *testing.T) {
 			if err := json.Unmarshal(raw, &record); err != nil {
 				return err
 			}
-			if record.Status == "admitted-process-only" {
+			if !reached && record.Status == "admitted-process-only" {
 				reached = true
 				switch change {
 				case "age":
@@ -546,7 +549,7 @@ func TestValidatorActivationAdmissionPostSyncFreshness(t *testing.T) {
 					cancel()
 				}
 			}
-			return file.Sync()
+			return nil
 		}
 		result, err := advanceValidatorActivation(ctx, store, f.host, nil, "admit", func() time.Time { return f.now })
 		closeErr := store.close()
@@ -566,7 +569,7 @@ func TestValidatorActivationLegacyReadinessRecoversConsumedStart(t *testing.T) {
 	if _, code, detail := f.command(t.Context(), "start", f); code == 0 || f.starts != [2]int{1, 0} {
 		t.Fatal("synthetic initial partial start unavailable", code, detail)
 	}
-	store, err := openValidatorActivationStore(t.Context(), f.approval, f.key, false, f.now)
+	store, err := openValidatorActivationStore(f.chain.storageContext(t.Context()), f.approval, f.key, false, f.now)
 	if err != nil {
 		t.Fatal(err)
 	}

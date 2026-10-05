@@ -232,7 +232,7 @@ func TestValidatorActivationProductionRetainedProjectionCannotOpenPublicStart(t 
 	if code != 0 {
 		t.Fatal(diagnostic)
 	}
-	store, err := openValidatorActivationStore(t.Context(), f.approval, f.key, false, f.now)
+	store, err := openValidatorActivationStore(f.chain.storageContext(t.Context()), f.approval, f.key, false, f.now)
 	if err != nil {
 		t.Fatal(err)
 	}
