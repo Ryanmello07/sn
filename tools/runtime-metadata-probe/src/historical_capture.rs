@@ -295,8 +295,10 @@ fn capture_historical_scoped<S: TrieBackendStorage<Blake2Hasher>>(
         }
         body.push(scale_exact::<OpaqueExtrinsic>("capture extrinsic", &bytes)?);
     }
-    if BlakeTwo256::ordered_trie_root(body.iter().map(Encode::encode).collect(), state_version)
-        != *child.extrinsics_root()
+    if BlakeTwo256::ordered_trie_root(
+        body.iter().map(Encode::encode).collect(),
+        extrinsics_root_state_version(request.execution_state_version)?,
+    ) != *child.extrinsics_root()
     {
         return Err(ProbeError::new(
             "historical capture extrinsics root differs",

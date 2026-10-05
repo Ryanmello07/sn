@@ -14,6 +14,12 @@ separate checks. Consensus seals are retained in the original header identity
 and removed only from the runtime execution input. No seal/finality verifier or
 source-to-code admission is supplied by this backend.
 
+The raw admitted system version remains zero or one and must equal original
+`Core_version`. Its storage layout is independent of the SDK's extrinsics-root
+layout: system version one uses storage V1 and extrinsics V0. Both body checks
+preserve complete SCALE-encoded opaque extrinsics and reject the wrong layout;
+there is no accept-either fallback.
+
 Capture executes `Core_execute_block` in the same onchain context as strict
 replay. In the pinned SDK, an explicit proved `:heappages` value selects static
 memory sizing only in that context; the offchain proof helper ignores it.

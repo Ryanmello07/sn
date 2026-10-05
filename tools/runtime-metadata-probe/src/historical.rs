@@ -95,6 +95,19 @@ const MAXIMUM_BLOCK_BYTES: usize = 8 * 1024 * 1024;
 const MAXIMUM_HEADER_BYTES: usize = 64 * 1024;
 type NativeHeader = Header<u32, BlakeTwo256>;
 
+/// The wire admits raw system versions zero and one. Their storage layouts
+/// differ, but the pinned SDK selects extrinsics layout zero for both. Replay
+/// separately requires the original Core_version to match this declared value.
+fn extrinsics_root_state_version(system_version: u8) -> Result<StateVersion, ProbeError> {
+    StateVersion::try_from(system_version)
+        .map_err(|_| ProbeError::new("historical state version unsupported"))?;
+    Ok(RuntimeVersion {
+        system_version,
+        ..RuntimeVersion::default()
+    }
+    .extrinsics_root_state_version())
+}
+
 /// Roots come only from these completely decoded headers. The caller must
 /// independently admit their hashes/finality before using any resulting fact.
 #[derive(Clone, Deserialize, Serialize)]
@@ -282,7 +295,7 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
     }
     if BlakeTwo256::ordered_trie_root(
         extrinsics.iter().map(Encode::encode).collect(),
-        state_version,
+        extrinsics_root_state_version(job.execution_state_version)?,
     ) != *child.extrinsics_root()
     {
         return Err(ProbeError::new("historical extrinsics root differs"));
