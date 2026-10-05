@@ -93,11 +93,7 @@ func ethCall(ctx context.Context, client *ethclient.Client, contract common.Addr
 // revert payload when the endpoint returned one: Error(string) require
 // reasons, Panic(uint256), or a custom error known to the settlement-vault ABI.
 func revertError(err error) error {
-	var de rpc.DataError
-	if !errors.As(err, &de) {
-		return err
-	}
-	data := hexErrorData(de.ErrorData())
+	data := onchainRevertData(err)
 	if len(data) == 0 {
 		return err
 	}
