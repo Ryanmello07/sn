@@ -377,41 +377,11 @@ func (self *economicFundingResolver) claim(value economicConservationClaim) (eco
 // A transfer consumes the whole retained credit set. Missing opening evidence
 // remains unknown and cannot be parsed as an explicit zero balance.
 func (self *economicFundingResolver) payment(value economicConservationPayment) (economicFundingRange, error) {
-	if err := self.ctx.Err(); err != nil {
+	selected := newEconomicFundingSelection(nil)
+	if err := selected.payment(self, value); err != nil {
 		return economicFundingRange{}, err
 	}
-	if value.Status != "aggregate-credit-observed" {
-		amount := value.Event.Values["amount"]
-		return newEconomicFundingRange(amount, "0", amount, false)
-	}
-	result, err := newEconomicFundingRange(value.Credit.Opening, "0", value.Credit.Opening, false)
-	if err != nil {
-		return result, err
-	}
-	for _, id := range value.Credit.Claims {
-		if err := self.ctx.Err(); err != nil {
-			return economicFundingRange{}, err
-		}
-		claim, known := self.claims[id]
-		if !known && self.state.archiveView != nil {
-			claim, known = self.state.archiveView.claims[id]
-		}
-		if !known {
-			return result, errors.New("economic paid funding lost its original accepted leaf")
-		}
-		part, err := self.claim(claim)
-		if err != nil {
-			return result, err
-		}
-		result, err = result.add(part)
-		if err != nil {
-			return result, err
-		}
-	}
-	if result.Amount != value.Event.Values["amount"] {
-		return result, errors.New("economic paid funding differs from original credit transfer")
-	}
-	return result, nil
+	return selected.funding()
 }
 
 // Summary callers already hold the admitted archive. Cold counters are built
@@ -425,11 +395,14 @@ func (self *economicConservationState) fundingSummary(ctx context.Context) (*eco
 		return nil, err
 	}
 	result := &economicConservationFundingSummary{Captured: zeroEconomicFunding(), Accepted: zeroEconomicFunding(), Paid: zeroEconomicFunding(), ActiveEntitlements: []economicFundingEntitlement{}, Authority: "original-native-capture-and-receipt-funding; fungible-source-bounds; no-capital-subsidy-authority"}
+	var acceptedIndex, paidIndex *economicFundingSelectionIndex
 	if self.archiveView != nil && self.archiveView.funding != nil {
 		cold := self.archiveView.funding
-		result.Captured, result.Accepted, result.Paid = cold.captured, cold.accepted, cold.paid
+		result.Captured = cold.captured
+		acceptedIndex, paidIndex = cold.acceptedSelection, cold.paidSelection
 		result.OriginalCaptures, result.OriginalClaims, result.OriginalPayments = cold.captureCount, cold.claimCount, cold.paymentCount
 	}
+	accepted, paid := newEconomicFundingSelection(acceptedIndex), newEconomicFundingSelection(paidIndex)
 	for _, capture := range self.Captures {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -452,26 +425,24 @@ func (self *economicConservationState) fundingSummary(ctx context.Context) (*eco
 		result.ActiveEntitlements = append(result.ActiveEntitlements, value)
 	}
 	for _, claim := range self.Claims {
-		value, err := resolver.claim(claim)
-		if err != nil {
-			return nil, err
-		}
-		result.Accepted, err = result.Accepted.add(value)
-		if err != nil {
+		if err := accepted.claim(resolver, claim); err != nil {
 			return nil, err
 		}
 		result.OriginalClaims++
 	}
 	for _, payment := range self.Payments {
-		value, err := resolver.payment(payment)
-		if err != nil {
-			return nil, err
-		}
-		result.Paid, err = result.Paid.add(value)
-		if err != nil {
+		if err := paid.payment(resolver, payment); err != nil {
 			return nil, err
 		}
 		result.OriginalPayments++
+	}
+	result.Accepted, err = accepted.funding()
+	if err != nil {
+		return nil, err
+	}
+	result.Paid, err = paid.funding()
+	if err != nil {
+		return nil, err
 	}
 	if result.Accepted.MinimumNonIncome != "0" || result.Paid.MinimumNonIncome != "0" {
 		value := false

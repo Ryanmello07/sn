@@ -10,14 +10,16 @@ import (
 
 // Only the private admitted owner can construct or mutate these compact facts.
 type economicConservationFundingIndex struct {
-	captures     map[string]economicFundingCapture
-	entitlements map[string]economicFundingEntitlement
-	captured     economicFundingRange
-	accepted     economicFundingRange
-	paid         economicFundingRange
-	captureCount uint64
-	claimCount   uint64
-	paymentCount uint64
+	captures          map[string]economicFundingCapture
+	entitlements      map[string]economicFundingEntitlement
+	captured          economicFundingRange
+	accepted          economicFundingRange
+	paid              economicFundingRange
+	acceptedSelection *economicFundingSelectionIndex
+	paidSelection     *economicFundingSelectionIndex
+	captureCount      uint64
+	claimCount        uint64
+	paymentCount      uint64
 }
 
 // The surrounding admission has already checked custody. All work below is
@@ -40,6 +42,8 @@ func (self *economicConservationArchiveView) retainFundingComposition(ctx contex
 	if err != nil {
 		return err
 	}
+	accepted := newEconomicFundingSelection(self.funding.acceptedSelection)
+	paid := newEconomicFundingSelection(self.funding.paidSelection)
 	retainedCaptures := economicConservationRetainedIds(compacted.Captures, func(value economicConservationCapture) string { return value.Id })
 	for _, capture := range original.Captures {
 		if err := ctx.Err(); err != nil {
@@ -85,6 +89,14 @@ func (self *economicConservationArchiveView) retainFundingComposition(ctx contex
 			return err
 		}
 		self.funding.entitlements[record.Id] = value
+		// Cache source topology even before its first selected claim. A long
+		// cold carry prefix is admitted once, not rebuilt by every live sample.
+		if err := accepted.obligation(resolver, record.Id); err != nil {
+			return err
+		}
+		if err := paid.obligation(resolver, record.Id); err != nil {
+			return err
+		}
 	}
 	retainedClaims := economicConservationRetainedIds(compacted.Claims, func(value economicConservationClaim) string { return value.Id })
 	for _, claim := range original.Claims {
@@ -94,12 +106,7 @@ func (self *economicConservationArchiveView) retainFundingComposition(ctx contex
 		if retainedClaims[claim.Id] {
 			continue
 		}
-		value, err := resolver.claim(claim)
-		if err != nil {
-			return err
-		}
-		self.funding.accepted, err = self.funding.accepted.add(value)
-		if err != nil {
+		if err := accepted.claim(resolver, claim); err != nil {
 			return err
 		}
 		self.funding.claimCount++
@@ -112,15 +119,26 @@ func (self *economicConservationArchiveView) retainFundingComposition(ctx contex
 		if retainedPayments[payment.Id] {
 			continue
 		}
-		value, err := resolver.payment(payment)
-		if err != nil {
-			return err
-		}
-		self.funding.paid, err = self.funding.paid.add(value)
-		if err != nil {
+		if err := paid.payment(resolver, payment); err != nil {
 			return err
 		}
 		self.funding.paymentCount++
+	}
+	self.funding.accepted, err = accepted.funding()
+	if err != nil {
+		return err
+	}
+	self.funding.paid, err = paid.funding()
+	if err != nil {
+		return err
+	}
+	self.funding.acceptedSelection, err = self.retainFundingSelection(ctx, accepted)
+	if err != nil {
+		return err
+	}
+	self.funding.paidSelection, err = self.retainFundingSelection(ctx, paid)
+	if err != nil {
+		return err
 	}
 	return ctx.Err()
 }
