@@ -323,22 +323,35 @@ func (self *economicConservationArchiveView) principalExecution(ctx context.Cont
 	}
 	segment := self.principalSegments[index]
 	if self.principalCache == nil || self.principalCache.Reference != segment.Reference {
-		var owner *monitorHistorySnapshot
-		for _, candidate := range self.owners {
-			if candidate.path == segment.Reference.Path {
-				owner = candidate
-				break
+		self.principalCache = nil
+		var raw []byte
+		var err error
+		if self.copiedSourceOnly {
+			raw, err = self.copiedPrincipalRead(ctx, segment.Reference)
+		} else {
+			var owner *monitorHistorySnapshot
+			for _, candidate := range self.owners {
+				if candidate.path == segment.Reference.Path {
+					owner = candidate
+					break
+				}
+			}
+			if owner == nil {
+				return empty, false, errors.New("principal segment has no retained original snapshot owner")
+			}
+			var present bool
+			raw, present, err = owner.read()
+			if err == nil && !present {
+				return empty, false, errors.New("principal segment lost original checkpoint bytes")
 			}
 		}
-		if owner == nil {
-			return empty, false, errors.New("principal segment has no retained original snapshot owner")
-		}
-		self.principalCache = nil
-		raw, present, err := owner.read()
 		if err != nil {
 			return empty, false, err
 		}
-		if !present || uint64(len(raw)) != segment.Reference.Bytes || monitorReadDigest(raw) != segment.Reference.Sha256 {
+		if err := errors.Join(ctx.Err(), self.check()); err != nil {
+			return empty, false, err
+		}
+		if uint64(len(raw)) != segment.Reference.Bytes || monitorReadDigest(raw) != segment.Reference.Sha256 {
 			return empty, false, errors.New("principal segment changed original checkpoint bytes")
 		}
 		var original economicConservationState

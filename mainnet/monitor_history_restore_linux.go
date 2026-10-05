@@ -18,12 +18,13 @@ import (
 
 // This in-memory review borrows immutable original inventories and byte refs.
 type monitorHistoryRestoreRootReview struct {
-	request   durablevolume.PreparationRequest
-	inventory durablevolume.Inventory
-	entries   map[string]durablevolume.InventoryEntry
-	seen      map[string]bool
-	nested    []string
-	profiles  map[string]storageMonitorTreeSnapshotProfile
+	request          durablevolume.PreparationRequest
+	inventory        durablevolume.Inventory
+	entries          map[string]durablevolume.InventoryEntry
+	seen             map[string]bool
+	nested           []string
+	profiles         map[string]storageMonitorTreeSnapshotProfile
+	admittedProfiles map[string]storageMonitorTreeSnapshotProfile
 }
 
 // An additional co-owner has exact explicit coverage; unknown files never get
@@ -39,7 +40,7 @@ func newMonitorHistoryRestoreRootReview(ctx context.Context, request durablevolu
 	if report.StateRoot.Path != request.RootPath || declared[request.RootPath] != report.StateRoot || !monitorHistoryPath(request.RestoreSource.Directory) {
 		return nil, errors.New("monitor history changed an original declared logical root")
 	}
-	self := &monitorHistoryRestoreRootReview{request: request, inventory: report, entries: map[string]durablevolume.InventoryEntry{}, seen: map[string]bool{}, profiles: map[string]storageMonitorTreeSnapshotProfile{}}
+	self := &monitorHistoryRestoreRootReview{request: request, inventory: report, entries: map[string]durablevolume.InventoryEntry{}, seen: map[string]bool{}, profiles: map[string]storageMonitorTreeSnapshotProfile{}, admittedProfiles: map[string]storageMonitorTreeSnapshotProfile{}}
 	self.request.Owners = nil
 	for _, entry := range report.Entries {
 		if _, present := self.entries[entry.Path]; present {
@@ -166,11 +167,38 @@ func (self *monitorHistoryRestoreRootReview) readProfile(ctx context.Context, re
 		return nil, errors.New("monitor history copied bytes differ from retained reference")
 	}
 	self.seen[name] = true
+	self.admittedProfiles[name] = storageMonitorTreeSnapshotProfile{Path: name, Kind: kind, MaximumBytes: uint64(maximum)}
 	if filepath.Dir(name) == "." {
 		self.request.Owners = append(self.request.Owners, owner)
 	} else {
 		self.nested = append(self.nested, name)
 		self.profiles[name] = storageMonitorTreeSnapshotProfile{Path: name, Kind: kind, MaximumBytes: uint64(maximum)}
+	}
+	return raw, nil
+}
+
+// Lazy restore validation can revisit an already admitted original without
+// creating a second coverage owner. Only descriptors stay resident; bytes are
+// reread under the same copied directory, inventory digest and fixed profile.
+func (self *monitorHistoryRestoreRootReview) rereadProfile(ctx context.Context, reference monitorHistoryReference, kind string, maximum int) ([]byte, error) {
+	if err := errors.Join(ctx.Err(), validateMonitorCheckpointProfile(kind, maximum), reference.validateLimit(uint64(maximum))); err != nil {
+		return nil, err
+	}
+	name, contained := monitorHistoryRestoreRelative(self.request.RootPath, reference.Path)
+	profile, admitted := self.admittedProfiles[name]
+	entry, present := self.entries[name]
+	if !contained || !admitted || !self.seen[name] || profile.Kind != kind || profile.MaximumBytes != uint64(maximum) || !present || entry.Kind != "file" || entry.Size != reference.Bytes || entry.Sha256 != reference.Sha256 {
+		return nil, errors.New("monitor history reread requires the exact already admitted original profile")
+	}
+	raw, err := readBootstrapChainInput(ctx, planFileReference{Path: filepath.Join(self.request.RestoreSource.Directory, name), Sha256: reference.Sha256}, maximum)
+	if err != nil {
+		return nil, fmt.Errorf("monitor history copied member reread: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if uint64(len(raw)) != reference.Bytes {
+		return nil, errors.New("monitor history reread bytes differ from retained reference")
 	}
 	return raw, nil
 }

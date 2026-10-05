@@ -170,6 +170,9 @@ type economicConservationArchiveView struct {
 	feeOrigins               map[string]economicConservationFeeObligation
 	feeSummary               *economicConservationFeeSummary
 	owners                   []*monitorHistorySnapshot
+	copiedPrincipalRead      func(context.Context, monitorHistoryReference) ([]byte, error)
+	copiedSourceContext      context.Context
+	copiedSourceOnly         bool
 	resources                economicConservationResources
 	entries                  uint64
 	bytes                    uint64
@@ -215,6 +218,14 @@ func (self *economicConservationArchiveView) check() error {
 	if self.closed {
 		return os.ErrClosed
 	}
+	if self.copiedSourceOnly {
+		if self.copiedSourceContext == nil || self.copiedPrincipalRead == nil {
+			return errors.New("economic copied-source review lost its original reader")
+		}
+		if err := self.copiedSourceContext.Err(); err != nil {
+			return err
+		}
+	}
 	for _, owner := range self.owners {
 		if self.claimWork != nil {
 			self.claimWork(economicConservationRole, "archive-custody-check", 1)
@@ -222,6 +233,19 @@ func (self *economicConservationArchiveView) check() error {
 		if err := owner.check(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// Copied originals can prove restore contents, but only reopened physical
+// snapshot owners authorize a live worker. The caller's existing complete
+// custody fence still runs immediately before its dependent operation.
+func (self *economicConservationArchiveView) requireLive() error {
+	if self != nil && self.copiedSourceOnly {
+		return errors.New("economic copied-source review cannot authorize live work")
+	}
+	if self != nil && self.closed {
+		return os.ErrClosed
 	}
 	return nil
 }
@@ -236,6 +260,8 @@ func (self *economicConservationArchiveView) close() error {
 		result = errors.Join(result, owner.close())
 	}
 	self.owners, self.principalCache = nil, nil
+	self.copiedPrincipalRead = nil
+	self.copiedSourceContext = nil
 	return result
 }
 
@@ -735,13 +761,13 @@ func (self *economicConservationArchiveView) indexAdmission(original, compacted 
 }
 
 func openEconomicConservationArchive(ctx context.Context, policy economicConservationPolicy, state *economicConservationState, hooks monitorServiceHooks) (*economicConservationArchiveView, error) {
-	return readEconomicConservationArchive(ctx, policy, state, hooks, policy.openHistoryReader)
+	return readEconomicConservationArchive(ctx, policy, state, hooks, policy.openHistoryReader, nil)
 }
 
 // Foreground admission retains each original snapshot owner. Offline restore
 // supplies a copied-source reader instead and discards the returned index before
 // producing a preparation request; it cannot turn that index into a live owner.
-func readEconomicConservationArchive(ctx context.Context, policy economicConservationPolicy, state *economicConservationState, hooks monitorServiceHooks, read func(context.Context, monitorHistoryReference) (*monitorHistorySnapshot, []byte, error)) (_ *economicConservationArchiveView, resultErr error) {
+func readEconomicConservationArchive(ctx context.Context, policy economicConservationPolicy, state *economicConservationState, hooks monitorServiceHooks, read func(context.Context, monitorHistoryReference) (*monitorHistorySnapshot, []byte, error), copiedPrincipalRead func(context.Context, monitorHistoryReference) ([]byte, error)) (_ *economicConservationArchiveView, resultErr error) {
 	if ctx == nil || state == nil || read == nil {
 		return nil, errors.New("economic history requires an exact current checkpoint and reader")
 	}
@@ -751,6 +777,10 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 	}
 	view := newEconomicConservationArchiveView(resources)
 	view.admission = ctx
+	view.copiedPrincipalRead, view.copiedSourceOnly = copiedPrincipalRead, copiedPrincipalRead != nil
+	if view.copiedSourceOnly {
+		view.copiedSourceContext = ctx
+	}
 	finalityPolicy := economicConservationNativeBasis(policy).Native.Observation
 	view.finalityPolicy = &finalityPolicy
 	view.entitlementEnabled = policy.EntitlementSources != nil
@@ -811,6 +841,9 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		}
 		if owner != nil {
 			view.owners = append(view.owners, owner)
+			if view.copiedSourceOnly {
+				return nil, errors.New("economic copied-source review cannot borrow live snapshot custody")
+			}
 		}
 		var original economicConservationState
 		if err := decodeMonitorHistoryInput(raw, &original); err != nil {
