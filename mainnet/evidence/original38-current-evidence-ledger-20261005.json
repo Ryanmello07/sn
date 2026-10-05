@@ -1,4 +1,38 @@
 {
+  "actual_core224_normal": {
+    "closed_owner": {
+      "bytes": 1984,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-core224-peer2-user-terminal-readback.json",
+      "sha256": "c0c22df9f7b7d9f51a789b35b277501ad98589b8ffa881fc6245e4079728785b"
+    },
+    "counts": {
+      "fail": 2,
+      "pass": 222,
+      "run": 224,
+      "skip": 0
+    },
+    "failed_roots": [
+      "TestDialH1MessagesStandaloneTotalBudget",
+      "TestHttpRequestCausesChargeAbsentChildrenWithinOriginalBudget"
+    ],
+    "prebody_refusal": {
+      "bytes": 1445,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-core224-v1-prebody-refusal-user-terminal-readback.json",
+      "sha256": "2fb7d3c190ff38c6c04bce2f051f7acf9a377df19b7cb99eebcbe6121f9ff6d5"
+    },
+    "qualification_limit": "Actual normal results on retained Core026 image only. Both failures and the earlier zero-body metadata namespace refusal are preserved. New12 roots, current combined Core11f99 and upstream inputs are unqualified; race and controls remain separate.",
+    "receipt": {
+      "bytes": 49778,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/core026-normal224-runtime-v2.receipt.json",
+      "sha256": "61f22c212efa1f20bcd7ce6bf8809a97522cda2f725b0f34fa7f996e78d78eff"
+    },
+    "resource_errors": [],
+    "source_tuple": {
+      "core": "026b850248352b72255be7a966e391e0a15e74c1",
+      "server": "9836322d6c06ce0207fd5d754b025fc48cb11c83",
+      "sn": "f0b7e52ab009746e05c3f6fb718243658881790d"
+    }
+  },
   "actual_current2_compilers": {
     "complete_evidence": {
       "bytes": 15540,
@@ -57,9 +91,9 @@
       "sha256": "8e6b3b48cb928e1d748ce0abdc19ae9546f10d9d9e95100052f60a94cf112b2e"
     },
     "latest_known_exception_snapshot": {
-      "bytes": 2217,
-      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-516-decision-route/fullmodel-known-exceptions.json",
-      "sha256": "42146dab96452ee07ae8b3be0e070f42d42207f042b8e9850065551c3a78fd1e"
+      "bytes": 3057,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/fullmodel-known-exceptions.json",
+      "sha256": "d5d3ee627cabc4d9ee055e8ca030a14d5a4b216c32ce35d6225dc0577c7a6e53"
     },
     "normal_body_passes_claimed": 0,
     "observation": {
@@ -608,9 +642,9 @@
     "test_bodies": 0
   },
   "completion_complement": {
-    "combined_deduplicated_obligations_per_mode": 3013,
-    "master_per_mode": 2849,
-    "scope_limit": "Master2849 retains separate116 existing, upstream51 (18 already master) and SDK15 obligations. Combined deduplicated3013 is completion accounting, not a claim of newly authored tests or execution.",
+    "combined_deduplicated_obligations_per_mode": 3027,
+    "master_per_mode": 2863,
+    "scope_limit": "Master2863 plus existing116, previous upstream33 disjoint and SDK15=3027. Later upstream feature scopes and optional retention6 remain explicitly separate, with no blanket launch gate or qualification claim.",
     "sdk_separate_per_mode": 15,
     "separate_existing_per_mode": 116,
     "separate_upstream_required": 51,
@@ -800,9 +834,9 @@
     "skip": 0
   },
   "controls_preservation_and_delta": {
-    "bytes": 296889,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/control-catalog-addendum.json",
-    "sha256": "43ed492fbee789900eb01db2659cc550fbe616f3625052762a7437b4277c2bd4"
+    "bytes": 336618,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/control-catalog-addendum.json",
+    "sha256": "f29b779f8f7b5ff07704866c651d6fb338b326ff961c81b9402e1780a02248bd"
   },
   "corrected_failures_not_reopened_as_code_bugs": [
     "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
@@ -812,6 +846,12 @@
     "Historical owner fixture, signed-NUL model indexing, stale ClosedWork API and carry6%-vs99% fixture failures retain their original receipts and named source corrections; only their exact later passed subsets are credited."
   ],
   "counts": {
+    "actual_core224_normal": {
+      "fail": 2,
+      "pass": 222,
+      "run": 224,
+      "skip": 0
+    },
     "actual_current2_normal_compilers_passed": 2,
     "actual_current_server_normal_compilers_passed": 8,
     "actual_current_tooling_python_tests": {
@@ -855,20 +895,24 @@
       "run": 113,
       "skip": 0
     },
-    "additive_control_groups": 150,
+    "additive_control_groups": 166,
     "arin_new_fixture_control_groups": 3,
     "arin_new_model_roots": 1,
-    "current_go_roots_per_mode": 2849,
+    "core_new_roots": 12,
+    "current_connect_roots_per_mode": 236,
+    "current_go_roots_per_mode": 2863,
     "current_mainnet_roots_per_mode": 302,
     "current_server_api_handlers": 10,
     "current_server_controller_roots_per_mode": 101,
-    "current_server_full_model": 1866,
-    "current_server_roots_per_mode": 2044,
+    "current_server_full_model": 1868,
+    "current_server_roots_per_mode": 2046,
     "current_sn_roots_per_mode": 573,
     "current_validator_roots_per_mode": 104,
     "decision_finality_new_control_groups": 13,
     "decision_finality_new_validator_roots": 16,
     "fp2_new_control_groups": 4,
+    "optional_minio_controls_separate": 7,
+    "optional_minio_new_roots_separate": 6,
     "original_native_overlap_with_prior2637": 0,
     "original_requirements": 38,
     "outcomes_closed": 0,
@@ -910,22 +954,28 @@
     "separate_upstream_already_master_roots_per_mode": 18,
     "separate_upstream_outside_master_roots_per_mode": 33,
     "separate_upstream_required_roots_per_mode": 51,
-    "source_catalog_control_groups": 377,
-    "source_control_groups_including_separate_sdk": 389,
+    "separate_wallet_diagnostic_roots": 2,
+    "server_fixture_new_roots": 2,
+    "source_catalog_control_groups": 393,
+    "source_control_groups_including_separate_sdk": 405,
     "upload_finality_new_control_groups": 7,
     "upload_finality_new_go_roots": 11
   },
   "current_default_product_tuple": {
-    "connect": "026b850248352b72255be7a966e391e0a15e74c1",
-    "sdk": "e3f4f3fb56e59eb9fdb12c1f87594209c505e5e9",
-    "server": "67467b263ff311da66ec96b3e9d007850bbfc627",
-    "sn": "ee81380ce97a7654979623d59164a178f6dca408",
+    "connect": "11f99c8f2b5c439625b35abec07de31e0987af2c",
+    "sdk": "18fca2edbbeac5566ef9c40027dba0e1d83be1d7",
+    "server": "f0b5238ffb663c6046c430b6542435fbc6ff0ceb",
+    "sn": "494c65becda9ce2c883cba04ff3b472639f41bd8",
     "xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
   },
   "current_portable_evidence": {
-    "bytes": 3265,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
-    "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+    "bytes": 3725,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+    "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+  },
+  "execution_priority": {
+    "deadline_utc": "2026-10-05T16:26:00Z",
+    "strategy": "Usefully parallel focused compilers and tests first; full suites afterward. Preserve original obligations, exact source inputs and component evidence. Full catalog/controls are not prerequisites for focused validation."
   },
   "external_authority_never_supplied_by_software_tests": [
     "Independently approved genesis/runtime/code/checkpoint/finality and true deployed route/identity.",
@@ -1105,9 +1155,14 @@
   },
   "known_pending_source_work": [],
   "latest_checkpoint": {
-    "bytes": 3265,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
-    "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+    "bytes": 3725,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+    "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+  },
+  "latest_published_addendum": {
+    "bytes": 2302,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/latest-published-addendum.json",
+    "sha256": "4390c21fdf63377c616c89737210a7a7e33bcd8b6423ce7e86285ee5dc27f36b"
   },
   "native86_asset_mapping": {
     "map": {
@@ -1153,12 +1208,17 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261004/sol-final-coverage-audit-20261004.json",
     "sha256": "12cdefbefbe1b671da91c2e27350e8bcda2af7c53fa231083c671fe8729d7559"
   },
-  "prior_checkpoint_preserved": {
-    "bytes": 3986,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-516-decision-route/sn/mainnet/evidence/evm-decision-route-source-and-scope-20261005.json",
-    "sha256": "00a1c665ffd300dda8e3a8d8a8709f0576b7b47ca6bde281a6dda764cb43ace7"
+  "optional_feature_scope": {
+    "bytes": 6152,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/optional-minio-retention.json",
+    "sha256": "ae42cf385dfd0563dc6fb484739405775b0451617496f3d310b07f4c1ea04244"
   },
-  "prior_checkpoint_status_preserved": "All38 original outcomes remain open. Preserve every prior2824 master tuple and357 operative control group; merged516 adds16 validator decision-finality roots and13 controls, yielding2840/core370 (SN564,validator95,mainnet302 unchanged). SDK15/12 controls, extra SN diagnostic, upstream51 recipe and all existing adjacent obligations remain separate and required. Decision source is implemented/unqualified; the immediate checkRoute identity follow-up remains separately unmerged. The frozen624/Core026/d64 model run retains its known failures/skips with no terminal or newer-source pass. All retained actual component results and external authority/rehearsal requirements remain unchanged.",
+  "prior_checkpoint_preserved": {
+    "bytes": 3265,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+    "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+  },
+  "prior_checkpoint_status_preserved": "All38 original outcomes remain open. Preserve every prior2840 master tuple and370 operative control group; mergedee813 adds9 validator route-identity roots/56cases and7 controls, yielding2849/core377 (SN573,validator104,mainnet302 unchanged). Six previously unselected existing route neighbors join the required companion116. SDK15/12 controls, extra SN diagnostic and upstream51 recipe remain separately required. The identified route source gap is fixed; normal/race/control qualification remains pending. Frozen624/Core026/d64 failures and original skips remain actual with no terminal or newer-source pass. All retained component results and external authority/rehearsal requirements remain unchanged.",
   "prior_failure_classification_preserved": [
     {
       "evidence_id": "nativefee11_direct",
@@ -1324,13 +1384,22 @@
   "reviewed_documentation_commit": "8776b03884fcca74d827dc613bd8233d2dc5f7a3",
   "rows": [
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
       ],
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Production custody and restore rehearsal.",
+      "focused_core_server_update": {
+        "actual": "Core026 normal224:222PASS/2FAIL/0SKIP, closed original owner.",
+        "evidence": {
+          "bytes": 3725,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+          "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+        },
+        "source": "Merged H1/cause and Server fixture fixes await normal/race/control qualification; later upstream source does not inherit older results."
+      },
       "id": "PH-01",
       "implementation": "Durable journals, separate runtime/audit owners, public archive and restore mechanisms are on main.",
       "known_source_or_composition_limit": null,
@@ -1364,7 +1433,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1380,6 +1449,15 @@
       },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Global signer/device custody; no live payment tests.",
+      "focused_core_server_update": {
+        "actual": "Core026 normal224:222PASS/2FAIL/0SKIP, closed original owner.",
+        "evidence": {
+          "bytes": 3725,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+          "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+        },
+        "source": "Merged H1/cause and Server fixture fixes await normal/race/control qualification; later upstream source does not inherit older results."
+      },
       "id": "PH-02",
       "implementation": "Signed-attempt custody, replacement/cancellation lineage and uncertain-outcome reconciliation are implemented.",
       "known_source_or_composition_limit": null,
@@ -1432,7 +1510,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1448,6 +1526,15 @@
       },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Real endpoint outage rehearsal separate from accelerated clocks.",
+      "focused_core_server_update": {
+        "actual": "Core026 normal224:222PASS/2FAIL/0SKIP, closed original owner.",
+        "evidence": {
+          "bytes": 3725,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+          "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+        },
+        "source": "Merged H1/cause and Server fixture fixes await normal/race/control qualification; later upstream source does not inherit older results."
+      },
       "id": "PH-03",
       "implementation": "Bounded complete-cause RPC/HTTP/DNS recovery, hard-cause precedence and joined close/cancellation are implemented; current Core adds affected transport code.",
       "known_source_or_composition_limit": null,
@@ -1499,7 +1586,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1556,7 +1643,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1582,7 +1669,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1611,7 +1698,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1651,7 +1738,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1677,7 +1764,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1712,7 +1799,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1746,7 +1833,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1790,7 +1877,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "contract_reuse_update": {
         "actual_forge_roots_retained": 226,
         "actual_forge_suites": 20,
@@ -1835,6 +1922,15 @@
       },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Authenticated chain/code/credit history and observed settlement cycle.",
+      "focused_core_server_update": {
+        "actual": "Core026 normal224:222PASS/2FAIL/0SKIP, closed original owner.",
+        "evidence": {
+          "bytes": 3725,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+          "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+        },
+        "source": "Merged H1/cause and Server fixture fixes await normal/race/control qualification; later upstream source does not inherit older results."
+      },
       "full_rust113_evidence": {
         "bytes": 54046,
         "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
@@ -1904,7 +2000,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1976,7 +2072,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2005,7 +2101,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2063,7 +2159,7 @@
         "race": "UNEXECUTED",
         "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
       },
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2079,6 +2175,15 @@
       },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Independent build provenance and production-path rehearsal.",
+      "focused_core_server_update": {
+        "actual": "Core026 normal224:222PASS/2FAIL/0SKIP, closed original owner.",
+        "evidence": {
+          "bytes": 3725,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+          "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+        },
+        "source": "Merged H1/cause and Server fixture fixes await normal/race/control qualification; later upstream source does not inherit older results."
+      },
       "id": "PH-16",
       "implementation": "Deterministic normal/race/control selections and protected execution mechanisms exist. Named process/peer regressions pass; affected Unix-socket roots pass after short owned TMPDIR correction.",
       "known_source_or_composition_limit": null,
@@ -2087,7 +2192,7 @@
       "original_complete_requirement": "Deterministic causal controls, affected normal/race/vet and actual complete release/rollout/restore/recovery qualification with exact custody.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
-      "remaining_software_evidence": "Complete the preserved2849 master normal/race selection, separate116 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all377 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate.",
+      "remaining_software_evidence": "Complete the preserved2863 master normal/race selection, separate116 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all393 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate. Focused validation has priority through16:26UTC; complete suites follow without erasing original obligations.",
       "required_outcome": "Qualification and evidence: deterministic faults, composed coverage and independent replay",
       "retained_component_evidence": {
         "bytes": 6133,
@@ -2116,7 +2221,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2142,7 +2247,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2223,7 +2328,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2257,7 +2362,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2283,7 +2388,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2323,7 +2428,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2349,7 +2454,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2375,7 +2480,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2401,7 +2506,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2436,7 +2541,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2456,7 +2561,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2485,7 +2590,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2526,7 +2631,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2542,6 +2647,15 @@
       },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Independent genesis/checkpoint, reviewed472 source, owned synced node.",
+      "focused_core_server_update": {
+        "actual": "Core026 normal224:222PASS/2FAIL/0SKIP, closed original owner.",
+        "evidence": {
+          "bytes": 3725,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+          "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+        },
+        "source": "Merged H1/cause and Server fixture fixes await normal/race/control qualification; later upstream source does not inherit older results."
+      },
       "id": "MG-01",
       "implementation": "Explicit genesis/runtime/code/finality reader and admission mechanisms exist.",
       "known_source_or_composition_limit": null,
@@ -2578,7 +2692,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "contract_reuse_update": {
         "actual_forge_roots_retained": 226,
         "actual_forge_suites": 20,
@@ -2633,7 +2747,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2659,7 +2773,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2737,7 +2851,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2757,7 +2871,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "contract_reuse_update": {
         "actual_forge_roots_retained": 226,
         "actual_forge_suites": 20,
@@ -2871,7 +2985,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2912,7 +3026,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "contract_reuse_update": {
         "actual_forge_roots_retained": 226,
         "actual_forge_suites": 20,
@@ -3002,7 +3116,7 @@
         "race": "UNEXECUTED",
         "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
       },
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -3049,7 +3163,7 @@
         "race": "UNEXECUTED",
         "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
       },
-      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Preserve original227 and all prior150 groups;16 Core/Server fix controls bring required catalog393. Reused ARIN controls are counted once. SDK12 and one redundant diagnostic stay separate; optional retention7 feature controls remain separate and unexecuted. Focused validation does not await full catalog execution.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -3065,6 +3179,15 @@
       },
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Controlled activation, three native emission intervals and full settlement/claim cycle.",
+      "focused_core_server_update": {
+        "actual": "Core026 normal224:222PASS/2FAIL/0SKIP, closed original owner.",
+        "evidence": {
+          "bytes": 3725,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+          "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+        },
+        "source": "Merged H1/cause and Server fixture fixes await normal/race/control qualification; later upstream source does not inherit older results."
+      },
       "id": "MG-10",
       "implementation": "Release/rollout/acceptance requirements and blocked October6 policy exist; no activation or production acceptance is established.",
       "known_source_or_composition_limit": null,
@@ -3073,7 +3196,7 @@
       "original_complete_requirement": "Complete prelaunch qualification and rollout/rollback/outage rehearsal; after approved activation observe three complete native emission intervals and a full 50,400-block UR settlement/claim cycle.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
-      "remaining_software_evidence": "Complete the preserved2849 master normal/race selection, separate116 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all377 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate.",
+      "remaining_software_evidence": "Complete the preserved2863 master normal/race selection, separate116 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all393 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate. Focused validation has priority through16:26UTC; complete suites follow without erasing original obligations.",
       "required_outcome": "Qualification, rollout and actual acceptance",
       "retained_component_evidence": {
         "bytes": 920,
@@ -3102,7 +3225,7 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v18",
+  "schema": "original38-current-evidence-ledger-v19",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
@@ -3152,6 +3275,13 @@
     "bytes": 40944,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/UPSTREAM-REQUIRED-RECIPE.json",
     "sha256": "c997297ec0ebe25b0bde5e1973da6ed6e7a8ef50b4dd1aee0173a7a9aad97cd3"
+  },
+  "source_catalog_tuple_preserved": {
+    "connect": "11f99c8f2b5c439625b35abec07de31e0987af2c",
+    "sdk": "e3f4f3fb56e59eb9fdb12c1f87594209c505e5e9",
+    "server": "f0b5238ffb663c6046c430b6542435fbc6ff0ceb",
+    "sn": "fdd3bff689427dcf092d89685e73afedc572f06f",
+    "xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
   },
   "source_fixed_awaiting_qualification": [
     {
@@ -3449,14 +3579,66 @@
       "owner_commit": "f92d20529cc5f765e57720eee927d9c623279459",
       "race": "UNEXECUTED",
       "source_commit": "ee81380ce97a7654979623d59164a178f6dca408"
+    },
+    {
+      "component": "h1-probe-new4",
+      "evidence": {
+        "bytes": 3725,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+        "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+      },
+      "new_roots": 4,
+      "normal": "UNEXECUTED",
+      "owner_commit": "25d5e21b2810c86600469a78953b3cefebb2c7bb",
+      "race": "UNEXECUTED",
+      "source_commit": "11f99c8f2b5c439625b35abec07de31e0987af2c"
+    },
+    {
+      "component": "http-cause-new8",
+      "evidence": {
+        "bytes": 3725,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+        "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+      },
+      "new_roots": 8,
+      "normal": "UNEXECUTED",
+      "owner_commit": "f6792fb712a75c45d4efc2cc58141dc30ccb1cdb",
+      "race": "UNEXECUTED",
+      "source_commit": "11f99c8f2b5c439625b35abec07de31e0987af2c"
+    },
+    {
+      "component": "population-fixture-new1",
+      "evidence": {
+        "bytes": 3725,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+        "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+      },
+      "new_roots": 1,
+      "normal": "UNEXECUTED",
+      "owner_commit": "6d9705f0bac343779af3b3c459993bfcac22d69b",
+      "race": "UNEXECUTED",
+      "source_commit": "f0b5238ffb663c6046c430b6542435fbc6ff0ceb"
+    },
+    {
+      "component": "paid-free-fixture-new1",
+      "evidence": {
+        "bytes": 3725,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/sn/mainnet/evidence/focused-core-server-progress-20261005.json",
+        "sha256": "8d0b42df283aa1346ce9a33fe7a7af38304c67c3cc0e11fbf50b13841228c758"
+      },
+      "new_roots": 1,
+      "normal": "UNEXECUTED",
+      "owner_commit": "6b3bc1f2766d06886955d2da723e2694ff8c574c",
+      "race": "UNEXECUTED",
+      "source_commit": "f0b5238ffb663c6046c430b6542435fbc6ff0ceb"
     }
   ],
   "source_selection": {
-    "bytes": 3446,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/SCOPE-HANDOFF.json",
-    "sha256": "f407700f31a7f4494866f4c5e97d28547c4918f321b5e36affeec292e6adcd39"
+    "bytes": 4590,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-fdd-core224-server-fixtures/SCOPE-HANDOFF.json",
+    "sha256": "56e941cb7ed0c664ee8986feebcf292eba5ecc6d218cd355a99eeaa37fce4027"
   },
-  "status": "All38 original outcomes remain open. Preserve every prior2840 master tuple and370 operative control group; mergedee813 adds9 validator route-identity roots/56cases and7 controls, yielding2849/core377 (SN573,validator104,mainnet302 unchanged). Six previously unselected existing route neighbors join the required companion116. SDK15/12 controls, extra SN diagnostic and upstream51 recipe remain separately required. The identified route source gap is fixed; normal/race/control qualification remains pending. Frozen624/Core026/d64 failures and original skips remain actual with no terminal or newer-source pass. All retained component results and external authority/rehearsal requirements remain unchanged.",
+  "status": "All38 original outcomes remain open. Preserve2849 master roots and377 core control groups; Core12 and Server fixture2 add14=2863 roots/mode, with16 controls=393. SDK15/12 controls, existing116, original upstream51 and later finite upstream/conditional feature obligations remain separate. Core026 normal224 actually finishes222PASS/2FAIL/0SKIP; current Core11f99 and Serverf0b fixes are unqualified. Focused useful parallel compilers/tests take priority through16:26UTC, full suites afterward, without using full catalog controls as a prerequisite. Frozen d64 model failures/skips remain actual with no terminal claimed. Optional MinIO storage is not required mainnet infrastructure. Later published SN494/SDK18f are bound separately: two wallet diagnostic roots remain explicit focused obligations; existing upstream validation resolves the SDK setter finding and its Hint fixture is corrected. No result inheritance or master-count increase is claimed.",
   "supersedes": {
     "bytes": 124390,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",
