@@ -13,37 +13,35 @@
   },
   "confirmed_current_failure_classification": [
     {
-      "body_failure_claimed": false,
-      "finding": "A durable Circle payment request loses retry continuity after its selected wallet is removed. DepositWallet owns exact-request continuation; fresh-send wallet and cutoff admission remain required.",
-      "kind": "source_confirmed_product_gap",
-      "owner": "/root/astra_deposit_wallet_review",
-      "qualification": "Correction and targeted normal/race/control evidence pending.",
-      "source": "Server9836322d"
+      "actual": {
+        "bytes": 14450,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v1.receipt.json",
+        "sha256": "b19f8a6c325bebbe61e79b0cf9fd521da3f35d0c50a2fd8ede3f1eace9de6262"
+      },
+      "current": {
+        "bytes": 22088,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2.intent.json",
+        "sha256": "581dc704c4491afa13614630fd220560100176269b90beeb0f99fc1afaab81e1"
+      },
+      "finding": "PRECOMPILER_HARNESS_REFUSAL; caller requested128MiB logs while qualified process helper requires64MiB. No compiler child, image, process result or Wait was created.",
+      "kind": "historical_harness_refusal_corrected_continuation_live",
+      "product_source_compiler_failure": false
     },
     {
-      "actual_counts": {
-        "assertion_failures": 6,
-        "errors": 25,
-        "pass": 0,
-        "run": 31,
-        "skip": 0
+      "actual": {
+        "bytes": 2922,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification34-v1.receipt.json",
+        "sha256": "801a37817308480dfcbcabade2963a3a27d76caa3128945349d4e2f03a65e427"
       },
-      "finding": "SourceVerification._Mounts rejects ambiguous stacked mount mapping (source line227).",
-      "kind": "inactive_optional_harness_failure",
-      "owner": "/root/astra_release_integration",
-      "product_go_code_defect_claimed": false,
-      "qualification": "Corrective source, positive regressions and18 controls remain pending; active full hashing and Server qualification are unaffected.",
-      "receipt": {
-        "bytes": 2923,
-        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification31-v1.receipt.json",
-        "sha256": "c3096bcdd26ef1878c3041a0f5ae15d862ca0a0a407afb851e19be628c7110da"
-      }
+      "finding": "Expected regex exceeds bound did not match actual closed directory name bytes exceed bound.",
+      "kind": "test_diagnostic_mismatch_corrected_source_retest_pending",
+      "product_go_code_defect": false
     }
   ],
   "controls_preservation_and_delta": {
-    "bytes": 234575,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/final-status-v4/controls-preservation-and-delta-v2.json",
-    "sha256": "2fba6f1da2f8d253274dba64a8389bd98a88ff0bb4c362a326fbf0a3eaabf953"
+    "bytes": 37699,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/control-catalog-addendum.json",
+    "sha256": "67d952e271791e6b7d4ebfe60fe9fc15322347fcd1f622ffd7627937fd178f25"
   },
   "corrected_failures_not_reopened_as_code_bugs": [
     "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
@@ -65,19 +63,21 @@
       "run": 13,
       "skip": 0
     },
-    "additive_control_groups": 3,
-    "current_go_roots_per_mode": 2637,
+    "additive_control_groups": 32,
+    "current_go_roots_per_mode": 2733,
     "current_server_full_model": 1865,
+    "original_native_overlap_with_prior2637": 0,
     "original_requirements": 38,
     "outcomes_closed": 0,
+    "restored_original_native_roots_per_mode": 86,
     "retained_control_groups": 227,
     "rows_demonstrated_to_have_only_deployment_work_left": 0,
-    "source_catalog_control_groups": 230
+    "source_catalog_control_groups": 259
   },
   "current_default_product_tuple": {
     "connect": "026b850248352b72255be7a966e391e0a15e74c1",
-    "server": "9836322d6c06ce0207fd5d754b025fc48cb11c83",
-    "sn": "4991966f658e149da2658c41a4fba785c91e5798"
+    "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
+    "sn": "5b873c942c57ff2a47ad9a896a529bf59e9ec5e6"
   },
   "current_portable_evidence": {
     "bytes": 41675,
@@ -93,6 +93,11 @@
     "Real backup/media recovery, production sizing, deployment rollback/outage, monitoring ingestion/delivery, deadman and on-call/repair drills.",
     "After authorized activation: three complete native emission intervals and one full50400-block UR settlement/claim cycle."
   ],
+  "latest_checkpoint": {
+    "bytes": 10528,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/checkpoint/original-native-and-payment-progress-20261005.json",
+    "sha256": "25deb267a1c61a032df8ee14f87d1c60451e57fe575ccfc7ca95fee2d4e01dfb"
+  },
   "old_sol_audit": {
     "bytes": 75710,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261004/sol-final-coverage-audit-20261004.json",
@@ -135,6 +140,35 @@
       "finding": "Five required long roots were omitted; additive2508 fixes selection. Whole-root900s cannot cover two900s reads; assertions/populations unchanged, larger finite mode budgets required.",
       "kind": "qualification_selection_and_budget_gap",
       "product_failure_proven": false
+    }
+  ],
+  "prior_failure_classification_preserved_v4": [
+    {
+      "body_failure_claimed": false,
+      "finding": "A durable Circle payment request loses retry continuity after its selected wallet is removed. DepositWallet owns exact-request continuation; fresh-send wallet and cutoff admission remain required.",
+      "kind": "source_confirmed_product_gap",
+      "owner": "/root/astra_deposit_wallet_review",
+      "qualification": "Correction and targeted normal/race/control evidence pending.",
+      "source": "Server9836322d"
+    },
+    {
+      "actual_counts": {
+        "assertion_failures": 6,
+        "errors": 25,
+        "pass": 0,
+        "run": 31,
+        "skip": 0
+      },
+      "finding": "SourceVerification._Mounts rejects ambiguous stacked mount mapping (source line227).",
+      "kind": "inactive_optional_harness_failure",
+      "owner": "/root/astra_release_integration",
+      "product_go_code_defect_claimed": false,
+      "qualification": "Corrective source, positive regressions and18 controls remain pending; active full hashing and Server qualification are unaffected.",
+      "receipt": {
+        "bytes": 2923,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification31-v1.receipt.json",
+        "sha256": "c3096bcdd26ef1878c3041a0f5ae15d862ca0a0a407afb851e19be628c7110da"
+      }
     }
   ],
   "prior_full_requirement_mapping": {
@@ -186,10 +220,10 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/nativefee-main9-to-default-current-applicability.json",
     "sha256": "60de07a44585f9ea32d1641514203bf35cab4e615216ce0fb930cb982b48f493"
   },
-  "reviewed_documentation_commit": "2f2c7b0e3b157a79cc36a86db64bd7610e88dc76",
+  "reviewed_documentation_commit": "5b873c942c57ff2a47ad9a896a529bf59e9ec5e6",
   "rows": [
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -215,7 +249,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -227,11 +261,10 @@
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
-      "open_source_confirmed_gap": "Durable Circle retry after wallet removal: original request continuation correction/qualification pending; no cutoff or fresh-send authority relaxation.",
       "original_complete_requirement": "Final signed-attempt census, nonce/outcome reconciliation and exact-byte/no-duplicate-spend behavior across all deployed owners.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Correct and qualify retired-wallet/lost-Circle-ACK retry continuity. Execute current all-owner original/replacement/cancel census, nonce/outcome and duplicate-effect tests.",
+      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Execute current all-owner original/replacement/cancel census, nonce/outcome and duplicate-effect tests.",
       "required_outcome": "Native/EVM submitters: one logical action, reconciled signed attempts and exact custody",
       "retained_component_evidence": {
         "bytes": 5266,
@@ -239,10 +272,11 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/customer-final-race-qualification-20261003.json",
         "sha256": "138253034e509103211bf57f10a61b999ef3d59c19eb6286b30fa0d5e6322513"
-      }
+      },
+      "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -268,7 +302,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -286,7 +320,7 @@
       "original_complete_requirement": "Approved actual runtime/code/finality; upgrade-block signing, execution-parent and post-state consumers, including both validator roles.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Execute current Go historical/renewal/finality consumers using retained actual originals; retain new Rust results.",
+      "remaining_software_evidence": "Execute current Go historical/renewal/finality consumers using retained actual originals; retain new Rust results. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
       "required_outcome": "Native-chain consumers: compatible upgrades and block-correct historical decoding",
       "retained_component_evidence": {
         "bytes": 8321,
@@ -297,7 +331,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -312,7 +346,7 @@
       "original_complete_requirement": "Complete nonempty-head lineage, invalidation, cold/warm replay and work-count qualification on the final graph.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Qualify nonempty immutable lineage, invalidation and cold/warm reuse/work counts on current inputs.",
+      "remaining_software_evidence": "Qualify nonempty immutable lineage, invalidation and cold/warm reuse/work counts on current inputs. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
       "required_outcome": "Historical verifiers: durable, dependency-bound successful proof reuse",
       "retained_component_evidence": {
         "bytes": 14760,
@@ -323,7 +357,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -352,7 +386,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -378,7 +412,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -404,7 +438,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -430,7 +464,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -448,7 +482,7 @@
       "original_complete_requirement": "Partial fleet renewal, delayed review, interrupted epoch progress and exact final boundary behavior without repeating completed work.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Run four current public Go renewal consumers against all five repaired original exports; test partial/delayed/interrupted renewal.",
+      "remaining_software_evidence": "Run four current public Go renewal consumers against all five repaired original exports; test partial/delayed/interrupted renewal. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
       "required_outcome": "Epoch, fleet and evidence scheduling: resumable partial renewals and correct windows",
       "retained_component_evidence": {
         "bytes": 8321,
@@ -459,7 +493,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -483,11 +517,10 @@
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
-      "open_source_confirmed_gap": "Durable Circle retry after wallet removal: original request continuation correction/qualification pending; no cutoff or fresh-send authority relaxation.",
       "original_complete_requirement": "Complete native-income versus opening-capital accounting, actual fees/refunds, funding bounds and 10/90 conformance under authentic authority.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
-      "remaining_software_evidence": "Correct and qualify retired-wallet/lost-Circle-ACK retry continuity. Complete five nativefee causal controls and changed downstream consumers. Complete current original native-fee and shared funding bounds, denomination, liability retention/refund and10/90 tests/controls.",
+      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Complete current original native-fee and shared funding bounds, denomination, liability retention/refund and10/90 tests/controls. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
       "required_outcome": "Treasury and bootstrap: conserved lifetime spend, reserve and funding semantics",
       "retained_component_evidence": {
         "bytes": 17304,
@@ -495,10 +528,11 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/capture-currentad0-qualification-20261003.json",
         "sha256": "612478dafb348da0311e8fc4c8b63aeb2a276936fda24fa7b428b61f12b94b4f"
-      }
+      },
+      "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -522,11 +556,10 @@
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
-      "open_source_confirmed_gap": "Durable Circle retry after wallet removal: original request continuation correction/qualification pending; no cutoff or fresh-send authority relaxation.",
       "original_complete_requirement": "Complete deposits/capture/carry/claims, original earning attribution, immutable vault liabilities and actual runtime rollback/transfer behavior.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
-      "remaining_software_evidence": "Correct and qualify retired-wallet/lost-Circle-ACK retry continuity. Complete five nativefee causal controls and changed downstream consumers. Run corrected large-claim carry and small-credit neighbor, actual original capture/replay and Solidity/control scopes.",
+      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Run corrected large-claim carry and small-credit neighbor, actual original capture/replay and Solidity/control scopes. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
       "required_outcome": "Contracts, operator and claims: complete settlement conservation and authorization",
       "retained_component_evidence": {
         "bytes": 7092,
@@ -534,10 +567,11 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-evm-current0f-qualification-20261003.json",
         "sha256": "3a42e698575b353be08e817a508b945355beeb5db8bce934b81d0dd42d9208ea"
-      }
+      },
+      "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -563,7 +597,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -583,7 +617,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -610,7 +644,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -625,11 +659,11 @@
       "implementation": "Deterministic normal/race/control selections and protected execution mechanisms exist. Named process/peer regressions pass; affected Unix-socket roots pass after short owned TMPDIR correction.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending. Optional inactive source-proof helper31 actually failed (6 assertion failures,25 errors); peer50 and other retained harness successes remain separate.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending. Optional inactive helper31 failed; after its bounded-mount correction the34-root follow-up records33PASS1FAIL. The remaining exact diagnostic assertion is corrected on main and awaits its one-root retest; peer50 and other harness results remain separate.",
       "original_complete_requirement": "Deterministic causal controls, affected normal/race/vet and actual complete release/rollout/restore/recovery qualification with exact custody.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
-      "remaining_software_evidence": "Complete current2637 normal/race and original227 plus3 additive causal obligations, reusing verified component results. Preserve all wider original requirements and qualify the Circle continuity correction. Correct and qualify optional source-proof helper before adoption; active full hashing remains available.",
+      "remaining_software_evidence": "Complete current2637 normal/race and original227 plus3 additive causal obligations, reusing verified component results. Preserve all wider original requirements and qualify the Circle continuity correction. Complete the optional helper targeted diagnostic retest and original controls before adoption; active full hashing remains available.",
       "required_outcome": "Qualification and evidence: deterministic faults, composed coverage and independent replay",
       "retained_component_evidence": {
         "bytes": 6133,
@@ -640,7 +674,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -666,7 +700,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -692,7 +726,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -721,7 +755,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -747,7 +781,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -773,7 +807,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -799,7 +833,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -825,7 +859,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -851,7 +885,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -886,7 +920,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -906,7 +940,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -926,7 +960,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -953,7 +987,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -973,7 +1007,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1003,7 +1037,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1029,7 +1063,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1047,12 +1081,12 @@
       "original_complete_requirement": "Approved actual runtime and complete signing/execution/history behavior across simulator-independent production roles and both validators.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Complete current Go native consumers and required Rust/control scope; targeted renewal pass is not full113 suite.",
+      "remaining_software_evidence": "Complete current Go native consumers and required Rust/control scope; targeted renewal pass is not full113 suite. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
       "required_outcome": "Runtime and native continuity",
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1072,7 +1106,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1096,11 +1130,10 @@
       "known_source_or_composition_limit": "Complete original-work/reliability-to-recipient economic composition is not demonstrated; synthetic receipts do not create live authority.",
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
-      "open_source_confirmed_gap": "Durable Circle retry after wallet removal: original request continuation correction/qualification pending; no cutoff or fresh-send authority relaxation.",
       "original_complete_requirement": "Exact original-work/reliability and recipient lineage, native 10/90 conformance, real reserves/deposits/claims and owner/operator custody; observe first-send outcomes prospectively.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
-      "remaining_software_evidence": "Correct and qualify retired-wallet/lost-Circle-ACK retry continuity. Complete five nativefee causal controls and changed downstream consumers. Qualify actual nonempty participant-to-payout, corrected carry, native proof/denomination and immutable recipient/liability paths.",
+      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Qualify actual nonempty participant-to-payout, corrected carry, native proof/denomination and immutable recipient/liability paths. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
       "required_outcome": "Economics, settlement and custody",
       "retained_component_evidence": {
         "bytes": 1814,
@@ -1108,10 +1141,11 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-split-conformance-source-finding-20261003.json",
         "sha256": "1e2a599a48145641e656263f85f2b43e606a16d32bb8cd9c21d43d793be37c1b"
-      }
+      },
+      "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1138,7 +1172,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1164,7 +1198,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1190,7 +1224,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1209,7 +1243,7 @@
       "original_complete_requirement": "Complete prelaunch qualification and rollout/rollback/outage rehearsal; after approved activation observe three complete native emission intervals and a full 50,400-block UR settlement/claim cycle.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
-      "remaining_software_evidence": "Complete remaining software scope across2637 selected roots per mode, original227 controls plus3 additive groups, original wider gates and composed recovery/rollback/outage rehearsal. Reuse actual component positives on unchanged complete inputs.",
+      "remaining_software_evidence": "Complete remaining software scope across2733 selected roots per mode and259 distinct source-control groups, all original wider gates and composed recovery/rollback/outage rehearsal. Current Server continuation remains frozen983; published paymentd64 requires targeted current-input qualification. Reuse unchanged complete-input positives without duplicate bodies.",
       "required_outcome": "Qualification, rollout and actual acceptance",
       "retained_component_evidence": {
         "bytes": 920,
@@ -1220,21 +1254,92 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v4",
+  "schema": "original38-current-evidence-ledger-v5",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
     "sha256": "4187085b66193dc9e7f0496ec9c90c6c820a88bf3ce3da43e391b63dc9e222a9"
   },
+  "source_fixed_awaiting_qualification": [
+    {
+      "authority": "Only exact retained original request/key/address/amount/wallet retry is restored. Fresh active-wallet and inclusive earning-cutoff gates remain; no new signing or production authority.",
+      "causal_controls": "UNEXECUTED",
+      "changed_existing_roots": 2,
+      "controls": 8,
+      "independent_control_review": {
+        "bytes": 4999,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-wallet-reconciliation/INDEPENDENT-CONTROLS-ACK-0d6a91bd.json",
+        "sha256": "22a070db3c062915915f4dd3a178fd65e1fb306899bdc8206f2215fee2d1f05b"
+      },
+      "independent_source_review": {
+        "bytes": 6835,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-wallet-reconciliation/INDEPENDENT-SOURCE-ACK-0d6a91bd.json",
+        "sha256": "f69c896ea08909a4fc110b22ebfaddbbe8d0af6a03d0430dc21a1bfb75846026"
+      },
+      "intake": {
+        "bytes": 13775,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-wallet-reconciliation/handoff/INTAKE.json",
+        "sha256": "3cbdf6bfe6dce4e90efba5db5817d479eab810240a1803930c01546fa1b2a1c5"
+      },
+      "new_roots": 10,
+      "normal": "UNEXECUTED",
+      "published_commit": "d64c9beb49a8637ce753103e9ea34521cc55f597",
+      "race": "UNEXECUTED",
+      "status": "MERGED_SOURCE_FIXED_TARGETED_QUALIFICATION_PENDING"
+    },
+    {
+      "actual_failure": "Expected regex exceeds bound did not match actual closed directory name bytes exceed bound.",
+      "adoption_status": "Optional helper is not imported into active jobs. Full hashing remains active; no product Go root or Server continuation dependency.",
+      "correction": {
+        "commit": "598f7ebf54a63d407ed13e54839c2f4e9d64dc05",
+        "merged_main": "5b873c942c57ff2a47ad9a896a529bf59e9ec5e6",
+        "qualification": "One affected-root retest pending. Original31 and latest34 failed receipts remain unchanged.",
+        "scope": "Exact count and byte census diagnostic assertions only; production helper unchanged by this follow-up."
+      },
+      "counts": {
+        "errors": 0,
+        "fail": 1,
+        "pass": 33,
+        "run": 34,
+        "skip": 0
+      },
+      "failed_root": "source_verification_test.SourceVerificationTests.test_directory_entry_count_and_bytes_stop_before_iterator_overrun",
+      "latest34_actual_wait": {
+        "bytes": 1927,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification34-v1.process-result.json",
+        "sha256": "96832d1a7befea55c0d6a74a2b9c76e7717ba0ec1a570759bcac19a5769a52a2"
+      },
+      "latest34_receipt": {
+        "bytes": 2922,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification34-v1.receipt.json",
+        "sha256": "801a37817308480dfcbcabade2963a3a27d76caa3128945349d4e2f03a65e427"
+      },
+      "latest34_terminal": {
+        "bytes": 1527,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification34-v1-user-terminal-readback.json",
+        "sha256": "45c9de6a5f02a8dcc12e3dc0441b2e2e997cf28f8463bafd2b7ca16d6a01da45"
+      },
+      "prior31_receipt": {
+        "bytes": 2923,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification31-v1.receipt.json",
+        "sha256": "c3096bcdd26ef1878c3041a0f5ae15d862ca0a0a407afb851e19be628c7110da"
+      },
+      "stderr": {
+        "bytes": 7214,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification34-v1.stderr",
+        "sha256": "3ff34b9a662b7067e083d537669f1cdfe2ff2cc0026b5b4d55a90edde17b1078"
+      }
+    }
+  ],
   "source_selection": {
-    "bytes": 2465954,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/positive-partitions.json",
-    "sha256": "105c2eef2e51d2c206eb6aae8a5ece791034ee995c22133957f8d09f1ee73051"
+    "bytes": 2148,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/HANDOFF.json",
+    "sha256": "61b549493116ec3b123138907422757625e1e2b581e447502f94465b719338c7"
   },
-  "status": "All38 original outcomes remain open. Nativefee13, selected replay7 and arin13 passed normally/race; release-build95 has a source-identical pass union across original93 and targeted2 per mode. Optional inactive source-proof helper31 failed; Circle continuity source gap and other qualification/live requirements remain open.",
+  "status": "All38 original outcomes remain open. Current selection preserves prior2637 plus10 payment and86 omitted original-native roots (2733 per mode). Payment continuity is source-fixed on main, not yet qualified. Optional helper33P1F has a merged diagnostic-only correction pending targeted retest. Frozen983 Server8 continuation has launched; no terminal compiler result follows. Retained nativefee13/replay7/arin13 and release95 pass-union results remain unchanged.",
   "supersedes": {
-    "bytes": 93412,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/original38-current-evidence-ledger-v3.json",
-    "sha256": "0916102fe9fe21d54333d288d926b8492b507aedf4a0f9b19fbde7f82a4bba61"
+    "bytes": 94709,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/final-status-v4/original38-current-evidence-ledger-v4.json",
+    "sha256": "0b5137f41ef40843c0e0a285b3d3cba4194130b87de83d7e47823c6d8ff53909"
   }
 }
