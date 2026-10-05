@@ -509,11 +509,19 @@ func (self *repairValidatorHost) incident(ctx context.Context, plan repairValida
 
 // A finite acknowledged command is the only concrete process mutation. No
 // restart, stop, daemon reload, enable, dependency repair or reset-failed exists.
-func (self *repairValidatorHost) start(ctx context.Context, plan repairValidatorPlan) error {
+func (self *repairValidatorHost) start(ctx context.Context, plan repairValidatorPlan, dispatchCheck func() error) error {
+	if dispatchCheck == nil {
+		return errors.New("process start dispatch authority check is absent")
+	}
 	if err := requireUnitDurableReference(ctx, plan.Unit.DurableVolumes); err != nil {
 		return err
 	}
 	if err := self.inspectServiceStorage(ctx, plan.Unit, nil); err != nil {
+		return err
+	}
+	// Successful inspection can outlive the signed action window. Preserve any
+	// inspection failure above; only a completed read reaches the final clock.
+	if err := dispatchCheck(); err != nil {
 		return err
 	}
 	_, err := self.command(ctx, plan, "--system", "--no-pager", "--no-ask-password", "--job-mode=fail", "start", "--", plan.Unit.Name)
