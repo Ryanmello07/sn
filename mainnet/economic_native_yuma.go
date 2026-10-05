@@ -106,7 +106,7 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 	self.MinerDenominator = nil
 	self.FullQuantizationTolerance = nil
 	if self.Epoch == nil {
-		if len(self.Records) != 0 || len(outcome.Recipients) != 0 || outcome.MinerAllocation != "0" {
+		if len(self.Records) != 0 || len(outcome.Recipients) != 0 || outcome.MinerAllocation != "0" || outcome.EpochInputs != nil {
 			return errors.New("native Yuma missing original epoch contradicts native execution")
 		}
 		zero := "0"
@@ -114,7 +114,15 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 		self.FullQuantizationTolerance = &zero
 		return nil
 	}
-	input, err := decodeNativeYuma(self.Authority, netuid, self.Boundary, self.Records, *self.Epoch)
+	var total uint64
+	if outcome.EpochInputs != nil {
+		var err error
+		total, err = nativeYumaJoinedEpochTotal(*self.Epoch, outcome.EpochInputs, outcome.Recipients)
+		if err != nil {
+			return err
+		}
+	}
+	input, err := decodeNativeYuma(self.Authority, netuid, self.Boundary, self.Records, *self.Epoch, outcome.EpochInputs, outcome.Recipients)
 	if err != nil {
 		if errors.Is(err, errMonitorEconomicCapacity) {
 			return err
@@ -122,10 +130,12 @@ func (self *nativeYumaProjection) calculate(ctx context.Context, netuid uint16, 
 		self.Issue = err.Error()
 		return nil
 	}
-	total, err := nativeCaptureUint(*self.Epoch, "total-alpha", 8)
-	if err != nil {
-		self.Issue = err.Error()
-		return nil
+	if outcome.EpochInputs == nil {
+		total, err = nativeCaptureUint(*self.Epoch, "total-alpha", 8)
+		if err != nil {
+			self.Issue = err.Error()
+			return nil
+		}
 	}
 	fixed, err := evaluateNativeYuma(ctx, input, total, false, self.Authority.MaximumOperations)
 	if err != nil {

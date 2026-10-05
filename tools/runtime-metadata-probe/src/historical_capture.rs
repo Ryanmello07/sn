@@ -354,6 +354,19 @@ fn capture_historical_scoped<S: TrieBackendStorage<Blake2Hasher>>(
     let wasm = sp_maybe_compressed_blob::decompress(&code, MAXIMUM_EXPANDED_CODE_BYTES)
         .map_err(|e| ProbeError::new(format!("historical capture code decompression: {e}")))?;
     memory_bound(&wasm, heap_pages)?;
+    if let Some(profile) = &request.observation_profile {
+        for key in epoch_layout::state_keys(profile)? {
+            // Retain parent inclusion/absence paths even when the original
+            // runtime never reads this observer-only key. Replay samples the
+            // actual live overlay at the selected callback, not this value.
+            let value = backend.storage(&key);
+            check_failure(&captured)?;
+            value.map_err(|e| {
+                ProbeError::new(format!("historical capture observation-state proof: {e}"))
+            })?;
+            check(canceled, &captured)?;
+        }
+    }
     let wrapped = WrappedRuntimeCode(code.as_slice().into());
     let runtime = RuntimeCode {
         code_fetcher: &wrapped,

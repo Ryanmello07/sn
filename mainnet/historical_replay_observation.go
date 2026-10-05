@@ -25,6 +25,7 @@ type historicalReplayObservationProfile struct {
 	MetadataSha256           *historicalReplayDigest    `json:"metadata_sha256,omitempty"`
 	PrincipalStoragePrefixes []string                   `json:"principal_storage_prefixes,omitempty"`
 	OriginalGlobals          []historicalOriginalGlobal `json:"original_globals,omitempty"`
+	EpochLayout              *string                    `json:"epoch_layout,omitempty"`
 }
 
 // The engine may expose only these existing globals to its read-only host.
@@ -42,6 +43,7 @@ type historicalReplayHookRule struct {
 	OffsetEnd          uint32                    `json:"offset_end"`
 	Memory             []historicalNativeCapture `json:"memory,omitempty"`
 	HostSnapshot       *string                   `json:"host_snapshot,omitempty"`
+	StateReads         []string                  `json:"state_reads,omitempty"`
 }
 
 type historicalNativeCapture struct {
@@ -74,9 +76,15 @@ type historicalNativeMemory struct {
 	ElementCount *uint32 `json:"element_count,omitempty"`
 }
 
+type historicalExecutionStateValue struct {
+	KeyHex   string  `json:"key_hex"`
+	ValueHex *string `json:"value_hex"`
+}
+
 type historicalNativeObservation struct {
-	ExecutionPhaseHex *string                  `json:"execution_phase_hex"`
-	Memory            []historicalNativeMemory `json:"memory"`
+	ExecutionPhaseHex *string                          `json:"execution_phase_hex"`
+	Memory            []historicalNativeMemory         `json:"memory"`
+	ExecutionState    *[]historicalExecutionStateValue `json:"execution_state,omitempty"`
 }
 
 type historicalStorageReturn struct {
@@ -178,6 +186,9 @@ func (self *historicalReplayObservationProfile) validate(job historicalReplayJob
 	}
 	if self.PrincipalStoragePrefixes != nil && self.Schema != historicalNativeProfileSchema {
 		return errors.New("principal storage scope requires native profile")
+	}
+	if err := self.validateEpochLayout(); err != nil {
+		return err
 	}
 	if err := self.validateOriginalGlobals(); err != nil {
 		return err

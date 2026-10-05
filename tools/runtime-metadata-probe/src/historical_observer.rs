@@ -29,6 +29,8 @@ pub struct HookRule {
     pub memory: Vec<MemoryCapture>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_snapshot: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub state_reads: Vec<String>,
 }
 
 /// An admitted original callsite supplies the layout, never the captured bytes.
@@ -114,9 +116,18 @@ pub struct StorageReturn {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct ExecutionStateValue {
+    pub key_hex: String,
+    pub value_hex: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NativeObservation {
     pub execution_phase_hex: Option<String>,
     pub memory: Vec<MemoryObservation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_state: Option<Vec<ExecutionStateValue>>,
 }
 
 /// Digests bind an independently supplied review reference. They do not prove
@@ -134,6 +145,8 @@ pub struct ObservationProfile {
     pub principal_storage_prefixes: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub original_globals: Vec<super::global_alias::OriginalGlobal>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch_layout: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -265,6 +278,7 @@ impl HistoricalObserver {
                 "observer profile, code or review reference differs",
             ));
         }
+        super::epoch_layout::state_keys(&profile)?;
         let mut principal_prefixes: Vec<Vec<u8>> = Vec::new();
         if let Some(prefixes) = &profile.principal_storage_prefixes {
             if profile.schema != "urnetwork-original-wasm-native-observation-v2"
@@ -362,7 +376,9 @@ impl HistoricalObserver {
             ) || profile.schema == "urnetwork-original-wasm-native-observation-v2"
                 && matches!(
                     rule.purpose.as_str(),
-                    "native-fee-exempt"
+                    "native-uid-census"
+                        | "native-epoch-index"
+                        | "native-fee-exempt"
                         | "native-fee-refund-zero"
                         | "native-drain"
                         | "native-epoch"
@@ -546,6 +562,53 @@ fn observe_value(
         }
         None
     };
+    // These are explicit observer reads of the SAME live proof/overlay. They
+    // are not relabeled runtime get calls or values from a later RPC reply.
+    let state_keys = ext
+        .extension::<HistoricalObserver>()
+        .map(|observer| {
+            observer
+                .0
+                .profile
+                .rules
+                .iter()
+                .find(|rule| {
+                    observer.0.stack.iter().enumerate().any(|(index, frame)| {
+                        (rule.host_snapshot.is_none() || index == 0)
+                            && frame.function_index == rule.function_index
+                            && frame.function_offset >= rule.offset_start
+                            && frame.function_offset < rule.offset_end
+                    })
+                })
+                .map(|rule| rule.state_reads.clone())
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
+    let execution_state = if state_keys.is_empty() {
+        None
+    } else {
+        Some(
+            state_keys
+                .into_iter()
+                .map(|key_hex| {
+                    let key = hex::decode(&key_hex[2..]).expect("observer validated state key");
+                    super::hosts::charge(ext, key.len());
+                    let value = ext.storage(&key);
+                    assert!(
+                        value.as_ref().is_none_or(|bytes| bytes.len() <= 8),
+                        "observer execution-state value bound"
+                    );
+                    if let Some(raw) = &value {
+                        super::hosts::charge(ext, raw.len());
+                    }
+                    ExecutionStateValue {
+                        key_hex,
+                        value_hex: value.map(|bytes| format!("0x{}", hex::encode(bytes))),
+                    }
+                })
+                .collect(),
+        )
+    };
     let Some(observer) = ext.extension::<HistoricalObserver>() else {
         return;
     };
@@ -592,6 +655,7 @@ fn observe_value(
                 Some(NativeObservation {
                     execution_phase_hex: phase,
                     memory: observer.memory.clone(),
+                    execution_state,
                 })
             } else {
                 None
