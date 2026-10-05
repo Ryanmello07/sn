@@ -1,6 +1,19 @@
 # Mainnet launch and operations plan
 
-## Current execution addendum — October 5
+## Current status after the missed deadline — October 5
+
+**The October 5 01:00 UTC deadline was missed. Work continues on all 38 original outcomes; none is closed.** This [source/receipt checkpoint](evidence/post-deadline-production-status-20261005.json), frozen at 01:12 UTC, supersedes earlier current-state summaries. No release completion, deployment, live signing authority or acceptance is established.
+
+| Current finding | Required correction and qualification |
+| --- | --- |
+| The protected `c60` model completed **1,703 RUN / 1,673 PASS / 19 FAIL / 11 SKIP**, terminal FAIL, exit one/joined, resource-qualified with completed fixture cleanup; every observed skip is preapproved. Eleven original-request failures share a **production schema defect**, separate from the earlier eight fixture failures. Mandatory signed domains contain `\u0000`; schema 773/775 cast the whole signed original to `jsonb`, producing `22P05`. | ResourceResolution owns the correction and Composer its independent review: preserve exact raw signed bytes, derive only the safe indexed fields, handle fresh 773/775 installation and append 779 for existing databases. A lexical `::json` substitution alone is insufficient. Exact canonical projection, migrations, public lookup/closure/concurrency regressions and controls remain in progress/unqualified. |
+| **The SN native-fee verifier already exists.** The pinned source checks independent approval/runtime/context, invokes receipt verification and original replay, and exposes both the public command and conservation worker. The missing implementation is the Server verified-settlement/denomination bridge. | NativeWitness and WholeFee are implementing the actual invocation bridge and independently signed exact denomination/idempotent ledger, with 780 reserved after 779. Unknown evidence retains full approved ceilings; no default conversion or credit from receipt status. Freeze and qualify the complete public path and controls; source approval is not release evidence. |
+| Exact SN `127db99c` / Core `25a4ce7f` / Server `2f8a6ee4` now passes normal `./model` compilation, exit zero/joined, `-vet=off`. Owner-fix SN `8e010496` has exact metadata qualification; its compiler/body result remains pending here. | Execute rebuilt model and owner regressions, affected normal/race/vet, operative controls and the broader final graph. Preserve the original 178 five failures and protected c60 failures. Neither a compile nor a fixture repair closes the production defect. |
+| xops `a1fdda0d` retains **311/311 PASS, zero skips** and is now published to `origin/main`; earlier failed runs remain evidence. | Actual Grafana/Mimir ingestion, alert delivery, repair drills and separate independent controls remain open. Source publication is not deployment. |
+
+The full PH-01–PH-28/MG-01–MG-10 ledger below still governs the work, including original recovery/custody, nonempty ingress-to-payout, native conservation, both validator roles and production rehearsal. October 6 new earnings, pre-cutoff USDC obligations, 10% provider/90% recycle, owner-local Ledger/no Snow, separate root custody and the closed-testnet exceptions remain unchanged.
+
+## Retained execution addendum — October 5, 00:55 UTC
 
 **Frozen October 5 00:55 UTC; 4 minutes remained before the October 5 01:00 UTC deadline (October 4, 8 PM CDT).** This [additive readback](evidence/mainnet-release-addendum-20261005.json) supersedes current-state statements in the retained October 4 checkpoint below. **All 38 original outcomes remain open.** No deployment, owner/device approval, real root/UR activation or economic acceptance is established.
 
