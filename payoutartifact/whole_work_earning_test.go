@@ -27,7 +27,7 @@ func TestWholeWorkEarningProducerProjectionRetainsPreCutoffOriginals(t *testing.
 	fixture.artifact.Providers = providers
 	rebuildWholeWorkEarningTestArtifact(t, fixture, fixture.expected.EarningSelection.StartTime)
 	value, err := VerifyClosedWorkReportsWithEarningSelection(t.Context(), fixture.artifact, common.Address{}, fixture.expected.EarningSelection)
-	if err != nil || value == nil || value.Contracts != 2 || value.UsageBytes != 100 || value.RegisteredReports != 0 || value.ReservedAmountJoins != 0 {
+	if err != nil || value == nil || value.Contracts != 2 || value.ClosedWork.UsageBytes != 100 || value.RegisteredReports != 0 || value.ReservedAmountJoins != 0 {
 		t.Fatal("producer projection lost full originals or acquired full authority", value, err)
 	}
 }
@@ -117,7 +117,7 @@ func TestWholeWorkStraddlingEarningCutoffRetainsFullOriginalEpoch(t *testing.T) 
 	fixture := newWholeWorkEarningTestFixture(t)
 	start := bytes.Clone(fixture.inventory.Clock.StartHeader)
 	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
-	if err != nil || value == nil || !value.Complete || !value.AttributionComplete || value.Contracts != 2 || value.Credited != 2 || len(value.ReconciledContracts) != 2 || value.Reports == nil || value.Reports.UsageBytes != 100 || value.Reports.ReservedAmountJoins != 2 {
+	if err != nil || value == nil || !value.Complete || !value.AttributionComplete || value.Contracts != 2 || value.Credited != 2 || len(value.ReconciledContracts) != 2 || value.Reports == nil || value.Reports.ClosedWork.UsageBytes != 100 || value.Reports.ReservedAmountJoins != 2 {
 		t.Fatal("straddling policy discarded original epoch or pre-cutoff proof", value, err)
 	}
 	if value.ExpectedProviders[0].UsageBytes != 100 || value.ExpectedProviders[1].UsageBytes != 0 || value.ExpectedProviders[2].UsageBytes != 0 || !bytes.Equal(start, fixture.inventory.Clock.StartHeader) || fixture.inventory.Window.Start != fixture.inventory.Clock.StartTime.Format(time.RFC3339Nano) {
@@ -166,7 +166,7 @@ func TestWholeWorkEarningIdentitySurvivesReadinessConfigRevision(t *testing.T) {
 	fixture.artifact.ClosedWork.EarningPolicyHash = "sha256:" + strings.Repeat("02", 32)
 	closedWorkTestSign(t, fixture.artifact)
 	value, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
-	if err != nil || value == nil || !value.AttributionComplete || value.Reports.UsageBytes != 100 {
+	if err != nil || value == nil || !value.AttributionComplete || value.Reports.ClosedWork.UsageBytes != 100 {
 		t.Fatal("readiness-only config audit invalidated immutable earning identity", value, err)
 	}
 	fixture.artifact.ClosedWork.EarningSelectionHash = "sha256:" + strings.Repeat("03", 32)

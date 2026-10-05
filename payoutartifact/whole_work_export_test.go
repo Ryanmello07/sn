@@ -302,7 +302,7 @@ func newWholeWorkExportFixture(t *testing.T, input *Artifact) *wholeWorkTestFixt
 func TestWholeWorkExportsCompleteOriginalsForActualTrialProviderUniverse(t *testing.T) {
 	fixture := newWholeWorkExportFixture(t, wholeWorkExportInput(t))
 	verified, err := VerifyWholeWorkInventoryWithWitness(t.Context(), fixture.artifact, fixture.inventory, fixture.expected)
-	if err != nil || verified == nil || !verified.Complete || !verified.AttributionComplete || verified.Credited != 7 || verified.Reports == nil || verified.Reports.UsageBytes != 700 || len(verified.ExpectedProviders) != len(fixture.artifact.Providers) {
+	if err != nil || verified == nil || !verified.Complete || !verified.AttributionComplete || verified.Credited != 7 || verified.Reports == nil || verified.Reports.ClosedWork.UsageBytes != 700 || len(verified.ExpectedProviders) != len(fixture.artifact.Providers) {
 		t.Fatal("exported original universe did not pass the actual public verifier", verified, err)
 	}
 	root := os.Getenv("URNETWORK_PROVIDER_WORK_FIXTURE_DIR")
