@@ -434,6 +434,14 @@ func mainnetRequiresDurableVolumes(args []string) bool {
 		return false
 	}
 	switch args[0] {
+	case "treasury":
+		if len(args) > 1 {
+			switch args[1] {
+			case "describe", "observe", "plan", "policy-plan", "inspect-request", "ledger-plan":
+				return false
+			}
+		}
+		return true
 	case "owner-signing":
 		return len(args) > 1 && args[1] == "sign"
 	case "owner-recycle":

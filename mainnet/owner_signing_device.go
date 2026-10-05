@@ -235,10 +235,10 @@ func openOwnerSigningDeviceStore(ctx context.Context, config ownerSigningDeviceC
 		ValidateReply: func(reply ownerSigningReply) error { _, err := reply.validate(request); return err }})
 }
 
-// Both owner action families use the same physical one-request custody rules.
+// Native owner action families share physical one-request custody rules.
 // No externally selected callback, journal schema or host path is interpreted.
 func openOwnerSigningDeviceScope(ctx context.Context, config ownerSigningDeviceConfig, scope ownerSigningDeviceScope) (_ *ownerSigningDeviceStore, resultErr error) {
-	if ctx == nil || scope.Schema != ownerSigningStateSchema && scope.Schema != ownerRecycleDeviceStateSchema || !planSha256(scope.RequestHash) ||
+	if ctx == nil || scope.Schema != ownerSigningStateSchema && scope.Schema != ownerRecycleDeviceStateSchema && scope.Schema != treasuryDeviceStateSchema || !planSha256(scope.RequestHash) ||
 		!bootstrapRootAbsolutePath(scope.HostStatePath) || scope.ValidateReply == nil {
 		return nil, errors.New("owner Ledger custody requires a typed authenticated request")
 	}

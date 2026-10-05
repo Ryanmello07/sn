@@ -123,6 +123,9 @@ func runMainWithMonitorHooks(ctx context.Context, args []string, stdout, stderr 
 			return 2
 		}
 	}
+	if len(args) != 0 && args[0] == "treasury" {
+		return runTreasuryCommand(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 0 && args[0] == "storage-inventory" {
 		return runStorageInventory(ctx, args[1:], stdout, stderr)
 	}
