@@ -567,7 +567,7 @@ fn fixture_with_treasury(
     };
     let child = NativeHeader::new(
         101,
-        BlakeTwo256::ordered_trie_root(extrinsics.clone(), StateVersion::V1),
+        BlakeTwo256::ordered_trie_root(extrinsics.clone(), StateVersion::V0),
         *backing.backend.root(),
         parent.hash(),
         Digest::default(),
@@ -817,7 +817,7 @@ fn export_contiguous_jobs(
         let previous = jobs.last().unwrap();
         let child = NativeHeader::new(
             number,
-            BlakeTwo256::ordered_trie_root(Vec::<Vec<u8>>::new(), StateVersion::V1),
+            BlakeTwo256::ordered_trie_root(Vec::<Vec<u8>>::new(), StateVersion::V0),
             *expected.backend.root(),
             H256(previous.child_hash),
             Digest::default(),

@@ -15,6 +15,9 @@ use std::{borrow::Cow, collections::BTreeMap};
 #[path = "historical_capture_tests.rs"]
 mod capture_tests;
 
+#[path = "historical_extrinsics_root_tests.rs"]
+mod extrinsics_root_tests;
+
 #[path = "historical_global_alias_tests.rs"]
 mod global_alias_tests;
 
@@ -156,7 +159,7 @@ fn job_with_storage(
     let body = vec![vec![1u8, 2, 3].encode()];
     let child = NativeHeader::new(
         5,
-        BlakeTwo256::ordered_trie_root(body.clone(), StateVersion::V1),
+        BlakeTwo256::ordered_trie_root(body.clone(), StateVersion::V0),
         *backing.backend.root(),
         parent.hash(),
         Digest::default(),
@@ -1123,7 +1126,7 @@ fn historical_empty_block_and_sealed_header_keep_original_identity() {
     let mut job = job(&code, |_| {});
     job.extrinsics_hex.clear();
     replace_child(&mut job, |header| {
-        header.set_extrinsics_root(BlakeTwo256::ordered_trie_root(Vec::new(), StateVersion::V1));
+        header.set_extrinsics_root(BlakeTwo256::ordered_trie_root(Vec::new(), StateVersion::V0));
         header
             .digest_mut()
             .push(DigestItem::Seal(*b"FAKE", vec![17; 64]));
