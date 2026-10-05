@@ -1,5 +1,11 @@
 # Mainnet prelaunch fixes
 
+## Storage failure isolation — October 5, 20:19 UTC
+
+The USB test-data SSD disconnected, returned under a different device name, then disconnected again. ext4 aborted its journal; free-space statistics still reported capacity while file reads returned I/O errors. All product jobs had completed before the incident. Canonical source on the internal SSD remains available. The [incident evidence](/home/by/sn-testnet-storage-incident-20261005T2020Z/HANDOFF.json) and [recovery readback](/home/by/sn-testnet-storage-incident-20261005T2020Z/root-recovery-readback.json) preserve the actual observations; no filesystem repair was applied.
+
+Production hardening must check the mounted filesystem identity and read/write health, rather than accepting free bytes alone. An absent mount must not silently redirect financial data or caches onto the root filesystem. Keep the host coordination lock on stable storage and distinguish its holder generation from a removable volume's device/inode identity. Retire the previous holder after its workers close before rebinding recovery. Preserve completed receipts and signatures; recheck their bytes after recovery instead of replaying successful transactions. Isolate failed storage owners, continue independent work on a bounded healthy volume, and require journal recovery plus exact artifact readback before reusing the failed volume. A transport reconnect is not proof of filesystem health.
+
 ## Current reserve and economic decision — October 5
 
 The user selected **10% of the native miner allocation for providers and 90% received by `ur-reserve` for future network improvements**. `ur-reserve` only receives funds and does not send funds. The [receive-only treasury path](TREASURY-EMISSIONS.md) accepts the supplied native address and public recipient hotkeys without multisig reconstruction, signatory identities, Ledger configuration or general reserve spending/signing qualification. This supersedes the earlier mandatory reserve-signing workflow and the owner-recycle choice. The treasury remains separate from provider claim collateral and the immutable, one-way `STReserveSink`.
