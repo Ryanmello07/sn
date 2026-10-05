@@ -513,6 +513,42 @@ class SourceVerificationTests(unittest.TestCase):
             with self.assertRaisesRegex(source.SourceIntegrityError, "filename bytes exceed bound"):
                 self.capture()
 
+    def test_unrelated_mount_stacks_preserve_capture_saved_proof_and_reuse(self):
+        original = source._mountinfo(self.retry.owner())
+        rows = []
+        for index, point in enumerate((self.root / "unused-mount", Path(str(self.stage) + "-neighbor"))):
+            first = 990000001 + index * 2
+            rows.extend((f"{first} 1 0:991 / {point} rw - autofs synthetic-source rw\n",
+                         f"{first + 1} {first} 0:992 / {point} rw - tmpfs synthetic-source rw\n"))
+        with mock.patch.object(source, "_mountinfo", return_value=original + "".join(rows).encode()):
+            proof = self.capture()
+            reference = proof.save(self.root / "proof.json")
+            loaded = source.SourceVerification.load(reference, self.files, self.census,
+                                                    self.context, retry=self.retry)
+            self.assertEqual(loaded.verify(self.context)["proof"], reference)
+        loaded.verify(self.context)
+
+    def test_selected_mount_stack_refuses_capture_for_source_and_ancestor(self):
+        original = source._mountinfo(self.retry.owner())
+        for point in (self.stage, self.root):
+            added = (f"990000001 1 0:991 / {point} rw - ext4 synthetic-source rw\n"
+                     f"990000002 990000001 0:992 / {point} rw - ext4 synthetic-source rw\n")
+            with mock.patch.object(source, "_mountinfo", return_value=original + added.encode()):
+                with self.assertRaisesRegex(source.SourceIntegrityError, "ambiguous selected"):
+                    self.capture()
+
+    def test_selected_mount_stack_invalidates_reuse_without_rebaseline(self):
+        proof = self.capture()
+        original = source._mountinfo(self.retry.owner())
+        added = (f"990000001 1 0:991 / {self.stage} rw - ext4 synthetic-source rw\n"
+                 f"990000002 990000001 0:992 / {self.stage} rw - ext4 synthetic-source rw\n")
+        with mock.patch.object(source, "_mountinfo", return_value=original + added.encode()):
+            with self.assertRaisesRegex(source.SourceIntegrityError, "ambiguous selected") as first:
+                proof.verify(self.context)
+        with self.assertRaisesRegex(source.SourceIntegrityError, "ambiguous selected") as repeated:
+            proof.verify(self.context)
+        self.assertIs(repeated.exception.__cause__, first.exception)
+
 
 if __name__ == "__main__":
     unittest.main()
