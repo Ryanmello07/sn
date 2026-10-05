@@ -34,9 +34,11 @@ func (self *attemptReadCauseBudget) admit(err error, depth int) bool {
 			return false
 		}
 	}
-	switch err.(type) {
+	switch cause := err.(type) {
 	case *os.PathError, *os.LinkError, *TrailFatalError:
 		return false
+	case *net.DNSError:
+		return !cause.IsNotFound
 	case syscall.Errno:
 		return true
 	case interface{ Is(error) bool }, interface{ As(any) bool }:

@@ -208,6 +208,7 @@ func TestAttemptBindingReadRetryPreservesConcreteTransportCauses(t *testing.T) {
 		syscall.ECONNABORTED, syscall.ECONNREFUSED, syscall.ECONNRESET,
 		syscall.EHOSTUNREACH, syscall.ENETUNREACH, syscall.EPIPE, syscall.ETIMEDOUT,
 		&net.DNSError{Err: "synthetic lookup timeout", Name: "rpc.example", IsTimeout: true},
+		&net.DNSError{Err: "synthetic temporary lookup failure", Name: "rpc.example", IsTemporary: true},
 		&url.Error{Op: "Post", URL: "https://rpc.example", Err: &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}},
 		gethrpc.HTTPError{StatusCode: http.StatusServiceUnavailable},
 		&gethrpc.HTTPError{StatusCode: http.StatusTooEarly},
@@ -251,6 +252,9 @@ func TestAttemptBindingReadRetryKeepsOriginalHardCauseDominant(t *testing.T) {
 		&os.LinkError{Op: "rename", Old: "synthetic-original", New: "synthetic-checkpoint", Err: context.DeadlineExceeded},
 		&TrailFatalError{Err: context.DeadlineExceeded},
 		&net.DNSError{Err: "synthetic lookup failure", Name: "rpc.example", IsTimeout: true, UnwrapErr: hard},
+		&net.DNSError{Err: "synthetic name absent", Name: "rpc.example", IsNotFound: true, IsTimeout: true},
+		&net.DNSError{Err: "synthetic name absent", Name: "rpc.example", IsNotFound: true, IsTemporary: true},
+		&net.DNSError{Err: "synthetic name absent", Name: "rpc.example", IsNotFound: true, UnwrapErr: context.DeadlineExceeded},
 		errors.Join(context.DeadlineExceeded, hard),
 		errors.Join(hard, context.DeadlineExceeded),
 		errors.Join(context.DeadlineExceeded, context.Canceled),
@@ -305,6 +309,7 @@ func TestAttemptContextErrorRequiresCompletePureOwnerCause(t *testing.T) {
 			&os.PathError{Op: "read", Path: "synthetic-checkpoint", Err: want},
 			&os.LinkError{Op: "rename", Old: "synthetic-original", New: "synthetic-checkpoint", Err: want},
 			&TrailFatalError{Err: want},
+			&net.DNSError{Err: "synthetic name absent", Name: "rpc.example", IsNotFound: true, UnwrapErr: want},
 			&attemptReadRetryJoinedError{causes: []error{want, nil}},
 			errors.Join(want, errors.New("synthetic canonical mismatch")),
 			errors.Join(context.Canceled, context.DeadlineExceeded),
@@ -336,6 +341,9 @@ func TestAttemptBindingReadRetryRunTrailStopsAtOriginalHardCause(t *testing.T) {
 				return &os.PathError{Op: "read", Path: "synthetic-checkpoint", Err: context.DeadlineExceeded}
 			}},
 			{name: "lifecycle timeout", cause: func() error { return &TrailFatalError{Err: context.DeadlineExceeded} }},
+			{name: "name absent with timeout", cause: func() error {
+				return &net.DNSError{Err: "synthetic name absent", Name: "rpc.example", IsNotFound: true, UnwrapErr: context.DeadlineExceeded}
+			}},
 			{name: "foreign leaf matcher", cause: func() error { return &attemptReadRetryLeafMatcherError{} }},
 			{name: "foreign wrapped matcher", cause: func() error { return &attemptReadRetryMatcherError{cause: context.DeadlineExceeded} }},
 			{name: "cyclic timeout", cause: func() error { return &attemptReadRetryCycleError{escape: context.DeadlineExceeded} }},
@@ -343,6 +351,9 @@ func TestAttemptBindingReadRetryRunTrailStopsAtOriginalHardCause(t *testing.T) {
 				return &os.PathError{Op: "read", Path: "synthetic-checkpoint", Err: context.Canceled}
 			}},
 			{name: "canceled lifecycle", cancel: true, cause: func() error { return &TrailFatalError{Err: context.Canceled} }},
+			{name: "canceled name absent", cancel: true, cause: func() error {
+				return &net.DNSError{Err: "synthetic name absent", Name: "rpc.example", IsNotFound: true, UnwrapErr: context.Canceled}
+			}},
 			{name: "canceled cycle", cancel: true, cause: func() error { return &attemptReadRetryCycleError{escape: context.Canceled} }},
 		} {
 			stateDir := t.TempDir()
