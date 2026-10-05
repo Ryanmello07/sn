@@ -1,5 +1,11 @@
 # Mainnet launch and operations plan
 
+## Current economic decision — October 5
+
+The user selected **10% of the native miner allocation for providers and 90% retained in a spendable network-improvement treasury**, replacing the earlier owner-recycle choice. The [treasury proposal](TREASURY-EMISSIONS.md) specifies separate native coldkey custody and at least two ordinary registered recipient hotkeys under the existing weight cap. The treasury is separate from provider claim collateral and the immutable, one-way `STReserveSink`.
+
+This is a design successor: current steering, approvals and accounting still implement owner recycling. Finalize and qualify the treasury path before reassessing launch readiness; existing recycle qualification and the earlier finite launch-path review do not establish that path. Preserve the 38 original requirements, their counts and all retained evidence. Earlier economic statements below describe the superseded policy. The October 6 inclusive new-earnings boundary, pre-cutoff USDC obligations and `activation: blocked` remain unchanged. No keys, transactions or deployment are supplied by this decision.
+
 ## Local dependency validation and retained results — October 5
 
 **Current execution priority — October 5, 16:26 UTC deadline:** compile deployable binaries early on the selected dependency graph, run useful parallel focused tests, then complete full suites. The [latest focused checkpoint](evidence/focused-sdk23-core-race-and-build-lessons-20261005.json) preserves every original requirement and control obligation; finishing the full catalog is not a prerequisite for focused validation. Report actual component results and remaining work separately from deployment or live authority. Canonical config `9c4a3435` contains the inclusive October 6 policy but still blocks activation with empty deployment, contract, policy and readiness fields; software test passes do not supply those authorities.

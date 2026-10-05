@@ -1,5 +1,11 @@
 # Mainnet prelaunch fixes
 
+## Current economic decision — October 5
+
+The user selected **10% of the native miner allocation for providers and 90% retained in a spendable network-improvement treasury**, superseding owner recycling. The [treasury proposal](TREASURY-EMISSIONS.md) records the native recipient/custody route and the affected steering, bootstrap, accounting and monitoring work. Treasury implementation, qualification and activation remain pending; the existing source freeze and recycle-path evidence cannot establish treasury readiness.
+
+Keep the 38 original requirements and every retained test count/evidence file intact. Apply the new treasury outcome to the existing economics and custody requirements when finalizing code and reassessing readiness. Earlier economic statements below record the superseded choice. Preserve the October 6 inclusive new-earnings boundary, pre-cutoff USDC obligations, owner-local Ledger/no Snow custody, the separate root role and `activation: blocked`.
+
 ## Local dependency validation and retained results — October 5
 
 **Current execution priority — October 5, 16:26 UTC deadline:** compile deployable binaries early on the selected dependency graph, run useful parallel focused tests, then complete full suites. The [latest focused checkpoint](evidence/focused-sdk23-core-race-and-build-lessons-20261005.json) preserves every original requirement and control obligation; finishing the full catalog is not a prerequisite for focused validation. Report actual component results and remaining work separately from deployment or live authority. Canonical config `9c4a3435` contains the inclusive October 6 policy but still blocks activation with empty deployment, contract, policy and readiness fields; software test passes do not supply those authorities.
