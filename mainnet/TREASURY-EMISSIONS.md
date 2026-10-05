@@ -47,8 +47,9 @@ SS58 prefix 42 to native AccountId32
 `0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`.
 Its checksum and canonical encoding round trip were checked using the same
 public Base58/BLAKE2b rule as [the existing SS58 helpers](../ss58/ss58.go).
-This pins the user-provided account, not a verified multisig derivation. The
-actual threshold and complete sorted signatory set remain required; their native
+The user confirmed this is a **2-of-3 multisig**. This pins the user-provided
+account and threshold, not a verified multisig derivation. The complete sorted
+set of three public signatory accounts remains required; its native
 derivation must equal this account before the custody descriptor is accepted.
 No recipient hotkeys or registered UID generations have been supplied here.
 
@@ -83,8 +84,9 @@ public earnings schedule strictly. Do not insert the following fields into
 `treasury_hotkey` deposit-staging field.
 
 This non-secret template matches the custody parser. Empty
-identities, zero threshold and empty file references are deliberately invalid;
-they are not runnable defaults or an assertion about the user's threshold.
+identities and empty file references are deliberately invalid; they are not
+runnable defaults. The threshold and three signatory slots reflect the user's
+confirmed 2-of-3 wallet.
 
 ```yaml
 schema: urnetwork-native-treasury-custody-v1
@@ -92,12 +94,15 @@ profile: mainnet
 netuid: 25
 genesis_hash: ""                       # independently approved native hash
 multisig:
-  # User-selected account; threshold and signatories must derive it.
+  # User-selected 2-of-3 account; actual signatories must derive it.
   account_id: "0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410"
-  threshold: 0                         # actual approved threshold, 2..N
+  threshold: 2                         # user-confirmed 2-of-3
   signatories:                         # all N accounts, sorted by raw bytes
     - account_id: ""
       signature_scheme: ed25519        # selected native Ledger workflow
+      device_config: {path: "", bytes: 0, sha256: ""}
+    - account_id: ""
+      signature_scheme: ed25519
       device_config: {path: "", bytes: 0, sha256: ""}
     - account_id: ""
       signature_scheme: ed25519
