@@ -95,19 +95,8 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 	var finality runtimeFinalityObservation
 	return crv4.ReadRuntimeObservationContext(operationCtx, native, func(ctx context.Context) (*OwnerRecycleAdmissionObservation, error) {
 		call := native.API.Client.CallContext
-		var nativeChain, evmChainId string
-		var genesis types.Hash
-		if err := call(ctx, &nativeChain, "system_chain"); err != nil {
+		if _, err := readRuntimeNetworkIdentity(ctx, native, approval.NativeChain, types.Hash(pin.GenesisHash)); err != nil {
 			return nil, err
-		}
-		if err := call(ctx, &genesis, "chain_getBlockHash", uint64(0)); err != nil {
-			return nil, err
-		}
-		if err := call(ctx, &evmChainId, "eth_chainId"); err != nil {
-			return nil, err
-		}
-		if nativeChain != approval.NativeChain || genesis != types.Hash(pin.GenesisHash) || native.GenesisHash != genesis || evmChainId != "0x3c4" {
-			return nil, errors.New("owner-recycle route differs from the independently approved mainnet name, genesis or EVM chain 964")
 		}
 		head, err := readRuntimeFinalityWitness(ctx, native)
 		if err != nil {

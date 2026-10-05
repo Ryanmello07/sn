@@ -151,20 +151,6 @@ func (self ValidatorUploadDeployment) authenticateNativeRuntimeRouteContext(ctx 
 		native.GenesisHash != types.Hash(self.GenesisHash) || !slices.Contains(owner.nativeRoutes, native.API.Client.URL()) {
 		return errors.New("validator staging native route differs from signed production authority")
 	}
-	var nativeChain, evmChainId string
-	var genesis types.Hash
-	call := native.API.Client.CallContext
-	if err := call(ctx, &nativeChain, "system_chain"); err != nil {
-		return err
-	}
-	if err := call(ctx, &genesis, "chain_getBlockHash", uint64(0)); err != nil {
-		return err
-	}
-	if err := call(ctx, &evmChainId, "eth_chainId"); err != nil {
-		return err
-	}
-	if nativeChain != owner.nativeChain || genesis != types.Hash(self.GenesisHash) || evmChainId != "0x3c4" {
-		return errors.New("validator staging native route has a different current network identity")
-	}
-	return ctx.Err()
+	_, err = readRuntimeNetworkIdentity(ctx, native, owner.nativeChain, types.Hash(self.GenesisHash))
+	return err
 }
