@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/urfoundation/sn/internal/durablefixture"
 )
 
 // SCALE bytes are built independently of the production availability parser.
@@ -70,38 +72,36 @@ func TestEconomicTreasuryAvailabilityCountsSharedColdkeyOnce(t *testing.T) {
 
 func TestEconomicTreasuryUnknownAvailabilityAndUncoveredStockStayUnknown(t *testing.T) {
 	for _, mode := range []string{"absent", "uncovered", "disagreement"} {
-		t.Run(mode, func(t *testing.T) {
-			state, policy := nativeTreasuryTestArchivedState(t)
-			for index := range state.Archive.PrincipalEffects.After {
-				value := &state.Archive.PrincipalEffects.After[index]
-				switch mode {
-				case "absent":
-					raw := append([]byte{4}, value.Query.Coldkey[:]...)
-					raw = append(raw, 0)
-					value.Availability = &historicalStakeAvailabilityObservation{ResultHex: nativeExecutionTestHex(raw)}
-				case "uncovered":
-					stock := uint64(9)
-					if index == 1 {
-						stock = 89
-					}
-					*value = nativeTreasuryTestObservation(value.Query, stock, 99, 0, 96)
-				case "disagreement":
-					if index == 1 {
-						*value = nativeTreasuryTestObservation(value.Query, 89, 98, 0, 94)
-					}
+		state, policy := nativeTreasuryTestArchivedState(t)
+		for index := range state.Archive.PrincipalEffects.After {
+			value := &state.Archive.PrincipalEffects.After[index]
+			switch mode {
+			case "absent":
+				raw := append([]byte{4}, value.Query.Coldkey[:]...)
+				raw = append(raw, 0)
+				value.Availability = &historicalStakeAvailabilityObservation{ResultHex: nativeExecutionTestHex(raw)}
+			case "uncovered":
+				stock := uint64(9)
+				if index == 1 {
+					stock = 89
+				}
+				*value = nativeTreasuryTestObservation(value.Query, stock, 99, 0, 96)
+			case "disagreement":
+				if index == 1 {
+					*value = nativeTreasuryTestObservation(value.Query, 89, 98, 0, 94)
 				}
 			}
-			result, err := state.treasurySummary(policy)
-			if mode == "disagreement" {
-				if err == nil {
-					t.Fatal("contradictory original coldkey results accepted")
-				}
-				return
+		}
+		result, err := state.treasurySummary(policy)
+		if mode == "disagreement" {
+			if err == nil {
+				t.Fatal("contradictory original coldkey results accepted")
 			}
-			if err != nil || result.SpendableIncomeLowerAlpha != nil || result.IncomeUnlockedOrSpent != nil {
-				t.Fatal("unknown original availability became spendable income", result, err)
-			}
-		})
+			continue
+		}
+		if err != nil || result.SpendableIncomeLowerAlpha != nil || result.IncomeUnlockedOrSpent != nil {
+			t.Fatal("unknown original availability became spendable income", mode, result, err)
+		}
 	}
 }
 
@@ -124,8 +124,24 @@ func TestEconomicTreasuryOriginalUnlockMakesAvailabilityKnownWithoutNewIncome(t 
 // The durable metrics owner accepts the explicit successor sample, including
 // unknown availability; none of its new gauges can turn unknown into success.
 func TestEconomicTreasuryMetricsPublishesSuccessorWithoutUnknownCredit(t *testing.T) {
-	path := filepath.Join(monitorMetricsTestDir(t), "treasury.prom")
-	owner, err := openMonitorMetrics(path, t.Context())
+	directory := monitorMetricsTestDir(t)
+	path := filepath.Join(directory, "treasury.prom")
+	// A real owner must reject a bare context before touching the textfile or
+	// lock. The same path succeeds only with its explicit fixture declaration.
+	unguarded, err := openMonitorMetrics(path, t.Context())
+	if unguarded != nil {
+		closeErr := unguarded.close()
+		t.Fatal("treasury metrics acquired storage without a declaration", closeErr)
+	}
+	if err == nil || !strings.Contains(err.Error(), "explicit durable-volume declaration and hash") {
+		t.Fatal("treasury metrics did not enforce the original volume admission", err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("refused treasury metrics owner changed its undeclared directory", entries, err)
+	}
+	storage := durablefixture.New(t, t.Context(), directory)
+	owner, err := openMonitorMetrics(path, storage.Context)
 	if err != nil {
 		t.Fatal(err)
 	}

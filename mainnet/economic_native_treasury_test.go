@@ -283,26 +283,24 @@ func TestNativeTreasuryWindowCarriesTenthsAndCountsCapturedIncomeOnce(t *testing
 func TestNativeTreasuryTrancheRetainsRedirectedAndSignedAllocationDifference(t *testing.T) {
 	authority, policy := nativeTreasuryTestAuthority(t)
 	for _, mode := range []string{"redirected", "negative-allocation-difference"} {
-		t.Run(mode, func(t *testing.T) {
-			window := nativeExecutionEmpty(policy.From)
-			window.Treasury = newNativeTreasuryAmounts(authority)
-			window.Blocks, window.Through = policy.Through.Number-policy.From.Number, policy.Through
-			window.MinerAllocation, window.AllocationDifference, window.RedirectedToValidators = "100", "100", "100"
-			if mode == "negative-allocation-difference" {
-				window.MinerAllocation, window.AllocationDifference, window.RedirectedToValidators = "97", "-1", "0"
-				window.Treasury.Gross, window.Treasury.Liquid = "98", "98"
-			}
-			if err := window.references(); err != nil {
-				t.Fatal(err)
-			}
-			if err := window.validate(); err != nil {
-				t.Fatal("original signed difference lost conserved mint", err)
-			}
-			within, _, _, _, err := economicTreasurySplit(window, "0")
-			if err != nil || within || mode == "redirected" && (window.ProviderReference != "10" || window.TreasuryReference == nil || *window.TreasuryReference != "90") {
-				t.Fatal("redirected or excess allocation acquired policy conformity", window, within, err)
-			}
-		})
+		window := nativeExecutionEmpty(policy.From)
+		window.Treasury = newNativeTreasuryAmounts(authority)
+		window.Blocks, window.Through = policy.Through.Number-policy.From.Number, policy.Through
+		window.MinerAllocation, window.AllocationDifference, window.RedirectedToValidators = "100", "100", "100"
+		if mode == "negative-allocation-difference" {
+			window.MinerAllocation, window.AllocationDifference, window.RedirectedToValidators = "97", "-1", "0"
+			window.Treasury.Gross, window.Treasury.Liquid = "98", "98"
+		}
+		if err := window.references(); err != nil {
+			t.Fatal(mode, err)
+		}
+		if err := window.validate(); err != nil {
+			t.Fatal("original signed difference lost conserved mint", mode, err)
+		}
+		within, _, _, _, err := economicTreasurySplit(window, "0")
+		if err != nil || within || mode == "redirected" && (window.ProviderReference != "10" || window.TreasuryReference == nil || *window.TreasuryReference != "90") {
+			t.Fatal("redirected or excess allocation acquired policy conformity", mode, window, within, err)
+		}
 	}
 }
 
