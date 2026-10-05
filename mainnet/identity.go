@@ -205,7 +205,7 @@ func (self *rpcClient) callAdmittedReadResult(ctx context.Context, method string
 				// An interrupted body cannot erase a known terminal status.
 				if response.StatusCode >= http.StatusMultipleChoices && response.StatusCode < http.StatusBadRequest {
 					requestErr = errors.Join(fmt.Errorf("%w: %s: HTTP %d redirect from owned route", errRpcIntegrity, method, response.StatusCode), requestErr)
-				} else if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusRequestTimeout && response.StatusCode != http.StatusTooManyRequests && response.StatusCode != http.StatusBadGateway && response.StatusCode != http.StatusServiceUnavailable && response.StatusCode != http.StatusGatewayTimeout {
+				} else if response.StatusCode != http.StatusOK && !rpcReadRetryStatus(response.StatusCode) {
 					requestErr = errors.Join(fmt.Errorf("%s: HTTP %d", method, response.StatusCode), requestErr)
 				}
 				if !rpcReadTransportMayRetry(requestErr) {
@@ -269,7 +269,7 @@ func (self *rpcClient) callAdmittedReadResult(ctx context.Context, method string
 			} else if readErr == nil && response.StatusCode >= http.StatusMultipleChoices && response.StatusCode < http.StatusBadRequest {
 				attemptCancel()
 				return errors.Join(fmt.Errorf("%w: %s: HTTP %d redirect from owned route", errRpcIntegrity, method, response.StatusCode), requestErr)
-			} else if readErr == nil && response.StatusCode != http.StatusRequestTimeout && response.StatusCode != http.StatusTooManyRequests && response.StatusCode != http.StatusBadGateway && response.StatusCode != http.StatusServiceUnavailable && response.StatusCode != http.StatusGatewayTimeout {
+			} else if readErr == nil && !rpcReadRetryStatus(response.StatusCode) {
 				attemptCancel()
 				return errors.Join(fmt.Errorf("%s: HTTP %d", method, response.StatusCode), requestErr)
 			} else if readErr == nil {
