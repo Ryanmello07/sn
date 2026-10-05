@@ -244,14 +244,15 @@ class JointAdmissionTests(unittest.TestCase):
         with mock.patch.object(admission.child, 'replay_process_result', return_value={'tree_joined': True, 'exit': 101}) as replay:
             result = owner.check(phase=True)
         self.assertEqual(result['states']['short'], 'joined-terminal')
-        replay.assert_called_once_with(terminal['joint_admission']['started'][0]['wait'])
+        replay.assert_called_once_with(terminal['joint_admission']['started'][0]['wait'],
+                                       require_context_verified=False)
         self.assertTrue((self.state / 'short.departure.json').exists())
 
     def test_unjoined_wait_cannot_be_promoted_by_terminal_claim(self):
         owner = self.owner()
         self.terminal(owner)
         with mock.patch.object(admission.child, 'replay_process_result', return_value={'tree_joined': False, 'exit': 0}):
-            with self.assertRaisesRegex(admission.Refused, 'unjoined or signaled'):
+            with self.assertRaisesRegex(admission.Refused, 'unjoined or invalid'):
                 owner.check(phase=True)
         self.assertFalse((self.state / 'short.departure.json').exists())
 
@@ -498,7 +499,7 @@ class JointAdmissionTests(unittest.TestCase):
         self.terminal(owner)
         self.collected()
         with mock.patch.object(admission.child, 'replay_process_result', return_value={'tree_joined': False, 'exit': 101}):
-            with self.assertRaisesRegex(admission.Refused, 'unjoined or signaled'):
+            with self.assertRaisesRegex(admission.Refused, 'unjoined or invalid'):
                 owner.check(phase=True)
         self.assertFalse((self.state / 'short.departure.json').exists())
         with mock.patch.object(admission.child, 'replay_process_result', return_value={'tree_joined': True, 'exit': 101}):
@@ -584,6 +585,218 @@ class JointAdmissionTests(unittest.TestCase):
         Path(self.members['short']['terminal_path']).rename(self.root / 'original-terminal.json')
         with self.assertRaisesRegex(admission.Refused, 'original terminal disappeared'):
             owner.check()
+
+    def failed_compiler_terminal(self, owner, wait=None, phase_changes=None,
+                                 evidence_changes=None, **changes):
+        """Retain the real compiler runner's failed phase and absent-wait shape."""
+        member = self.members['compiler']
+        failure = {'type': 'Refused', 'detail': 'synthetic resource observation interrupted'}
+        phase = {'job': member['job'], 'status': 'FAIL_OR_INCOMPLETE', 'result': None,
+                 'failure': failure, 'resource_errors': [failure]}
+        phase.update(phase_changes or {})
+        receipt = admission.child.durable_json(self.root / 'synthetic-compiler.receipt.json', phase)
+        final = copy.deepcopy(self.current)
+        final.update(cgroup=member['cgroup'], memory_events='oom 0\noom_kill 0\n')
+        evidence = {'plan': self.plan_pin, 'initial': owner.initial,
+                    'executor': owner.claims['compiler'], 'adoption': admission.pin(member['adoption_path']),
+                    'all_started_joined': wait is not None, 'replay_error': None,
+                    'started': [{'label': 'synthetic-compiler', 'wait': wait}]}
+        evidence.update(evidence_changes or {})
+        terminal = {'job': member['job'], 'adoption': admission.pin(member['adoption_path']),
+                    'status': 'FAIL_OR_INCOMPLETE', 'failure': {'type': 'UnqualifiedContinuation'},
+                    'final': final, 'phases': [{'receipt': receipt}], 'joint_admission': evidence}
+        terminal.update(changes)
+        admission.child.durable_json(Path(member['terminal_path']), terminal)
+        self.observations['compiler'].update(main_pid=0, active='failed', empty=True, process=None)
+        return terminal
+
+    def retained_wait(self, label, code=-15):
+        """Synthetic immutable wait bytes exercise the real replay decoder only."""
+        stdout, stderr = b'synthetic original output\n', b'synthetic interrupted guard\n'
+        (self.root / (label + '.stdout')).write_bytes(stdout)
+        (self.root / (label + '.stderr')).write_bytes(stderr)
+        return admission.child.durable_json(self.root / (label + '.process-result.json'), {
+            'schema': 'urnetwork-qualification-process-wait-v1', 'label': label,
+            'child_context': {'synthetic': True}, 'executable': {'synthetic': True},
+            'result': {'argv': ['/synthetic/child'], 'pid': 424242, 'exit': code,
+                'stdout_sha256': hashlib.sha256(stdout).hexdigest(),
+                'stderr_sha256': hashlib.sha256(stderr).hexdigest(),
+                'log_bytes': len(stdout) + len(stderr), 'tree_joined': True,
+                'guard_failure': {'type': 'Refused', 'detail': 'synthetic interrupted guard'}}})
+
+    def test_failed_compiler_without_wait_releases_only_stopped_original_slot(self):
+        owner = self.owner('short')
+        terminal = self.failed_compiler_terminal(owner)
+        paths = [self.state / 'initial.json', self.state / 'compiler.generation.json',
+                 Path(self.members['compiler']['terminal_path']), self.root / 'synthetic-compiler.receipt.json']
+        original = [(path.read_bytes(), path.stat().st_ino) for path in paths]
+        context = mock.Mock()
+        context.run.return_value = {'synthetic': 'independent body admitted'}
+        with mock.patch.object(admission.child, 'replay_process_result') as replay:
+            self.assertEqual(owner.check(phase=True)['states']['compiler'], 'stopped-failed-terminal')
+            result = owner.run_phase(context, ['/synthetic/independent-body'], self.root,
+                                     'synthetic-independent', 1, minimum_free=owner.floor)
+            replay.assert_not_called()
+        self.assertEqual(result, context.run.return_value)
+        context.run.assert_called_once_with(['/synthetic/independent-body'], self.root,
+                                            'synthetic-independent', 1, minimum_free=owner.floor)
+        record = json.loads((self.state / 'compiler.departure.json').read_text())
+        self.assertEqual(record['release'], {'basis': 'stopped-empty-failed-generation',
+            'all_started_joined': False, 'missing_wait_labels': ['synthetic-compiler'],
+            'test_qualification': 'not-performed'})
+        self.assertEqual(record['terminal']['sha256'], admission.pin(paths[2])['sha256'])
+        self.assertEqual(terminal['joint_admission']['started'][0]['wait'], None)
+        self.assertFalse((self.root / 'synthetic-compiler.process-result.json').exists())
+        self.assertEqual([(path.read_bytes(), path.stat().st_ino) for path in paths], original)
+        departure = (self.state / 'compiler.departure.json').read_bytes()
+        self.observations['compiler'].update(invocation='', cgroup='', active='inactive',
+                                             load_state='not-found', manager_absent=True)
+        self.assertEqual(owner.check(phase=True)['states']['compiler'], 'stopped-failed-terminal')
+        self.assertEqual((self.state / 'compiler.departure.json').read_bytes(), departure)
+
+    def test_failed_peer_actual_signaled_exit_wait_does_not_require_context_postcheck(self):
+        owner = self.owner('short')
+        wait = self.retained_wait('synthetic-compiler')
+        self.failed_compiler_terminal(owner, wait=wait)
+        with self.assertRaisesRegex(admission.Refused, 'postcheck is incomplete'):
+            admission.child.replay_process_result(wait)
+        self.assertEqual(owner.check(phase=True)['states']['compiler'], 'joined-terminal')
+        waited = admission.child.replay_process_result(wait, require_context_verified=False)
+        self.assertEqual(waited['exit'], -15)
+        self.assertFalse(waited['context_verified'])
+        self.assertEqual(waited['guard_failure']['detail'], 'synthetic interrupted guard')
+        release = json.loads((self.state / 'compiler.departure.json').read_text())['release']
+        self.assertEqual(release['basis'], 'replayed-joined-waits')
+        self.assertEqual(release['test_qualification'], 'not-performed')
+
+    def test_failed_peer_corrupt_present_wait_cannot_be_treated_as_absent(self):
+        owner = self.owner('short')
+        wait = self.retained_wait('synthetic-compiler')
+        self.failed_compiler_terminal(owner, wait=wait)
+        (self.root / 'synthetic-compiler.stdout').write_bytes(b'changed synthetic original\n')
+        with self.assertRaisesRegex(admission.Refused, 'retained process output differs'):
+            owner.check(phase=True)
+        self.assertFalse((self.state / 'compiler.departure.json').exists())
+
+    def test_failed_short_execution_wait_survives_incomplete_body_projection(self):
+        owner = self.owner()
+        wait = self.retained_wait('synthetic-phase')
+        failure = {'type': 'Refused', 'detail': 'synthetic guard stopped before projection'}
+        original = {'job': self.members['short']['job'], 'result': None, 'process_result': wait,
+                    'failure': failure, 'resource_errors': [failure]}
+        receipt = admission.child.durable_json(self.root / 'synthetic-phase.execution.json', original)
+        evidence = {'plan': self.plan_pin, 'initial': owner.initial,
+                    'executor': owner.claims['short'], 'adoption': admission.pin(self.members['short']['adoption_path']),
+                    'all_started_joined': True, 'started': [{'label': 'synthetic-phase', 'wait': wait}]}
+        self.terminal(owner, status='FAIL_OR_INCOMPLETE', failure=failure, phases=[],
+                      executions=[{'receipt': receipt, 'process_result': wait}], actual_waits=[wait],
+                      joint_admission=evidence)
+        self.assertEqual(owner.check(phase=True)['states']['short'], 'joined-terminal')
+        self.assertEqual(admission.pinned_json(receipt), original)
+        self.assertFalse(admission.child.replay_process_result(wait, require_context_verified=False)['context_verified'])
+
+    def test_failed_short_projection_cannot_replace_its_original_execution(self):
+        owner = self.owner()
+        wait = self.retained_wait('synthetic-phase')
+        failure = {'type': 'Refused', 'detail': 'synthetic guard stopped before projection'}
+        original = {'job': self.members['short']['job'], 'result': None, 'process_result': wait,
+                    'failure': failure, 'resource_errors': [failure]}
+        receipt = admission.child.durable_json(self.root / 'synthetic-phase.execution.json', original)
+        evidence = {'plan': self.plan_pin, 'initial': owner.initial,
+                    'executor': owner.claims['short'], 'adoption': admission.pin(self.members['short']['adoption_path']),
+                    'all_started_joined': True, 'started': [{'label': 'synthetic-phase', 'wait': wait}]}
+        self.terminal(owner, status='FAIL_OR_INCOMPLETE', failure=failure,
+                      phases=[dict(original, failure=None, execution_receipt=receipt)],
+                      executions=[{'receipt': receipt, 'process_result': wait}], actual_waits=[wait],
+                      joint_admission=evidence)
+        with self.assertRaisesRegex(admission.Refused, 'projected phase differs from original execution'):
+            owner.check(phase=True)
+        self.assertFalse((self.state / 'short.departure.json').exists())
+
+    def test_missing_wait_cannot_be_excused_without_original_phase_failure(self):
+        owner = self.owner('short')
+        self.failed_compiler_terminal(owner, phase_changes={'failure': None, 'resource_errors': []})
+        with self.assertRaisesRegex(admission.Refused, 'missing wait lacks original phase failure'):
+            owner.check(phase=True)
+        self.assertFalse((self.state / 'compiler.departure.json').exists())
+
+    def test_missing_wait_cannot_be_promoted_to_original_join_claim(self):
+        owner = self.owner('short')
+        self.failed_compiler_terminal(owner, evidence_changes={'all_started_joined': True})
+        with self.assertRaisesRegex(admission.Refused, 'joined-wait claim differs'):
+            owner.check(phase=True)
+        self.assertFalse((self.state / 'compiler.departure.json').exists())
+
+    def test_failed_terminal_cannot_hide_live_unknown_or_new_peer_generation(self):
+        owner = self.owner('short')
+        live = copy.deepcopy(self.observations['compiler'])
+        self.failed_compiler_terminal(owner)
+        stopped = copy.deepcopy(self.observations['compiler'])
+        for observed in (dict(stopped, empty=False), dict(stopped, main_pid=live['main_pid']),
+                         dict(stopped, active='deactivating')):
+            self.observations['compiler'] = observed
+            self.assertEqual(owner.check()['states']['compiler'], 'terminal-pending')
+            with self.assertRaisesRegex(admission.Refused, 'not yet joined'):
+                owner.check(phase=True)
+            self.assertFalse((self.state / 'compiler.departure.json').exists())
+        self.observations['compiler'] = dict(stopped, invocation='9' * 32)
+        with self.assertRaisesRegex(admission.Refused, 'invocation changed'):
+            owner.check(phase=True)
+        self.observations['compiler'] = live
+        self.assertEqual(owner.check(phase=True)['states']['compiler'], 'live')
+        self.assertFalse((self.state / 'compiler.departure.json').exists())
+
+    def test_failed_peer_release_keeps_original_floor_and_current_resource_gate(self):
+        owner = self.owner('short')
+        initial = (self.state / 'initial.json').read_bytes()
+        self.failed_compiler_terminal(owner, final=None)
+        self.current['data']['bytes'] = owner.floor - 1
+        with self.assertRaisesRegex(admission.Refused, 'healthy resource floor'):
+            owner.check(phase=True)
+        self.assertFalse((self.state / 'compiler.departure.json').exists())
+        self.current['data']['bytes'] = owner.floor
+        self.assertEqual(owner.check(phase=True)['states']['compiler'], 'stopped-failed-terminal')
+        self.assertEqual((self.state / 'initial.json').read_bytes(), initial)
+
+    def test_run_phase_retains_guard_exception_wait_without_qualifying_context(self):
+        owner = self.owner()
+        original = admission.Refused('synthetic original observation failure')
+        def fail(*unused, **kwargs):
+            self.retained_wait('synthetic-guard')
+            raise original
+        context = mock.Mock()
+        context.run.side_effect = fail
+        with self.assertRaises(admission.Refused) as raised:
+            owner.run_phase(context, ['/synthetic/child'], self.root, 'synthetic-guard', 1,
+                            minimum_free=owner.floor)
+        self.assertIs(raised.exception, original)
+        failure = {'type': 'Refused', 'detail': str(original)}
+        terminal = owner.terminal({'status': 'FAIL_OR_INCOMPLETE', 'failure': failure})
+        self.assertEqual(terminal['failure'], failure)
+        self.assertTrue(terminal['joint_admission']['all_started_joined'])
+        self.assertFalse(terminal['joint_admission']['all_started_context_verified'])
+        self.assertIsNone(terminal['joint_admission']['replay_error'])
+        self.assertFalse((self.root / 'synthetic-guard.process-context.json').exists())
+
+    def test_run_phase_preserves_original_exception_when_retained_wait_is_corrupt(self):
+        owner = self.owner()
+        original = admission.Refused('synthetic original observation failure')
+        def fail(*unused, **kwargs):
+            self.retained_wait('synthetic-guard')
+            (self.root / 'synthetic-guard.stderr').write_bytes(b'changed synthetic bytes')
+            raise original
+        context = mock.Mock()
+        context.run.side_effect = fail
+        with self.assertRaises(admission.Refused) as raised:
+            owner.run_phase(context, ['/synthetic/child'], self.root, 'synthetic-guard', 1,
+                            minimum_free=owner.floor)
+        self.assertIs(raised.exception, original)
+        self.assertIsNotNone(owner.started[0]['wait'])
+        self.assertIn('retained process output differs', owner.started[0]['replay_error']['detail'])
+        terminal = owner.terminal({'failure': {'detail': str(original)}})['joint_admission']
+        self.assertFalse(terminal['all_started_joined'])
+        self.assertFalse(terminal['all_started_context_verified'])
+        self.assertIn('retained process output differs', terminal['replay_error']['detail'])
 
 
 if __name__ == '__main__':

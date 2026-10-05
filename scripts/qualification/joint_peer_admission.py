@@ -4,6 +4,8 @@ Both callers retain the qualified child guard. A Root-pinned plan selects two
 exact USER generations and one physical state directory. Its first resource
 observation and generation claims are immutable. Missing terminal publication
 blocks the next phase, without canceling an already running healthy phase.
+An exactly stopped failed generation releases only its resource slot. Its
+original missing waits and failed qualification remain unchanged.
 """
 import fcntl
 import hashlib
@@ -492,8 +494,9 @@ class JointAdmission:
                 self.claims[role] = prior
                 states[role] = "terminal-pending"
                 if observation["main_pid"] == 0 and observation["empty"] and observation["active"] in ("inactive", "failed"):
-                    if self._departure_with_lock(role, prior, observation, departed):
-                        states[role] = "joined-terminal"
+                    departure = self._departure_with_lock(role, prior, observation, departed)
+                    if departure:
+                        states[role] = departure
                 if states[role] == "terminal-pending":
                     pending.append(role)
             self.peer_adoptions[role] = peer_adoption
@@ -509,45 +512,55 @@ class JointAdmission:
         require(kwargs.get("minimum_free") == self.floor, "joint child floor was reset")
         row = {"label": label, "wait": None}
         self.started.append(row)
+        failure = None
         try:
             return context.run(argv, output, label, timeout, **kwargs)
+        except BaseException as exc:
+            failure = exc
+            raise
         finally:
             path = Path(output) / (label + ".process-result.json")
-            if path.exists():
-                reference = pin(path)
-                child.replay_process_result(reference)
-                row["wait"] = reference
+            if os.path.lexists(path):
+                try:
+                    row["wait"] = pin(path)
+                    child.replay_process_result(row["wait"], require_context_verified=False)
+                except Exception as exc:
+                    row["replay_error"] = {"type": type(exc).__name__, "detail": str(exc)}
+                    if failure is None:
+                        raise
 
     def terminal(self, value):
-        """Own completion records every start; missing waits never qualify departure."""
+        """Retain actual joins separately from context and test qualification."""
         joined = bool(self.started) and all(row["wait"] is not None for row in self.started)
+        verified = joined
         replay_error = None
         try:
             for row in self.started:
                 if row["wait"] is not None:
-                    child.replay_process_result(row["wait"])
+                    waited = child.replay_process_result(row["wait"], require_context_verified=False)
+                    verified = verified and waited["context_verified"]
         except Exception as exc:
-            joined = False
+            joined = verified = False
             replay_error = {"type": type(exc).__name__, "detail": str(exc)}
         value["joint_admission"] = {"plan": self.plan_pin, "initial": self.initial,
             "executor": self.claims[self.role], "adoption": self.adoption_pin,
-            "started": self.started, "all_started_joined": joined, "replay_error": replay_error}
+            "started": self.started, "all_started_joined": joined,
+            "all_started_context_verified": verified, "replay_error": replay_error}
         return value
 
     def _departure_with_lock(self, role, executor, observation, departed):
-        """Only the exact peer terminal plus replayed waits permits departure."""
+        """Prove a stopped slot without promoting its failed or missing execution."""
         member = self.members[role]
         observed = departed_observation(member, observation, executor, departed)
         path = Path(member["terminal_path"])
-        if not path.exists():
+        if not os.path.lexists(path):
             require(not departed, "joint original terminal disappeared")
             return False
         terminal, reference = retained(path, self.uid)
-        require(terminal["job"] == member["job"] and terminal.get("failure") in (None, {})
-                and not terminal.get("resource_errors"), "joint peer terminal is unqualified")
+        require(terminal["job"] == member["job"], "joint peer terminal job differs")
         evidence = terminal["joint_admission"]
         require(evidence["plan"] == self.plan_pin and evidence["initial"] == self.initial
-                and evidence["executor"] == executor and evidence["all_started_joined"] is True,
+                and evidence["executor"] == executor,
                 "joint terminal generation or original baseline differs")
         adoption = pinned_json(evidence["adoption"])
         require(evidence["adoption"]["path"] == member["adoption_path"]
@@ -556,34 +569,91 @@ class JointAdmission:
                 and adoption["joint_admission"] == self.plan_pin
                 and adoption["job_sha256"] == member["job"]["sha256"]
                 and adoption["runner_sha256"] == member["runner"]["sha256"], "joint peer adoption differs")
-        require(0 < len(evidence["started"]) <= member["maximum_phases"]
+        require(len(evidence["started"]) <= member["maximum_phases"]
                 and len({row["label"] for row in evidence["started"]}) == len(evidence["started"]),
                 "joint started-phase census differs")
-        original_waits = []
-        for phase in terminal["phases"]:
-            original = pinned_json(phase["receipt"]) if role == "compiler" else phase
-            require(not original.get("failure") and not original.get("resource_errors"),
-                    "joint original phase is unqualified")
-            original_waits.append(original["result"]["process_result"])
-        require(original_waits == [row["wait"] for row in evidence["started"]],
+        # Short runners retain every execution before projecting qualified body
+        # phases. A guard failure can interrupt that projection after the wait.
+        executions = role == "short" and "executions" in terminal
+        phases = terminal["executions"] if executions else terminal["phases"]
+        require(len(phases) == len(evidence["started"]),
                 "joint terminal omitted or changed an original phase wait")
-        for row in evidence["started"]:
+
+        def failed(record):
+            failure, errors = record.get("failure"), record.get("resource_errors")
+            require(failure is None or isinstance(failure, dict), "joint failure evidence differs")
+            require(errors is None or isinstance(errors, list), "joint resource failure evidence differs")
+            return bool(failure or errors)
+
+        terminal_failed = failed(terminal)
+        missing = []
+        for phase, row in zip(phases, evidence["started"]):
+            label = row["label"]
+            require(isinstance(label, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,96}", label),
+                    "joint wait label differs")
+            original = pinned_json(phase["receipt"]) if role == "compiler" or executions else phase
+            if role == "compiler" or executions:
+                require(original["job"] == member["job"], "joint original phase job differs")
+                suffix = ".receipt.json" if role == "compiler" else ".execution.json"
+                require(Path(phase["receipt"]["path"]).name == label + suffix, "joint original phase label differs")
+            original_failed = failed(original)
+            result = original.get("result")
+            original_wait = result["process_result"] if result is not None else original.get("process_result")
+            if "process_result" in original and result is not None:
+                require(original["process_result"] == original_wait, "joint original phase wait contradicts result")
+            if executions:
+                require(phase["process_result"] == original_wait, "joint execution wait differs")
+            if original_wait != row["wait"]:
+                # Older compiler runners do not copy a guard exception's wait
+                # into result=None. Bind that retained original by exact label.
+                receipt_path = Path(phase["receipt"]["path"]) if role == "compiler" else None
+                require(role == "compiler" and result is None and original_wait is None
+                        and original_failed and row["wait"] is not None
+                        and receipt_path.name == label + ".receipt.json"
+                        and Path(row["wait"]["path"]) == receipt_path.with_name(label + ".process-result.json"),
+                        "joint terminal omitted or changed an original phase wait")
+            if row["wait"] is None:
+                require(original_failed, "joint missing wait lacks original phase failure")
+                missing.append(label)
+                continue
             require(Path(row["wait"]["path"]).name == row["label"] + ".process-result.json", "joint wait label differs")
-            waited = child.replay_process_result(row["wait"])
-            require(waited["tree_joined"] is True and type(waited["exit"]) is int and waited["exit"] >= 0,
-                    "joint peer wait is unjoined or signaled")
+            waited = child.replay_process_result(row["wait"], require_context_verified=False)
+            require(waited["tree_joined"] is True and type(waited["exit"]) is int,
+                    "joint peer wait is unjoined or invalid")
+        joined = bool(evidence["started"]) and not missing
+        if executions:
+            require(terminal["actual_waits"] == [row["wait"] for row in evidence["started"]],
+                    "joint terminal execution wait census differs")
+            # A projection may stop at the first failed execution, but cannot
+            # replace or contradict any original execution already projected.
+            require(len(terminal["phases"]) <= len(phases), "joint projected phase census differs")
+            for phase, projected in zip(phases, terminal["phases"]):
+                original = pinned_json(phase["receipt"])
+                require(projected == dict(original, execution_receipt=phase["receipt"]),
+                        "joint projected phase differs from original execution")
+        require(evidence["all_started_joined"] is joined, "joint terminal joined-wait claim differs")
+        require(joined or (terminal_failed and terminal["status"] == "FAIL_OR_INCOMPLETE"),
+                "joint incomplete terminal lacks original failure")
+        require(evidence.get("replay_error") is None and not any(row.get("replay_error") for row in evidence["started"]),
+                "joint original wait replay failed")
         final = terminal["final"]
-        healthy(final, self.floor)
-        require(final["cgroup"].lstrip("/") == member["cgroup"].lstrip("/"), "joint final resource namespace differs")
-        for line in final["memory_events"].splitlines():
-            name, count = line.split()
-            require(name not in ("oom", "oom_kill", "oom_group_kill") or count == "0", "joint terminal OOM observed")
+        if not terminal_failed:
+            healthy(final, self.floor)
+        if final is not None and "error" not in final:
+            require(final["cgroup"].lstrip("/") == member["cgroup"].lstrip("/"), "joint final resource namespace differs")
+            for line in final["memory_events"].splitlines():
+                name, count = line.split()
+                require(name not in ("oom", "oom_kill", "oom_group_kill") or count == "0", "joint terminal OOM observed")
+        release = {"basis": "replayed-joined-waits" if joined else "stopped-empty-failed-generation",
+                   "all_started_joined": joined, "missing_wait_labels": missing,
+                   "test_qualification": "not-performed"}
         name = role + ".departure.json"
         if departed:
             original, unused = self._record_with_lock(name)
             require(original["executor"] == executor and original["terminal"] == reference,
                     "joint original record differs")
+            require(original.get("release", release) == release, "joint original release differs")
         else:
             self._record_with_lock(name, {"executor": executor, "terminal": reference,
-                                         "first_manager_observation": observed})
-        return True
+                                         "first_manager_observation": observed, "release": release})
+        return "joined-terminal" if joined else "stopped-failed-terminal"
