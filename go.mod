@@ -201,10 +201,10 @@ require (
 // source explicitly as Server does; a workspace override is not required.
 replace github.com/urnetwork/connect => ../connect
 
-replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20261003032453-9ae95704a230
+replace github.com/urnetwork/sdk => ../sdk
 
-// A dependency's replaces are ignored, so pin Connect's SCTP fork here too.
-replace github.com/pion/sctp => github.com/urnetwork/connect/sctp v0.0.0-20261002163341-6443417d70dc
+// A dependency's replaces are ignored, so select the sibling SCTP fork here too.
+replace github.com/pion/sctp => ../connect/sctp
 
 replace github.com/urnetwork/server => ../server
 
