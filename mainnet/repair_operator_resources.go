@@ -50,10 +50,13 @@ func readRepairOperatorFile(ctx context.Context, host *repairValidatorHost, path
 		return nil, nil, repairValidatorObservationError("cannot open retained operator resource", err, true)
 	}
 	file := os.NewFile(uintptr(fd), path)
-	defer func() { resultErr = errors.Join(resultErr, file.Close(), ctx.Err()) }()
+	defer func() {
+		closeErr := repairValidatorObservation(ctx, "operator-resource-close", file.Close())
+		resultErr = errors.Join(resultErr, repairValidatorObservationError("cannot close retained operator resource", closeErr, false))
+	}()
 	info, err = file.Stat()
-	if err != nil {
-		return nil, nil, err
+	if err := repairValidatorObservation(ctx, "operator-resource-open-stat", err); err != nil {
+		return nil, nil, repairValidatorObservationError("cannot inspect retained operator resource", err, false)
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || stat.Uid != uid || stat.Nlink != 1 || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 || info.Mode()&(os.ModeSetuid|os.ModeSetgid) != 0 || info.Size() < 0 || info.Size() > maximum {
@@ -70,11 +73,15 @@ func readRepairOperatorFile(ctx context.Context, host *repairValidatorHost, path
 			return nil, nil, errors.Join(errRpcIntegrity, errors.New("operator retained resource exceeds its byte bound"))
 		}
 		raw = append(raw, buffer[:count]...)
-		if errors.Is(readErr, io.EOF) {
-			break
+		end := errors.Is(readErr, io.EOF)
+		if end {
+			readErr = nil
 		}
-		if readErr != nil {
-			return nil, nil, readErr
+		if err := repairValidatorObservation(ctx, "operator-resource-read", readErr); err != nil {
+			return nil, nil, repairValidatorObservationError("cannot read retained operator resource", err, false)
+		}
+		if end {
+			break
 		}
 	}
 	after, statErr := file.Stat()
@@ -281,10 +288,13 @@ func inspectRepairOperatorTree(ctx context.Context, host *repairValidatorHost, t
 			return repairValidatorObservationError("cannot open operator resource directory", err, true)
 		}
 		directory := os.NewFile(uintptr(fd), path)
-		defer func() { resultErr = errors.Join(resultErr, directory.Close()) }()
+		defer func() {
+			closeErr := repairValidatorObservation(ctx, "operator-resource-directory-close", directory.Close())
+			resultErr = errors.Join(resultErr, repairValidatorObservationError("cannot close original operator resource directory", closeErr, false))
+		}()
 		before, err := directory.Stat()
-		if err != nil {
-			return err
+		if err := repairValidatorObservation(ctx, "operator-resource-directory-stat", err); err != nil {
+			return repairValidatorObservationError("cannot inspect original operator resource directory", err, false)
 		}
 		stat, ok := before.Sys().(*syscall.Stat_t)
 		if !ok || stat.Uid != host.rootUid || !before.IsDir() || before.Mode().Perm()&0022 != 0 {
@@ -381,12 +391,15 @@ func inspectRepairOperatorRetained(ctx context.Context, host *repairValidatorHos
 		if value.Quota && original {
 			fd, err := syscall.Open(value.File.Path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC|syscall.O_NONBLOCK, 0)
 			if err != nil {
-				return err
+				return repairValidatorObservationError("cannot open original operator quota owner", err, true)
 			}
 			file := os.NewFile(uintptr(fd), value.File.Path)
 			locked, statErr := file.Stat()
-			if statErr != nil || !os.SameFile(info, locked) {
-				return errors.Join(errRpcIntegrity, errors.New("operator original quota identity changed before lock observation"), statErr, file.Close())
+			if err := repairValidatorObservation(ctx, "operator-quota-open-stat", statErr); err != nil {
+				return repairValidatorObservationError("cannot inspect original operator quota owner", errors.Join(err, file.Close()), false)
+			}
+			if !os.SameFile(info, locked) {
+				return errors.Join(errRpcIntegrity, errors.New("operator original quota identity changed before lock observation"), file.Close())
 			}
 			lockErr := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)
 			if lockErr == nil {
