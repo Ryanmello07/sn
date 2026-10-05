@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/urfoundation/sn/payoutartifact"
+	"github.com/urnetwork/server"
 )
 
 // Network values are synthetic; the transition semantics are the exact
@@ -17,7 +18,7 @@ import (
 func economicProviderEarningPolicyFixture(t *testing.T) (*economicProviderMeasurementPolicy, economicConservationPolicy, *payoutartifact.Artifact) {
 	t.Helper()
 	selected, _ := economicProviderAttemptPolicyFixture(t)
-	selected.EarningIdentity = &payoutartifact.WholeWorkEarningIdentity{Schema: "urnetwork-provider-payout-transition-v1", CutoffUtc: "2026-10-06T00:00:00Z", Attribution: "close_time", LegacyUsdc: "before_cutoff_only", Profile: "mainnet", ChainId: 945, GenesisHash: "0x" + strings.Repeat("ab", 32), Netuid: 521}
+	selected.EarningIdentity = &payoutartifact.WholeWorkEarningIdentity{Schema: "urnetwork-provider-payout-transition-v1", CutoffUtc: "2026-10-06T00:00:00Z", Attribution: "settled_contract_close_time", LegacyUsdc: "finish_pre_cutoff_obligations", Profile: "mainnet", ChainId: 945, GenesisHash: "0x" + strings.Repeat("ab", 32), Netuid: 521}
 	policy := economicConservationPolicy{Vault: monitorEconomicEvmPolicy{Network: planNetwork{EvmChainId: 945, GenesisHash: selected.EarningIdentity.GenesisHash}, Netuid: 521}}
 	artifact := &payoutartifact.Artifact{ChainID: 945, GenesisHash: selected.EarningIdentity.GenesisHash, Netuid: 521}
 	return selected, policy, artifact
@@ -98,5 +99,81 @@ func TestEconomicProviderEarningDeclarationCannotCreatePolicy(t *testing.T) {
 	encoded, err := json.Marshal(selected)
 	if err != nil || strings.Contains(string(encoded), "earning_identity") {
 		t.Fatal("legacy nil earning profile changed serialized policy", err)
+	}
+}
+
+// The real Server parser and immutable identity encoder supply the declaration
+// accepted by both live and reopened economic policy readers. The genesis is
+// synthetic; chain and subnet numbers exercise the required mainnet grammar.
+func TestEconomicProviderEarningSelectionAcceptsServerPolicyIdentity(t *testing.T) {
+	raw := []byte(`schema: urnetwork-provider-payout-transition-v1
+cutoff_utc: "2026-10-06T00:00:00Z"
+attribution: settled_contract_close_time
+legacy_usdc: finish_pre_cutoff_obligations
+mainnet:
+  profile: mainnet
+  chain_id: 964
+  genesis_hash: "0x` + strings.Repeat("ab", 32) + `"
+  netuid: 25
+  activation: blocked
+`)
+	serverPolicy, err := server.ParseProviderPayoutTransition(raw)
+	if err != nil {
+		t.Fatal("actual Server schedule parser refused synthetic mainnet policy", err)
+	}
+	digest, err := serverPolicy.EarningIdentitySha256()
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, policy, artifact := economicProviderEarningPolicyFixture(t)
+	selected.EarningIdentity = &payoutartifact.WholeWorkEarningIdentity{
+		Schema: serverPolicy.Schema, CutoffUtc: serverPolicy.Cutoff.UTC().Format(time.RFC3339Nano),
+		Attribution: serverPolicy.Attribution, LegacyUsdc: serverPolicy.LegacyUsdc,
+		Profile: serverPolicy.Mainnet.Profile, ChainId: serverPolicy.Mainnet.ChainId,
+		GenesisHash: serverPolicy.Mainnet.GenesisHash, Netuid: serverPolicy.Mainnet.Netuid,
+	}
+	policy.Vault.Network.EvmChainId, policy.Vault.Netuid = serverPolicy.Mainnet.ChainId, serverPolicy.Mainnet.Netuid
+	artifact.ChainID, artifact.Netuid = serverPolicy.Mainnet.ChainId, serverPolicy.Mainnet.Netuid
+	encoded, err := json.Marshal(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reopened economicProviderMeasurementPolicy
+	if err := json.Unmarshal(encoded, &reopened); err != nil {
+		t.Fatal(err)
+	}
+	for index, original := range []*economicProviderMeasurementPolicy{selected, &reopened} {
+		if err := original.validate(policy); err != nil {
+			t.Fatal("actual Server earning identity refused by economic policy", index, err)
+		}
+		expected, err := original.workExpectation(artifact, "", nil)
+		if err != nil || expected.EarningSelection == nil || expected.EarningSelection.PolicyHash != "sha256:"+digest || !expected.EarningSelection.StartTime.Equal(serverPolicy.Cutoff) {
+			t.Fatal("economic consumer changed actual Server earning identity", index, expected, err)
+		}
+	}
+}
+
+// Semantically suggestive aliases are different immutable policies. Accepting
+// them would preserve the original Server/consumer hash disagreement.
+func TestEconomicProviderEarningSelectionRefusesObsoletePolicyAliases(t *testing.T) {
+	selected, policy, artifact := economicProviderEarningPolicyFixture(t)
+	original := *selected.EarningIdentity
+	for _, aliases := range []struct {
+		attribution string
+		legacyUsdc  string
+	}{
+		{attribution: "close_time", legacyUsdc: original.LegacyUsdc},
+		{attribution: original.Attribution, legacyUsdc: "before_cutoff_only"},
+		{attribution: "close_time", legacyUsdc: "before_cutoff_only"},
+	} {
+		candidate := original
+		candidate.Attribution, candidate.LegacyUsdc = aliases.attribution, aliases.legacyUsdc
+		selected.EarningIdentity = &candidate
+		if err := selected.validate(policy); err == nil {
+			t.Error("obsolete earning identity admitted", aliases)
+		}
+		if _, err := selected.workExpectation(artifact, "", nil); err == nil {
+			t.Error("obsolete earning identity reached witness reader", aliases)
+		}
 	}
 }

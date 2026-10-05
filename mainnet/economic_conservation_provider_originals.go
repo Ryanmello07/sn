@@ -134,7 +134,7 @@ func (self *economicProviderMeasurementPolicy) earningSelection() (*payoutartifa
 		return nil, nil
 	}
 	identity := *self.EarningIdentity
-	if identity.Schema != "urnetwork-provider-payout-transition-v1" || identity.CutoffUtc != "2026-10-06T00:00:00Z" || identity.Attribution != "close_time" || identity.LegacyUsdc != "before_cutoff_only" || identity.Profile != "mainnet" {
+	if identity.Schema != "urnetwork-provider-payout-transition-v1" || identity.CutoffUtc != "2026-10-06T00:00:00Z" || identity.Attribution != "settled_contract_close_time" || identity.LegacyUsdc != "finish_pre_cutoff_obligations" || identity.Profile != "mainnet" {
 		return nil, errors.New("economic earning identity differs from the approved mainnet transition")
 	}
 	return payoutartifact.NewWholeWorkEarningSelection(identity)
