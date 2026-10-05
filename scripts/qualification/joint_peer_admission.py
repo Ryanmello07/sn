@@ -99,6 +99,19 @@ def healthy(current, floor):
             "joint healthy inode floor crossed")
 
 
+def memory_oom(raw):
+    """Read cumulative counters without treating malformed evidence as zero."""
+    require(isinstance(raw, str), "joint memory event evidence differs")
+    counts = {}
+    for line in raw.splitlines():
+        fields = line.split()
+        require(len(fields) == 2 and fields[0] not in counts
+                and re.fullmatch(r"[0-9]+", fields[1]), "joint memory event evidence differs")
+        counts[fields[0]] = int(fields[1])
+    require("oom" in counts, "joint memory event evidence differs")
+    return any(counts.get(name, 0) > 0 for name in ("oom", "oom_kill", "oom_group_kill"))
+
+
 def process(pid):
     """Retry bounded exec/reparent cuts; never retry across a reused PID."""
     directory = Path("/proc") / str(pid)
@@ -155,7 +168,8 @@ def departed_observation(member, observation, prior, departed=False):
             "manager_absent": observation.get("manager_absent") is True,
             "load_state": observation.get("load_state"),
             "active": observation["active"], "main_pid": 0,
-            "cgroup": observation["cgroup"], "empty": True}
+            "cgroup": observation["cgroup"], "empty": True,
+            "memory_events": observation.get("memory_events")}
 
 
 def admit_member(member, observation, prior=None, departed=False):
@@ -166,7 +180,7 @@ def admit_member(member, observation, prior=None, departed=False):
     if prior is not None and invocation != prior["invocation"]:
         # Default transient-unit collection removes InvocationID. This only
         # permits reconciliation of an old claim; the original terminal and
-        # every actual wait must still qualify before a new phase is admitted.
+        # wait evidence still bind physical release without qualifying tests.
         departed_observation(member, observation, prior, departed)
     current = observation.get("process")
     if current is None:
@@ -206,21 +220,27 @@ def observe_member(member):
             pass
     group = Path("/sys/fs/cgroup") / member["cgroup"].lstrip("/")
     empty = not group.exists()
+    memory_events = None
     if not empty:
         try:
             events = dict(line.split() for line in (group / "cgroup.events").read_text().splitlines())
             empty = events.get("populated") == "0"
             require((group / "memory.max").read_text().strip() == str(member["memory_max"])
                     and (group / "memory.swap.max").read_text().strip() == "0", "joint peer hard limits differ")
-            for line in (group / "memory.events").read_text().splitlines():
-                name, count = line.split()
-                require(name not in ("oom", "oom_kill", "oom_group_kill") or count == "0", "joint peer OOM observed")
+            memory_events = (group / "memory.events").read_text()
+            stopped = (pid == 0 and current is None and empty
+                       and values["ActiveState"] in ("inactive", "failed")
+                       and values.get("ControlGroup") == member["cgroup"])
+            # A cumulative peer OOM can survive after its entire generation
+            # stops. Only failed-terminal reconciliation may release that slot.
+            require(not memory_oom(memory_events) or stopped, "joint peer OOM observed")
         except FileNotFoundError:
             require(not group.exists(), "joint live cgroup became unobservable")
             empty = True
     return {"unit": values["Id"], "invocation": values.get("InvocationID", ""), "cgroup": values.get("ControlGroup", ""),
             "main_pid": pid, "active": values["ActiveState"], "empty": empty, "process": current,
-            "load_state": values.get("LoadState"), "manager_absent": absent}
+            "load_state": values.get("LoadState"), "manager_absent": absent,
+            "memory_events": memory_events}
 
 
 def admit_census(members, claims, rows):
@@ -586,6 +606,9 @@ class JointAdmission:
             return bool(failure or errors)
 
         terminal_failed = failed(terminal)
+        if observation.get("memory_events") is not None:
+            require(not memory_oom(observation["memory_events"]) or terminal_failed,
+                    "joint stopped peer OOM lacks original failure")
         missing = []
         for phase, row in zip(phases, evidence["started"]):
             label = row["label"]
@@ -639,11 +662,14 @@ class JointAdmission:
         final = terminal["final"]
         if not terminal_failed:
             healthy(final, self.floor)
-        if final is not None and "error" not in final:
-            require(final["cgroup"].lstrip("/") == member["cgroup"].lstrip("/"), "joint final resource namespace differs")
-            for line in final["memory_events"].splitlines():
-                name, count = line.split()
-                require(name not in ("oom", "oom_kill", "oom_group_kill") or count == "0", "joint terminal OOM observed")
+        if final is not None:
+            if "error" in final:
+                require(set(final) == {"error"} and isinstance(final["error"], dict) and bool(final["error"]),
+                        "joint failed final resource evidence differs")
+            else:
+                require(final["cgroup"].lstrip("/") == member["cgroup"].lstrip("/"), "joint final resource namespace differs")
+                require(not memory_oom(final["memory_events"]) or terminal_failed,
+                        "joint terminal OOM lacks original failure")
         release = {"basis": "replayed-joined-waits" if joined else "stopped-empty-failed-generation",
                    "all_started_joined": joined, "missing_wait_labels": missing,
                    "test_qualification": "not-performed"}

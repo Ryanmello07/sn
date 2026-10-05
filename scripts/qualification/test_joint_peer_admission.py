@@ -798,6 +798,101 @@ class JointAdmissionTests(unittest.TestCase):
         self.assertFalse(terminal['all_started_context_verified'])
         self.assertIn('retained process output differs', terminal['replay_error']['detail'])
 
+    def read_member_memory(self, role, memory_events):
+        """Exercise the actual USER/cgroup reader with explicit kernel-file seams."""
+        member, observed = self.members[role], self.observations[role]
+        output = '\n'.join(key + '=' + str(value) for key, value in {
+            'Id': member['unit'], 'ActiveState': observed['active'],
+            'LoadState': observed['load_state'], 'MainPID': observed['main_pid'],
+            'InvocationID': observed['invocation'], 'ControlGroup': observed['cgroup']}.items()) + '\n'
+        group = Path('/sys/fs/cgroup') / member['cgroup'].lstrip('/')
+        files = {group / 'cgroup.events': 'populated ' + ('0' if observed['empty'] else '1') + '\n',
+                 group / 'memory.max': str(member['memory_max']) + '\n',
+                 group / 'memory.swap.max': '0\n', group / 'memory.events': memory_events}
+        with mock.patch.object(admission.subprocess, 'run',
+                return_value=subprocess.CompletedProcess([], 0, output, '')) as manager, \
+                mock.patch.object(admission.Path, 'exists', autospec=True, side_effect=lambda path: path == group), \
+                mock.patch.object(admission.Path, 'read_text', autospec=True,
+                                  side_effect=lambda path, *args, **kwargs: files[path]), \
+                mock.patch.object(admission, 'process', return_value=copy.deepcopy(observed['process'])):
+            result = self.observe_member_original(member)
+        self.assertEqual(manager.call_args.args[0][:3], ['/usr/bin/systemctl', '--user', 'show'])
+        return result
+
+    def test_stopped_failed_peer_oom_releases_slot_and_retains_original_counters(self):
+        owner = self.owner('short')
+        events = 'low 0\nhigh 0\nmax 1\noom 1\noom_kill 1\noom_group_kill 0\n'
+        final = copy.deepcopy(self.current)
+        final.update(cgroup=self.members['compiler']['cgroup'], memory_events=events)
+        self.failed_compiler_terminal(owner, final=final)
+        path = Path(self.members['compiler']['terminal_path'])
+        original = (path.read_bytes(), path.stat().st_ino)
+        self.observations['compiler'] = self.read_member_memory('compiler', events)
+        self.assertEqual(owner.check(phase=True)['states']['compiler'], 'stopped-failed-terminal')
+        departure = json.loads((self.state / 'compiler.departure.json').read_text())
+        self.assertEqual(departure['first_manager_observation']['memory_events'], events)
+        self.assertFalse(departure['release']['all_started_joined'])
+        self.assertEqual(departure['release']['test_qualification'], 'not-performed')
+        self.assertEqual((path.read_bytes(), path.stat().st_ino), original)
+        context = mock.Mock()
+        owner.run_phase(context, ['/synthetic/independent-body'], self.root,
+                        'synthetic-after-peer-oom', 1, minimum_free=owner.floor)
+        context.run.assert_called_once()
+        self.assertFalse((self.root / 'synthetic-compiler.process-result.json').exists())
+
+    def test_live_peer_oom_still_refuses_admission(self):
+        owner = self.owner('short')
+        def observe(member):
+            if member['unit'] == self.members['compiler']['unit']:
+                return self.read_member_memory('compiler', 'oom 1\noom_kill 1\n')
+            return self.observe(member)
+        context = mock.Mock()
+        with mock.patch.object(admission, 'observe_member', side_effect=observe):
+            with self.assertRaisesRegex(admission.Refused, 'joint peer OOM observed'):
+                owner.run_phase(context, ['/synthetic/independent-body'], self.root,
+                                'synthetic-live-peer-oom', 1, minimum_free=owner.floor)
+        context.run.assert_not_called()
+        self.assertFalse((self.state / 'compiler.departure.json').exists())
+
+    def test_current_owner_oom_still_refuses_admission(self):
+        owner = self.owner('short')
+        def observe(member):
+            if member['unit'] == self.members['short']['unit']:
+                return self.read_member_memory('short', 'oom 1\noom_kill 0\n')
+            return self.observe(member)
+        context = mock.Mock()
+        with mock.patch.object(admission, 'observe_member', side_effect=observe):
+            with self.assertRaisesRegex(admission.Refused, 'joint peer OOM observed'):
+                owner.run_phase(context, ['/synthetic/independent-body'], self.root,
+                                'synthetic-own-oom', 1, minimum_free=owner.floor)
+        context.run.assert_not_called()
+        self.assertEqual(owner.started, [])
+
+    def test_stopped_peer_oom_without_original_failure_is_a_contradiction(self):
+        owner = self.owner()
+        self.terminal(owner)
+        self.observations['short'] = self.read_member_memory('short', 'oom 1\noom_kill 1\n')
+        with self.assertRaisesRegex(admission.Refused, 'stopped peer OOM lacks original failure'):
+            owner.check(phase=True)
+        self.assertFalse((self.state / 'short.departure.json').exists())
+
+    def test_stopped_failed_peer_malformed_oom_counters_remain_unknown(self):
+        owner = self.owner('short')
+        self.failed_compiler_terminal(owner)
+        for events in ('oom -1\n', 'oom unknown\n', 'oom 1\noom 0\n', '', 'high 0\n'):
+            with self.assertRaisesRegex(admission.Refused, 'memory event evidence differs'):
+                self.read_member_memory('compiler', events)
+            self.assertFalse((self.state / 'compiler.departure.json').exists())
+
+    def test_failed_final_error_cannot_hide_contradictory_resource_namespace(self):
+        owner = self.owner('short')
+        self.failed_compiler_terminal(owner, final={
+            'error': {'type': 'Refused', 'detail': 'synthetic failed final read'},
+            'cgroup': '/system.slice/synthetic-unrelated.service'})
+        with self.assertRaisesRegex(admission.Refused, 'failed final resource evidence differs'):
+            owner.check(phase=True)
+        self.assertFalse((self.state / 'compiler.departure.json').exists())
+
 
 if __name__ == '__main__':
     unittest.main()
