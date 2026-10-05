@@ -1,4 +1,4 @@
-// Read error inspection has its own finite work budget, independent of the
+// Miner error inspection has its own finite work budget, independent of the
 // network deadline. Unknown, incomplete and typed nil graphs stay terminal.
 package miner
 
@@ -9,7 +9,7 @@ const (
 	minerReadCauseMaximumNodes = 128
 )
 
-// Both read policies share traversal bounds without sharing status authority.
+// Policies share traversal bounds without sharing status authority.
 type minerReadCauseBudget struct {
 	remaining int
 }
