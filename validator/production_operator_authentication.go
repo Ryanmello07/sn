@@ -76,70 +76,43 @@ func (self *releaseRuntimeV2) authenticationPending(intent *SteeringIntent) erro
 // These are completed application refusals or the dedicated idempotent route's
 // unresolved physical reply. Arbitrary decoder/custody errors remain hard.
 func productionRegistrationWait(err error) (bool, bool) {
-	if err == nil || err == context.Canceled {
-		return false, false
-	}
-	switch err.(type) {
-	case *sdk.NetworkClientRegistrationUnsupportedError:
-		return true, true
-	case *clientauth.RegistrationRefusedError:
-		refusal := err.(*clientauth.RegistrationRefusedError)
-		return refusal.Code == "network_authentication_missing" || refusal.Code == "legacy_identity_requires_explicit_recovery", true
-	case *sdk.NetworkClientRegistrationUnavailableError, *clientauth.RegistrationRefreshUnavailableError:
-		return true, false
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
-			return false, false
+	remaining := 512
+	blocked := false
+	wait := releaseErrorGraph(err, func(cause error) bool {
+		switch value := cause.(type) {
+		case *sdk.NetworkClientRegistrationUnsupportedError:
+			blocked = true
+			return true
+		case *clientauth.RegistrationRefusedError:
+			blocked = true
+			return value.Code == "network_authentication_missing" || value.Code == "legacy_identity_requires_explicit_recovery"
+		case *sdk.NetworkClientRegistrationUnavailableError, *clientauth.RegistrationRefreshUnavailableError:
+			return true
 		}
-		blocked := false
-		for _, cause := range causes {
-			wait, refusal := productionRegistrationWait(cause)
-			if !wait {
-				return false, false
-			}
-			blocked = blocked || refusal
-		}
-		return true, blocked
-	}
-	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return productionRegistrationWait(wrapped.Unwrap())
-	}
-	return false, false
+		return false
+	}, 0, &remaining)
+	return wait, wait && blocked
 }
 
 // Only API-local causes may latch this operator while native observation stays
 // alive. A local descriptor/ledger/intent error joined to them remains shared
 // failure; no arbitrary error text or generic hard leaf is downgraded here.
 func productionRegistrationLocalFailure(err error) bool {
-	if err == context.DeadlineExceeded {
-		return true
-	}
-	switch cause := err.(type) {
-	case *sdk.ClientControlResponseError, *clientauth.RegistrationResponseIdentityError, *clientauth.RegistrationRefusedError, *sdk.NetworkClientRegistrationUnsupportedError:
-		return true
-	case *sdk.NetworkClientRegistrationUnavailableError, *clientauth.RegistrationRefreshUnavailableError:
-		return true // In a mixed local verdict, this never makes it retryable.
-	case *connect.HttpStatusError:
-		return 400 <= cause.StatusCode && cause.StatusCode <= 599
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
-			return false
+	remaining := 512
+	return releaseErrorGraph(err, func(cause error) bool {
+		if cause == context.DeadlineExceeded {
+			return true
 		}
-		for _, cause := range causes {
-			if !productionRegistrationLocalFailure(cause) {
-				return false
-			}
+		switch value := cause.(type) {
+		case *sdk.ClientControlResponseError, *clientauth.RegistrationResponseIdentityError, *clientauth.RegistrationRefusedError, *sdk.NetworkClientRegistrationUnsupportedError:
+			return true
+		case *sdk.NetworkClientRegistrationUnavailableError, *clientauth.RegistrationRefreshUnavailableError:
+			return true // In a mixed local verdict, this never makes it retryable.
+		case *connect.HttpStatusError:
+			return 400 <= value.StatusCode && value.StatusCode <= 599
 		}
-		return true
-	}
-	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		return productionRegistrationLocalFailure(wrapped.Unwrap())
-	}
-	return false
+		return false
+	}, 0, &remaining)
 }
 
 func observeProductionAuthenticationWait(ctx context.Context, progress *releaseProgress, wait *productionOperatorAuthenticationPending) {

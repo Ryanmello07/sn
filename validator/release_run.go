@@ -139,10 +139,8 @@ func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyT
 			return false, false
 		}
 	}
-	if _, fileError := err.(*os.PathError); fileError {
-		return false, false
-	}
-	if _, fatal := err.(*TrailFatalError); fatal {
+	switch err.(type) {
+	case *os.PathError, *os.LinkError, *TrailFatalError:
 		return false, false
 	}
 	if err == context.Canceled {
@@ -176,10 +174,32 @@ func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyT
 		return classifyReleaseSnapshotRetryBounded(cause.Err, siblingCancellation, legacyText, true, depth+1, remaining)
 	case *net.OpError:
 		return classifyReleaseSnapshotRetryBounded(cause.Err, siblingCancellation, legacyText, true, depth+1, remaining)
+	case *net.DNSError:
+		if cause.IsNotFound {
+			return false, false
+		}
+		if cause.UnwrapErr != nil {
+			return classifyReleaseSnapshotRetryBounded(cause.UnwrapErr, siblingCancellation, legacyText, true, depth+1, remaining)
+		}
+		// The standard resolver can report a timeout without an underlying
+		// error. Only this concrete nil-child result grants transport retry.
+		retryable := cause.IsTimeout || cause.IsTemporary
+		return retryable, retryable
 	case *attemptStreamHttpReadError:
 		return classifyReleaseSnapshotRetryBounded(cause.cause, siblingCancellation, legacyText, true, depth+1, remaining)
 	case *chainRpcMissingResponseError:
 		return classifyReleaseSnapshotRetryBounded(cause.cause, siblingCancellation, legacyText, true, depth+1, remaining)
+	case *artifactUnavailable:
+		// Its pending projection is not transport authority. Preserve only
+		// the complete cause retained by this package's original reader.
+		return classifyReleaseSnapshotRetryBounded(cause.cause, siblingCancellation, legacyText, transportOrigin, depth+1, remaining)
+	case syscall.Errno:
+		// Standard timeout/temporary errno values retain their taxonomy;
+		// their Is method is not foreign matching authority.
+		retryable := cause.Timeout() || cause.Temporary()
+		return retryable, retryable
+	case interface{ Is(error) bool }, interface{ As(any) bool }:
+		return false, false
 	}
 	if _, observationStatus := err.(*clientKeyObservationHttpStatusError); observationStatus {
 		retryable := retryableClientKeyObservationHttpError(err)

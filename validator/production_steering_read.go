@@ -61,12 +61,20 @@ func retryableProductionSteeringReadBounded(err error, transportOrigin bool, dep
 		return true
 	}
 	switch cause := err.(type) {
-	case *os.PathError, *TrailFatalError:
+	case *os.PathError, *os.LinkError, *TrailFatalError:
 		return false
 	case *url.Error:
 		return retryableProductionSteeringReadBounded(cause.Err, true, depth+1, remaining)
 	case *net.OpError:
 		return retryableProductionSteeringReadBounded(cause.Err, true, depth+1, remaining)
+	case *net.DNSError:
+		if cause.IsNotFound {
+			return false
+		}
+		if cause.UnwrapErr != nil {
+			return retryableProductionSteeringReadBounded(cause.UnwrapErr, true, depth+1, remaining)
+		}
+		return cause.IsTimeout || cause.IsTemporary
 	case *attemptStreamHttpReadError:
 		return retryableProductionSteeringReadBounded(cause.cause, true, depth+1, remaining)
 	case *chainRpcMissingResponseError:

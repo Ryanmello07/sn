@@ -8,8 +8,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"os"
+	"reflect"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -35,29 +39,100 @@ func releaseOnlyErrors(err error, allowed ...error) bool {
 	if err == nil {
 		return true
 	}
-	if _, fatal := err.(*TrailFatalError); fatal {
+	remaining := 512
+	return releaseErrorGraph(err, func(cause error) bool {
+		for _, candidate := range allowed {
+			if releaseErrorIdentity(cause, candidate) {
+				return true
+			}
+		}
 		return false
-	}
-	for _, candidate := range allowed {
-		if err == candidate {
+	}, 0, &remaining)
+}
+
+// Only exact concrete identity grants an allowed result. Error implementations
+// may contain slices or maps; comparing their interfaces must not panic.
+func releaseErrorIdentity(left, right error) bool {
+	return left != nil && right != nil && reflect.ValueOf(left).Comparable() && reflect.ValueOf(right).Comparable() && left == right
+}
+
+// A bounded concrete search preserves the producer's opaque marker without
+// invoking foreign As methods. Presence grants no disposition: callers must
+// still check all sibling causes and the marker's own phase/cause semantics.
+func releaseErrorMarker[T error](err error) T {
+	var result T
+	var original error
+	remaining := 512
+	complete := releaseErrorGraph(err, func(cause error) bool {
+		marker, ok := cause.(T)
+		if ok {
+			if original == nil {
+				result, original = marker, cause
+			}
 			return true
 		}
+		if _, joined := cause.(interface{ Unwrap() []error }); joined {
+			return false
+		}
+		if _, wrapped := cause.(interface{ Unwrap() error }); wrapped {
+			return false
+		}
+		return true
+	}, 0, &remaining)
+	if !complete || original == nil {
+		var absent T
+		return absent
+	}
+	return result
+}
+
+// One finite allowance covers the complete graph. Local storage and fatal
+// state errors remain hard before unwrapping their cancellation causes. Nil
+// children, typed nils, cycles and oversized joins never become pure success.
+func releaseErrorGraph(err error, accept func(error) bool, depth int, remaining *int) bool {
+	if err == nil || depth > 32 || *remaining <= 0 {
+		return false
+	}
+	*remaining--
+	value := reflect.ValueOf(err)
+	switch value.Kind() {
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		if value.IsNil() {
+			return false
+		}
+	}
+	switch cause := err.(type) {
+	case *os.PathError, *os.LinkError, *TrailFatalError:
+		return false
+	case *net.DNSError:
+		if cause.IsNotFound {
+			return false
+		}
+	case *artifactUnavailable:
+		// This package owns the concrete wrapper. Only its exact allowed
+		// identity or complete child graph can authorize a disposition.
+	case syscall.Errno:
+		return accept(err)
+	case interface{ Is(error) bool }, interface{ As(any) bool }:
+		return false
+	}
+	if accept(err) {
+		return true
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		causes := joined.Unwrap()
-		if len(causes) == 0 {
+		if len(causes) == 0 || len(causes) > 128 || len(causes) > *remaining {
 			return false
 		}
 		for _, cause := range causes {
-			if !releaseOnlyErrors(cause, allowed...) {
+			if !releaseErrorGraph(cause, accept, depth+1, remaining) {
 				return false
 			}
 		}
 		return true
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		cause := wrapped.Unwrap()
-		return cause != nil && releaseOnlyErrors(cause, allowed...)
+		return releaseErrorGraph(wrapped.Unwrap(), accept, depth+1, remaining)
 	}
 	return false
 }
@@ -65,7 +140,7 @@ func releaseOnlyErrors(err error, allowed ...error) bool {
 // Ordinary owner cancellation is not a service failure. Independent errors,
 // including a cancellation joined with failed I/O, remain supervisor-visible.
 func releaseRuntimeError(ctx context.Context, err error) error {
-	if err != nil && ctx.Err() != nil && releaseOnlyErrors(err, context.Canceled, context.DeadlineExceeded) {
+	if err != nil && ctx != nil && ctx.Err() != nil && releaseOnlyErrors(err, context.Canceled, context.DeadlineExceeded) {
 		return nil
 	}
 	return err
