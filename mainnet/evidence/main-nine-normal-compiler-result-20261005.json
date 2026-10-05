@@ -40,7 +40,13 @@
         "sha256": "9b654106d6534a697dc372c3f31b484caaba4c78616835574143bf11f77c5227",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-mainnet.process-result.json",
+        "sha256": "7b1e612214269e38027f6ac2aedefbe493642fc8a311539d9af54c6366ded4e7"
+      },
+      "exit": 0,
+      "tree_joined": true
     },
     {
       "id": "nativefee",
@@ -62,7 +68,13 @@
         "sha256": "feaec46dd00a6d5950d62bed7e2296ceb13e5917b3f903986c5fde9ef517d6cb",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-nativefee.process-result.json",
+        "sha256": "635de4ee6a9260f53fd6c5629996d2c6d319588d60ab84a8200c991a91fd3d36"
+      },
+      "exit": 0,
+      "tree_joined": true
     },
     {
       "id": "miner",
@@ -84,7 +96,13 @@
         "sha256": "7c3020147c648b315ba1f74c68b02ed49d5fcc8654a47d8c01e117d4bd055975",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-miner.process-result.json",
+        "sha256": "3d94f90b4ba95850b4a53e9930fd3967d1a3f87a775fde521c8084e5eb48e9c5"
+      },
+      "exit": 0,
+      "tree_joined": true
     },
     {
       "id": "onchain",
@@ -106,7 +124,13 @@
         "sha256": "08fa2b24c6931d95342b3a3baa375a9b0d01372f99cf9f292042707d322a9684",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-onchain.process-result.json",
+        "sha256": "fe68b725e0ddeafc5204d87b2a822556a502a9a6a4651c9ce19d582db16aba7a"
+      },
+      "exit": 0,
+      "tree_joined": true
     },
     {
       "id": "validator",
@@ -128,7 +152,13 @@
         "sha256": "9a40be2e25715e3d3c9129cd6f33f50f5a60127990ad05af955980c9f3933ad0",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-validator.process-result.json",
+        "sha256": "f3ded9752484f9f5896991567300c95b7d30e164420e1a4e46087d2ab5121a86"
+      },
+      "exit": 0,
+      "tree_joined": true
     },
     {
       "id": "evmrpc",
@@ -150,7 +180,13 @@
         "sha256": "bdbdabb5229810acf6b56a97df92c289262ef2fae95fd5a4ea9c0ce341fb6ee2",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-evmrpc.process-result.json",
+        "sha256": "e6bb8d8788f3ddd3ce925195e86559cd4278395608ccb4082e386283235d5d80"
+      },
+      "exit": 0,
+      "tree_joined": true
     },
     {
       "id": "crv4",
@@ -172,7 +208,13 @@
         "sha256": "90d81aee2852510068e7ae20586a0fe3a14789fb79f095d7eb4837cb9f9fd9ac",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-crv4.process-result.json",
+        "sha256": "2252c187a5c8d9a41a5386e13a5b75d817c67db5c4f745803048a4decde8cffc"
+      },
+      "exit": 0,
+      "tree_joined": true
     },
     {
       "id": "core",
@@ -194,7 +236,13 @@
         "sha256": "6921131842bb30c7ad25c958c69896f155a4a6c47f0b11f8adb77b9e54d482c4",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-core.process-result.json",
+        "sha256": "b206a14023dec9409110f46d154846caaab63fc9c6a7bbc5a6d81e4d5e46b2e5"
+      },
+      "exit": 0,
+      "tree_joined": true
     },
     {
       "id": "payoutartifact",
@@ -216,8 +264,18 @@
         "sha256": "a6958543ff7ee79007d755273295d9a045f824a747785575146f6cba612bd841",
         "type": 32768,
         "uid": 1000
-      }
+      },
+      "process_result": {
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/published-main-sn-core9-normal-v1-payoutartifact.process-result.json",
+        "sha256": "9e2b69983ad0ac0f3add101b76f0d324721c48dc49d98e0c5cc76ee962adc4d8"
+      },
+      "exit": 0,
+      "tree_joined": true
     }
   ],
-  "limit": "Nine normal test-image compiler passes on the frozen workspace tuple. No test bodies, race, controls, current sibling-default dependency validation or deployment inferred."
+  "limit": "Nine normal test-image compiler passes on the frozen workspace tuple. No test bodies, race, controls, current sibling-default dependency validation or deployment inferred.",
+  "independent_checks": [
+    "All nine compiler receipts: exit zero, hash-verified durable joined waits and no resource errors.",
+    "All nine retained images still match their original hashes."
+  ]
 }
