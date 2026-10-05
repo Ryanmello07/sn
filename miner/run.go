@@ -56,6 +56,7 @@ func initGlog() {
 
 // mainUsage returns the docopt usage string. Package-level (rather than
 // inline in `main`) so tests can parse argv against the real usage.
+// Docopt needs two spaces between an option declaration and its description.
 func mainUsage() string {
 	return fmt.Sprintf(
 		`Connect provider.
@@ -150,15 +151,15 @@ Options:
 	--whole-work-capture=<path>        Exact public launch profile for independently signed whole-work requests and retained private outboxes.
 	--whole-work-capture-sha256=<hash>  Independently reviewed sha256: digest of that original launch profile.
 	--require-whole-work-capture       Refuse startup without the complete original capture profile; never allocate replacement client keys.
-	--original-contract-capture=<path> Exact approved original request/admission source profile with prepared private custody.
-	--original-contract-capture-sha256=<hash> Independently reviewed sha256: digest of the original contract source profile.
-	--require-original-contract-capture Refuse startup without the complete original contract source profile and retained provider identity.
+	--original-contract-capture=<path>  Exact approved original request/admission source profile with prepared private custody.
+	--original-contract-capture-sha256=<hash>  Independently reviewed sha256: digest of the original contract source profile.
+	--require-original-contract-capture  Refuse startup without the complete original contract source profile and retained provider identity.
     --durable-volumes=<path>          Exact external storage declaration; fleet writes require the owner-local schema.
     --durable-volumes-sha256=<hash>   Reviewed sha256: digest; claim daemons require the daemon-volume schema.
     -h --help                        Show this help and exit.
     --version                        Show version.
-    -v...                            Enable verbose mode. -v implies verbose level 1,
-    				                 -vv implies level 2... etc.
+    -v                               Enable verbose mode. Repeat for higher levels:
+                                     one -v means level 1, -vv means level 2, and so on.
     -f                               Force overwrite the JWT token store file or proxy value, if exists.
                                      By default, existing values will not be overwritten.
     --api_url=<api_url>              Specify a custom API URL to use.
