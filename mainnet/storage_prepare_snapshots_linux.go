@@ -43,6 +43,8 @@ func storagePreparationSnapshotSpec(ownerLocal bool, owner durablevolume.Prepara
 		maximum = ownerSigningReplyLimit
 	case "mainnet-owner-recycle":
 		maximum = ownerRecycleStoreLimit
+	case "mainnet-root-register":
+		maximum = rootRegisterStoreLimit
 	case "mainnet-native-treasury":
 		maximum = treasuryStoreLimit
 	case "mainnet-owner-trim":

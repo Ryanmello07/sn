@@ -227,6 +227,10 @@ func inspectRootCurrentCapabilities(metadata *types.Metadata, metadataHash, file
 			result.MetadataInterfaceCompatible = false
 			result.Blockers = append(result.Blockers, fmt.Sprintf("ROOT_CALL_INTERFACE_UNAVAILABLE:%s", spec.name))
 		}
+		if spec.name == "root_register" && source == crv4.NativeOwnerSource473 && call.MetadataStatus == "shape-supported" {
+			call.MutationAdapter = "root-register-v1;requires-separate-473-policy-operator-custody-and-whole-reducible-balance-exposure-approval"
+			result.MutationExecution = "root_register-only:separate-473-root-register-domain;other-current-root-mutations-not-implemented"
+		}
 		result.Calls = append(result.Calls, call)
 	}
 	if !result.MetadataInterfaceCompatible {
