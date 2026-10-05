@@ -4,6 +4,102 @@
 
 use super::*;
 
+/// Keep each original read distinct from the one committed financial effect,
+/// including the zero-earning write after the first epoch has completed.
+fn assert_renewed_principal_effects(report: &HistoricalReport, opening: u64, earning: u64) {
+    let opening_principals = report.opening_principals.as_ref().unwrap();
+    let closing_principals = report.closing_principals.as_ref().unwrap();
+    assert_eq!(opening_principals.len(), 1);
+    assert_eq!(closing_principals.len(), 1);
+    assert_eq!(
+        opening_principals[0].opening_stake_alpha,
+        Some(opening.to_string())
+    );
+    assert_eq!(
+        closing_principals[0].opening_stake_alpha,
+        Some((opening + earning + 4).to_string())
+    );
+    let trace = report.hook_observations.as_ref().unwrap();
+    let mutations = trace.principal_mutations.as_ref().unwrap();
+    assert_eq!(trace.discarded_on_rollback, 0);
+    assert_eq!(mutations.len(), 4);
+    let key = encoded(b"synthetic-opening-stake");
+    let mut previous = 0;
+    for (index, (purpose, before, after)) in [
+        ("native-principal-earning", opening, opening + earning),
+        (
+            "native-principal-deposit",
+            opening + earning,
+            opening + earning + 5,
+        ),
+        (
+            "native-principal-withdrawal",
+            opening + earning + 5,
+            opening + earning + 2,
+        ),
+        (
+            "native-principal-refund",
+            opening + earning + 2,
+            opening + earning + 4,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let records: Vec<_> = trace
+            .observations
+            .iter()
+            .filter(|record| record.purpose == purpose)
+            .collect();
+        assert_eq!(records.len(), 2, "original get/set pair missing: {purpose}");
+        let (read, write) = (records[0], records[1]);
+        assert_eq!(read.operation, "get", "{purpose}");
+        assert_eq!(write.operation, "set", "{purpose}");
+        assert!(previous < read.ordinal && read.ordinal < write.ordinal);
+        previous = write.ordinal;
+        assert_eq!(read.key_hex, key);
+        assert_eq!(write.key_hex, key);
+        assert!(read.value_hex.is_none());
+        let returned = read.storage_return.as_ref().unwrap();
+        assert!(returned.present);
+        assert_eq!(returned.value_hex, Some(encoded(&words(&[before]))));
+        assert!(write.storage_return.is_none());
+        assert_eq!(write.value_hex, Some(encoded(&words(&[after]))));
+        let native = write.native.as_ref().unwrap();
+        assert_eq!(native.execution_phase_hex.as_deref(), Some("0x02"));
+        assert_eq!(
+            read.native.as_ref().unwrap().execution_phase_hex,
+            native.execution_phase_hex
+        );
+        for (name, value) in [
+            ("netuid", vec![25, 0]),
+            ("hotkey", vec![0x11; 32]),
+            ("coldkey", vec![0x33; 32]),
+            ("before", words(&[before])),
+            ("after", words(&[after])),
+        ] {
+            assert_eq!(
+                native
+                    .memory
+                    .iter()
+                    .find(|field| field.name == name)
+                    .unwrap()
+                    .bytes_hex,
+                encoded(&value),
+                "original principal memory differs: {purpose}/{name}"
+            );
+        }
+        let mutation = &mutations[index];
+        assert_eq!(mutation.ordinal, write.ordinal);
+        assert_eq!(mutation.operation, write.operation);
+        assert_eq!(mutation.key_hex, write.key_hex);
+        assert_eq!(mutation.value_sha256, Some(sha2_256(&words(&[after]))));
+        assert!(mutations.iter().all(|item| item.ordinal != read.ordinal));
+    }
+}
+
+/// Prove each independently rooted block's cause census and stock progression
+/// while both capture and replay follow the original runtime-code transition.
 #[test]
 fn historical_native_runtime_renewal_exports_actual_upgrade_and_principal_jobs() {
     let (second, _) = fixture_with_principal_effects(true, Some(Some(14)), Some("causes"));
@@ -104,21 +200,23 @@ fn historical_native_runtime_renewal_exports_actual_upgrade_and_principal_jobs()
         assert_eq!(captured_job.runtime_code_sha256, job.runtime_code_sha256);
         assert_eq!(captured_job.parent_header_hex, job.parent_header_hex);
         assert_eq!(captured_job.child_header_hex, job.child_header_hex);
-        let records = &replayed.hook_observations.as_ref().unwrap().observations;
-        assert_eq!(
-            records
-                .iter()
-                .filter(|item| item.purpose == "native-principal-deposit")
-                .count(),
-            1
-        );
-        assert_eq!(
-            records
-                .iter()
-                .filter(|item| item.purpose == "native-epoch")
-                .count(),
-            usize::from(index == 0)
-        );
+        let opening = if index == 0 {
+            14
+        } else {
+            20 + 4 * index as u64
+        };
+        let earning = if index == 0 { 6 } else { 0 };
+        for report in [&original, &captured.replay, &replayed] {
+            assert_renewed_principal_effects(report, opening, earning);
+            let records = &report.hook_observations.as_ref().unwrap().observations;
+            assert_eq!(
+                records
+                    .iter()
+                    .filter(|item| item.purpose == "native-epoch")
+                    .count(),
+                usize::from(index == 0)
+            );
+        }
     }
     // A next runtime cannot execute a parent that still proves the old code.
     let mut wrong = jobs[1].clone();
