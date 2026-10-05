@@ -35,24 +35,26 @@ type economicConservationArchivedAmounts struct {
 }
 
 type economicConservationArchive struct {
-	OriginalFees       *economicWholeFeeHead                   `json:"original_complete_fee_census,omitempty"`
-	Finality           *economicConservationFinalityHead       `json:"original_consensus_head,omitempty"`
-	Yuma               *economicConservationYumaArchive        `json:"original_yuma_summary,omitempty"`
-	NativeApprovalHead *economicConservationNativeApprovalHead `json:"native_approval_head,omitempty"`
-	PrincipalEffects   *economicConservationPrincipalArchive   `json:"original_principal_effects,omitempty"`
-	ClaimHeads         []economicConservationClaimHead         `json:"claim_window_heads,omitempty"`
-	FeeRevisionHead    *economicConservationFeeRevisionHead    `json:"native_fee_revision_head,omitempty"`
-	FeeRetirements     []monitorHistoryReference               `json:"native_fee_retirements,omitempty"`
-	NativeFees         *economicConservationFeeSummary         `json:"native_fee_census,omitempty"`
-	Segments           []monitorHistoryReference               `json:"segments"`
-	Resources          economicConservationResources           `json:"resources"`
-	LastRenewalHash    string                                  `json:"last_renewal_hash"`
-	LastRenewalOrdinal uint64                                  `json:"last_renewal_ordinal"`
-	Native             economicEmissionBoundary                `json:"native_cursor"`
-	Vault              economicEmissionBoundary                `json:"vault_cursor"`
-	PoolBoundaries     map[string]economicEmissionBoundary     `json:"original_pool_source_boundaries"`
-	Counts             economicConservationCounts              `json:"counts"`
-	Amounts            economicConservationArchivedAmounts     `json:"amounts"`
+	PrincipalRetained   *economicConservationPrincipalRetained  `json:"retained_original_principal,omitempty"`
+	PrincipalRetentions []monitorHistoryReference               `json:"principal_retention_segments,omitempty"`
+	OriginalFees        *economicWholeFeeHead                   `json:"original_complete_fee_census,omitempty"`
+	Finality            *economicConservationFinalityHead       `json:"original_consensus_head,omitempty"`
+	Yuma                *economicConservationYumaArchive        `json:"original_yuma_summary,omitempty"`
+	NativeApprovalHead  *economicConservationNativeApprovalHead `json:"native_approval_head,omitempty"`
+	PrincipalEffects    *economicConservationPrincipalArchive   `json:"original_principal_effects,omitempty"`
+	ClaimHeads          []economicConservationClaimHead         `json:"claim_window_heads,omitempty"`
+	FeeRevisionHead     *economicConservationFeeRevisionHead    `json:"native_fee_revision_head,omitempty"`
+	FeeRetirements      []monitorHistoryReference               `json:"native_fee_retirements,omitempty"`
+	NativeFees          *economicConservationFeeSummary         `json:"native_fee_census,omitempty"`
+	Segments            []monitorHistoryReference               `json:"segments"`
+	Resources           economicConservationResources           `json:"resources"`
+	LastRenewalHash     string                                  `json:"last_renewal_hash"`
+	LastRenewalOrdinal  uint64                                  `json:"last_renewal_ordinal"`
+	Native              economicEmissionBoundary                `json:"native_cursor"`
+	Vault               economicEmissionBoundary                `json:"vault_cursor"`
+	PoolBoundaries      map[string]economicEmissionBoundary     `json:"original_pool_source_boundaries"`
+	Counts              economicConservationCounts              `json:"counts"`
+	Amounts             economicConservationArchivedAmounts     `json:"amounts"`
 }
 
 func (self *economicConservationArchive) validate(policy economicConservationPolicy, state *economicConservationState) error {
@@ -97,6 +99,9 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 	if err := self.validateFeeRetirements(seen); err != nil {
 		return err
 	}
+	if err := self.validatePrincipalRetentions(seen); err != nil {
+		return err
+	}
 	for _, amount := range []string{self.Amounts.Direct, self.Amounts.Tail, self.Amounts.Unrouted, self.Amounts.Collateral} {
 		if _, err := monitorEconomicInteger(amount); err != nil {
 			return err
@@ -114,6 +119,10 @@ func (self *economicConservationArchive) validate(policy economicConservationPol
 // It never supplies evidence to an external caller, and survives neither owner
 // replacement nor restart without authenticating the complete bounded chain.
 type economicConservationArchiveView struct {
+	principalSegments        []economicConservationPrincipalSegment
+	principalRetained        *economicConservationPrincipalRetained
+	principalCache           *economicConservationPrincipalCache
+	principalReservedBytes   uint64
 	providerCandidate        *economicProviderCandidate
 	providerCensuses         map[string]*economicProviderAdmitted
 	providerContracts        map[economicProviderContractKey]map[string]struct{}
@@ -187,6 +196,10 @@ func (self *economicConservationArchiveView) charge(value any) error {
 	}
 	bytes := uint64(len(raw)) + 256
 	entryLimit, byteLimit := self.resources.IndexEntries/2, self.resources.IndexBytes/2
+	if self.principalReservedBytes > byteLimit {
+		return errMonitorEconomicCapacity
+	}
+	byteLimit -= self.principalReservedBytes
 	if self.claimBasisEntries >= entryLimit || self.entries >= entryLimit-self.claimBasisEntries || self.claimBasisBytes > byteLimit || self.bytes > byteLimit-self.claimBasisBytes || bytes > byteLimit-self.claimBasisBytes-self.bytes {
 		return errors.Join(errMonitorEconomicCapacity, errors.New("economic archive index needs reviewed entry/byte capacity before admission"))
 	}
@@ -222,7 +235,7 @@ func (self *economicConservationArchiveView) close() error {
 	for _, owner := range self.owners {
 		result = errors.Join(result, owner.close())
 	}
-	self.owners = nil
+	self.owners, self.principalCache = nil, nil
 	return result
 }
 
@@ -270,6 +283,12 @@ func compactEconomicConservationWithFeeRetirement(ctx context.Context, policy ec
 }
 
 func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy economicConservationPolicy, original *economicConservationState, reference monitorHistoryReference, renewal *economicConservationRenewal, retireFees bool, feeRevision *economicConservationFeeRevision) (*economicConservationState, error) {
+	return compactEconomicConservationWithPrincipalRetention(ctx, policy, original, reference, renewal, retireFees, feeRevision, false)
+}
+
+// The explicit selector retains unresolved originals without claiming their
+// causes complete. Its per-segment marker preserves every older replay grammar.
+func compactEconomicConservationWithPrincipalRetention(ctx context.Context, policy economicConservationPolicy, original *economicConservationState, reference monitorHistoryReference, renewal *economicConservationRenewal, retireFees bool, feeRevision *economicConservationFeeRevision, retainPrincipal bool) (*economicConservationState, error) {
 	policy = policy.withStorageProfile()
 	native, err := original.nativeOperatingPolicy(policy)
 	if err != nil {
@@ -291,6 +310,8 @@ func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy econo
 	}
 	archive := &economicConservationArchive{Resources: resources, LastRenewalHash: policy.identityHash(), Native: original.Native.Cursor, Vault: original.Vault.Cursor, PoolBoundaries: map[string]economicEmissionBoundary{}, Amounts: economicConservationArchivedAmounts{Direct: "0", Tail: "0", Unrouted: "0", Collateral: "0"}}
 	if next.Archive != nil {
+		archive.PrincipalRetained = next.Archive.PrincipalRetained
+		archive.PrincipalRetentions = slices.Clone(next.Archive.PrincipalRetentions)
 		archive.NativeApprovalHead = next.Archive.NativeApprovalHead
 		archive.PrincipalEffects = next.Archive.PrincipalEffects
 		archive.FeeRevisionHead = next.Archive.FeeRevisionHead
@@ -488,8 +509,13 @@ func compactEconomicConservationWithFeeUpdates(ctx context.Context, policy econo
 	if err := next.retireYuma(); err != nil {
 		return nil, err
 	}
-	if err := next.retirePrincipalEffects(); err != nil {
+	if err := next.retainPrincipalOriginals(reference, retainPrincipal); err != nil {
 		return nil, err
+	}
+	if archive.retainsPrincipal(reference) {
+		// Candidate validation must still see the authenticated originals
+		// removed from its hot head before the new snapshot is published.
+		next.principalProvisional = &economicConservationPrincipalProvisional{ctx: ctx, view: original.archiveView, reference: reference, originalHash: original.ContentHash, valuesHash: rootObjectHash(original.PrincipalExecutions), values: original.PrincipalExecutions}
 	}
 	next.entitlementIds, next.claimIds, next.captureKeys, next.claimKeys = nil, nil, nil, nil
 	next.ContentHash = next.hash()
@@ -702,6 +728,9 @@ func (self *economicConservationArchiveView) indexAdmission(original, compacted 
 	if err := archive.validateFeeRetirements(segments); err != nil {
 		return false, err
 	}
+	if err := archive.validatePrincipalRetentions(segments); err != nil {
+		return false, err
+	}
 	return archive.retiresFees(archive.Segments[len(archive.Segments)-1]), nil
 }
 
@@ -797,7 +826,7 @@ func readEconomicConservationArchive(ctx context.Context, policy economicConserv
 		if err := view.admitEntitlementCensuses(ctx, policy, &original); err != nil {
 			return nil, err
 		}
-		compacted, err := compactEconomicConservationWithFeeRetirement(ctx, policy, &original, reference, nil, state.Archive.retiresFees(reference))
+		compacted, err := compactEconomicConservationWithPrincipalRetention(ctx, policy, &original, reference, nil, state.Archive.retiresFees(reference), nil, state.Archive.retainsPrincipal(reference))
 		if err != nil {
 			return nil, err
 		}
