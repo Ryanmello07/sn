@@ -133,13 +133,15 @@ func TestEconomicProgressPendingCannotBypassOriginalIdentity(t *testing.T) {
 
 // Defensive projection checks never become new financial acceptance gates.
 func TestEconomicProgressIncomparableClocksAndBoundariesRemainUnknown(t *testing.T) {
-	for _, fault := range []string{"clock-backwards", "read-future", "read-regresses", "advanced-head-same-read", "cursor-regresses", "cursor-hash", "head-regresses", "head-hash"} {
+	for _, fault := range []string{"clock-zero", "clock-backwards", "read-future", "read-regresses", "advanced-head-same-read", "cursor-regresses", "cursor-hash", "head-regresses", "head-hash"} {
 		tracker, now := economicProgressTestTracker()
 		target := economicProgressTestBoundary(200)
 		tracker.observe(economicProgressTestBoundary(110), &target, now.Add(10*time.Second), now.Add(10*time.Second), true, false, false, "", true)
 		cursor, target := economicProgressTestBoundary(120), economicProgressTestBoundary(210)
 		readAt, completedAt := now.Add(20*time.Second), now.Add(25*time.Second)
 		switch fault {
+		case "clock-zero":
+			readAt, completedAt = time.Time{}, time.Time{}
 		case "clock-backwards":
 			readAt, completedAt = now.Add(5*time.Second), now.Add(5*time.Second)
 		case "read-future":
@@ -162,6 +164,15 @@ func TestEconomicProgressIncomparableClocksAndBoundariesRemainUnknown(t *testing
 		failed := tracker.observe(cursor, &target, readAt, completedAt, true, false, false, "", true)
 		if failed.Preparation != nil || failed.FinalizedCadence != nil || failed.CatchupEtaSeconds != nil || tracker.anchorValid {
 			t.Fatal("incomparable source acquired a rate or ETA0", fault, failed)
+		}
+	}
+	tracker, now := economicProgressTestTracker()
+	cursor, target := economicProgressTestBoundary(110), economicProgressTestBoundary(200)
+	tracker.observe(cursor, &target, now.Add(time.Second), now.Add(10*time.Second), true, false, false, "", true)
+	for _, elapsed := range []time.Duration{5 * time.Second, 7 * time.Second} {
+		failed := tracker.observe(cursor, &target, now.Add(time.Second), now.Add(elapsed), true, false, false, "", true)
+		if tracker.anchorValid || !tracker.lastAt.Equal(now.Add(10*time.Second)) || failed.CatchupEtaSeconds != nil {
+			t.Fatal("repeated regressed completion lowered its high-water mark", elapsed, failed)
 		}
 	}
 }
@@ -237,6 +248,14 @@ func TestEconomicProgressDurationCeilingAndOverflow(t *testing.T) {
 		if (actual != nil) != row.known || actual != nil && *actual != row.want {
 			t.Fatal("elapsed projection changed exact ceiling or overflow semantics", row.name, actual)
 		}
+	}
+	tracker, _ := economicProgressTestTracker()
+	ancient, future := time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2400, 1, 1, 0, 0, 0, 0, time.UTC)
+	tracker.anchorAt, tracker.lastAt = ancient, ancient
+	target := economicProgressTestBoundary(200)
+	value := tracker.observe(economicProgressTestBoundary(110), &target, future, future, true, false, false, "", true)
+	if value.Preparation != nil || value.CatchupEtaSeconds != nil || value.BacklogBlocks == nil || *value.BacklogBlocks != 90 {
+		t.Fatal("saturated time.Sub manufactured a finite preparation rate", value)
 	}
 }
 
