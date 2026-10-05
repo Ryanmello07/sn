@@ -731,31 +731,6 @@ func (self *TrailEngine) waitForAttemptBindingRetry(ctx context.Context) error {
 	return wait(ctx, attemptBindingRetryDelay)
 }
 
-// Wrapper labels do not turn owner cancellation into local corruption, while
-// one independent joined branch keeps the complete tree hard.
-func onlyAttemptContextError(err, want error) bool {
-	if err == nil || want == nil {
-		return false
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
-			return false
-		}
-		for _, cause := range causes {
-			if !onlyAttemptContextError(cause, want) {
-				return false
-			}
-		}
-		return true
-	}
-	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
-		cause := wrapped.Unwrap()
-		return cause != nil && onlyAttemptContextError(cause, want)
-	}
-	return err == want
-}
-
 // Retains one verified assignment and its exact boundary while a typed
 // transient binding read is retried; record mutation starts after validation.
 func (self *TrailEngine) captureAttemptAssignment(ctx context.Context, record *AttemptRecord, assign *connect.VerifyAssignResult) error {
