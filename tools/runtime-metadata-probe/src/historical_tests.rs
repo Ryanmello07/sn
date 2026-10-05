@@ -21,6 +21,9 @@ mod global_alias_tests;
 #[path = "historical_host_snapshot_tests.rs"]
 mod host_snapshot_tests;
 
+#[path = "historical_epoch_layout_tests.rs"]
+mod epoch_layout_tests;
+
 #[path = "historical_native_execution_tests.rs"]
 mod native_execution_tests;
 
@@ -115,7 +118,14 @@ fn parent_storage(code: &[u8]) -> Storage {
 /// Complete raw snapshots retain all top-level, child, and hashed-value nodes.
 /// The child expected map uses the SDK's full-state builder independently.
 fn job(code: &[u8], change: impl FnOnce(&mut Storage)) -> HistoricalJob {
-    let initial = parent_storage(code);
+    job_with_storage(code, parent_storage(code), change)
+}
+
+fn job_with_storage(
+    code: &[u8],
+    initial: Storage,
+    change: impl FnOnce(&mut Storage),
+) -> HistoricalJob {
     let backing = TestExternalities::<Blake2Hasher>::new_with_code_and_state(
         code,
         initial.clone(),
@@ -248,10 +258,12 @@ fn observation_profile(code: &[u8], export: &str, purpose: &str) -> observer::Ob
             offset_end: body.len() as u32,
             memory: Vec::new(),
             host_snapshot: None,
+            state_reads: Vec::new(),
         }],
         metadata_sha256: None,
         principal_storage_prefixes: None,
         original_globals: Vec::new(),
+        epoch_layout: None,
     }
 }
 

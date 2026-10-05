@@ -192,3 +192,32 @@ serialization and behavior.
 This permits review of an original epoch vector that remains live after the
 last storage callback. It supplies no allocation amounts, UID mapping, epoch
 identity, or economic interpretation beyond the explicitly captured bytes.
+
+
+An explicit `epoch_layout: "single-mechanism-original-keys-v1"` joins these
+observations without inventing stack fields. The decoder requires the original
+mechanism-count option to select exactly one mechanism, then uses the saturated
+sum of the three original pending-tranche returns. `native-uid-census` rules
+retain original `Keys(netuid, uid)` gets; exact metadata types, dense unique UIDs,
+unique AccountIds and pre-epoch ordinals supply the roster. `native-epoch-index`
+retains the actual `SubnetEpochIndex` write. Neither a BTreeMap's order nor a
+later chain query supplies a missing UID or epoch. Yuma consumes the explicit,
+hash-bound joined total and identities while still requiring every original
+allocation stage. Legacy profiles omit this field and retain their old bytes.
+
+A selected drain may declare exactly two canonical `state_reads` keys (at most
+64 bytes each). They are observer reads of the current proof-backed execution
+overlay at that callback, retained separately as `execution_state` with explicit
+presence/absence; they are never labeled as Wasm memory or original runtime
+gets. Capture preloads those parent inclusion/absence paths into its existing
+bounded recorder so strict replay can sample the actual overlay. Replay charges
+key/value reads to the shared work budget, bounds each returned value to eight
+bytes, and preserves transaction rollback. Registration must be observed present;
+generation absence may use only the independently authenticated metadata default.
+A missing proof path or observation is not absence.
+
+The operational lesson is to adapt to the actual compiled layout with explicit
+provenance: a source variable need not survive in a stack slot, and a pure late
+vector need not coincide with a storage callback. These capabilities and their
+synthetic tests do not supply a complete runtime-473 economic profile, successful
+original-block replay or independent authority approval.

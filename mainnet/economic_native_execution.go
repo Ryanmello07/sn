@@ -128,6 +128,7 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // FixedPointTolerance covers the observed final normalization and u64 casts;
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
+	EpochInputs            *nativeEpochInputProvenance         `json:"original_epoch_inputs,omitempty"`
 	Treasury               *nativeTreasuryAmounts              `json:"treasury_income,omitempty"`
 	FeeCensus              *nativeFeeCensusProjection          `json:"original_fee_census,omitempty"`
 	CertifiedWindow        *nativeExecutionFinalityProjection  `json:"original_finality_window,omitempty"`
@@ -220,7 +221,7 @@ func nativeCaptureVector(record historicalReplayObservation, label string, count
 
 // All decoded values come from the owned VM's captures. Approval carries no
 // alpha amounts. Read absence, omitted captures or ambiguous order refuse.
-func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecutionAdmission, block economicEmissionBlock, job historicalReplayJob, report historicalReplayReport, drainKeys [3]nativeExecutionDrain) (*nativeExecutionOutcome, error) {
+func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecutionAdmission, block economicEmissionBlock, job historicalReplayJob, report historicalReplayReport, drainKeys [3]nativeExecutionDrain, metadata *types.Metadata) (*nativeExecutionOutcome, error) {
 	profile, trace := job.ObservationProfile, report.HookObservations
 	if profile == nil || profile.Schema != historicalNativeProfileSchema || trace == nil || (profile.MetadataSha256 != nil) != (admission.FeeCensus != nil) {
 		return nil, errors.New("native execution omits its dedicated original-memory profile")
@@ -250,6 +251,10 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 	if monitorReadDigest(raw) != admission.ProfileSha256 || "sha256:"+hex.EncodeToString(profile.SourceReviewSha256[:]) != admission.ReviewSha256 || "0x"+hex.EncodeToString(job.ParentHash[:]) != admission.Parent.Hash || "0x"+hex.EncodeToString(job.ChildHash[:]) != admission.Child.Hash || "0x"+hex.EncodeToString(job.RuntimeCodeBlake2b256[:]) != admission.Runtime.RuntimeCodeHash {
 		return nil, errors.New("native execution job or raw memory profile differs from independent approval")
 	}
+	epochLayout, err := newNativeEpochStorageLayout(profile, metadata, policy.Netuid)
+	if err != nil {
+		return nil, err
+	}
 	var drains []*historicalReplayObservation
 	var epoch, emission *historicalReplayObservation
 	recipients := []historicalReplayObservation{}
@@ -264,9 +269,23 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 		if historicalPrincipalEffectPurpose(record.Purpose) || historicalYumaPurpose(record.Purpose) {
 			continue
 		}
+		if record.Purpose == "native-uid-census" || record.Purpose == "native-epoch-index" {
+			if epochLayout == nil {
+				return nil, errors.New("native original census has no admitted epoch layout")
+			}
+			if err := epochLayout.collect(*record); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		// The same original runtime callsite can execute for several subnets.
 		// Its actual netuid remains part of the authenticated memory capture.
-		netuid, err := nativeCaptureUint(*record, "netuid", 2)
+		var netuid uint64
+		if epochLayout != nil && record.Purpose == "native-drain" {
+			netuid, err = nativeEpochDrainNetuid(*record, drainKeys)
+		} else {
+			netuid, err = nativeCaptureUint(*record, "netuid", 2)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -300,6 +319,9 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 	}
 	result := &nativeExecutionOutcome{Treasury: newNativeTreasuryAmounts(admission.Treasury), Boundary: block.Boundary, AdmissionHash: rootObjectHash(admission), JobHash: admission.Job.Sha256, TraceHash: rootObjectHash(trace), MinerAllocation: "0", ProviderEntitlement: "0", OwnerRecycled: "0", ResidualEntitlement: "0", CollateralCapture: "0", FixedPointDust: "0", FixedPointTolerance: "0", RedirectedToValidators: "0", AllocationDifference: "0", Recipients: []nativeExecutionRecipient{}}
 	if len(drains) == 0 && epoch == nil && emission == nil && len(recipients) == 0 {
+		if epochLayout != nil && epochLayout.hasRecords() {
+			return nil, errors.New("native original census has no completed epoch")
+		}
 		for _, event := range block.Events {
 			if event.Kind == "SubtensorModule.IncentiveAlphaEmittedToMiners" {
 				return nil, errors.New("native replay omitted a runtime incentive execution")
@@ -333,33 +355,37 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 		tranches[index] = binary.LittleEndian.Uint64(raw)
 	}
 	miner, validator, root := tranches[0], tranches[1], tranches[2]
-	for label, expected := range map[string]uint64{"subnet-registered": *policy.SubnetRegistrationBlock, "subnet-generation": *policy.SubnetGeneration} {
-		value, err := nativeCaptureUint(*drains[0], label, 8)
-		if err != nil || value != expected {
-			return nil, errors.New("native drain lost its original subnet generation")
-		}
-	}
-	if admission.Treasury != nil {
-		epochIndex, err := nativeCaptureUint(*epoch, "subnet-epoch", 8)
-		if err != nil {
+	if epochLayout != nil {
+		if err := epochLayout.validateGeneration(*drains[0], policy); err != nil {
 			return nil, err
 		}
-		if err := admission.Treasury.validateScope(policy, block.Boundary, &epochIndex); err != nil {
-			return nil, err
+	} else {
+		for label, expected := range map[string]uint64{"subnet-registered": *policy.SubnetRegistrationBlock, "subnet-generation": *policy.SubnetGeneration} {
+			value, err := nativeCaptureUint(*drains[0], label, 8)
+			if err != nil || value != expected {
+				return nil, errors.New("native drain lost its original subnet generation")
+			}
 		}
 	}
+
 	count := len(block.Events[0].AlphaByUid)
 	if count > int(policy.MaximumUids) {
 		return nil, errors.New("native execution UID census exceeds original bound")
 	}
-	total, err := nativeCaptureUint(*epoch, "total-alpha", 8)
-	if err != nil {
-		return nil, err
+	var total uint64
+	if epochLayout == nil {
+		total, err = nativeCaptureUint(*epoch, "total-alpha", 8)
+		if err != nil {
+			return nil, err
+		}
 	}
 	trancheTotal := new(big.Int).Add(new(big.Int).SetUint64(miner), new(big.Int).SetUint64(validator))
 	trancheTotal.Add(trancheTotal, new(big.Int).SetUint64(root))
 	if trancheTotal.BitLen() > 64 {
 		trancheTotal.SetUint64(^uint64(0))
+	}
+	if epochLayout != nil {
+		total = trancheTotal.Uint64()
 	}
 	if total != trancheTotal.Uint64() {
 		return nil, errors.New("native normalization total includes an unobserved tranche or owner cut")
@@ -384,13 +410,26 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 	if err != nil {
 		return nil, err
 	}
-	hotkeys, err := nativeCapture(*epoch, "hotkeys", count*32)
+	var hotkeys, uids []byte
+	var epochIndex uint64
+	if epochLayout != nil {
+		hotkeys, uids, epochIndex, result.EpochInputs, err = epochLayout.derive(*epoch, count, total, drains)
+	} else {
+		hotkeys, err = nativeCapture(*epoch, "hotkeys", count*32)
+		if err == nil {
+			uids, err = nativeCapture(*epoch, "uids", count*2)
+		}
+		if err == nil && admission.Treasury != nil {
+			epochIndex, err = nativeCaptureUint(*epoch, "subnet-epoch", 8)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
-	uids, err := nativeCapture(*epoch, "uids", count*2)
-	if err != nil {
-		return nil, err
+	if admission.Treasury != nil {
+		if err := admission.Treasury.validateScope(policy, block.Boundary, &epochIndex); err != nil {
+			return nil, err
+		}
 	}
 	allocation, dust, tolerance, err := nativeExecutionArithmetic(total, incentives, dividends, normalized, emitted)
 	if err != nil {
@@ -653,19 +692,12 @@ func validateNativeExecutionReplay(ctx context.Context, policy economicEmissionP
 			}
 		}
 	}
-	entries, err := observationStorageProfile(metadata, economicEmissionStorageSpecs)
+	drains, err := nativeExecutionDrainKeys(metadata, policy.Netuid)
 	if err != nil {
 		return nil, err
 	}
-	var drains [3]nativeExecutionDrain
-	for index, name := range []string{"PendingServerEmission", "PendingValidatorEmission", "PendingRootAlphaDivs"} {
-		key, err := types.CreateStorageKey(metadata, "SubtensorModule", name, binary.LittleEndian.AppendUint16(nil, policy.Netuid))
-		if err != nil {
-			return nil, err
-		}
-		drains[index] = nativeExecutionDrain{Key: key.Hex(), Fallback: append([]byte(nil), entries[name].Fallback...)}
-	}
-	result, err := deriveNativeExecution(policy, admission, block, job, *report, drains)
+
+	result, err := deriveNativeExecution(policy, admission, block, job, *report, drains, metadata)
 	if err != nil {
 		return nil, nativeExecutionDerivationError(err)
 	}
@@ -682,4 +714,22 @@ func validateNativeExecutionReplay(ctx context.Context, policy economicEmissionP
 		return nil, nativeExecutionDerivationError(err)
 	}
 	return result, nil
+}
+
+// One metadata-validated map layout supplies both provider selection and the
+// final amount derivation; neither accepts a caller's replacement key prefix.
+func nativeExecutionDrainKeys(metadata *types.Metadata, netuid uint16) ([3]nativeExecutionDrain, error) {
+	var drains [3]nativeExecutionDrain
+	entries, err := observationStorageProfile(metadata, economicEmissionStorageSpecs)
+	if err != nil {
+		return drains, err
+	}
+	for index, name := range []string{"PendingServerEmission", "PendingValidatorEmission", "PendingRootAlphaDivs"} {
+		key, err := types.CreateStorageKey(metadata, "SubtensorModule", name, binary.LittleEndian.AppendUint16(nil, netuid))
+		if err != nil {
+			return drains, err
+		}
+		drains[index] = nativeExecutionDrain{Key: key.Hex(), Fallback: append([]byte(nil), entries[name].Fallback...)}
+	}
+	return drains, nil
 }

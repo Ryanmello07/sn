@@ -25,6 +25,8 @@ use std::{any::TypeId, collections::BTreeSet, panic::AssertUnwindSafe};
 
 #[path = "historical_capture.rs"]
 pub mod capture;
+#[path = "historical_epoch_layout.rs"]
+mod epoch_layout;
 #[path = "historical_fee_events.rs"]
 pub mod fee_events;
 #[path = "historical_global_alias.rs"]
