@@ -49,6 +49,9 @@ func repairOperatorCensusError(err error) error {
 	if errors.As(err, &refusal) {
 		return errors.Join(errRpcIntegrity, err)
 	}
+	if strecovery.CensusReadUnavailable(err) {
+		return errors.Join(errRepairProcessPending, err)
+	}
 	return err
 }
 
