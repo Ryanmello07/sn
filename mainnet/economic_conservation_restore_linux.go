@@ -33,7 +33,7 @@ type economicConservationRestoreRequest struct {
 // The same semantic archive reader reconstructs Claim windows, fee revisions,
 // immutable receipts, carry and native source provenance. Its temporary index
 // cannot be used by a live worker: all target owners must later reopen normally.
-func validateEconomicConservationRestoreHistory(ctx context.Context, policy economicConservationPolicy, original monitorHistoryReference, read func(monitorHistoryReference) ([]byte, error), hooks monitorServiceHooks) error {
+func validateEconomicConservationRestoreHistory(ctx context.Context, policy economicConservationPolicy, original monitorHistoryReference, read func(monitorHistoryReference) ([]byte, error), reread func(context.Context, monitorHistoryReference) ([]byte, error), hooks monitorServiceHooks) error {
 	if err := errors.Join(ctx.Err(), policy.validate(), policy.validateReference(original)); err != nil {
 		return err
 	}
@@ -89,6 +89,14 @@ func validateEconomicConservationRestoreHistory(ctx context.Context, policy econ
 		}
 		raw, err := readExact(reference)
 		return nil, raw, err
+	}, func(readContext context.Context, reference monitorHistoryReference) ([]byte, error) {
+		if err := errors.Join(ctx.Err(), readContext.Err(), policy.validateReference(reference)); err != nil {
+			return nil, err
+		}
+		if reread == nil {
+			return nil, errors.New("economic copied principal history requires an admitted original rereader")
+		}
+		return reread(readContext, reference)
 	})
 	if err != nil {
 		return err
@@ -140,6 +148,12 @@ func reviewEconomicConservationRestore(ctx context.Context, request economicCons
 			originalRaw = raw
 		}
 		return raw, err
+	}, func(readContext context.Context, reference monitorHistoryReference) ([]byte, error) {
+		root, err := monitorHistoryRestoreRootLimit(roots, reference, request.Policy.storageMaximum())
+		if err != nil {
+			return nil, err
+		}
+		return root.rereadProfile(readContext, reference, request.Policy.storageKind(), int(request.Policy.storageMaximum()))
 	}, hooks); err != nil {
 		return empty, nil, err
 	}

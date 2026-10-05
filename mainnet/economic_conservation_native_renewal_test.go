@@ -376,7 +376,7 @@ func TestEconomicConservationNativeRenewalRestoreAuthenticatesCompleteOriginalHi
 	original := monitorHistoryReference{Path: f.source.checkpoint, Sha256: monitorReadDigest(raw), Bytes: uint64(len(raw))}
 	var reads int
 	read := func(reference monitorHistoryReference) ([]byte, error) { reads++; return os.ReadFile(reference.Path) }
-	if err := validateEconomicConservationRestoreHistory(f.ctx, f.source.policy, original, read, monitorServiceHooks{}); err != nil || reads != 3 {
+	if err := validateEconomicConservationRestoreHistory(f.ctx, f.source.policy, original, read, nil, monitorServiceHooks{}); err != nil || reads != 3 {
 		t.Fatal("copied native adoption did not authenticate exact original history once", err, reads)
 	}
 	state := f.source.state(t)
@@ -393,7 +393,7 @@ func TestEconomicConservationNativeRenewalRestoreAuthenticatesCompleteOriginalHi
 			return changed, nil
 		}
 		return os.ReadFile(reference.Path)
-	}, monitorServiceHooks{}); err == nil {
+	}, nil, monitorServiceHooks{}); err == nil {
 		t.Fatal("self-sealed copied native head discarded its original approval lineage")
 	}
 }

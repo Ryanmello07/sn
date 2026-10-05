@@ -474,7 +474,7 @@ func TestEconomicConservationRestoreReadFailureCannotInventHistoryMismatch(t *te
 				return append(raw, ' '), nil
 			}
 			return raw, nil
-		}, monitorServiceHooks{})
+		}, nil, monitorServiceHooks{})
 		cancel()
 		if calls != 2 || fault != nil && (!errors.Is(err, fault) || strings.Contains(fmt.Sprint(err), "differ")) || fault == nil && (err == nil || !strings.Contains(err.Error(), "returned bytes differ")) {
 			t.Fatal("economic copied-source read lost its observed cause", calls, fault, err)

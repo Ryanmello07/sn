@@ -285,6 +285,9 @@ func loadEconomicConservation(ctx context.Context, owner *monitorCheckpointStore
 }
 
 func saveEconomicConservation(ctx context.Context, owner *monitorCheckpointStore, policy economicConservationPolicy, state *economicConservationState) error {
+	if err := state.archiveView.requireLive(); err != nil {
+		return err
+	}
 	if state.principalProvisional != nil {
 		return errors.New("economic publication requires retained principal snapshot custody, not a provisional plan")
 	}
@@ -345,6 +348,9 @@ func sampleEconomicConservation(ctx context.Context, policy economicConservation
 }
 
 func sampleEconomicConservationWithNativeWorker(ctx context.Context, policy economicConservationPolicy, prior *economicConservationState, native, vault *rpcClient, now time.Time, hooks monitorServiceHooks, worker *economicConservationNativeWorker) (*economicConservationState, bool, bool, error) {
+	if err := prior.archiveView.requireLive(); err != nil {
+		return nil, false, false, err
+	}
 	if err := prior.requireEntitlementHistory(); err != nil {
 		return nil, false, false, err
 	}

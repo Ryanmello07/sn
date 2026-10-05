@@ -169,7 +169,7 @@ func maintainEconomicPrincipalArchive(ctx context.Context, policy economicConser
 		// Reader custody lasts for the command, beyond this maintenance
 		// attempt's deadline. Admission itself still observes readContext.
 		return policy.openHistoryReader(lifecycle, reference)
-	})
+	}, nil)
 	if err != nil {
 		return state, view, err
 	}
