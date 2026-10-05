@@ -22,6 +22,7 @@ func runHistoricalCaptureCommand(ctx context.Context, args []string, stdout, std
 	nodes := flags.String("nodes", "", "absolute read-only raw parent trie node directory")
 	rpc := flags.String("rpc", "", "optional read-only archive route for bounded missing-node proofs")
 	cache := flags.String("cache-dir", "", "absolute existing private declared archive evidence directory")
+	ownerLocal := flags.Bool("owner-local-cache", false, "archive mode: explicitly select separate owner-local durable evidence policy")
 	chain := flags.String("expected-chain", "", "archive mode: independently selected native chain")
 	genesis := flags.String("expected-genesis", "", "archive mode: independently selected genesis")
 	evm := flags.Uint64("expected-evm-chain-id", 0, "archive mode: independently selected EVM chain ID")
@@ -35,7 +36,7 @@ func runHistoricalCaptureCommand(ctx context.Context, args []string, stdout, std
 	archive := *rpc != ""
 	cacheLimitsSupplied := false
 	flags.Visit(func(value *flag.Flag) {
-		cacheLimitsSupplied = cacheLimitsSupplied || value.Name == "cache-max-bytes" || value.Name == "cache-max-entries"
+		cacheLimitsSupplied = cacheLimitsSupplied || value.Name == "cache-max-bytes" || value.Name == "cache-max-entries" || value.Name == "owner-local-cache"
 	})
 	if archive && (*nodes != "" || !bootstrapRootAbsolutePath(*cache) || *chain == "" || !rootCanonicalHash(*genesis) || *evm == 0 || *maximumBytes < 2*nativeProducerBoundaryReserve || *maximumBytes > 64*1024*1024*1024 || *maximumEntries < 2*nativeProducerBoundaryEntries || *maximumEntries > 1024*1024) || !archive && (!bootstrapRootAbsolutePath(*nodes) || *cache != "" || *chain != "" || *genesis != "" || *evm != 0 || cacheLimitsSupplied) {
 		fmt.Fprintln(stderr, "choose --nodes, or --rpc with --cache-dir and all expected network fields; archive cache requires finite limits and declared durable custody")
@@ -45,7 +46,7 @@ func runHistoricalCaptureCommand(ctx context.Context, args []string, stdout, std
 	var report *historicalCaptureReport
 	var err error
 	if archive {
-		report, err = runHistoricalArchiveCapture(ctx, historicalArchiveCaptureRequest{Capture: request, Rpc: *rpc, Expected: identityExpectation{NativeChain: *chain, GenesisHash: *genesis, EvmChainId: *evm}, CacheDirectory: *cache, MaximumBytes: *maximumBytes, MaximumEntries: *maximumEntries}, historicalReplayHooks{})
+		report, err = runHistoricalArchiveCapture(ctx, historicalArchiveCaptureRequest{Capture: request, Rpc: *rpc, Expected: identityExpectation{NativeChain: *chain, GenesisHash: *genesis, EvmChainId: *evm}, CacheDirectory: *cache, OwnerLocalCache: *ownerLocal, MaximumBytes: *maximumBytes, MaximumEntries: *maximumEntries}, historicalReplayHooks{})
 	} else {
 		report, err = runHistoricalCapture(ctx, request, historicalReplayHooks{})
 	}
