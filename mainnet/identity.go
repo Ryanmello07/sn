@@ -353,8 +353,14 @@ func (self *rpcClient) readIdentityAt(ctx context.Context, blockHash string) (ch
 		}
 		retainedHeader.normalizeHashes()
 		number, err := retainedHeader.authenticate(blockHash)
-		if err != nil || number >= identity.FinalizedNumber {
-			return chainIdentity{}, fmt.Errorf("%w: retained header is invalid or not finalized: %v", errRpcIntegrity, err)
+		if err != nil {
+			return chainIdentity{}, fmt.Errorf("%w: retained header is invalid: %v", errRpcIntegrity, err)
+		}
+		if number >= identity.FinalizedNumber {
+			finalized, err = self.readNativeFinalityCovering(sampleCtx, finalized, nativeFinalityPoint{Number: number, Hash: blockHash})
+			if err != nil {
+				return chainIdentity{}, err
+			}
 		}
 		identity.FinalizedHash, identity.FinalizedNumber = blockHash, number
 	}

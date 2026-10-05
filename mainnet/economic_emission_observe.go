@@ -39,11 +39,16 @@ func (self *economicEmissionBudget) retain(value any) error {
 // Walk by child-authenticated parent hashes. The owned route's finalized-head
 // assertion is retained as such; header linkage is not an independent GRANDPA
 // justification or storage proof.
-func economicEmissionAncestry(ctx context.Context, chain *rootCanonicalChain, from economicEmissionBoundary, budget *economicEmissionBudget, retain *[]rootReceiptHeader) (economicEmissionBoundary, map[uint64]economicEmissionBlock, error) {
-	var hash string
-	if err := chain.client.call(ctx, "chain_getFinalizedHead", []any{}, &hash); err != nil {
+func economicEmissionAncestry(ctx context.Context, chain *rootCanonicalChain, from economicEmissionBoundary, budget *economicEmissionBudget, retain *[]rootReceiptHeader, retained ...economicEmissionBoundary) (economicEmissionBoundary, map[uint64]economicEmissionBlock, error) {
+	points := []nativeFinalityPoint{{Number: from.Number, Hash: from.Hash}}
+	for _, boundary := range retained {
+		points = append(points, nativeFinalityPoint{Number: boundary.Number, Hash: boundary.Hash})
+	}
+	point, err := chain.client.readNativeFinalityCovering(ctx, points...)
+	if err != nil {
 		return economicEmissionBoundary{}, nil, err
 	}
+	hash := point.Hash
 	openingHash := hash
 	blocks := map[uint64]economicEmissionBlock{}
 	var head economicEmissionBoundary
@@ -55,11 +60,11 @@ func economicEmissionAncestry(ctx context.Context, chain *rootCanonicalChain, fr
 		}
 		if count == 0 {
 			head = economicEmissionBoundary{Number: number, Hash: openingHash}
-			if number < from.Number || number-from.Number > rootAncestryLimit {
-				return head, blocks, errors.New("native incentive finalized ancestry is behind the boundary or exceeds 4096 blocks")
+			if number-from.Number > rootAncestryLimit {
+				return head, blocks, errors.New("native incentive finalized ancestry exceeds 4096 blocks")
 			}
 		} else if number+1 != previous {
-			return head, blocks, errors.New("native incentive finalized ancestry height is discontinuous")
+			return head, blocks, errors.Join(errRpcIntegrity, errors.New("native incentive finalized ancestry height is discontinuous"))
 		}
 		if err := budget.retain(header); err != nil {
 			return head, blocks, err
@@ -72,7 +77,7 @@ func economicEmissionAncestry(ctx context.Context, chain *rootCanonicalChain, fr
 		}
 		if number == from.Number {
 			if hash != from.Hash {
-				return head, blocks, errors.New("native incentive finalized ancestry conflicts with the exact boundary")
+				return head, blocks, errors.Join(errRpcIntegrity, errors.New("native incentive finalized ancestry conflicts with the exact boundary"))
 			}
 			return head, blocks, nil
 		}
@@ -195,7 +200,7 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 		result.HistoricalFinality = "owned-rpc-assertion"
 		result.Finalized, result.FinalizedHeader, blocks, err = economicEmissionHistoricalPage(readCtx, chain, policy, &budget, &result.RangeAncestry)
 	} else {
-		result.Finalized, blocks, err = economicEmissionAncestry(readCtx, chain, policy.From, &budget, &result.Ancestry)
+		result.Finalized, blocks, err = economicEmissionAncestry(readCtx, chain, policy.From, &budget, &result.Ancestry, policy.Through)
 		if len(result.Ancestry) != 0 {
 			header := result.Ancestry[0]
 			result.FinalizedHeader = &header
@@ -311,12 +316,9 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 		previous = after
 	}
 	if historical {
-		result.ClosingFinalized, result.ClosingFinalizedHeader, err = economicEmissionFinalizedAssertion(readCtx, chain)
-		if err == nil && (result.ClosingFinalized.Number < result.Finalized.Number || result.ClosingFinalized.Number == result.Finalized.Number && result.ClosingFinalized.Hash != result.Finalized.Hash) {
-			err = errors.Join(errRpcIntegrity, errors.New("native economic closing finalized assertion regressed"))
-		}
+		result.ClosingFinalized, result.ClosingFinalizedHeader, err = economicEmissionFinalizedAssertion(readCtx, chain, policy.From, policy.Through, result.Finalized)
 	} else {
-		result.ClosingFinalized, _, err = economicEmissionAncestry(readCtx, chain, result.Finalized, &budget, &result.ClosingAncestry)
+		result.ClosingFinalized, _, err = economicEmissionAncestry(readCtx, chain, result.Finalized, &budget, &result.ClosingAncestry, policy.From, policy.Through)
 	}
 	if err != nil {
 		return result, err
@@ -327,7 +329,7 @@ func observeEconomicEmissionCatalog(ctx context.Context, client *rpcClient, poli
 			return result, err
 		}
 		if canonical != boundary.Hash {
-			return result, fmt.Errorf("native incentive closing canonical conflict at block %d", boundary.Number)
+			return result, fmt.Errorf("%w: native incentive closing canonical conflict at block %d", errRpcIntegrity, boundary.Number)
 		}
 	}
 	if err := chain.network(readCtx); err != nil {

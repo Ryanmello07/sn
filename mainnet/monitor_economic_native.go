@@ -302,54 +302,31 @@ func observeMonitorEconomicNative(ctx context.Context, client *rpcClient, policy
 	if err := chain.network(ctx); err != nil {
 		return nil, err
 	}
-	var current string
-	if err := client.call(ctx, "chain_getBlockHash", []any{state.Cursor.Number}, &current); err != nil {
-		return nil, err
+	retained := []nativeFinalityPoint{{Number: state.Cursor.Number, Hash: state.Cursor.Hash}}
+	if state.Finalized != nil {
+		retained = append(retained, nativeFinalityPoint{Number: state.Finalized.Number, Hash: state.Finalized.Hash})
 	}
-	if current != state.Cursor.Hash {
-		return nil, errors.Join(errRpcIntegrity, errors.New("native economic retained cursor changed canonically"))
+	if state.BatchCount == 0 {
+		retained = append(retained, nativeFinalityPoint{Number: policy.Observation.Through.Number, Hash: policy.Observation.Through.Hash})
 	}
-	var hash string
-	if err := client.call(ctx, "chain_getFinalizedHead", []any{}, &hash); err != nil {
-		return nil, err
+	if state.PendingThrough != nil {
+		retained = append(retained, nativeFinalityPoint{Number: state.PendingThrough.Number, Hash: state.PendingThrough.Hash})
 	}
-	_, head, err := chain.header(ctx, hash)
+	point, err := client.readNativeFinalityCovering(ctx, retained...)
 	if err != nil {
 		return nil, err
 	}
-	if head < state.Cursor.Number || head == state.Cursor.Number && hash != state.Cursor.Hash {
-		return nil, errors.Join(errRpcIntegrity, errors.New("native economic finalized head regressed or changed"))
-	}
-	if state.Finalized != nil {
-		if head < state.Finalized.Number || head == state.Finalized.Number && hash != state.Finalized.Hash {
-			return nil, errors.Join(errRpcIntegrity, errors.New("native economic finalized assertion changed across samples"))
-		}
-		var prior string
-		if err := client.call(ctx, "chain_getBlockHash", []any{state.Finalized.Number}, &prior); err != nil {
-			return nil, err
-		}
-		if prior != state.Finalized.Hash {
-			return nil, errors.Join(errRpcIntegrity, errors.New("native economic prior finalized assertion changed canonically"))
-		}
-	}
+	head := point.Number
 	if head == state.Cursor.Number {
-		if state.BatchCount == 0 {
-			return nil, errors.New("native economic finalized head has not reached reviewed initial window")
-		}
 		return nil, nil
 	}
 	through := min(head, state.Cursor.Number+policy.BatchBlocks)
 	if state.BatchCount == 0 {
-		if head < policy.Observation.Through.Number {
-			return nil, errors.New("native economic finalized head has not reached reviewed initial window")
-		}
 		through = policy.Observation.Through.Number
 	} else if state.PendingThrough != nil {
-		if head < state.PendingThrough.Number {
-			return nil, errors.New("native economic head is behind retained pending range")
-		}
 		through = state.PendingThrough.Number
 	}
+	var hash string
 	if err := client.call(ctx, "chain_getBlockHash", []any{through}, &hash); err != nil {
 		return nil, err
 	}
