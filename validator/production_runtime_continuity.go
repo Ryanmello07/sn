@@ -188,7 +188,7 @@ func verifyProductionRuntimeContinuity(cfg *ReleaseConfig, policyRaw, certificat
 		return nil, nil, err
 	}
 	policy := envelope.Policy
-	key, err := canonicalAttemptHex32("original runtime continuity approver", cfg.OwnerRecycleApproval.Signer, false)
+	key, err := canonicalAttemptHex32("original runtime continuity approver", productionEconomicSelection(cfg).Signer, false)
 	if err != nil {
 		return nil, nil, err
 	}

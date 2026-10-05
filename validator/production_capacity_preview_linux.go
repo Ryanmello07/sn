@@ -100,7 +100,7 @@ func BuildProductionCapacityPreview(ctx context.Context, request ProductionCapac
 	if request.SuccessorApprovalPath == request.OriginalAuthorityPath {
 		return result, errors.New("capacity request aliases original or proposed public authority")
 	}
-	retainedPaths := []string{request.Config.Path, cfg.OwnerRecycleApproval.Approval.Path, cfg.HotkeySeedFile}
+	retainedPaths := []string{request.Config.Path, productionEconomicSelection(cfg).Approval.Path, cfg.HotkeySeedFile}
 	for _, prior := range append(append([]ReleaseEvidenceV2File(nil), cfg.ProductionAuthorityHistory...), cfg.ProductionRuntimeApprovals...) {
 		retainedPaths = append(retainedPaths, prior.Path)
 	}
@@ -183,7 +183,7 @@ func BuildProductionCapacityPreview(ctx context.Context, request ProductionCapac
 	if err != nil {
 		return result, err
 	}
-	revision := ProductionCapacityRevision{Schema: ProductionCapacityRevisionSchema, PredecessorConfigHash: attemptHex32(approved.Approval.ConfigHash), PredecessorApprovalSha256: cfg.OwnerRecycleApproval.Approval.SHA256, EconomicApprovalSha256: productionCapacityEconomicHash(approved.Approval), ValidThroughNativeBlock: approved.Approval.ValidThroughNativeBlock, ValidThroughNativeEpoch: approved.Approval.Production.ValidThroughNativeEpoch, Margin: 2, FutureHistoryBytes: request.FutureHistoryBytes, FutureCaptureFiles: request.FutureCaptureFiles}
+	revision := ProductionCapacityRevision{Schema: ProductionCapacityRevisionSchema, PredecessorConfigHash: attemptHex32(approved.Approval.ConfigHash), PredecessorApprovalSha256: productionEconomicSelection(cfg).Approval.SHA256, EconomicApprovalSha256: productionCapacityEconomicHash(approved.Approval), ValidThroughNativeBlock: approved.Approval.ValidThroughNativeBlock, ValidThroughNativeEpoch: approved.Approval.Production.ValidThroughNativeEpoch, Margin: 2, FutureHistoryBytes: request.FutureHistoryBytes, FutureCaptureFiles: request.FutureCaptureFiles}
 	for _, root := range selected {
 		if root.report.TotalBytes > ^uint64(0)-revision.RetainedHistoryBytes {
 			return result, errors.New("capacity retained history byte sum overflows")
@@ -256,7 +256,12 @@ func BuildProductionCapacityPreview(ctx context.Context, request ProductionCapac
 	next.ProductionAuthorityHistory = append(next.ProductionAuthorityHistory, reference)
 	next.EvidenceV2.Bounds = request.Bounds
 	next.ProductionCapacityRevision = &revision
-	next.OwnerRecycleApproval = &ReleaseOwnerRecycleApprovalConfig{Signer: cfg.OwnerRecycleApproval.Signer, Approval: ReleaseEvidenceV2File{Path: request.SuccessorApprovalPath}}
+	selection := &ReleaseOwnerRecycleApprovalConfig{Signer: productionEconomicSelection(cfg).Signer, Approval: ReleaseEvidenceV2File{Path: request.SuccessorApprovalPath}}
+	if cfg.TreasuryApproval != nil {
+		next.TreasuryApproval = selection
+	} else {
+		next.OwnerRecycleApproval = selection
+	}
 	// Nested runtime bounds retain their original YAML names, which are not
 	// always their default Go JSON field names. Emit that exact document and
 	// validate it before any independent signer receives a message.
@@ -310,7 +315,7 @@ func CompleteProductionCapacityDocument(ctx context.Context, path string, previe
 	if err != nil {
 		return nil, err
 	}
-	if cfg.OwnerRecycleApproval == nil || cfg.OwnerRecycleApproval.Approval.Path != approval.Path {
+	if productionEconomicSelection(cfg) == nil || productionEconomicSelection(cfg).Approval.Path != approval.Path {
 		return nil, errors.New("capacity completion changes the originally nominated approval path")
 	}
 	digest, err := OwnerRecycleConfigHash(cfg)
@@ -322,7 +327,7 @@ func CompleteProductionCapacityDocument(ctx context.Context, path string, previe
 	if _, err := ReadReleaseEvidenceV2File(ctx, approval, maximumOwnerRecycleApprovalBytes); err != nil {
 		return nil, err
 	}
-	cfg.OwnerRecycleApproval.Approval = approval
+	productionEconomicSelection(cfg).Approval = approval
 	raw, err := yaml.Marshal(cfg)
 	if err != nil {
 		return nil, err

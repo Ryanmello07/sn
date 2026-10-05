@@ -411,6 +411,9 @@ func (self *ownerRecycleProductionTestFixture) intentAndEnvelope(t *testing.T, s
 		MeasurementArtifactHash: ReleaseMeasurementContentHash(measurement.encoded), MeasurementEnvelopeHash: envelopeHash, OwnerRecycle: sidecar,
 		Prepared: prepared, UIDs: row.UIDs, Scores: scores, MaskedUIDs: provider.MaskedUIDs, EligibleHeadUIDs: headSelectionUIDs(provider.EligibleHead),
 		SelectedHeadUIDs: headSelectionUIDs(provider.SelectedHead), RejectedHeadUIDs: headSelectionUIDs(provider.RejectedHead), StaleHeadBindings: provider.StaleBindings, DepositAudits: artifact.DepositAudits}
+	if self.cfg.TreasuryApproval != nil {
+		intent.Treasury, intent.OwnerRecycle = intent.OwnerRecycle, nil
+	}
 	for _, head := range provider.EligibleHead {
 		encoded, _ := rationalJSON([]*big.Rat{head.Score})
 		intent.EligibleHeadScores = append(intent.EligibleHeadScores, encoded[0])

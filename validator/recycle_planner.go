@@ -45,6 +45,7 @@ type OwnerRecycleProposal struct {
 	Remainder        string
 	OwnerAllocation  string
 	Runtime          OwnerRecycleRuntimePin
+	Treasury         *TreasuryPolicy `json:"treasury,omitempty"`
 }
 
 // Validates the proposed successor without weakening any parent-policy field.
@@ -53,14 +54,25 @@ func (self OwnerRecycleProposal) Validate(parent protocol.Policy) error {
 	if err != nil {
 		return err
 	}
-	if self.Schema != ownerRecycleProposalSchema || parent.NetworkProfile != "mainnet" || self.ParentPolicyHash != parentHash {
+	if (self.Schema != ownerRecycleProposalSchema && self.Schema != TreasuryProposalSchema) || parent.NetworkProfile != "mainnet" || self.ParentPolicyHash != parentHash {
 		return errors.New("owner-recycle requires its exact schema and unchanged mainnet parent policy hash")
 	}
 	if self.PolicyId <= parent.PolicyID || self.EffectiveEpoch <= parent.EffectiveEpoch {
 		return errors.New("owner-recycle successor policy and epoch must advance")
 	}
-	if self.ProviderShare != (protocol.Rational{Numerator: 1, Denominator: 10}) || self.Remainder != "recognized_owner_recycle" || self.OwnerAllocation != "equal_unmasked_registered" {
-		return errors.New("owner-recycle supports exactly the reviewed 10/90 proposal and equal owner allocation")
+	if self.Schema == TreasuryProposalSchema {
+		if self.Treasury == nil || self.Remainder != "ordinary_treasury_credit" || self.OwnerAllocation != "equal_exact_registered" ||
+			self.Treasury.MaxWeightLimitU16 != parent.Steering.MaxWeightLimitU16 || self.Runtime.SourceCommit != ownerRecycleSourceCommit470 {
+			return errors.New("treasury proposal requires its complete public policy, ordinary credit source and unchanged cap")
+		}
+		if err := self.Treasury.Validate(); err != nil {
+			return err
+		}
+	} else if self.Treasury != nil || self.Remainder != "recognized_owner_recycle" || self.OwnerAllocation != "equal_unmasked_registered" {
+		return errors.New("owner-recycle supports only its original owner allocation without treasury authority")
+	}
+	if self.ProviderShare != (protocol.Rational{Numerator: 1, Denominator: 10}) {
+		return errors.New("economic successor requires exactly one tenth provider allocation")
 	}
 	if self.Runtime.GenesisHash == ([32]byte{}) || self.Runtime.CodeHash == ([32]byte{}) || self.Runtime.MetadataHash == ([32]byte{}) || self.Runtime.Netuid != 25 ||
 		self.Runtime.SourceCommit != ownerRecycleSourceCommit && self.Runtime.SourceCommit != ownerRecycleSourceCommit470 {
@@ -81,6 +93,9 @@ func (self OwnerRecycleProposal) Hash(parent protocol.Policy) ([32]byte, error) 
 	encoded, err := json.Marshal(self)
 	if err != nil {
 		return [32]byte{}, err
+	}
+	if self.Schema == TreasuryProposalSchema {
+		return sha256.Sum256(append([]byte(TreasuryProposalSchema+"\n"), encoded...)), nil
 	}
 	return sha256.Sum256(encoded), nil
 }
@@ -155,6 +170,9 @@ func (self *OwnerRecyclePreview) AdmissionError() error {
 // Cap clipping or integer repair could change channel budgets, so this preview
 // refuses either requirement instead of redistributing between recipients.
 func PreviewOwnerRecycle(input OwnerRecyclePreviewInput) (*OwnerRecyclePreview, error) {
+	if input.Proposal.Treasury != nil {
+		return nil, errors.New("treasury preview requires the authenticated ordinary-recipient census")
+	}
 	proposalHash, err := input.Proposal.Hash(input.ParentPolicy)
 	if err != nil {
 		return nil, err

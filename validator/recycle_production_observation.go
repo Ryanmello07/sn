@@ -117,7 +117,8 @@ func observeOwnerRecycleProductionEligibilityAttempt(ctx context.Context, cfg *R
 		fresh := max(last, registration.RegistrationBlock)
 		if stake.Identity.Hotkey != hotkey || !stake.MeetsNonSelfStakeAndPermit() || stake.Identity.Coldkey == ([32]byte{}) ||
 			coldkeysKVs[stake.Identity.Coldkey] || fresh == 0 || fresh > authority.expected.NativeSnapshotBlock ||
-			authority.expected.NativeSnapshotBlock-fresh > production.MaximumLastUpdateAge {
+			authority.expected.NativeSnapshotBlock-fresh > production.MaximumLastUpdateAge ||
+			approval.Proposal.Treasury != nil && stake.Identity.Coldkey == approval.Proposal.Treasury.MultisigAccount {
 			return nil, errors.New("owner-recycle production validators lack distinct ownership, stake/permit or bounded native activity")
 		}
 		coldkeysKVs[stake.Identity.Coldkey] = true

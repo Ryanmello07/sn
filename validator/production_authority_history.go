@@ -69,7 +69,11 @@ func matchProductionAuthorityBytes(reference ReleaseEvidenceV2File, raw []byte, 
 // Flat content-addressed names reuse the existing private state owner and
 // cannot overwrite either the old fixed record or another signed approval.
 func retainedProductionApprovalPath(cfg *ReleaseConfig) string {
-	return filepath.Join(cfg.StateDir, "owner-recycle-production-approval-"+strings.TrimPrefix(cfg.OwnerRecycleApproval.Approval.SHA256, "0x")+".json")
+	prefix := "owner-recycle-production-approval-"
+	if cfg.TreasuryApproval != nil {
+		prefix = "treasury-production-approval-"
+	}
+	return filepath.Join(cfg.StateDir, prefix+strings.TrimPrefix(productionEconomicSelection(cfg).Approval.SHA256, "0x")+".json")
 }
 
 // History lookup never trusts the source path to identify its contents.
@@ -227,7 +231,8 @@ func validateProductionAuthorityContinuity(original, current *ReleaseConfig) err
 		owned.RuntimeSpec, owned.TransactionVersion, owned.StateVersion = 0, 0, 0
 		owned.RuntimeCodeHash, owned.RuntimeMetadataHash = "", ""
 		owned.ProductionRuntimeApprovals, owned.ProductionAuthorityHistory = nil, nil
-		owned.OwnerRecycleApproval = &ReleaseOwnerRecycleApprovalConfig{Signer: cfg.OwnerRecycleApproval.Signer}
+		owned.OwnerRecycleApproval = &ReleaseOwnerRecycleApprovalConfig{Signer: productionEconomicSelection(cfg).Signer}
+		owned.TreasuryApproval = nil
 		owned.PollSeconds = 0
 		owned.EvidenceV2.Bounds = ReleaseEvidenceV2Bounds{}
 		owned.ProductionCapacityRevision = nil
@@ -250,10 +255,23 @@ func validateProductionAuthorityContinuity(original, current *ReleaseConfig) err
 		return err
 	}
 	a, b := prior.Approval, approved.Approval
+	treasuryTransition := a.Proposal.Treasury == nil && b.Proposal.Treasury != nil
+	if a.Proposal.Treasury != nil && b.Proposal.Treasury == nil {
+		return errors.New("treasury authority cannot be reinterpreted as an old owner-recycle policy")
+	}
+	if treasuryTransition {
+		if b.FirstNativeEpoch <= a.FirstNativeEpoch || b.Proposal.PolicyId <= a.Proposal.PolicyId ||
+			b.Proposal.EffectiveEpoch <= a.Proposal.EffectiveEpoch || ownerRecycleActivationBlock(&b) <= ownerRecycleActivationBlock(&a) ||
+			ownerRecycleActivationBlock(&b) != b.ValidFromNativeBlock {
+			return errors.New("treasury successor requires an explicit advancing drained economic activation")
+		}
+	} else if !reflect.DeepEqual(a.Proposal.Treasury, b.Proposal.Treasury) {
+		return errors.New("runtime or capacity continuity cannot change the signed treasury policy")
+	}
 	if a.ValidatorHotkey != b.ValidatorHotkey || a.NativeChain != b.NativeChain || a.SubnetOwner != b.SubnetOwner ||
 		a.Production.EpochScheduleProfile != b.Production.EpochScheduleProfile ||
-		a.ValidFromNativeBlock > b.ValidFromNativeBlock || a.FirstNativeEpoch != b.FirstNativeEpoch ||
-		a.Production.ActivationNativeHash != b.Production.ActivationNativeHash || ownerRecycleActivationBlock(&a) != ownerRecycleActivationBlock(&b) {
+		a.ValidFromNativeBlock > b.ValidFromNativeBlock || !treasuryTransition && (a.FirstNativeEpoch != b.FirstNativeEpoch ||
+		a.Production.ActivationNativeHash != b.Production.ActivationNativeHash || ownerRecycleActivationBlock(&a) != ownerRecycleActivationBlock(&b)) {
 		return errors.New("production authority continuity changes the original signer or economic activation")
 	}
 	if a.ValidFromNativeBlock == b.ValidFromNativeBlock && releaseNativeRuntimeIdentity(original) != releaseNativeRuntimeIdentity(current) {
@@ -381,15 +399,15 @@ func productionConfigForIntent(cfg *ReleaseConfig, intent *SteeringIntent) (*Rel
 	if err := validateReleaseProductionAuthorityHistory(cfg); err != nil {
 		return nil, err
 	}
-	if intent == nil || intent.OwnerRecycle == nil {
+	if intent == nil || productionEconomicIntent(intent) == nil {
 		return nil, errors.New("production intent lacks its original signed authority")
 	}
-	if bytes.Equal(intent.OwnerRecycle.Proof.Approval, cfg.ownerRecycleProduction.encoded) {
+	if bytes.Equal(productionEconomicIntent(intent).Proof.Approval, cfg.ownerRecycleProduction.encoded) {
 		return cfg, nil
 	}
 	if cfg.productionAuthorityHistory != nil {
 		for _, entry := range cfg.productionAuthorityHistory.entries {
-			if bytes.Equal(intent.OwnerRecycle.Proof.Approval, entry.config.ownerRecycleProduction.encoded) {
+			if bytes.Equal(productionEconomicIntent(intent).Proof.Approval, entry.config.ownerRecycleProduction.encoded) {
 				return entry.config, nil
 			}
 		}

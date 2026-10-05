@@ -290,9 +290,9 @@ func (self *recycleAdmissionFixture) sign(t *testing.T) {
 		t.Fatal(err)
 	}
 	self.raw = append(raw, '\n')
-	self.cfg.OwnerRecycleApproval.Approval.Bytes = uint64(len(self.raw))
-	self.cfg.OwnerRecycleApproval.Approval.SHA256 = attemptHex32(sha256.Sum256(self.raw))
-	if err := os.WriteFile(self.cfg.OwnerRecycleApproval.Approval.Path, self.raw, 0600); err != nil {
+	productionEconomicSelection(self.cfg).Approval.Bytes = uint64(len(self.raw))
+	productionEconomicSelection(self.cfg).Approval.SHA256 = attemptHex32(sha256.Sum256(self.raw))
+	if err := os.WriteFile(productionEconomicSelection(self.cfg).Approval.Path, self.raw, 0600); err != nil {
 		t.Fatal(err)
 	}
 }

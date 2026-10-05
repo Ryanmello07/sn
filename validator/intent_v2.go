@@ -206,7 +206,11 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 	seen := make(map[string]bool, len(all))
 	var previous *SteeringIntent
 	for index, intent := range all {
-		if err := requireOwnerRecycleProductionFirstIntent(&self.v2.runtime.cfg, previous, intent.SubnetEpoch); err != nil {
+		decisionCfg, err := productionConfigForIntent(&self.v2.runtime.cfg, intent)
+		if err != nil {
+			return result, err
+		}
+		if err := requireOwnerRecycleProductionFirstIntent(decisionCfg, previous, intent.SubnetEpoch); err != nil {
 			return result, err
 		}
 		if err := validateSteeringIntentLifecycle(intent, index < len(result.file.History)); err != nil {

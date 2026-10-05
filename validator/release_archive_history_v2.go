@@ -316,7 +316,11 @@ func (self *ReleaseEvidenceV2Archive) readIntents(ctx context.Context, request *
 		if err := validateSteeringIntentLifecycle(&intent, index < len(wire.History)); err != nil {
 			return err
 		}
-		if err := requireOwnerRecycleProductionFirstIntent(&owner.cfg, previous, intent.SubnetEpoch); err != nil {
+		decisionCfg, err := productionConfigForIntent(&owner.cfg, &intent)
+		if err != nil {
+			return err
+		}
+		if err := requireOwnerRecycleProductionFirstIntent(decisionCfg, previous, intent.SubnetEpoch); err != nil {
 			return err
 		}
 		if err := intent.VerifyVectorHash(); err != nil {

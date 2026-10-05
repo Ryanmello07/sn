@@ -57,12 +57,12 @@ func InspectProductionBootstrapConfig(ctx context.Context, path string, raw []by
 	}
 	paths := productionBootstrapDeclaredPaths(cfg)
 	for _, reserved := range append([]string{path}, paths...) {
-		approvalPath := cfg.OwnerRecycleApproval.Approval.Path
+		approvalPath := productionEconomicSelection(cfg).Approval.Path
 		if approvalPath == reserved || strings.HasPrefix(approvalPath, reserved+string(filepath.Separator)) || strings.HasPrefix(reserved, approvalPath+string(filepath.Separator)) {
 			return nil, errors.New("production bootstrap approval overlaps declared config, credentials, state or evidence")
 		}
 	}
-	approvalRaw, err := ReadReleaseEvidenceV2File(ctx, cfg.OwnerRecycleApproval.Approval, maximumOwnerRecycleApprovalBytes)
+	approvalRaw, err := ReadReleaseEvidenceV2File(ctx, productionEconomicSelection(cfg).Approval, maximumOwnerRecycleApprovalBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func InspectProductionBootstrapConfig(ctx context.Context, path string, raw []by
 	}
 	return &ProductionBootstrapInspection{DeploymentId: cfg.DeploymentID, ValidatorId: cfg.ValidatorID, EvmChainId: cfg.ChainID, Netuid: cfg.Netuid,
 		Coordinator: cfg.Coordinator, SettlementVault: cfg.SettlementVault, DeployBlock: cfg.DeployBlock, PolicyHash: cfg.PolicyHash,
-		ApprovalSigner: cfg.OwnerRecycleApproval.Signer, ApprovalReference: cfg.OwnerRecycleApproval.Approval,
+		ApprovalSigner: productionEconomicSelection(cfg).Signer, ApprovalReference: productionEconomicSelection(cfg).Approval,
 		Approval: approved.Approval, DeclaredPaths: paths}, nil
 }
 

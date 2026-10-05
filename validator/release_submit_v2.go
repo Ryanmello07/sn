@@ -619,6 +619,10 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	defer func() {
 		resultErr = self.productionRetainedReadFailure(ctx, productionReadIntent, durableIntent, resultErr)
 	}()
+	var treasuryIntent *TreasuryProductionIntent
+	if self.cfg.TreasuryApproval != nil {
+		treasuryIntent, productionIntent = productionIntent, nil
+	}
 	intent, err := self.intents.beginV2(ctx, SteeringIntent{
 		ValidatorID:             self.cfg.ValidatorID,
 		Netuid:                  self.cfg.Netuid,
@@ -636,6 +640,7 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 		MeasurementEnvelopeHash: envelopeHash,
 		MeasurementEnvelopeSize: envelopeSize,
 		OwnerRecycle:            productionIntent,
+		Treasury:                treasuryIntent,
 		SelfUID:                 selfUid,
 		MaskedUIDs:              verifiedMeasurement.MaskedUIDs,
 		EligibleHeadUIDs:        headSelectionUIDs(verifiedMeasurement.EligibleHead),

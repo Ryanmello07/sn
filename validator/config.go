@@ -78,6 +78,7 @@ type ReleaseConfig struct {
 
 	SourceRolePredecessorV2    *ReleaseEvidenceV2File             `yaml:"source_role_predecessor_v2,omitempty" json:"source_role_predecessor_v2,omitempty"`
 	OwnerRecycleApproval       *ReleaseOwnerRecycleApprovalConfig `yaml:"owner_recycle_approval,omitempty" json:"owner_recycle_approval,omitempty"`
+	TreasuryApproval           *ReleaseTreasuryApprovalConfig     `yaml:"treasury_approval,omitempty" json:"treasury_approval,omitempty"`
 	MainnetRuntimeApprovals    []ReleaseEvidenceV2File            `yaml:"mainnet_runtime_approvals,omitempty" json:"mainnet_runtime_approvals,omitempty"`
 	ProductionRuntimeApprovals []ReleaseEvidenceV2File            `yaml:"production_runtime_approvals,omitempty" json:"production_runtime_approvals,omitempty"`
 	ProductionAuthorityHistory []ReleaseEvidenceV2File            `yaml:"production_authority_history,omitempty" json:"production_authority_history,omitempty"`
@@ -219,8 +220,8 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 		if err := validateOwnerRecycleApprovalScope(&cfg); err != nil {
 			return nil, fmt.Errorf("validator admission config %s: %w", abs, err)
 		}
-		if cfg.OwnerRecycleApproval.Approval != (ReleaseEvidenceV2File{}) {
-			if err := cfg.OwnerRecycleApproval.Approval.Validate(maximumOwnerRecycleApprovalBytes); err != nil {
+		if productionEconomicSelection(&cfg).Approval != (ReleaseEvidenceV2File{}) {
+			if err := productionEconomicSelection(&cfg).Approval.Validate(maximumOwnerRecycleApprovalBytes); err != nil {
 				return nil, fmt.Errorf("validator admission config %s: %w", abs, err)
 			}
 		}
@@ -413,7 +414,7 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 	if !c.Production {
 		return errors.New("release config must explicitly set production: true")
 	}
-	if c.OwnerRecycleApproval != nil {
+	if productionEconomicSelection(&c) != nil {
 		if err := validateOwnerRecycleApprovalSelection(&c); err != nil {
 			return err
 		}

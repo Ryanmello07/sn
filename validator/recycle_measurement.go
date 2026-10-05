@@ -50,6 +50,7 @@ type OwnerRecycleMeasuredRow struct {
 	Values             []uint16       `json:"values"`
 	OwnerUids          []uint16       `json:"owner_uids"`
 	MaskedOwnerUids    []uint16       `json:"masked_owner_uids"`
+	TreasuryUids       []uint16       `json:"treasury_uids,omitempty"`
 	WireProviderShare  RationalJSON   `json:"wire_provider_share"`
 	ProviderShareError string         `json:"provider_share_error"`
 }
@@ -218,10 +219,32 @@ func deriveOwnerRecycleMeasuredRow(authority *OwnerRecycleMeasurementAuthority, 
 	row := &OwnerRecyclePreview{ProposalHash: authority.observation.ProposalHash, FinalizedHash: authority.observation.Snapshot.FinalizedHash}
 	for _, owner := range authority.observation.RecognizedOwners {
 		owners[owner.Uid] = true
+		if authority.config.TreasuryApproval != nil {
+			continue
+		}
 		if masked[owner.Uid] {
 			row.MaskedOwnerUids = append(row.MaskedOwnerUids, owner.Uid)
 		} else {
 			row.OwnerUids = append(row.OwnerUids, owner.Uid)
+		}
+	}
+	if authority.config.TreasuryApproval != nil {
+		approval, err := ownerRecycleProductionApproval(&authority.config)
+		if err != nil {
+			return empty, err
+		}
+		policy := approval.Approval.Proposal.Treasury
+		if policy == nil || !reflect.DeepEqual(policy.Recipients, authority.observation.TreasuryRecipients) {
+			return empty, errors.New("treasury row lacks its complete authenticated ordinary recipient roster")
+		}
+		for _, recipient := range policy.Recipients {
+			registered, exists := registrations[recipient.Uid]
+			if !exists || registered.Hotkey != recipient.Hotkey || registered.RegistrationBlock != recipient.RegistrationBlock ||
+				owners[recipient.Uid] || masked[recipient.Uid] {
+				return empty, errors.New("treasury row cannot omit, mask or replace an approved recipient")
+			}
+			owners[recipient.Uid] = true
+			row.OwnerUids = append(row.OwnerUids, recipient.Uid)
 		}
 	}
 	checkProvider := func(uid uint16, encodedHotkey string) error {
@@ -258,8 +281,12 @@ func deriveOwnerRecycleMeasuredRow(authority *OwnerRecycleMeasurementAuthority, 
 	if err != nil {
 		return empty, err
 	}
-	return OwnerRecycleMeasuredRow{Uids: row.Uids, Scores: scores, Values: row.WireValues, OwnerUids: row.OwnerUids,
-		MaskedOwnerUids: row.MaskedOwnerUids, WireProviderShare: share, ProviderShareError: row.ProviderShareError.RatString()}, nil
+	result := OwnerRecycleMeasuredRow{Uids: row.Uids, Scores: scores, Values: row.WireValues, OwnerUids: row.OwnerUids,
+		MaskedOwnerUids: row.MaskedOwnerUids, WireProviderShare: share, ProviderShareError: row.ProviderShareError.RatString()}
+	if authority.config.TreasuryApproval != nil {
+		result.TreasuryUids, result.OwnerUids = result.OwnerUids, nil
+	}
+	return result, nil
 }
 
 // One full original V2 proof replay derives all scores before the proposed
@@ -288,6 +315,9 @@ func buildOwnerRecycleMeasurement(ctx context.Context, authority *OwnerRecycleMe
 	if len(authority.operatorEvidence) != 0 {
 		schema = ownerRecycleOperatorMeasurementSchema
 	}
+	if authority.config.TreasuryApproval != nil {
+		schema = treasuryMeasurementSchema
+	}
 	return &OwnerRecycleMeasurement{Schema: schema, Status: OwnerRecycleDecisionBlocked,
 		Approval: bytes.Clone(authority.approval), Census: bytes.Clone(authority.census), ProviderMeasurement: providerBytes,
 		OperatorEvidence: bytes.Clone(authority.operatorEvidence), Row: row}, ctx.Err()
@@ -310,6 +340,10 @@ func ownerRecycleDecisionIntent(authority *OwnerRecycleMeasurementAuthority, cap
 		intent.Schema = ownerRecycleOperatorIntentSchema
 		intent.OperatorEvidenceHash = ReleaseMeasurementContentHash(authority.operatorEvidence)
 		intent.Blockers[1] = "decision-time operator state and source-root window are observed; API health, key/payout custody and full native/EVM history remain unproved"
+	}
+	if authority.config.TreasuryApproval != nil {
+		intent.Schema = treasuryDecisionIntentSchema
+		intent.Blockers[3] = "execution-time ordinary credit, collateral, treasury custody and the 10/90 native outcome remain unobserved"
 	}
 	return intent
 }
@@ -374,6 +408,9 @@ func ReplayOwnerRecycleMeasurement(ctx context.Context, authority *OwnerRecycleM
 	schema := ownerRecycleMeasurementSchema
 	if len(authority.operatorEvidence) != 0 {
 		schema = ownerRecycleOperatorMeasurementSchema
+	}
+	if authority.config.TreasuryApproval != nil {
+		schema = treasuryMeasurementSchema
 	}
 	if capsule.Schema != schema || capsule.Status != OwnerRecycleDecisionBlocked ||
 		!bytes.Equal(capsule.Approval, authority.approval) || !bytes.Equal(capsule.Census, authority.census) ||
