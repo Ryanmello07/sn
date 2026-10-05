@@ -104,7 +104,8 @@ func retryableOnchainRead(err error, finality bool) bool {
 				return false
 			}
 		}
-		if _, local := err.(*os.PathError); local {
+		switch err.(type) {
+		case *os.PathError, *os.LinkError:
 			return false
 		}
 		if err == context.DeadlineExceeded || err == os.ErrDeadlineExceeded || err == net.ErrClosed || err == io.EOF || err == io.ErrUnexpectedEOF || err == syscall.ECONNRESET || err == syscall.ECONNREFUSED || err == syscall.EPIPE || err == syscall.ETIMEDOUT || err == syscall.ENETUNREACH || err == syscall.EHOSTUNREACH {
@@ -119,7 +120,13 @@ func retryableOnchainRead(err error, finality bool) bool {
 		case *rpc.HTTPError:
 			return cause.StatusCode == http.StatusRequestTimeout || cause.StatusCode == http.StatusTooEarly || cause.StatusCode == http.StatusTooManyRequests || cause.StatusCode >= 500 && cause.StatusCode <= 599
 		case *net.DNSError:
-			return cause.IsTimeout || cause.IsTemporary
+			if cause.IsNotFound || !cause.IsTimeout && !cause.IsTemporary {
+				return false
+			}
+			if underlying := cause.Unwrap(); underlying != nil {
+				return visit(underlying, depth+1)
+			}
+			return true
 		case *websocket.CloseError:
 			switch cause.Code {
 			case websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseInternalServerErr, websocket.CloseServiceRestart, websocket.CloseTryAgainLater:

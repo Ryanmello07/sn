@@ -452,25 +452,64 @@ func (self onchainReadTestTransport) RoundTrip(request *http.Request) (*http.Res
 func TestOnchainReceiptReadsRefuseMixedHardTransportCauses(t *testing.T) {
 	hard := errors.New("synthetic physical response integrity failure")
 	for _, finality := range []bool{false, true} {
+		for _, cause := range []error{
+			errors.Join(&net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}, ethereum.NotFound, hard),
+			&os.LinkError{Op: "read", Old: "synthetic-old", New: "synthetic-new", Err: context.DeadlineExceeded},
+			&net.DNSError{IsTimeout: true, UnwrapErr: &os.PathError{Op: "read", Path: "synthetic-custody", Err: context.DeadlineExceeded}},
+			&net.DNSError{IsTimeout: true, UnwrapErr: errors.Join(io.EOF, hard)},
+			&net.DNSError{IsTimeout: true, IsNotFound: true, UnwrapErr: syscall.ECONNRESET},
+			&net.DNSError{IsTemporary: true, UnwrapErr: context.Canceled},
+		} {
+			calls, waits := 0, 0
+			transport := onchainReadTestTransport(func(*http.Request) (*http.Response, error) {
+				calls++
+				return nil, cause
+			})
+			client, err := rpc.DialOptions(t.Context(), "http://synthetic-rpc.example", rpc.WithHTTPClient(&http.Client{Transport: transport}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			actual := ethclient.NewClient(client)
+			ctx, _ := onchainReadTestContext(t, t.Context(), func(context.Context, time.Duration) error { waits++; return errors.New("synthetic unexpected retry") })
+			if finality {
+				err = waitFinalized(ctx, actual, &types.Receipt{TxHash: common.Hash{0x11}, BlockHash: common.Hash{0x44}, BlockNumber: big.NewInt(4)})
+			} else {
+				_, err = waitMined(ctx, actual, common.Hash{0x11})
+			}
+			actual.Close()
+			if !errors.Is(err, cause) || calls != 1 || waits != 0 {
+				t.Fatalf("hard transport cause became retryable: cause=%T finality=%t calls=%d waits=%d err=%v", cause, finality, calls, waits, err)
+			}
+		}
+	}
+}
+
+// DNS availability flags and complete transient children retain recovery at the
+// actual finality owner. The next read traverses a real HTTP server and parser.
+func TestOnchainFinalityRecoversCompleteDnsAvailability(t *testing.T) {
+	for _, cause := range []error{&net.DNSError{IsTimeout: true}, &net.DNSError{IsTemporary: true, UnwrapErr: syscall.ECONNRESET}} {
+		fixture := newOnchainReadTestServer(t, nil)
+		base := &http.Transport{Proxy: nil}
 		calls, waits := 0, 0
-		transport := onchainReadTestTransport(func(*http.Request) (*http.Response, error) {
+		transport := onchainReadTestTransport(func(request *http.Request) (*http.Response, error) {
 			calls++
-			return nil, errors.Join(&net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}, ethereum.NotFound, hard)
+			if calls == 1 {
+				return nil, cause
+			}
+			return base.RoundTrip(request)
 		})
-		client, err := rpc.DialOptions(t.Context(), "http://synthetic-rpc.example", rpc.WithHTTPClient(&http.Client{Transport: transport}))
+		client, err := rpc.DialOptions(t.Context(), fixture.server.URL, rpc.WithHTTPClient(&http.Client{Transport: transport}))
 		if err != nil {
+			base.CloseIdleConnections()
 			t.Fatal(err)
 		}
 		actual := ethclient.NewClient(client)
-		ctx, _ := onchainReadTestContext(t, t.Context(), func(context.Context, time.Duration) error { waits++; return errors.New("synthetic unexpected retry") })
-		if finality {
-			err = waitFinalized(ctx, actual, &types.Receipt{TxHash: common.Hash{0x11}, BlockHash: common.Hash{0x44}, BlockNumber: big.NewInt(4)})
-		} else {
-			_, err = waitMined(ctx, actual, common.Hash{0x11})
-		}
+		ctx, _ := onchainReadTestContext(t, t.Context(), func(ctx context.Context, _ time.Duration) error { waits++; return ctx.Err() })
+		err = waitFinalized(ctx, actual, &types.Receipt{TxHash: common.Hash{0x11}, BlockHash: common.Hash{0x44}, BlockNumber: big.NewInt(4)})
 		actual.Close()
-		if !errors.Is(err, hard) || calls != 1 || waits != 0 {
-			t.Fatalf("hard transport cause became retryable: finality=%t calls=%d waits=%d err=%v", finality, calls, waits, err)
+		base.CloseIdleConnections()
+		if err != nil || waits != 1 || calls != 6 || fixture.count("eth_getBlockByNumber") != 5 {
+			t.Fatalf("complete DNS availability lost recovery: cause=%T calls=%d waits=%d err=%v", cause, calls, waits, err)
 		}
 	}
 }
