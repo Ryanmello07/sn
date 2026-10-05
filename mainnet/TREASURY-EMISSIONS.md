@@ -40,13 +40,24 @@ independent validator participation and account for any additional dividends.
 [Autostake authority](https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/macros/dispatches.rs#L1949),
 [permit selection](https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/epoch/run_epoch.rs#L673).
 
-The user is preparing this separate hardware multisig. `vault/main/sn.yml`
-contains its **public descriptor only**: account, threshold, public signatories,
-recipient hotkeys and references to owner-local Ledger configuration. No coldkey
+The user selected reserve public account
+`5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR`, which decodes under
+SS58 prefix 42 to native AccountId32
+`0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`.
+Its checksum and canonical encoding round trip were checked using the same
+public Base58/BLAKE2b rule as [the existing SS58 helpers](../ss58/ss58.go).
+This pins the user-provided account, not a verified multisig derivation. The
+actual threshold and complete sorted signatory set remain required; their native
+derivation must equal this account before the custody descriptor is accepted.
+No recipient hotkeys or registered UID generations have been supplied here.
+
+The anticipated `vault/main/sn.yml` contains its **public descriptor only**:
+account, threshold, public signatories, recipient hotkeys and references to
+owner-local Ledger configuration. No coldkey
 or hotkey seed, private key, mnemonic or online signer belongs there. Native
 incentive reception needs no always-on treasury signer. This review does not read
-or create the actual vault file or choose identities. Validator inputs receive
-only the public policy projection below. Establish hardware recovery and rotation
+or create the actual vault file or choose missing identities. Validator inputs
+receive only the public policy projection below. Establish hardware recovery and rotation
 before activation; changing signatories or threshold changes the native account.
 
 Direct native treasury custody requires no new Solidity contract.
@@ -80,7 +91,8 @@ profile: mainnet
 netuid: 25
 genesis_hash: ""                       # independently approved native hash
 multisig:
-  account_id: ""                       # derived native AccountId32
+  # User-selected account; threshold and signatories must derive it.
+  account_id: "0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410"
   threshold: 0                         # actual approved threshold, 2..N
   signatories:                         # all N accounts, sorted by raw bytes
     - account_id: ""

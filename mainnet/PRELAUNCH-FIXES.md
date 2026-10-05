@@ -4,6 +4,8 @@
 
 The user selected **10% of the native miner allocation for providers and 90% retained in a spendable network-improvement treasury**, replacing the earlier owner-recycle choice. The [treasury proposal](TREASURY-EMISSIONS.md) remains pending implementation and qualification. Treasury custody is a **hardware-Ledger multisig**: private keys stay on Ledger devices; `vault/main/sn.yml` holds only public account, signatory, threshold and device references. Validators receive public inputs only. The treasury is separate from provider claim collateral and the immutable, one-way `STReserveSink`.
 
+The user-selected reserve public account is `5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR`; its valid prefix-42 encoding maps to `0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`. The [public custody example](TREASURY-EMISSIONS.md#public-configuration-contract) now pins this account. Actual threshold/sorted signatories must independently derive it, and ordinary recipient hotkeys/registered generations remain missing inputs. This documentation change does not create or read `vault/main/sn.yml` or grant activation.
+
 Keep the 38 original requirements and every retained test count/evidence file intact. Apply the new treasury outcome to the existing economics and custody requirements when finalizing code and reassessing readiness. Earlier economic statements below record the superseded choice. Preserve the October 6 inclusive new-earnings boundary, pre-cutoff USDC obligations, owner-local Ledger/no Snow custody, the separate root role and `activation: blocked`.
 
 ## Local dependency validation and retained results — October 5
