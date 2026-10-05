@@ -22,6 +22,143 @@
       "sha256": "a603368aeb8b3449516319a5ad1a18e875eeb23803d99f5b0ca5c4e4b3fe6075"
     }
   },
+  "actual_current_fullmodel_execution": {
+    "actual_list_roots": 1865,
+    "actual_list_wait": {
+      "path": "/mnt/data/sn-testnet/sol-server-final-f67-20261004/evidence/current-624-d64-fullmodel1865-v6-model-normal-list.process-result.json",
+      "sha256": "5fdea5c6bd4c7eca14bc0b9f3ae01708522ed1f6c50d042f5472e6b388657e5a"
+    },
+    "body_pid": 3628898,
+    "invocation_id": "cf41e3aee35245a1b037cf956b0fe8f2",
+    "known_failed_root_names": [
+      "TestArinRemoteFullPopulationActualPGAndTwentyUnixOwners",
+      "TestArinRemoteFullPopulationEightHostsWithinTwoPipes",
+      "TestArinRemoteFullPopulationTwoHostPipesRolloverAndLatency"
+    ],
+    "known_failure_observation": {
+      "bytes": 2039,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/fullmodel-live-known-failures.json",
+      "sha256": "c9565ba855103c3789b0f8e83ef290ddf33d49d2f0c98e7e22dd2458a8ba96dd"
+    },
+    "normal_body_passes_claimed": 0,
+    "observation": {
+      "bytes": 1569,
+      "path": "/mnt/data/sn-testnet/sol-server-final-f67-20261004/evidence/current-624-d64-fullmodel1865-v6-model-normal-actual-launch-readback.json",
+      "sha256": "d84195d91f660ca43e132b702421f981c8380f7532e76f5a8fad07dec055f9f6"
+    },
+    "observed_at": "2026-10-05T12:17:22.146183+00:00",
+    "owner_unit": "sn-current-624-d64-fullmodel1865-v6-model-normal-owner-20261005.service",
+    "source_tuple": {
+      "core": "026b850248352b72255be7a966e391e0a15e74c1",
+      "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
+      "sn": "624cf1e00f45dac61bc5675e4a21eb2a8dd121e5"
+    },
+    "status": "ACTUAL_LAUNCHED_KNOWN_FAILURES_TERMINAL_PENDING",
+    "terminal_result": null
+  },
+  "actual_current_server8_compilers": {
+    "body_passes_inferred": 0,
+    "control_kills_inferred": 0,
+    "normal_compiler_passes": 8,
+    "original_waits": [
+      {
+        "exit": 0,
+        "reference": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-controller.process-result.json",
+          "sha256": "3d505121df90cf5f5603e63d777c50362ecda319455e6411b322e30fdcd023a3"
+        },
+        "tree_joined": true
+      },
+      {
+        "exit": 0,
+        "reference": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-model.process-result.json",
+          "sha256": "8c39e2cfbc99b09b1f7fe0f69fc74d1da26462a17c3d155a8b193b19a0a840b4"
+        },
+        "tree_joined": true
+      },
+      {
+        "exit": 0,
+        "reference": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-root.process-result.json",
+          "sha256": "183132c48650f81d9e7383e00f108a1e6b837dc9cea03cb4fdcdb7c5992f4a92"
+        },
+        "tree_joined": true
+      },
+      {
+        "exit": 0,
+        "reference": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-monitor.process-result.json",
+          "sha256": "b3871b7e521eb21e29ad1fca39672a0d36c8bca3a0c2c73caa68ded2d1050441"
+        },
+        "tree_joined": true
+      },
+      {
+        "exit": 0,
+        "reference": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-native-cli.process-result.json",
+          "sha256": "bb04d151f5ae3d15d657b03baa8a82501463af31f80cc748a8903119265ea5b5"
+        },
+        "tree_joined": true
+      },
+      {
+        "exit": 0,
+        "reference": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-api.process-result.json",
+          "sha256": "a7fb50914150a414057058e284d107b5b0d6e76e71dff985dd26ead68b717ff9"
+        },
+        "tree_joined": true
+      },
+      {
+        "exit": 0,
+        "reference": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-proxy.process-result.json",
+          "sha256": "427e0e0c316403f37825ff0cb176c3416ed694e4c6cdc58f95d39b0c09ff408c"
+        },
+        "tree_joined": true
+      },
+      {
+        "exit": 0,
+        "reference": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-taskworker-work.process-result.json",
+          "sha256": "b3198c0eb4a93ab9ee9c429dd8fc42a719f27e8a251546b941f592c5e82e449a"
+        },
+        "tree_joined": true
+      }
+    ],
+    "phase_ids": [
+      "controller",
+      "model",
+      "root",
+      "monitor",
+      "native-cli",
+      "api",
+      "proxy",
+      "taskworker-work"
+    ],
+    "race_passes_inferred": 0,
+    "receipt": {
+      "bytes": 53251,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1.receipt.json",
+      "sha256": "2489289bbc2a837583e17338cb051ee4a762ebfc93ee69806ab319875080f3f6"
+    },
+    "scope": "Exact624/Core026/d64 compiler inputs only. No new8776 operator qualification follows. Fullmodel1865 bodies and controller95/payment bodies are separate.",
+    "source_closure": {
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-624cf1-026b-d64-compiler-source-closure-v1.json",
+      "sha256": "f2ce1ef4248f9d01d062e32f40a881c1af86c26d659de13262ddaec1641782ff"
+    },
+    "source_tuple": {
+      "core": "026b850248352b72255be7a966e391e0a15e74c1",
+      "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
+      "sn": "624cf1e00f45dac61bc5675e4a21eb2a8dd121e5"
+    },
+    "status": "COMPILE_BATCH_PASS_BODY_PENDING",
+    "user_terminal": {
+      "bytes": 3205,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-serverd64-current8-normal-v1-user-terminal-readback.json",
+      "sha256": "51ab65d090248b0d5d11fa6e2a109cb37ea43d65bd799c5a63a0f93e6cedca87"
+    }
+  },
   "actual_current_tooling38": {
     "complete_evidence": {
       "bytes": 15540,
@@ -601,9 +738,9 @@
     }
   },
   "controls_preservation_and_delta": {
-    "bytes": 41779,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/control-catalog-addendum.json",
-    "sha256": "4dc8aa2ee0e1637dcbf3d3dc484121cc24e10800bc94949d670acfcdf2e9a4c7"
+    "bytes": 70126,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/launch-boundary-successor/control-catalog-addendum.json",
+    "sha256": "22d26d9cfae5760946fbd531f4eff6a91665c555ca2211daf0f7cc999975205e"
   },
   "corrected_failures_not_reopened_as_code_bugs": [
     "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
@@ -614,6 +751,7 @@
   ],
   "counts": {
     "actual_current2_normal_compilers_passed": 2,
+    "actual_current_server_normal_compilers_passed": 8,
     "actual_current_tooling_python_tests": {
       "fail": 0,
       "pass": 38,
@@ -655,13 +793,14 @@
       "run": 113,
       "skip": 0
     },
-    "additive_control_groups": 36,
-    "current_go_roots_per_mode": 2757,
-    "current_mainnet_roots_per_mode": 292,
+    "additive_control_groups": 56,
+    "current_go_roots_per_mode": 2776,
+    "current_mainnet_roots_per_mode": 302,
     "current_server_controller_roots_per_mode": 95,
     "current_server_full_model": 1865,
     "current_server_roots_per_mode": 2027,
-    "current_sn_roots_per_mode": 498,
+    "current_sn_roots_per_mode": 517,
+    "current_validator_roots_per_mode": 68,
     "original_native_overlap_with_prior2637": 0,
     "original_requirements": 38,
     "outcomes_closed": 0,
@@ -671,18 +810,27 @@
     "ph15_new_go_roots": 17,
     "ph15_restored_existing_go_roots": 5,
     "ph15_targeted_producer_roots": 32,
+    "production_boundary_new_control_groups": 3,
+    "production_boundary_new_go_roots": 2,
     "ready_native86_originals": 38,
     "ready_native86_profiles": 9,
+    "repair_dispatch_new_control_groups": 6,
+    "repair_dispatch_new_go_roots": 10,
     "restored_existing_payment_neighbors": 2,
     "restored_original_native_roots_per_mode": 86,
     "retained_control_groups": 227,
     "rows_demonstrated_to_have_only_deployment_work_left": 0,
-    "source_catalog_control_groups": 263
+    "runtime_identity_new_control_groups": 11,
+    "runtime_identity_new_go_roots": 7,
+    "separate_existing_completion_adjacent_roots_per_mode": 54,
+    "separate_existing_identity_adjacent_roots_per_mode": 28,
+    "separate_existing_repair_adjacent_roots_per_mode": 14,
+    "source_catalog_control_groups": 283
   },
   "current_default_product_tuple": {
     "connect": "026b850248352b72255be7a966e391e0a15e74c1",
     "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
-    "sn": "1af1e92b2e810c42131832afde744676cb291b6c",
+    "sn": "03b94755dfa13e5d562f6ed77b1a1d93860283f9",
     "xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
   },
   "current_portable_evidence": {
@@ -699,10 +847,191 @@
     "Real backup/media recovery, production sizing, deployment rollback/outage, monitoring ingestion/delivery, deadman and on-call/repair drills.",
     "After authorized activation: three complete native emission intervals and one full50400-block UR settlement/claim cycle."
   ],
+  "finite_contract_source_audit": {
+    "disposition": "No confirmed missing production implementation or adjacent code defect found in the reviewed scope; no product change or new test authored.",
+    "later_identity_scope_limit": {
+      "changed_reviewed_paths_at_later_identity1d425": [],
+      "qualification": "Finite no-confirmed-defect source review retains its original scope and limits. Later changed validator inputs are covered only by the separate identity source review, not by an invented whole-graph audit or execution.",
+      "review": {
+        "bytes": 40132,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-completion-audit-9a6446e5/review.json",
+        "sha256": "22993b6d52e3c662e7bd9139fde557d1555de784464e158f3e0d42714ad8091f"
+      },
+      "review_bound_commit": "9a6446e59545b3aba94f3937a3cc95da8ebf50ef",
+      "reviewed26_inputs_exact_at8776": true
+    },
+    "limits": [
+      "Authentic native runtime, finality, source-to-code and nested rollback/exact transfer behavior.",
+      "Independent owner/Safe/root/UR approvals, hardware custody, generation and live Recycle recognition.",
+      "Actual completed paid/free provider measurement, immutable original recipient/direction/close facts and complete window census; canceled originals are not fabricated.",
+      "Accepted exact compiled/deployed five-contract graph, old immutable-vault liability lifecycle and actual sustained settlement/claim outcomes.",
+      "Original pending controls/public consumers retain their separate exact-source and asset obligations."
+    ],
+    "new_control_groups": 0,
+    "new_roots": 0,
+    "not_a_completion_certificate": true,
+    "reference": {
+      "bytes": 40132,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/contract-completion-audit-9a6446e5/review.json",
+      "sha256": "22993b6d52e3c662e7bd9139fde557d1555de784464e158f3e0d42714ad8091f"
+    },
+    "reviewed_inputs_identical_at8776": [
+      {
+        "git_blob": "37dce20ed4b53257165089705b4d174493ba61a7",
+        "path": "evm/src/STCoordinator.sol",
+        "sha256": "e7c5a292a04ea9c7e9c354699416bf4184d20b4f2bb54facad48f1fb6384c6ea"
+      },
+      {
+        "git_blob": "20152a65012a18248eb60fb3fba249bfc160eb64",
+        "path": "evm/src/STSettlementVault.sol",
+        "sha256": "ac76e47f8744bf65d621005b4765985002e17a706f380c914987af4af55ede4a"
+      },
+      {
+        "git_blob": "b73443d418dce83ee4a24cf6b6d36a65c275642e",
+        "path": "evm/src/STReserveSink.sol",
+        "sha256": "18de7d37b11edcf1e6b57adb290acc5c568b43673557ebb74f94d68620db2a46"
+      },
+      {
+        "git_blob": "285f42aef5e62983c4a0995c4cc6f98f2dde1b4e",
+        "path": "evm/src/NativeBalance.sol",
+        "sha256": "6e17708fea3f8ed48086c58fafbd4fd5549e5ea857aad534915855aa8c2c6d46"
+      },
+      {
+        "git_blob": "436ff4284a4717f7c798b29d6942505121985586",
+        "path": "evm/script/Deploy.s.sol",
+        "sha256": "239cf9c910108600d6c8484404e5e0cbcf8118de24a097d4b658473c77085fb0"
+      },
+      {
+        "git_blob": "0e785be7e1ad2f693a253028b3023616dd54747c",
+        "path": "scripts/mainnet-release-build/contracts.go",
+        "sha256": "bcb21b9a9113651e914b4d129a545c2d67ca177b8fab935432fc487bb57bee26"
+      },
+      {
+        "git_blob": "f19878254047dcb3c980731426ef2609bd9f5811",
+        "path": "scripts/mainnet-release-build/build.go",
+        "sha256": "c34e23e446b17887dce3972ae86a2f143336b983019b50ca8ae209712acbdb4f"
+      },
+      {
+        "git_blob": "6d312d51c7659f579009a3637b2a3807f4d6eeef",
+        "path": "sim-testnet/gencontracts/main.go",
+        "sha256": "4c850b01fc4462de12d52077d5821667f16bd9dfe48eeed27e712a0933b0cc6f"
+      },
+      {
+        "git_blob": "16ac201e194060cb5fc88104c84f7d97699517b4",
+        "path": "sim-testnet/contracts_gen.go",
+        "sha256": "91d4c21837321d627e88af7eb98c8eee125384d2a5d96c2fe70c91c989b8398e"
+      },
+      {
+        "git_blob": "70ea637b48fb4c5514922441ac2c680347f183cf",
+        "path": "mainnet/contract_artifacts.go",
+        "sha256": "94d1ac9ae82835ac2e545275c3850ec94ef45ce70e10510b8f3870ad84ed0930"
+      },
+      {
+        "git_blob": "ead0868b28e54f52dcd95e8d0b74877fed9a54a8",
+        "path": "validator/recycle_planner.go",
+        "sha256": "549c33ee610e94015ab4f6065e41a287346932ed6a0468b8311812c947682297"
+      },
+      {
+        "git_blob": "f2659903ddda54919cc9a692a37f2968abb85820",
+        "path": "validator/recycle_measurement.go",
+        "sha256": "1e429178b540cb87599b1ecb84212b481240a1a06147553dc6bef88a73255ddf"
+      },
+      {
+        "git_blob": "b665db8dd8fc6c335ce5784290696e752e248e69",
+        "path": "validator/recycle_production_approval.go",
+        "sha256": "0e28aaf7adcd9bd6d7c53bed9c193b40e2cc4f00fa3ce39d96342b8436080017"
+      },
+      {
+        "git_blob": "2a4d96f2eb7de8be6c713bf1cc92894facaad858",
+        "path": "validator/recycle_production_decision.go",
+        "sha256": "b29eb411a6f445ce3e5b0fe897335e361e6cb17b2252f89f682d850f7914abf1"
+      },
+      {
+        "git_blob": "d4ce165e5aa07c63237aa71491127320394eb5c8",
+        "path": "validator/recycle_production_prepared.go",
+        "sha256": "653f66984f130d71b043deb4ec9784ccc8fd8da6726e9856a872dc68b405a57a"
+      },
+      {
+        "git_blob": "ad33dcce57452a245591c9f3a651d7796b6d08e8",
+        "path": "validator/release_submit_v2.go",
+        "sha256": "f20699aee58dfd2959ca7e483e8bdecbf4d220f54a9a9da32be9bf12bd600938"
+      },
+      {
+        "git_blob": "133992df8b19b78315a7647005f287546e76470a",
+        "path": "validator/release_math.go",
+        "sha256": "4d4b61c0e9847e2ebd05ed46b07f22846654f9d4fc458b71545874b988a70945"
+      },
+      {
+        "git_blob": "4445ffbc7a836ee03eafd444338bc0d175c3cec5",
+        "path": "protocol/policy.go",
+        "sha256": "f9d0e2b227a8e69ac4f2501b90390c79a628b8be4ef78b6c75a293e7c66161d6"
+      },
+      {
+        "git_blob": "b6acafc5fa23aeaae0416663ed5a32d9d9c5e57e",
+        "path": "mainnet/owner_recycle_action.go",
+        "sha256": "fca8ad81cb94ed2764e6baaf0a8810e9a5a55c2185baca09958de2d0ae7f467f"
+      },
+      {
+        "git_blob": "b547ec28886ea6824367d34c42eb50478f9082ad",
+        "path": "mainnet/owner_recycle_submission.go",
+        "sha256": "05318c104fa7e72397e73934f5e6ee58c62f32cae2219932362994b0e4940feb"
+      },
+      {
+        "git_blob": "2f879371b4ad70dc80fca4c44c436f1be490ba72",
+        "path": "mainnet/economic_reference.go",
+        "sha256": "b190d55f0cac689cbeea454f9708525b7dfd9dfd8937accb8411cb1a16c3cd46"
+      },
+      {
+        "git_blob": "1bf9318c5d6a339def5edc4024f0adef9f24561f",
+        "path": "mainnet/economic_conservation_conformance.go",
+        "sha256": "351b6c1bf98905509227d50d0104a78835e6bd17b9c9a5dc4150467d5bb49154"
+      },
+      {
+        "git_blob": "ae962c47a29321992a6d7c5a065c86e3b8217188",
+        "path": "mainnet/economic_conservation_entitlement.go",
+        "sha256": "bfaffef115c32c87af767f7af78be5cef669f054d500634c48724c6414254321"
+      },
+      {
+        "git_blob": "7738bc6b7035351091a1549fb99417a0e5948c23",
+        "path": "mainnet/economic_conservation_funding.go",
+        "sha256": "74cffa35699d157107206f12c136ac2f3c4885870a37ace7cd12c6c9b0bd4d42"
+      },
+      {
+        "git_blob": "1fa67c7397b1df6312af55a6adadba3d9bf0ffd1",
+        "path": "evm/CLAIM-RECOVERY.md",
+        "sha256": "59028c27fd96fec48aa16ed0c4c56db37f11ddb6492c56a8a252e773fc786677"
+      },
+      {
+        "git_blob": "298e42c706986511fcd7910cb9ec74433ad16f8e",
+        "path": "mainnet/PRELAUNCH-FIXES.md",
+        "sha256": "3e0922b87e791ada7a47f8c882c5e469df8c3aee313ac5096a9dc959305761e4"
+      }
+    ],
+    "source": {
+      "all_bound_files_match_commit": true,
+      "commit": "9a6446e59545b3aba94f3937a3cc95da8ebf50ef",
+      "repository": "/home/by/urnetwork/sn",
+      "tree": "f37f32e043c845ea7dfb63e5a2917c275571b735"
+    }
+  },
+  "known_pending_source_work": [
+    {
+      "component": "Validator upload observer",
+      "issue": "Lower finalized-head handling is under correction by FixedBoundary; no successor is selected or qualified in this checkpoint."
+    },
+    {
+      "component": "PH12 earning-wallet producer/SDK",
+      "issue": "Explicit WalletMappingConsent path is under correction; generic login proof alone is insufficient. No new source roots or qualification are credited here."
+    },
+    {
+      "component": "ARIN full-population model fixtures",
+      "issue": "Actual PostgreSQL SQLSTATE53200 shared-memory failures during100000-row setup; source diagnosis ongoing, no population/owner assertion reduction or fix credited."
+    }
+  ],
   "latest_checkpoint": {
-    "bytes": 15540,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/current-compilers-and-ph15-producer-normal-20261005.json",
-    "sha256": "6621b9b30449b527ce8799248e33509fe8d2902c30475250e2c57eb0bb586ee5"
+    "bytes": 9455,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/production-boundary-source-and-scope-20261005.json",
+    "sha256": "ad738fcfb5ce92e3b92fd218d264e981fd5029c26c870333dce3044afce511d6"
   },
   "native86_asset_mapping": {
     "map": {
@@ -753,6 +1082,7 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/ph15-consumer12-actual-docs/ph15-source-and-consumer-actual-v2.json",
     "sha256": "76fd5d673b0491efd379464a17b5aeb76242b48fae8d30e6a972b3a4db967b78"
   },
+  "prior_checkpoint_status_preserved": "All38 original outcomes remain open. Eight normal Server compilers actually pass on frozen f0b/026/983 with joined waits and protected images; their bodies/race/controls and later payment graph remain separate. Full Rust113 including ignored roots actually passes113/113 with zero failures/skips/not-run,61 exports and closed outer process. All9 native fixture profiles/38 originals are ready; original Rust controls and current Go native86 consumers remain unqualified. PH13 canceled attribution remains honestly unknown without an authorizer; PH15 source is merged; all12 targeted dashboard consumer tests actually pass with zero failures/skips. Its32 Go producer normal roots also pass with zero failures/skips/resource errors; producer race, four Go controls and live operational evidence remain pending. Current624/Core026b/Serverd64 mainnet and miner normal compilers pass with joined waits and protected images. Preserve original2733 Go roots and259 controls;17 new roots plus5 previously omitted existing neighbors give2755 Go roots per mode. Restoring two previously requested existing payment neighbors gives2757 (Server2027/controller95); mainnet292 and263 controls are unchanged. Retained results qualify only their named component/mode scopes. Merged8776 fixes final start-window dispatch checks;10 new normal/race roots and6 controls remain unexecuted. The preserved2757/263 master becomes2767/269 (SN508/mainnet302);14 existing adjacent tests remain separately required outside that master count. Current624/Core026/d64 eight normal Server compilers now also pass with joined waits, without body/race/control or8776 input inheritance. The finite contract audit found no confirmed source defect in its reviewed26 inputs; original external authority and qualification limits remain open. PH12 and earning-wallet/SDK work in progress are not counted. Identity1d425 appends7 validator roots and11 source controls:2774 master roots per mode (SN515/mainnet302/validator66, Server2027/controller95),280 controls. Operator14 and identity28 existing adjacent completion requirements remain separately pending outside that precise master count. The exact1865 model LIST passed and the normal body was actually live at12:17:22UTC; no terminal or body PASS is claimed.",
   "prior_failure_classification_preserved": [
     {
       "evidence_id": "nativefee11_direct",
@@ -915,10 +1245,10 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/nativefee-main9-to-default-current-applicability.json",
     "sha256": "60de07a44585f9ea32d1641514203bf35cab4e615216ce0fb930cb982b48f493"
   },
-  "reviewed_documentation_commit": "1af1e92b2e810c42131832afde744676cb291b6c",
+  "reviewed_documentation_commit": "8776b03884fcca74d827dc613bd8233d2dc5f7a3",
   "rows": [
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -934,6 +1264,20 @@
       "outcome_complete": false,
       "race": "Claim1298152.19s and Restore1298341.08s PASS retained on original inputs; changed Core/Restore inputs prevent current transfer.",
       "remaining_software_evidence": "Execute current all-owner/cross-volume restore, interrupted publication/restart and independent healthy-owner progress; include long5.",
+      "repair_dispatch_source_update": {
+        "evidence": {
+          "bytes": 21137,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+          "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+        },
+        "implementation": "Merged8776 rechecks signed start authority after final inspection and immediately before dispatch, preserving original inspection failure and consumed-start custody.",
+        "qualification": "New10 normal/race and6 causal groups unexecuted;14 existing adjacent obligations remain separately pending.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 16758,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+          "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+        }
+      },
       "required_outcome": "Operator, validators, bootstrap: durable recovery with independent audit and runtime owners",
       "retained_component_evidence": {
         "bytes": 4116,
@@ -944,7 +1288,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -960,6 +1304,20 @@
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Execute current all-owner original/replacement/cancel census, nonce/outcome and duplicate-effect tests.",
+      "repair_dispatch_source_update": {
+        "evidence": {
+          "bytes": 21137,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+          "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+        },
+        "implementation": "Merged8776 rechecks signed start authority after final inspection and immediately before dispatch, preserving original inspection failure and consumed-start custody.",
+        "qualification": "New10 normal/race and6 causal groups unexecuted;14 existing adjacent obligations remain separately pending.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 16758,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+          "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+        }
+      },
       "required_outcome": "Native/EVM submitters: one logical action, reconciled signed attempts and exact custody",
       "retained_component_evidence": {
         "bytes": 5266,
@@ -971,7 +1329,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -994,10 +1352,24 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/monitor-policy-renewal-qualification-20261003.json",
         "sha256": "5cee15514cae38a39ffe021c489f57ffaa93346701754b353a7be823d663e5cd"
+      },
+      "runtime_identity_source_update": {
+        "evidence": {
+          "bytes": 13769,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/runtime-identity-source-and-scope-20261005.json",
+          "sha256": "166d3d026bba8187408f105526fe0b9993a9d19af4487f32867991fc7b2f2095"
+        },
+        "implementation": "Merged1d425 retains the first completed identity mismatch before later read failure; null/unavailable and malformed/hard remain distinct under original read budgets.",
+        "qualification": "New7 normal/race,11 control groups and28 separately retained existing neighbors remain unexecuted.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 28937,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/identity-successor/adjacent-existing28-recipe.json",
+          "sha256": "227f751e4c600fa6e23512b6302773138d37ec62b16f348aa4cd7794095af3a3"
+        }
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1028,10 +1400,24 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-runtime-renewal-qualification-20261003.json",
         "sha256": "acd2d3098954a2af1c6785685423d0e4087c67687881b5f60c758c942ccf172a"
+      },
+      "runtime_identity_source_update": {
+        "evidence": {
+          "bytes": 13769,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/runtime-identity-source-and-scope-20261005.json",
+          "sha256": "166d3d026bba8187408f105526fe0b9993a9d19af4487f32867991fc7b2f2095"
+        },
+        "implementation": "Merged1d425 retains the first completed identity mismatch before later read failure; null/unavailable and malformed/hard remain distinct under original read budgets.",
+        "qualification": "New7 normal/race,11 control groups and28 separately retained existing neighbors remain unexecuted.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 28937,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/identity-successor/adjacent-existing28-recipe.json",
+          "sha256": "227f751e4c600fa6e23512b6302773138d37ec62b16f348aa4cd7794095af3a3"
+        }
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1057,7 +1443,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1086,7 +1472,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1102,6 +1488,20 @@
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Qualify actual public startup/recovery/heartbeat/metrics-only continuation and hard-refusal isolation.",
+      "repair_dispatch_source_update": {
+        "evidence": {
+          "bytes": 21137,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+          "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+        },
+        "implementation": "Merged8776 rechecks signed start authority after final inspection and immediately before dispatch, preserving original inspection failure and consumed-start custody.",
+        "qualification": "New10 normal/race and6 causal groups unexecuted;14 existing adjacent obligations remain separately pending.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 16758,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+          "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+        }
+      },
       "required_outcome": "Service supervision: independent restart, single ownership and meaningful readiness",
       "retained_component_evidence": {
         "bytes": 3746,
@@ -1112,7 +1512,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1138,7 +1538,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1164,7 +1564,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1198,7 +1598,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1242,7 +1642,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1286,7 +1686,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1310,6 +1710,20 @@
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-signed-catalog1b5-qualification-20261003.json",
         "sha256": "d46aadd282bea0eb7b129d05c38e7a7ec23eac909829ab3742da2af396bbe620"
       },
+      "runtime_identity_source_update": {
+        "evidence": {
+          "bytes": 13769,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/runtime-identity-source-and-scope-20261005.json",
+          "sha256": "166d3d026bba8187408f105526fe0b9993a9d19af4487f32867991fc7b2f2095"
+        },
+        "implementation": "Merged1d425 retains the first completed identity mismatch before later read failure; null/unavailable and malformed/hard remain distinct under original read budgets.",
+        "qualification": "New7 normal/race,11 control groups and28 separately retained existing neighbors remain unexecuted.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 28937,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/identity-successor/adjacent-existing28-recipe.json",
+          "sha256": "227f751e4c600fa6e23512b6302773138d37ec62b16f348aa4cd7794095af3a3"
+        }
+      },
       "source_limit_audit": {
         "bytes": 6668,
         "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-cancellation-review/HANDOFF.json",
@@ -1317,7 +1731,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1331,13 +1745,22 @@
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
       "original_complete_requirement": "Actual capabilities/contracts and owner approvals, admitted active root and UR participants, independently identified root coldkey/hardware custody for required lifecycle actions, and observed native behavior.",
       "outcome_complete": false,
+      "production_boundary_source_clarification": {
+        "evidence": {
+          "bytes": 9455,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/production-boundary-source-and-scope-20261005.json",
+          "sha256": "ad738fcfb5ce92e3b92fd218d264e981fd5029c26c870333dce3044afce511d6"
+        },
+        "implementation": "Current schema3 V2 production path is implemented; legacy observer and unsigned review graph remain intentionally nonexecuting. Diagnostics and tests clarify that existing authority boundary.",
+        "qualification": "Two new validator roots, one changed existing mainnet assertion and three controls remain unexecuted; external independently approved authority is unchanged."
+      },
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Execute current owner/bootstrap normal/race and independent controls; retain original75 normal component.",
       "required_outcome": "Governance/bootstrap: actual capabilities, activated policy and both validator roles",
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1379,7 +1802,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1409,7 +1832,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1435,7 +1858,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1451,6 +1874,20 @@
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Run complete current post-provisional/reconnect/finality read roots and hard-vs-pending controls.",
+      "repair_dispatch_source_update": {
+        "evidence": {
+          "bytes": 21137,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+          "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+        },
+        "implementation": "Merged8776 rechecks signed start authority after final inspection and immediately before dispatch, preserving original inspection failure and consumed-start custody.",
+        "qualification": "New10 normal/race and6 causal groups unexecuted;14 existing adjacent obligations remain separately pending.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 16758,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+          "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+        }
+      },
       "required_outcome": "Strict readers: re-authorize connection/runtime provenance at every boundary after provisional work",
       "retained_component_evidence": {
         "bytes": 27681,
@@ -1458,10 +1895,24 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/runtime-observation6fa-short-partition-root-review-20261004.json",
         "sha256": "7eb71d1db11448cdee7e8f7a38644a668f1708d2fea0d2b9d67bcc51a9394ceb"
+      },
+      "runtime_identity_source_update": {
+        "evidence": {
+          "bytes": 13769,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/runtime-identity-source-and-scope-20261005.json",
+          "sha256": "166d3d026bba8187408f105526fe0b9993a9d19af4487f32867991fc7b2f2095"
+        },
+        "implementation": "Merged1d425 retains the first completed identity mismatch before later read failure; null/unavailable and malformed/hard remain distinct under original read budgets.",
+        "qualification": "New7 normal/race,11 control groups and28 separately retained existing neighbors remain unexecuted.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 28937,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/identity-successor/adjacent-existing28-recipe.json",
+          "sha256": "227f751e4c600fa6e23512b6302773138d37ec62b16f348aa4cd7794095af3a3"
+        }
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1495,7 +1946,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1521,7 +1972,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1537,6 +1988,20 @@
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Run actual public multi-component repair routes, interrupted journals, cumulative allowance and hard/availability controls.",
+      "repair_dispatch_source_update": {
+        "evidence": {
+          "bytes": 21137,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+          "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+        },
+        "implementation": "Merged8776 rechecks signed start authority after final inspection and immediately before dispatch, preserving original inspection failure and consumed-start custody.",
+        "qualification": "New10 normal/race and6 causal groups unexecuted;14 existing adjacent obligations remain separately pending.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 16758,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+          "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+        }
+      },
       "required_outcome": "Fault controller: bounded parallel, idempotent component control with durable partial recovery",
       "retained_component_evidence": {
         "bytes": 3435,
@@ -1547,7 +2012,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1573,7 +2038,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1599,7 +2064,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1625,7 +2090,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1660,7 +2125,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1680,7 +2145,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1694,13 +2159,22 @@
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
       "original_complete_requirement": "Both operators and all validator/provider consumers must join original eligibility, binding, wallet consent and policy authority through rollover.",
       "outcome_complete": false,
+      "production_boundary_source_clarification": {
+        "evidence": {
+          "bytes": 9455,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/production-boundary-source-and-scope-20261005.json",
+          "sha256": "ad738fcfb5ce92e3b92fd218d264e981fd5029c26c870333dce3044afce511d6"
+        },
+        "implementation": "Current schema3 V2 production path is implemented; legacy observer and unsigned review graph remain intentionally nonexecuting. Diagnostics and tests clarify that existing authority boundary.",
+        "qualification": "Two new validator roots, one changed existing mainnet assertion and three controls remain unexecuted; external independently approved authority is unchanged."
+      },
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Run full model1865 and current controller/monitor/whole-work eligibility, wallet consent, first-partial and rollover controls.",
       "required_outcome": "Policy activation: coherent validator evidence and client-key domains across operators",
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1717,6 +2191,20 @@
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Qualify current producer/repair paths and missing-host/outcome-freshness behavior; retain xops33.",
+      "repair_dispatch_source_update": {
+        "evidence": {
+          "bytes": 21137,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+          "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+        },
+        "implementation": "Merged8776 rechecks signed start authority after final inspection and immediately before dispatch, preserving original inspection failure and consumed-start custody.",
+        "qualification": "New10 normal/race and6 causal groups unexecuted;14 existing adjacent obligations remain separately pending.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 16758,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+          "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+        }
+      },
       "required_outcome": "Continuous operations: independent monitoring, bounded authorized repair and exercised on-call",
       "retained_component_evidence": {
         "bytes": 27345,
@@ -1727,7 +2215,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1744,10 +2232,24 @@
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Qualify exact current public identity/runtime/finality admission and refusal controls.",
       "required_outcome": "Mainnet identity",
-      "retained_component_evidence": null
+      "retained_component_evidence": null,
+      "runtime_identity_source_update": {
+        "evidence": {
+          "bytes": 13769,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/runtime-identity-source-and-scope-20261005.json",
+          "sha256": "166d3d026bba8187408f105526fe0b9993a9d19af4487f32867991fc7b2f2095"
+        },
+        "implementation": "Merged1d425 retains the first completed identity mismatch before later read failure; null/unavailable and malformed/hard remain distinct under original read budgets.",
+        "qualification": "New7 normal/race,11 control groups and28 separately retained existing neighbors remain unexecuted.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 28937,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/identity-successor/adjacent-existing28-recipe.json",
+          "sha256": "227f751e4c600fa6e23512b6302773138d37ec62b16f348aa4cd7794095af3a3"
+        }
+      }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1777,7 +2279,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1803,7 +2305,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1825,13 +2327,36 @@
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls.",
       "original_complete_requirement": "Approved actual runtime and complete signing/execution/history behavior across simulator-independent production roles and both validators.",
       "outcome_complete": false,
+      "production_boundary_source_clarification": {
+        "evidence": {
+          "bytes": 9455,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/production-boundary-source-and-scope-20261005.json",
+          "sha256": "ad738fcfb5ce92e3b92fd218d264e981fd5029c26c870333dce3044afce511d6"
+        },
+        "implementation": "Current schema3 V2 production path is implemented; legacy observer and unsigned review graph remain intentionally nonexecuting. Diagnostics and tests clarify that existing authority boundary.",
+        "qualification": "Two new validator roots, one changed existing mainnet assertion and three controls remain unexecuted; external independently approved authority is unchanged."
+      },
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Complete current Go native consumers and the original Rust/control scope; full Rust113 normal has passed, while its original causal controls remain separate. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Runtime and native continuity",
-      "retained_component_evidence": null
+      "retained_component_evidence": null,
+      "runtime_identity_source_update": {
+        "evidence": {
+          "bytes": 13769,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/runtime-identity-source-and-scope-20261005.json",
+          "sha256": "166d3d026bba8187408f105526fe0b9993a9d19af4487f32867991fc7b2f2095"
+        },
+        "implementation": "Merged1d425 retains the first completed identity mismatch before later read failure; null/unavailable and malformed/hard remain distinct under original read budgets.",
+        "qualification": "New7 normal/race,11 control groups and28 separately retained existing neighbors remain unexecuted.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 28937,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/identity-successor/adjacent-existing28-recipe.json",
+          "sha256": "227f751e4c600fa6e23512b6302773138d37ec62b16f348aa4cd7794095af3a3"
+        }
+      }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1851,7 +2376,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1895,7 +2420,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1912,6 +2437,20 @@
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Execute current monitor22/repair/producer consumers and remaining rule/operations scopes; xops33 already retained. Finish and qualify the PH15 supported metrics/status change; current36 conservation metric semantics remain preserved.",
+      "repair_dispatch_source_update": {
+        "evidence": {
+          "bytes": 21137,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+          "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+        },
+        "implementation": "Merged8776 rechecks signed start authority after final inspection and immediately before dispatch, preserving original inspection failure and consumed-start custody.",
+        "qualification": "New10 normal/race and6 causal groups unexecuted;14 existing adjacent obligations remain separately pending.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 16758,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+          "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+        }
+      },
       "required_outcome": "Continuous monitoring and bounded repair",
       "retained_component_evidence": {
         "bytes": 15116,
@@ -1922,7 +2461,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1936,8 +2475,31 @@
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
       "original_complete_requirement": "Actual census/reset disposition, signed owner action, installed contracts/Safe/funding, independent custody and actual admitted/active root and UR roles, and separately authorized root custody/transport for any required current lifecycle mutation.",
       "outcome_complete": false,
+      "production_boundary_source_clarification": {
+        "evidence": {
+          "bytes": 9455,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/production-boundary-source-and-scope-20261005.json",
+          "sha256": "ad738fcfb5ce92e3b92fd218d264e981fd5029c26c870333dce3044afce511d6"
+        },
+        "implementation": "Current schema3 V2 production path is implemented; legacy observer and unsigned review graph remain intentionally nonexecuting. Diagnostics and tests clarify that existing authority boundary.",
+        "qualification": "Two new validator roots, one changed existing mainnet assertion and three controls remain unexecuted; external independently approved authority is unchanged."
+      },
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
       "remaining_software_evidence": "Qualify current complete owner/bootstrap/contract/root/UR public software paths and controls.",
+      "repair_dispatch_source_update": {
+        "evidence": {
+          "bytes": 21137,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+          "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+        },
+        "implementation": "Merged8776 rechecks signed start authority after final inspection and immediately before dispatch, preserving original inspection failure and consumed-start custody.",
+        "qualification": "New10 normal/race and6 causal groups unexecuted;14 existing adjacent obligations remain separately pending.",
+        "separate_existing_adjacent_recipe": {
+          "bytes": 16758,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+          "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+        }
+      },
       "required_outcome": "Mainnet bootstrap and both validator roles",
       "retained_component_evidence": {
         "bytes": 4880,
@@ -1948,7 +2510,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1974,7 +2536,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact evidence retained; original227 plus3 output,8 payment,21 restored native Go,4 PH15,6 repair-dispatch,11 runtime-identity and3 production-boundary groups remain required (283 distinct source groups), without a blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2004,7 +2566,7 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v10",
+  "schema": "original38-current-evidence-ledger-v13",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
@@ -2113,14 +2675,79 @@
       "producer_selected_roots": 32,
       "race": "UNEXECUTED",
       "status": "PRODUCER32_NORMAL_AND_CONSUMER12_PASS_RACE_CONTROLS_PENDING"
+    },
+    {
+      "causal_controls": "UNEXECUTED",
+      "component": "repair-dispatch-window",
+      "controls": 6,
+      "evidence": {
+        "bytes": 21137,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/repair-dispatch-window-source-and-scope-20261005.json",
+        "sha256": "cf47481f6dcca68804d5f3ae80872786a1d807c166fd4d0673c45583b9dcdcbc"
+      },
+      "new_roots": 10,
+      "normal": "UNEXECUTED",
+      "race": "UNEXECUTED",
+      "separate_existing_adjacent14": {
+        "bytes": 16758,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/adjacent-existing14-recipe.json",
+        "sha256": "7e9ffc78b4b86729f093b4b5cf060551885379592c24168c76afc6948e3fdcc2"
+      },
+      "source_commit": "8776b03884fcca74d827dc613bd8233d2dc5f7a3",
+      "source_intake": {
+        "bytes": 8942,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/repair-dispatch-window/HANDOFF.json",
+        "sha256": "6228380952c99b0ebe249aac9980aae2848a15696d44bc9b73365b3fa1ab4bc5"
+      },
+      "status": "MERGED_SOURCE_FIXED_TARGETED_QUALIFICATION_PENDING"
+    },
+    {
+      "causal_controls": "UNEXECUTED",
+      "component": "runtime-network-identity",
+      "controls": 11,
+      "evidence": {
+        "bytes": 13769,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/runtime-identity-source-and-scope-20261005.json",
+        "sha256": "166d3d026bba8187408f105526fe0b9993a9d19af4487f32867991fc7b2f2095"
+      },
+      "new_roots": 7,
+      "normal": "UNEXECUTED",
+      "race": "UNEXECUTED",
+      "separate_existing_adjacent28": {
+        "bytes": 28937,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/identity-successor/adjacent-existing28-recipe.json",
+        "sha256": "227f751e4c600fa6e23512b6302773138d37ec62b16f348aa4cd7794095af3a3"
+      },
+      "source_commit": "1d4251f4c3b586df8dd2c96602914797a67546c6",
+      "source_intake": {
+        "bytes": 5254,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/validator-runtime-identity-cause/qualification/handoff.json",
+        "sha256": "9251dc276c1ceaae43b8ac8545214394f3f9d301af1f8f1a8cb49018d5af4f67"
+      },
+      "status": "MERGED_SOURCE_FIXED_TARGETED_QUALIFICATION_PENDING"
+    },
+    {
+      "causal_controls": "UNEXECUTED",
+      "changed_existing_mainnet_roots": 1,
+      "component": "current-production-authority-diagnostics",
+      "controls": 3,
+      "evidence": {
+        "bytes": 9455,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/sn/mainnet/evidence/production-boundary-source-and-scope-20261005.json",
+        "sha256": "ad738fcfb5ce92e3b92fd218d264e981fd5029c26c870333dce3044afce511d6"
+      },
+      "new_roots": 2,
+      "normal": "UNEXECUTED",
+      "race": "UNEXECUTED",
+      "status": "MERGED_DIAGNOSTIC_AND_TEST_SOURCE_UNQUALIFIED"
     }
   ],
   "source_selection": {
-    "bytes": 1545,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-1af1-ph15-normal32/SCOPE-HANDOFF.json",
-    "sha256": "2724795fa61afc5034bb727f5f20081c03ebbe5a263fe46360373474c6f99007"
+    "bytes": 2843,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-8776-dispatch-window/launch-boundary-successor/SCOPE-HANDOFF.json",
+    "sha256": "33e52004ffad05bb5a7766526f8de3135299dbe3a7e32ce97f7d626c4565c4d5"
   },
-  "status": "All38 original outcomes remain open. Eight normal Server compilers actually pass on frozen f0b/026/983 with joined waits and protected images; their bodies/race/controls and later payment graph remain separate. Full Rust113 including ignored roots actually passes113/113 with zero failures/skips/not-run,61 exports and closed outer process. All9 native fixture profiles/38 originals are ready; original Rust controls and current Go native86 consumers remain unqualified. PH13 canceled attribution remains honestly unknown without an authorizer; PH15 source is merged; all12 targeted dashboard consumer tests actually pass with zero failures/skips. Its32 Go producer normal roots also pass with zero failures/skips/resource errors; producer race, four Go controls and live operational evidence remain pending. Current624/Core026b/Serverd64 mainnet and miner normal compilers pass with joined waits and protected images. Preserve original2733 Go roots and259 controls;17 new roots plus5 previously omitted existing neighbors give2755 Go roots per mode. Restoring two previously requested existing payment neighbors gives2757 (Server2027/controller95); mainnet292 and263 controls are unchanged. Retained results qualify only their named component/mode scopes.",
+  "status": "All38 original outcomes remain open. Current master2776 roots/mode preserves every prior2757 tuple and adds19 new roots:operator10, identity7, boundary2. SN517/mainnet302/validator68, Core224, VLESS8 and Server2027/controller95/fullmodel1865 remain selected; all283 source control groups and separately named adjacent completion obligations remain required. These three source additions are unqualified. Actual nativefee13 normal/race, PH15 producer32 normal, dashboard12, Rust113 and named tooling scopes retain their original receipts. Current624/Core026/d64 mainnet/miner2 and Server8 normal compilers passed with joined waits; the fullmodel1865 normal body was actually running at12:17:22UTC with exact LIST1865, and its terminal is pending in this checkpoint. Three named ARIN full-population roots have since failed with PostgreSQL SQLSTATE53200; source diagnosis is ongoing and no fullmodel PASS is claimed. Original Rust controls, current Go native86, producer race/controls and live authority/rehearsal outcomes remain separate. Finite contract review found no confirmed source defect within its scope. Known upload lower-finality and PH12 earning-wallet consent corrections remain in progress and are excluded from source/result counts. No whole-current-graph PASS or deployment readiness is claimed.",
   "supersedes": {
     "bytes": 124390,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",
