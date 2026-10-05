@@ -92,6 +92,7 @@ func init() {
 	os.Exit(0)
 }
 
+// Owns a protected verifier copy independently of go test's temporary image.
 func invocationFixture(t *testing.T, mode string) (Authority, Reference, string) {
 	t.Helper()
 	sha := "sha256:" + strings.Repeat("31", 32)
@@ -141,12 +142,31 @@ func invocationFixture(t *testing.T, mode string) (Authority, Reference, string)
 	if err != nil {
 		t.Fatal(err)
 	}
+	sourceInfo, err := file.Stat()
+	if err != nil {
+		t.Fatal(errors.Join(err, file.Close()))
+	}
+	// A go test image can have shared cache links or writable build modes.
+	// Copy it into a fresh inode; never chmod the running or cached image.
+	verifierPath := filepath.Join(directory, "verifier")
+	verifier, err := os.OpenFile(verifierPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(errors.Join(err, file.Close()))
+	}
 	engineDigest := sha256.New()
-	_, copyErr := io.Copy(engineDigest, file)
-	if err := errors.Join(copyErr, file.Close()); err != nil {
+	copied, copyErr := io.Copy(io.MultiWriter(verifier, engineDigest), io.LimitReader(file, maximumExecutableBytes+1))
+	if err := errors.Join(copyErr, file.Close(), verifier.Chmod(0500), verifier.Close()); err != nil {
 		t.Fatal(err)
 	}
-	return Authority{Verifier: Reference{Path: executable, Sha256: "sha256:" + hex.EncodeToString(engineDigest.Sum(nil))}, NativePolicy: policy}, Reference{Path: path, Sha256: "sha256:" + hex.EncodeToString(requestDigest[:])}, statement.TransactionHash
+	info, err := os.Lstat(verifierPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || info.Mode().Perm() != 0500 || stat.Nlink != 1 || os.SameFile(sourceInfo, info) || copied < 4 || copied > maximumExecutableBytes || copied != sourceInfo.Size() || copied != info.Size() {
+		t.Fatal("fixture does not own a protected bounded verifier copy")
+	}
+	return Authority{Verifier: Reference{Path: verifierPath, Sha256: "sha256:" + hex.EncodeToString(engineDigest.Sum(nil))}, NativePolicy: policy}, Reference{Path: path, Sha256: "sha256:" + hex.EncodeToString(requestDigest[:])}, statement.TransactionHash
 }
 
 func TestInvokeNativeFeeOwnsImmutableResult(t *testing.T) {
