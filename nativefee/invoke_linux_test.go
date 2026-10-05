@@ -1,5 +1,6 @@
 //go:build linux
 
+// Exercises owned verifier output, process joins and immutable proof custody.
 package nativefee
 
 import (
@@ -66,7 +67,14 @@ func init() {
 		json.NewEncoder(os.Stdout).Encode(fixture.Statement)
 		os.Exit(1)
 	case "overflow":
-		os.Stdout.Write(bytes.Repeat([]byte{'x'}, maximumStatementBytes+1))
+		// The statement and trailing whitespace remain valid JSON; only the
+		// output bound may reject them, not a later syntax error.
+		json.NewEncoder(os.Stdout).Encode(fixture.Statement)
+		os.Stdout.Write(bytes.Repeat([]byte{' '}, maximumStatementBytes+1))
+		os.Exit(0)
+	case "stderr-overflow":
+		os.Stderr.Write(bytes.Repeat([]byte{'x'}, 64*1024+1))
+		json.NewEncoder(os.Stdout).Encode(fixture.Statement)
 		os.Exit(0)
 	case "orphan":
 		command := exec.Command("/proc/self/exe")
@@ -184,21 +192,60 @@ func TestInvokeNativeFeeFailureCannotPublishPlausibleOutput(t *testing.T) {
 	}
 }
 
+// A valid statement cannot hide an overbound stream behind legal whitespace.
 func TestInvokeNativeFeeOutputOverflowCancelsAndJoins(t *testing.T) {
 	authority, request, transaction := invocationFixture(t, "overflow")
 	verified, err := Invoke(t.Context(), authority, request, transaction, time.Minute)
-	if err == nil || verified != nil {
-		t.Fatal("overbound child output was accepted")
+	if !errors.Is(err, context.Canceled) || verified != nil || !strings.Contains(err.Error(), "native fee verifier output exceeds bound") {
+		t.Fatal("overbound child output did not cancel its owner", err)
 	}
 }
 
+// Diagnostics have their own cap even when the child supplies a valid result.
+func TestInvokeNativeFeeStderrOverflowCancelsAndJoins(t *testing.T) {
+	authority, request, transaction := invocationFixture(t, "stderr-overflow")
+	verified, err := Invoke(t.Context(), authority, request, transaction, time.Minute)
+	if !errors.Is(err, context.Canceled) || verified != nil || !strings.Contains(err.Error(), "native fee verifier output exceeds bound") {
+		t.Fatal("overbound child diagnostics did not cancel its owner", err)
+	}
+}
+
+// The command copy dispatch must visit the owner cancellation boundary.
 func TestInvokeNativeFeeCancellationAfterOutputCannotSettle(t *testing.T) {
 	authority, request, transaction := invocationFixture(t, "complete")
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	verified, err := invoke(ctx, authority, request, transaction, time.Minute, invocationHooks{afterOutput: cancel})
+	visited := false
+	verified, err := invoke(ctx, authority, request, transaction, time.Minute, invocationHooks{afterOutput: func() {
+		visited = true
+		cancel()
+	}})
+	if !visited {
+		t.Fatal("command output bypassed its owner cancellation hook")
+	}
 	if !errors.Is(err, context.Canceled) || verified != nil {
 		t.Fatal("canceled owner accepted completed-looking bytes", err)
+	}
+}
+
+// Copy's ReaderFrom fast path must not bypass chunk admission or its error latch.
+func TestNativeFeeOutputCopyPreservesBoundAndError(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	visits := 0
+	output := boundedOutput{maximum: 4, cancel: cancel, after: func() { visits++ }}
+	// Hide the source's WriterTo to exercise destination copy dispatch.
+	source := struct{ io.Reader }{Reader: strings.NewReader("abcd")}
+	if n, err := io.Copy(&output, source); err != nil || n != 4 || output.buffer.String() != "abcd" || visits != 1 || ctx.Err() != nil {
+		t.Fatal("exact-bound copied output did not pass chunk admission", n, err, visits)
+	}
+	source.Reader = strings.NewReader("e")
+	_, copyErr := io.Copy(&output, source)
+	if copyErr == nil || copyErr != output.err || !errors.Is(ctx.Err(), context.Canceled) || output.buffer.String() != "abcd" || visits != 1 {
+		t.Fatal("copy dispatch bypassed the output bound", copyErr, visits)
+	}
+	if n, err := output.Write(nil); n != 0 || err != copyErr || visits != 1 {
+		t.Fatal("failed output accepted a later write", n, err, visits)
 	}
 }
 

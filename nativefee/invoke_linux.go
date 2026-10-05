@@ -1,5 +1,6 @@
 //go:build linux
 
+// Owns a pinned verifier process and admits only bounded, joined output.
 package nativefee
 
 import (
@@ -87,13 +88,13 @@ func invoke(ctx context.Context, authority Authority, request Reference, transac
 		hooks.beforeStart(owner, verifier)
 	}
 	if err := command.Run(); err != nil {
-		return nil, errors.Join(err, stdout.err, stderr.err, owner.Err(), fmt.Errorf("native fee verifier: %s", stderr.Bytes()))
+		return nil, errors.Join(err, stdout.err, stderr.err, owner.Err(), fmt.Errorf("native fee verifier: %s", stderr.buffer.Bytes()))
 	}
 	if err := errors.Join(stdout.err, stderr.err, owner.Err()); err != nil {
 		return nil, err
 	}
 	var statement Statement
-	decoder := json.NewDecoder(bytes.NewReader(stdout.Bytes()))
+	decoder := json.NewDecoder(bytes.NewReader(stdout.buffer.Bytes()))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&statement); err != nil {
 		return nil, err
@@ -107,21 +108,27 @@ func invoke(ctx context.Context, authority Authority, request Reference, transac
 	return &Verified{statement: statement, authority: authority, completed: true}, owner.Err()
 }
 
+// One command copy goroutine owns each stream until Run joins it. Keep the
+// buffer private: embedding would promote ReadFrom and let io.Copy bypass Write.
 type boundedOutput struct {
-	bytes.Buffer
+	buffer  bytes.Buffer
 	maximum int
 	cancel  context.CancelFunc
 	after   func()
 	err     error
 }
 
+// Admits each copied chunk before allocation and latches the first refusal.
 func (self *boundedOutput) Write(raw []byte) (int, error) {
-	if len(raw) > self.maximum-self.Len() {
+	if self.err != nil {
+		return 0, self.err
+	}
+	if len(raw) > self.maximum-self.buffer.Len() {
 		self.err = errors.New("native fee verifier output exceeds bound")
 		self.cancel()
 		return 0, self.err
 	}
-	n, err := self.Buffer.Write(raw)
+	n, err := self.buffer.Write(raw)
 	if self.after != nil {
 		self.after()
 	}
