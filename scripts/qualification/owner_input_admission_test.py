@@ -1,10 +1,12 @@
 """Actual file/commit changes exercise the owner and package boundaries."""
 import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from cargo_control import Refused
 from joint_peer_admission import pin
@@ -109,6 +111,73 @@ class OwnerInputs(unittest.TestCase):
         spec["repository"] = str(link); verify_git_input_scope(spec)
         other = self.root / "other"; other.mkdir(); link.unlink(); link.symlink_to(other)
         with self.assertRaises(Refused): verify_git_input_scope(spec)
+
+    def test_ignored_compiler_input_is_rejected(self):
+        d, spec = self.repository()
+        (d / ".gitignore").write_text("selected/hidden.go\n")
+        (d / "selected/hidden.go").write_text("package selected\n")
+        with self.assertRaises(Refused): verify_git_input_scope(spec)
+
+    def test_index_flags_cannot_hide_changed_physical_source(self):
+        d, spec = self.repository()
+        for flag in ("--assume-unchanged", "--skip-worktree"):
+            subprocess.check_call(["git", "-C", str(d), "update-index", flag, "selected/input.go"])
+            (d / "selected/input.go").write_text("package corrupted\n")
+            with self.assertRaises(Refused): verify_git_input_scope(spec)
+            (d / "selected/input.go").write_text("package selected\n")
+            subprocess.check_call(["git", "-C", str(d), "update-index", "--no-assume-unchanged",
+                                   "--no-skip-worktree", "selected/input.go"])
+
+    def test_selected_file_symlink_is_rejected(self):
+        d, spec = self.repository()
+        external = self.root / "outside.go"; external.write_text("package selected\n")
+        (d / "selected/input.go").unlink(); (d / "selected/input.go").symlink_to(external)
+        subprocess.check_call(["git", "-C", str(d), "add", "."])
+        subprocess.check_call(["git", "-C", str(d), "commit", "-qm", "selected symlink"])
+        spec["base_commit"] = subprocess.check_output(["git", "-C", str(d), "rev-parse", "HEAD"]).decode().strip()
+        external.write_text("package changed_without_git_link_change\n")
+        with self.assertRaises(Refused): verify_git_input_scope(spec)
+
+    def test_selected_source_rename_outside_scope_is_rejected(self):
+        d, spec = self.repository()
+        subprocess.check_call(["git", "-C", str(d), "mv", "selected/input.go", "unreached/input.go"])
+        with self.assertRaises(Refused): verify_git_input_scope(spec)
+
+    def test_unrelated_subtrees_are_not_walked_and_selected_ancestor_links_refuse(self):
+        d, spec = self.repository()
+        original_walk = os.walk
+        visited = []
+        def walk(*args, **kwargs):
+            for row in original_walk(*args, **kwargs):
+                visited.append(Path(row[0]))
+                yield row
+        (d / "unreached/large/peer/generated").mkdir(parents=True)
+        with mock.patch("owner_input_admission.os.walk", side_effect=walk):
+            verify_git_input_scope(spec)
+        self.assertNotIn(d / "unreached", visited)
+        (d / "selected").rename(d / "outside-selected")
+        (d / "selected").symlink_to(d / "outside-selected", target_is_directory=True)
+        spec["package_directories"] = []
+        spec["input_files"] = ["selected/input.go"]
+        spec["input_trees"] = []
+        with self.assertRaises(Refused): verify_git_input_scope(spec)
+
+    def test_fifo_replacement_at_open_is_nonblocking_and_refused(self):
+        d, spec = self.repository()
+        real_open = os.open
+        target = d / "selected/input.go"
+        observed_flags = []
+        def replace_at_open(path, flags, *args, **kwargs):
+            if Path(path) == target:
+                observed_flags.append(flags)
+                self.assertTrue(flags & os.O_NONBLOCK)
+                self.assertTrue(flags & os.O_CLOEXEC)
+                target.unlink()
+                os.mkfifo(target)
+            return real_open(path, flags, *args, **kwargs)
+        with mock.patch("owner_input_admission.os.open", side_effect=replace_at_open):
+            with self.assertRaises(Refused): verify_git_input_scope(spec)
+        self.assertEqual(len(observed_flags), 1)
 
 
 if __name__ == "__main__":

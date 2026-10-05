@@ -6,10 +6,11 @@ part of resource observation: an unstarted owner can be prepared again without
 invalidating a healthy peer. Existing generation, ancestry, OOM, floor and
 joined-wait checks remain the resource observer's responsibility.
 """
-import json
+import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import subprocess
+import stat
 
 from cargo_control import require
 from joint_peer_admission import pin, pinned_json
@@ -71,6 +72,21 @@ def _selected(path, spec):
                 for root in spec["input_trees"]))
 
 
+def _needed(path, spec):
+    """Inspect selected entries and their ancestors, never unrelated subtrees."""
+    return (_selected(path, spec) or path in spec["package_directories"] or
+            any(value.startswith(path + "/") for value in
+                spec["input_files"] + spec["package_directories"] + spec["input_trees"]))
+
+
+def _descend(path, spec):
+    return (path in spec["package_directories"] or
+            any(root == "." or path == root or path.startswith(root + "/")
+                for root in spec["input_trees"]) or
+            any(value.startswith(path + "/") for value in
+                spec["input_files"] + spec["package_directories"] + spec["input_trees"]))
+
+
 def verify_git_input_scope(spec):
     """Verify a caller-authenticated complete package/input scope, not HEAD.
 
@@ -91,15 +107,73 @@ def verify_git_input_scope(spec):
         result = subprocess.check_output(["/usr/bin/git", "-C", str(repository), *args], timeout=30)
         require(len(result) <= 8 * 1024 * 1024, "source delta exceeds bound")
         return result.decode()
+    # The Git index is not source custody: ignored files, assume-unchanged and
+    # skip-worktree can all hide compiler inputs from an ordinary Git diff.
+    expected = {}
+    for row in git("ls-tree", "-rz", spec["base_commit"]).split("\0"):
+        if not row:
+            continue
+        metadata, name = row.split("\t", 1)
+        mode, kind, blob = metadata.split()
+        if _selected(name, spec):
+            require(kind == "blob" and mode in ("100644", "100755"),
+                    "selected Git input is a symlink or non-regular object")
+            expected[name] = (mode, blob)
+    actual_files = set()
+    entries = total = 0
+    for directory, dirs, files in os.walk(resolved, followlinks=False):
+        if Path(directory) == resolved and ".git" in dirs:
+            dirs.remove(".git")
+        for name in dirs + files:
+            path = Path(directory) / name
+            relative = path.relative_to(resolved).as_posix()
+            if relative == ".git":
+                continue
+            if not _needed(relative, spec):
+                if name in dirs:
+                    dirs.remove(name)
+                continue
+            entries += 1
+            require(entries <= 200000, "source namespace exceeds bound")
+            before = path.lstat()
+            require(not stat.S_ISLNK(before.st_mode), "selected source symlink needs separate authority")
+            if stat.S_ISDIR(before.st_mode):
+                if not _descend(relative, spec) and name in dirs:
+                    dirs.remove(name)
+                continue
+            require(_selected(relative, spec), "selected source ancestor is not a directory")
+            require(stat.S_ISREG(before.st_mode) and relative in expected,
+                    "untracked or non-regular selected compiler input")
+            mode, expected_blob = expected[relative]
+            require(bool(before.st_mode & 0o111) == (mode == "100755"), "selected source mode changed")
+            require(before.st_size <= 512 * 1024**2, "source file exceeds bound")
+            total += before.st_size
+            require(total <= 2 * 1024**3, "selected source bytes exceed bound")
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+            try:
+                identity = lambda value: (value.st_dev, value.st_ino, value.st_size,
+                    value.st_mode, value.st_uid, value.st_gid, value.st_nlink,
+                    value.st_mtime_ns, value.st_ctime_ns)
+                require(identity(os.fstat(descriptor)) == identity(before), "source changed before read")
+                checksum = hashlib.sha1(b"blob " + str(before.st_size).encode() + b"\0")
+                count = 0
+                while True:
+                    block = os.read(descriptor, min(65536, before.st_size - count + 1))
+                    if not block:
+                        break
+                    count += len(block)
+                    require(count <= before.st_size, "source grew during read")
+                    checksum.update(block)
+                require(count == before.st_size and checksum.hexdigest() == expected_blob,
+                        "selected physical source bytes changed")
+                require(identity(os.fstat(descriptor)) == identity(before) == identity(path.lstat()),
+                        "source changed during read")
+            finally:
+                os.close(descriptor)
+            actual_files.add(relative)
+    require(actual_files == set(expected), "selected compiler input disappeared or moved")
     actual = git("rev-parse", "HEAD").strip()
-    changed = set()
-    for args in (("diff", "--name-only", "-z", spec["base_commit"], actual),
-                 ("diff", "--name-only", "-z", "HEAD"),
-                 ("diff", "--cached", "--name-only", "-z"),
-                 ("ls-files", "--others", "--exclude-standard", "-z")):
-        changed.update(path for path in git(*args).split("\0") if path)
-    affected = sorted(path for path in changed if _selected(path, spec))
-    require(not affected, "selected build inputs changed: " + repr(affected[:16]))
     return {"repository": str(repository), "base_commit": spec["base_commit"],
-            "observed_head": actual, "outside_scope_changes": sorted(changed),
+            "observed_head": actual, "physical_input_files": len(actual_files),
+            "physical_input_bytes": total, "outside_scope_inspected": False,
             "selected_input_changes": []}
