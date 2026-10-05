@@ -102,11 +102,13 @@ func TestEconomicCarryChronologyChecksSameBlockTransactionAndLogOrder(t *testing
 	}
 }
 
-// Use the actual public receipt, artifact, archive and restart owners. Only
-// the original source epoch label changes; source amounts and target stay put.
-func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *testing.T) {
+// Select the newer source epoch before any reader starts. Original capture
+// execution proves the fourteen units of opening stock, while the receipt-only
+// variant deliberately retains that unresolved difference as an active source.
+func newEconomicCarryChronologyArchiveFixture(t *testing.T, originalCapture bool) (*economicConservationArchiveFixture, *economicEntitlementFixture) {
+	t.Helper()
 	var entitlement *economicEntitlementFixture
-	f := newEconomicConservationArchiveFixture(t, false, func(source *economicConservationFixture) {
+	configure := func(source *economicConservationFixture) {
 		vault := source.vault
 		economicConservationTestEvmRehash(t, vault, func(number uint64, receipt *types.Receipt) {
 			if number != 11 {
@@ -122,7 +124,41 @@ func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *
 		vault.blocks[11].funded["4/1"] = vault.blocks[11].funded["2/1"]
 		delete(vault.blocks[11].funded, "2/1")
 		entitlement = configureEconomicEntitlementFixture(t, source)
-	})
+	}
+	if !originalCapture {
+		f := newEconomicConservationArchiveFixture(t, false, configure)
+		return f, entitlement
+	}
+	source := newEconomicConservationFixture(t, false)
+	configure(source)
+	vault := source.vault
+	vault.policy.CaptureIdentity = true
+	vault.fixtureGetters = map[string][]any{
+		"pools":        {[32]byte(common.HexToHash("0x" + strings.Repeat("11", 32))), uint16(1), true},
+		"selfColdkey":  {[32]byte(common.HexToHash("0x" + strings.Repeat("33", 32)))},
+		"escrowHotkey": {[32]byte(common.HexToHash("0x" + strings.Repeat("55", 32)))},
+	}
+	vault.policy.BatchBlocks = source.policy.Vault.BatchBlocks
+	source.policy.Vault = vault.policy
+	f, _ := economicConservationPrincipalFixtureWithSource(t, source, "capture", true, func(job *historicalReplayJob) {
+		if len(job.ExtrinsicsHex) != 1 {
+			t.Fatal("carry chronology original capture lost its complete body")
+		}
+		job.ExtrinsicsHex[0] = nativeExecutionTestHex(append(rootCompact(32), vault.blocks[11].transactions[0].Hash().Bytes()...))
+	}, nil)
+	first := f.sample(t, monitorServiceHooks{})
+	if first.VaultCursor.Number != 11 || first.CausallyJoinedCaptures != 1 || first.Funding == nil || first.Funding.OriginalCaptures != 1 || entitlement.artifactReads.Load() != 0 {
+		t.Fatal("carry chronology did not admit the original capture before its delayed root", first)
+	}
+	economicFundingTestRange(t, first.Funding.Captured, "20", "6", "6", "14", "14", true)
+	return f, entitlement
+}
+
+// Use the actual public receipt, original native capture, artifact, archive
+// and restart owners. The source remains epoch four and the target epoch three;
+// all original capture, carry, entitlement and claim amounts stay unchanged.
+func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *testing.T) {
+	f, entitlement := newEconomicCarryChronologyArchiveFixture(t, true)
 	summary := f.sample(t, monitorServiceHooks{})
 	record := economicEntitlementRecord(t, f.source)
 	if record.Census == nil || record.Epoch != "3" || record.Funded != "0" || record.Total == nil || *record.Total != "50" || len(record.Sources) != 3 || record.Sources[2].Id != "4/1" || record.Sources[2].Amount != "20" || record.PayoutRoot != common.Hash(entitlement.committedRoot).Hex() || summary.Funding == nil || summary.Funding.OriginalCaptures != 1 || summary.Funding.OriginalClaims != 2 || summary.Funding.OriginalPayments != 1 || summary.TargetMet != nil {
@@ -136,6 +172,10 @@ func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *
 	if !found || state.Entitlements[index].CarryEvent == nil || state.Entitlements[index].CarryEvent.Values["epoch"] != "4" || state.Entitlements[index].CarryEvent.Block.Number >= record.Finalization.Block.Number {
 		t.Fatal("public delayed root lost its earlier receipt from the newer source epoch", state)
 	}
+	if len(state.Captures) != 1 || !state.Captures[0].causalComplete() || state.Captures[0].Event.Values["epoch"] != "4" || state.Captures[0].PrincipalEffects.OpeningStock != "14" || state.Captures[0].PrincipalEffects.LiquidEarnings != "6" {
+		t.Fatal("carry chronology lacks original source evidence needed for cold retirement", state.Captures)
+	}
+	economicFundingTestRange(t, summary.Funding.Captured, "20", "6", "6", "14", "14", true)
 	beforeCensus, beforeFunding := record.censusHash(), economicEntitlementFundingHash(record)
 	f.reset(t)
 	_, args := f.plan(t)
@@ -143,12 +183,46 @@ func TestEconomicCarryChronologyPublicDelayedRootRetainsSourceThroughArchive(t *
 		t.Fatal("public archive refused original out-of-order finalization", code, issue)
 	}
 	retired := f.source.state(t)
-	if len(retired.Captures) != 0 || len(retired.Claims) != 0 || retired.Archive == nil || retired.Archive.Counts.Claims != 2 {
+	if len(retired.Captures) != 0 || len(retired.Claims) != 0 || len(retired.Payments) != 0 || retired.Archive == nil || retired.Archive.Counts.Captures != 1 || retired.Archive.Counts.CausalCaptures != 1 || retired.Archive.Counts.Claims != 2 || retired.Archive.Counts.Payments != 1 {
 		t.Fatal("carry chronology control did not actually retire original source and claims", retired)
+	}
+	if err := retired.index(); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := retired.entitlementIds["4/1"]; found {
+		t.Fatal("carry chronology source obligation remained hot instead of exercising cold funding")
 	}
 	reopened := f.sample(t, monitorServiceHooks{})
 	after := economicEntitlementRecord(t, f.source)
 	if after.Census != nil || after.CensusReference == nil || after.censusHash() != beforeCensus || economicEntitlementFundingHash(after) != beforeFunding || after.Sources[2].Id != "4/1" || reopened.Funding == nil || reopened.Funding.Captured != summary.Funding.Captured || reopened.Funding.Accepted != summary.Funding.Accepted || reopened.Funding.Paid != summary.Funding.Paid || reopened.Funding.OriginalCaptures != 1 || reopened.Funding.OriginalClaims != 2 || reopened.Funding.OriginalPayments != 1 || reopened.TargetMet != nil {
 		t.Fatal("cold delayed root changed original source or repeated economic effects", reopened, after)
+	}
+}
+
+// The same receipt chronology cannot retire an unexplained source. Its paid
+// claims and missed-root obligation can become cold while the original capture
+// remains active, without converting the fourteen-unit difference into income.
+func TestEconomicCarryChronologyPublicUnprovedSourceRemainsActiveAfterArchive(t *testing.T) {
+	f, _ := newEconomicCarryChronologyArchiveFixture(t, false)
+	before := f.sample(t, monitorServiceHooks{})
+	state := f.source.state(t)
+	if before.Funding == nil || len(state.Captures) != 1 || state.Captures[0].causalComplete() || state.Captures[0].PrincipalEffects != nil || state.Captures[0].AmountDifferenceAlpha == nil || *state.Captures[0].AmountDifferenceAlpha != "14" || state.Captures[0].Event.Values["epoch"] != "4" {
+		t.Fatal("unproved carry source did not retain its original unresolved difference", before, state.Captures)
+	}
+	captureHash := rootObjectHash(state.Captures[0])
+	economicFundingTestRange(t, before.Funding.Captured, "20", "0", "20", "0", "20", false)
+	f.reset(t)
+	_, args := f.plan(t)
+	if code, issue := f.apply(t, args, &bytes.Buffer{}, monitorServiceHooks{}); code != 0 {
+		t.Fatal("archive refused an explicitly unresolved carry source", code, issue)
+	}
+	retained := f.source.state(t)
+	if len(retained.Captures) != 1 || rootObjectHash(retained.Captures[0]) != captureHash || len(retained.Claims) != 0 || retained.Archive == nil || retained.Archive.Counts.Captures != 0 || retained.Archive.Counts.CausalCaptures != 0 || retained.Archive.Counts.Claims != 2 {
+		t.Fatal("archive discarded unresolved carry evidence or failed to retire paid claims", retained)
+	}
+	after := f.sample(t, monitorServiceHooks{})
+	root := economicEntitlementRecord(t, f.source)
+	if after.Funding == nil || after.Funding.Captured != before.Funding.Captured || after.Funding.Accepted != before.Funding.Accepted || after.Funding.Paid != before.Funding.Paid || after.Funding.OriginalCaptures != 1 || after.Funding.OriginalClaims != 2 || after.Funding.OriginalPayments != 1 || len(root.Sources) != 3 || root.Sources[2].Id != "4/1" || after.TargetMet != nil {
+		t.Fatal("cold claims changed the active original source or invented income authority", before, after, root)
 	}
 }
