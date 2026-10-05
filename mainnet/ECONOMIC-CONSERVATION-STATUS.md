@@ -91,3 +91,58 @@ substitutes for them. Production also needs the original provider/attempt/window
 authorities, owned durable roots, active collector ingestion, independently
 rostered alert receivers and verified on-call delivery. Missing deployment or
 measurement evidence remains explicit; this command creates none of it.
+
+## Principal original retention
+
+Incomplete principal causes can remain unknown while later native rewards are
+observed. The optional `principal_retention` object in the original conservation
+policy selects automatic cold retention under the existing checkpoint writer:
+
+```json
+{
+  "principal_retention": {
+    "schema": "urnetwork-original-principal-retention-v1",
+    "trigger_principal_facts": 256,
+    "preprovisioned_archive_paths": [
+      "/durable/conservation/principal-0001.json",
+      "/durable/conservation/principal-0002.json"
+    ]
+  }
+}
+```
+
+These paths are examples. Select actual canonical absolute paths under the
+declared durable volume and provision each snapshot and private lock with the
+same physical storage profile as the checkpoint. Slots must be distinct from
+the checkpoint, policy, metrics and fee-request owners. The positive threshold
+must be at most half the original `maximum_facts`; the example therefore needs
+at least 512 facts. The object is included in the exact policy hash. Omitting it
+preserves the existing policy bytes and manual archive behavior.
+
+`observe-economic-conservation --follow` checks this threshold between completed
+native attempts. It retains and rereads the exact current checkpoint in the next
+unused slot, reconstructs the candidate archive under held snapshot owners, then
+publishes the compacted checkpoint. It does not cancel an active capture/replay
+or replace that worker's original cursor. An interrupted attempt can reuse a slot
+only when its bytes equal the same original checkpoint. A separately selected
+manual `economic-conservation-archive` request may set
+`"retain_principal_originals": true`; its existing writer-fence requirements
+still apply.
+
+The sample's `original_principal_execution.retained_original_effects` reports
+the retained interval, unresolved block count and latest original stake queries.
+Its `complete_through` stops at the first incomplete block, even if later stock
+changes cancel numerically. Treasury availability remains the latest original
+coldkey-wide API observation, counted once. Cold retention does not make
+`approved_position_causes_complete` true or fill spendable income bounds.
+Provider claims, unresolved captures, fees and their signatures keep their
+existing independent retention rules.
+
+This is finite storage management. Slot exhaustion, archive/index limits,
+physical custody loss and malformed originals remain explicit refusals with
+the original checkpoint intact. A single actual native batch that exceeds the
+admitted fact or byte limit also remains a capacity outcome. Do not filter
+foreign mutations from an approved global storage scope, increase producer
+bounds without its original authority, or relabel pool changes as per-coldkey
+causes to fit capacity. The implementation and source-reviewed tests do not
+supply deployment configuration, economic approvals or executed qualification.

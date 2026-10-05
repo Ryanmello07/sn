@@ -248,6 +248,13 @@ the retained stake positions and original causes to cover that coldkey's total;
 untracked positions leave the custody conclusion unqualified. Later liquidation
 and spending are separate native outflows, never negative provider earnings.
 
+When complete principal causes are unavailable, select the observer's explicit
+[principal original retention policy](ECONOMIC-CONSERVATION-STATUS.md#principal-original-retention)
+to keep exact evidence in bounded durable segments while native observation
+continues. This operational selection preserves unknown custody causes and
+spendable bounds. It creates no reserve signing action, provider claim collateral
+or additional treasury earning authority.
+
 The submitted 90/10 row is a target. Yuma masks, other validators, clipping,
 normalization and integer rounding determine actual incentive. Preserve the
 observed-native-target assurance and runtime-derived tolerance; no hard payout
