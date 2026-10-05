@@ -252,8 +252,14 @@ func TestOnchainSubmitRetainsReceiptObservationAfterTransientHttp(t *testing.T) 
 // endpoint cannot launder the first configured endpoint's completed refusal.
 func TestOnchainSubmitReadRefusesHardIdentityBeforeFailover(t *testing.T) {
 	first := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		_, _ = io.Copy(io.Discard, request.Body)
-		_, _ = io.WriteString(writer, `{"jsonrpc":"2.0","id":1,"result":"not-a-quantity"}`)
+		var call struct {
+			Id json.RawMessage `json:"id"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&call); err != nil {
+			t.Error(err)
+			return
+		}
+		_ = json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": call.Id, "result": "not-a-quantity"})
 	}))
 	defer first.Close()
 	second := newOnchainReadTestServer(t, nil)
@@ -325,25 +331,36 @@ func TestOnchainSubmitExplicitGasCannotHideEstimateCancellation(t *testing.T) {
 // Cancellation interrupts the actual current HTTP request and joins it; no
 // later endpoint, signer or read owner is admitted after the server barrier.
 func TestOnchainSubmitReadCancellationJoinsCurrentRequest(t *testing.T) {
+	watchdog, stop := context.WithTimeout(t.Context(), 30*time.Second)
+	defer stop()
+	parent, cancel := context.WithCancel(watchdog)
+	defer cancel()
 	started, stopped := make(chan struct{}), make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		_, _ = io.Copy(io.Discard, request.Body)
 		close(started)
-		<-request.Context().Done()
+		select {
+		case <-request.Context().Done():
+		case <-watchdog.Done():
+		}
 		close(stopped)
 	}))
-	defer server.Close()
+	defer func() {
+		cancel()
+		server.CloseClientConnections()
+		server.Close()
+	}()
 	fixture := newOnchainReadTestServer(t, nil)
 	params := fixture.params(true)
 	params.Rpcs = []string{server.URL, fixture.server.URL}
-	parent, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	ctx, budgets := onchainReadTestContext(t, parent, nil)
+	ctx, budgets := onchainReadTestContext(t, parent, func(ctx context.Context, _ time.Duration) error {
+		return errors.Join(ctx.Err(), watchdog.Err())
+	})
 	done := make(chan error, 1)
 	go func() { _, err := Submit(ctx, params); done <- err }()
 	select {
 	case <-started:
-	case <-t.Context().Done():
+	case <-watchdog.Done():
 		t.Fatal("public submission never reached actual request")
 	}
 	cancel()
@@ -352,12 +369,12 @@ func TestOnchainSubmitReadCancellationJoinsCurrentRequest(t *testing.T) {
 		if !errors.Is(err, context.Canceled) || budgets.Load() != 1 || fixture.count("eth_chainId") != 0 {
 			t.Fatalf("canceled read continued: budgets=%d err=%v", budgets.Load(), err)
 		}
-	case <-t.Context().Done():
+	case <-watchdog.Done():
 		t.Fatal("canceled public submission did not join")
 	}
 	select {
 	case <-stopped:
-	case <-t.Context().Done():
+	case <-watchdog.Done():
 		t.Fatal("canceled request retained its HTTP handler")
 	}
 }
