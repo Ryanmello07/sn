@@ -440,9 +440,11 @@ class SourceVerificationTests(unittest.TestCase):
                                            retry=self.retry)
 
     def test_directory_entry_count_and_bytes_stop_before_iterator_overrun(self):
-        for kind, limit, names, expected_calls in (
-                ("MAXIMUM_DIRECTORY_ENTRIES", 2, ["one", "two", "three"], 3),
-                ("MAXIMUM_CENSUS_BYTES", 2, ["three"], 1)):
+        for kind, limit, names, expected_calls, expected_error in (
+                ("MAXIMUM_DIRECTORY_ENTRIES", 2, ["one", "two", "three"], 3,
+                 "closed directory entry count exceeds bound"),
+                ("MAXIMUM_CENSUS_BYTES", 2, ["three"], 1,
+                 "closed directory name bytes exceed bound")):
             calls = []
 
             class Entries:
@@ -465,8 +467,9 @@ class SourceVerificationTests(unittest.TestCase):
 
             with mock.patch.object(source, kind, limit):
                 with mock.patch.object(source.os, "scandir", return_value=Entries()):
-                    with self.assertRaisesRegex(source.SourceIntegrityError, "exceeds? bound"):
+                    with self.assertRaises(source.SourceIntegrityError) as caught:
                         self.capture()
+            self.assertEqual(str(caught.exception), expected_error)
             self.assertEqual(len(calls), expected_calls)
 
     def test_directory_enumeration_observes_owner_cancellation(self):
