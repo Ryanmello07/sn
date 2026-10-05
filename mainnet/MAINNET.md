@@ -2,17 +2,17 @@
 
 ## Current status after the missed deadline — October 5
 
-**The October 5 01:00 UTC deadline was missed. All 38 original outcomes remain open.** This [source/receipt checkpoint](evidence/qualified-progress-checkpoint-20261005.json), frozen at 02:10 UTC, supersedes the earlier current-state summaries. No deployment, live signing authority, October 6 transition or final acceptance is established.
+**The October 5 01:00 UTC deadline was missed. All 38 original outcomes remain open.** This [source/receipt checkpoint](evidence/source-lessons-checkpoint-20261005.json), frozen at 02:51 UTC, supersedes the earlier current-state summaries. No deployment, live signing authority, October 6 transition or final acceptance is established.
 
 | Exact current result | Remaining action and scope limit |
 | --- | --- |
 | Server `4b917455` on SN `8e010496` / Core `25a4ce7f` passes **37 selected normal roots, zero failures/skips**, including all 19 previously failed model roots. Compiler/body and outer database waits exited zero/joined; resource qualification and cleanup completed. | Preserve original `c60` **1,703 RUN / 1,673 PASS / 19 FAIL / 11 allowed SKIP**, exit one with cleanup complete. Eleven failures exposed the signed-domain NUL/`jsonb` production defect; eight were fixture defects. `4b` preserves exact signed bytes, uses a canonical-prefix projection for indexing, corrects fresh 773/775 and appends 779. Qualify remaining migration, normal/race/vet and operative-control scopes; 37 passes do not establish a newer-source full-suite pass. |
 | Owner/CLI/custody component on exact SN `8e010496` / Core `25a4ce7f` / Server `2f8a6ee4`: **75/75 normal PASS, zero skips**, formed from disjoint nine plus 66 roots. | The five original `178` failures remain recorded; their corrected roots now pass. Race, independent controls, actual owner-local Ledger replies and separate root/UR authority remain open. No later source inherits this result. |
 | Ordinary funding on that same tuple: **38 RUN / 37 PASS / 1 FAIL / 0 SKIP**; all 13 new joint-flow roots pass. The carry/archive fixture incorrectly demanded retirement with 14 units of unresolved source. | Test-only `d2198a39` / `ec3b27f4` requires actual capture proof, retains the resulting capital contradiction before/after archive, and adds an unproved-source retention neighbor. Bind native capture/replay assets and execute corrected bodies/controls; the original failure stays recorded. |
-| Monitor `7885a3ec` normal compilation **fails**, exit one/joined, with no recorded resource errors: nonexistent `Row.str` and two `testing.TB`/`*testing.T` mismatches in fixtures. No body ran. | Correct the three fixture errors, then compile and execute PostgreSQL catalog/guard tests and controls. Concrete 770–779 expectations remain unqualified; selected37 excludes this successor, root-package migration regressions and native 780. |
-| SN8e's economic reader rejects the actual published earning identity because it requires obsolete `close_time` / `before_cutoff_only` strings. | Source `aea330b1` adopts exact `settled_contract_close_time` / `finish_pre_cutoff_obligations` and adds actual Server parser/hash plus obsolete-alias regressions. Current `0a407e7f` has joined this source; execution remains pending. No owner75/model37 result is inherited, and activation remains blocked with deployed October 6 behavior unproved. |
-| **The SN native-fee verifier already exists** in the public command and conservation worker. Complete Server verified settlement, independently approved denomination and ledger 780 remain unfinished/unqualified, including bounded resource-read work. | Finish and freeze the bridge, then qualify actual public invocation, replay, settlement and controls. Unknown fees retain full approved ceilings; no default conversion or credit from receipt status. |
-| xops `a1fdda0d` retains **311/311 PASS, zero skips**, published to `origin/main`. | Actual Grafana/Mimir ingestion, alert delivery, repair drills and separate independent controls remain open. Source publication establishes no deployment. |
+| Monitor `9430262c` on SN8e/Core25a compiles, then completes **17 RUN / 15 PASS / 2 FAIL / 0 SKIP**, exit one/joined, resource-qualified with cleanup complete. Fault fixtures name a nonexistent constraint (`42704`) and try to disable a protected system trigger (`42501`). | Correct and qualify those exact fault injections. Preserve the prior 7885 compiler failure and this 15/17 result. The executed monitor is pre-780; no new fee/catalog, race or full-model result is inherited. |
+| Frozen SN `3388840a` retains `d9d01a6a` earning-identity, bounded read/cause, pure-review and metrics-recovery fixes and adds the reviewed finality/registration children. Core `87e1bf9f` joins upgrade/Close handling and SDK close-frame custody. | Source-only: SN 245-root/119-control and Core 76-root/18-control inventories remain unexecuted and overlap other scopes. Later cause/DNS/close-expiry successors stay separate. No owner 75/model 37 result is inherited; deployed October 6 enforcement remains unproved. |
+| **The fee bridge is now implemented in frozen Server `1ea80fa2` source**, joining independently invoked SN verification, signed exact denomination, idempotent settlement/contradiction holds, seven-original custody, bounded resource reads and actual 780 plus its schema catalog. | Compile and execute the complete public proof/settlement/catalog and causal scopes. Unknown or unmappable contradictory fees retain liability; no default conversion, receipt-status credit or missing-original credit. Independent production authority and actual outcomes remain open. |
+| xops `a1fdda0d` retains **311/311 PASS, zero skips**, published to `origin/main`. Separate source child `2f1043a3` adds a conservation clock-ahead alert and seven Promtool roots (318 declared total). | The 318 child is unexecuted. Future sample time cannot establish freshness; retain the original checkpoint. Actual Grafana/Mimir ingestion, delivery, repair drills and independent controls remain open. |
 
 The complete PH-01–PH-28/MG-01–MG-10 ledger still governs recovery/custody, nonempty ingress-to-payout, native conservation, both validator roles and production rehearsal. October 6 governs new earnings; pre-cutoff USDC obligations remain payable. Preserve 10% provider/90% recycle, owner-local Ledger/no Snow, separate root custody and the closed-testnet exceptions. Earlier dated evidence remains unchanged.
 
@@ -2255,6 +2255,8 @@ authority remain unchanged. Validator, mainnet custom RPC and server receipt
 collection already use separate bounds; WebSocket/IPC, aggregate process memory
 and host capacity are not newly qualified by this change.
 
+The [current source checkpoint](evidence/source-lessons-checkpoint-20261005.json) adds finite inspection of complete physical error graphs, including typed nil, cycles and hard siblings. Legitimate optional DNS causes remain valid. Hard body/Close failures and cancellation survive upgrade fallback, while WebSocket batching stays intact. SDK shutdown retains the same signed close frame until acknowledgement or a joined out-of-band handoff. Separately, economic follow reads can continue after an acknowledged financial checkpoint during a transient metrics-only outage, without publishing success or replaying retained effects. All of these new source paths still require their named normal/race/control qualification.
+
 The [public cross-endpoint readback](evidence/public-cross-endpoint-20261001.md)
 compares Rao archive and the public entrypoint at one pinned finalized block.
 Their genesis, header, runtime version, metadata and `:code` digests match, but
@@ -2268,6 +2270,8 @@ dependency graph while approved mainnet identity is unavailable;
 testnet EVM945 or an unexpected genesis. Both modes keep every action blocked,
 with no apply authority. Supplied review manifests remain unvalidated until
 their actual semantic/capability/custody checks are implemented.
+
+Frozen source SN `d9d01a6a` lets eight pure review modes reach input validation without unrelated daemon durable-volume declarations: `bootstrap plan`; `bootstrap-chain plan`, `contract-plan`, `contract-role-plan`; `bootstrap-contracts plan`/`preview`; and `root-service plan`/`root-passive-service plan`. Explicit inputs and their authority checks still apply. Retained-state and effect commands keep custody admission. Four new public regressions and two controls remain unexecuted.
 
 Keep the executable plan builder pure after authenticated snapshot inputs are supplied.
 Separate chain adapters, signer interfaces, state storage and supervisors so
@@ -2839,7 +2843,7 @@ joined in local deterministic tests. This closes the downstream tuple-only
 history gap without granting writer capability or proving remote delivery,
 original economic authority, mainnet deployment or live approval custody.
 
-No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every mutating command takes an explicit run directory and accepted plan hash. Read-only discovery may run while identity or other gates remain unresolved; executable plans and mutating phases require their actual production prerequisites.
+No implicit apply, automatic subnet creation, private-key CLI flags, “force” bypass, mutable `latest` artifact, or inherited network defaults. Every mutating command takes an explicit run directory and accepted plan hash. Read-only discovery and pure review plans may run while other gates remain unresolved; their explicit input checks still apply. Mutating phases require accepted plans, actual production authority and durable custody.
 
 The canonical plan binds schema and action-format versions; exact config/policy bytes; resolved configuration roots and runtime routes; source/dependency/artifact/binary identities; owned-node and runtime identities; native/EVM snapshot hashes; all public roles; census and reset classifications; actual transaction payloads/origins; expected CREATE addresses and nonces; phase dependencies; validity windows; spend/count caps; and the chosen emission-denominator/remainder policy. Hash canonical bytes with domain separation. The signed authorization names that hash, network, expiry, allowed phases and ceilings. Reject duplicate fields, unknown schema versions, overflow, unexpanded substitutions and ambiguous addresses.
 
@@ -3637,10 +3641,7 @@ approval gates.
 Obtain
 an independently approved mainnet genesis/runtime identity and complete
 SN25 census. Qualify the production source/dependency release with
-the retained R48/R46 lessons, then implement the bootstrap mutation paths and
-separate root-validator service. Resolve the actual reset capability and implement the selected 90% owner-recycle
-policy with the observed 10% native allocation and runtime tolerance, root custody and
-registration protection, real identities and budgets. Install independent
+the retained R48/R46 lessons, then qualify the implemented separate bootstrap, owner-local signing/host submission, passive-root and UR activation paths. The generic combined plan remains blocked. Supply actual reset capability, independent custody, registration protection, identities and budgets, and observe the selected 10% native allocation/90% recycle outcome under the approved runtime tolerance. Existing passive root participation has no periodic root-weight signing requirement; any required registration/stake/basket mutation needs its separate current authority. Install independent
 monitoring, existing-stack alerts, bounded repair authority and the on-call
 runbook before activation. Each unresolved item remains visible in the plan and
 report; the closed testnet effort is not relabeled as a pass.
