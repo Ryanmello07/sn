@@ -128,6 +128,13 @@ func classifyReleaseSnapshotRetryMode(err error, siblingCancellation, legacyText
 // Nil, cyclic and excessive cause trees are hard refusals. No custom Is/As
 // method can turn an opaque error into observed transport authority.
 func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyText, transportOrigin bool, depth int, remaining *int) (bool, bool) {
+	return classifyReleaseRetryBounded(err, siblingCancellation, legacyText, transportOrigin, false, depth, remaining)
+}
+
+// Preparation may admit exact cut leaves alongside transport, but it must
+// inspect each original edge once. A failed transport pass cannot ask a mutable
+// wrapper for a replacement cause in a second cut pass.
+func classifyReleaseRetryBounded(err error, siblingCancellation, legacyText, transportOrigin, preparation bool, depth int, remaining *int) (bool, bool) {
 	if err == nil || depth > 32 || *remaining <= 0 {
 		return false, false
 	}
@@ -142,6 +149,16 @@ func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyT
 	switch err.(type) {
 	case *os.PathError, *os.LinkError, *TrailFatalError:
 		return false, false
+	}
+	if crv4.IsSubstrateReadTransportCause(err) {
+		retryable := crv4.RetryableSubstrateReadTransportError(err)
+		return retryable, retryable
+	}
+	if preparation {
+		switch err {
+		case errAttemptCutPending, errAttemptCutSnapshotStale, errAttemptSettlementSnapshotStale:
+			return true, false
+		}
 	}
 	if err == context.Canceled {
 		return siblingCancellation, false
@@ -171,28 +188,28 @@ func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyT
 			return false, false
 		}
 	case *url.Error:
-		return classifyReleaseSnapshotRetryBounded(cause.Err, siblingCancellation, legacyText, true, depth+1, remaining)
+		return classifyReleaseRetryBounded(cause.Err, siblingCancellation, legacyText, true, preparation, depth+1, remaining)
 	case *net.OpError:
-		return classifyReleaseSnapshotRetryBounded(cause.Err, siblingCancellation, legacyText, true, depth+1, remaining)
+		return classifyReleaseRetryBounded(cause.Err, siblingCancellation, legacyText, true, preparation, depth+1, remaining)
 	case *net.DNSError:
 		if cause.IsNotFound {
 			return false, false
 		}
 		if cause.UnwrapErr != nil {
-			return classifyReleaseSnapshotRetryBounded(cause.UnwrapErr, siblingCancellation, legacyText, true, depth+1, remaining)
+			return classifyReleaseRetryBounded(cause.UnwrapErr, siblingCancellation, legacyText, true, false, depth+1, remaining)
 		}
 		// The standard resolver can report a timeout without an underlying
 		// error. Only this concrete nil-child result grants transport retry.
 		retryable := cause.IsTimeout || cause.IsTemporary
 		return retryable, retryable
 	case *attemptStreamHttpReadError:
-		return classifyReleaseSnapshotRetryBounded(cause.cause, siblingCancellation, legacyText, true, depth+1, remaining)
+		return classifyReleaseRetryBounded(cause.cause, siblingCancellation, legacyText, true, preparation, depth+1, remaining)
 	case *chainRpcMissingResponseError:
-		return classifyReleaseSnapshotRetryBounded(cause.cause, siblingCancellation, legacyText, true, depth+1, remaining)
+		return classifyReleaseRetryBounded(cause.cause, siblingCancellation, legacyText, true, preparation, depth+1, remaining)
 	case *artifactUnavailable:
 		// Its pending projection is not transport authority. Preserve only
 		// the complete cause retained by this package's original reader.
-		return classifyReleaseSnapshotRetryBounded(cause.cause, siblingCancellation, legacyText, transportOrigin, depth+1, remaining)
+		return classifyReleaseRetryBounded(cause.cause, siblingCancellation, legacyText, transportOrigin, preparation, depth+1, remaining)
 	case syscall.Errno:
 		// Standard timeout/temporary errno values retain their taxonomy;
 		// their Is method is not foreign matching authority.
@@ -214,11 +231,17 @@ func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyT
 		return retryable, retryable
 	}
 	if publication, ok := err.(*attemptReplicaPublicationError); ok {
-		return classifyReleaseSnapshotRetryCauses(publication.causes, true, legacyText, transportOrigin, depth+1, remaining)
+		// This owner's sibling cancellation is scoped to actual publication
+		// transport. A preparation cut cannot borrow it as a neutral child.
+		retryable, transient := classifyReleaseRetryCauses(publication.causes, true, legacyText, transportOrigin, false, depth+1, remaining)
+		if preparation {
+			return retryable && transient, transient
+		}
+		return retryable, transient
 	}
 	if incomplete, ok := err.(*attemptStreamHTTPIncompleteError); ok {
 		if incomplete.cause != nil {
-			return classifyReleaseSnapshotRetryBounded(incomplete.cause, siblingCancellation, legacyText, true, depth+1, remaining)
+			return classifyReleaseRetryBounded(incomplete.cause, siblingCancellation, legacyText, true, false, depth+1, remaining)
 		}
 		// Closing an owned sibling after another sibling times out can reach
 		// this exact typed marker before the body observes cancellation. It is
@@ -226,14 +249,14 @@ func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyT
 		return siblingCancellation, false
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		return classifyReleaseSnapshotRetryCauses(joined.Unwrap(), siblingCancellation, legacyText, transportOrigin, depth+1, remaining)
+		return classifyReleaseRetryCauses(joined.Unwrap(), siblingCancellation, legacyText, transportOrigin, preparation, depth+1, remaining)
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
 		cause := wrapped.Unwrap()
 		if cause == nil {
 			return false, false
 		}
-		return classifyReleaseSnapshotRetryBounded(cause, siblingCancellation, legacyText, transportOrigin, depth+1, remaining)
+		return classifyReleaseRetryBounded(cause, siblingCancellation, legacyText, transportOrigin, preparation, depth+1, remaining)
 	}
 	if netErr, ok := err.(net.Error); ok && (netErr.Timeout() || netErr.Temporary()) {
 		return true, true
@@ -281,13 +304,15 @@ func classifyReleaseSnapshotRetryBounded(err error, siblingCancellation, legacyT
 	return false, false
 }
 
-func classifyReleaseSnapshotRetryCauses(causes []error, siblingCancellation, legacyText, transportOrigin bool, depth int, remaining *int) (bool, bool) {
+// Every joined original spends the same allowance and must support the exact
+// mode; a neutral sibling alone never establishes an actual transport failure.
+func classifyReleaseRetryCauses(causes []error, siblingCancellation, legacyText, transportOrigin, preparation bool, depth int, remaining *int) (bool, bool) {
 	if len(causes) == 0 || len(causes) > 128 || len(causes) > *remaining || depth > 32 {
 		return false, false
 	}
 	transient := false
 	for _, cause := range causes {
-		retryable, actualTransient := classifyReleaseSnapshotRetryBounded(cause, siblingCancellation, legacyText, transportOrigin, depth+1, remaining)
+		retryable, actualTransient := classifyReleaseRetryBounded(cause, siblingCancellation, legacyText, transportOrigin, preparation, depth+1, remaining)
 		if !retryable {
 			return false, false
 		}

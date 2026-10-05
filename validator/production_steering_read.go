@@ -133,8 +133,7 @@ func (self *ReleaseSteerer) productionRetainedReadFailure(ctx context.Context, p
 	if !isOwnerRecycleProductionConfig(self.cfg) || err == nil || errors.Is(ctx.Err(), context.Canceled) || !retryableProductionSteeringRead(err) {
 		return err
 	}
-	var retained *productionSteeringReadWait
-	if errors.As(err, &retained) {
+	if retained := releaseErrorMarker[*productionSteeringReadWait](err); retained != nil {
 		return err
 	}
 	result := &productionSteeringReadWait{phase: phase, cause: err}
