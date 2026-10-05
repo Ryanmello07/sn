@@ -48,6 +48,7 @@ fn fixture() -> (Vec<u8>, ProfileProposal) {
             rules: vec![rule],
             metadata_sha256: None,
             principal_storage_prefixes: None,
+            original_globals: Vec::new(),
         },
     };
     (code, proposal)
@@ -236,6 +237,7 @@ fn original_profile_indirect_call_review_binds_table_and_type() {
             source_review_sha256: [29; 32],
             metadata_sha256: None,
             principal_storage_prefixes: None,
+            original_globals: Vec::new(),
             rules: vec![HookRule {
                 purpose: "fee-withdraw".to_owned(),
                 function_index: 1,
@@ -333,6 +335,7 @@ fn original_profile_assembly_preserves_replay_memory_admission() {
                 source_review_sha256: [13; 32],
                 metadata_sha256: None,
                 principal_storage_prefixes: None,
+                original_globals: Vec::new(),
                 rules: vec![HookRule {
                     purpose: "fee-withdraw".to_owned(),
                     function_index: 1,
@@ -357,4 +360,40 @@ fn original_profile_assembly_preserves_replay_memory_admission() {
             "memory shape admitted: {memory}"
         );
     }
+}
+
+#[test]
+fn original_profile_reserved_export_cannot_substitute_for_alias_declaration() {
+    let (_, mut proposal) = fixture();
+    // A separately parsed original has an existing reserved export and the same
+    // function body. That original export cannot bypass alias declarations.
+    let code = wat::parse_str(
+        r#"(module
+        (import "env" "fixture_host" (func $host))
+        (memory (export "memory") 8)
+        (global (export "__heap_base") i32 (i32.const 8192))
+        (global (export "__urnetwork_observe_global_0") i32 (i32.const 32))
+        (func (drop (i32.const 8192)) (call $host) (call $host)))"#,
+    )
+    .unwrap();
+    proposal.profile.runtime_code_sha256 = sha2_256(&code);
+    proposal.profile.rules[0].memory[0].global = Some("__urnetwork_observe_global_0".to_owned());
+    assert!(assemble_profile(&code, &proposal)
+        .unwrap_err()
+        .to_string()
+        .contains("undeclared"));
+    proposal.profile.rules[0].memory[0].global = None;
+    proposal.profile.rules[0].memory[0].repeat = Some(MemoryRepeat {
+        count: MemoryPointer {
+            address: 0,
+            global: Some("__urnetwork_observe_global_0".to_owned()),
+            dereference_offsets: Vec::new(),
+        },
+        maximum: 1,
+        stride: 2,
+    });
+    assert!(assemble_profile(&code, &proposal)
+        .unwrap_err()
+        .to_string()
+        .contains("undeclared"));
 }

@@ -27,6 +27,8 @@ use std::{any::TypeId, collections::BTreeSet, panic::AssertUnwindSafe};
 pub mod capture;
 #[path = "historical_fee_events.rs"]
 pub mod fee_events;
+#[path = "historical_global_alias.rs"]
+pub mod global_alias;
 #[path = "historical_hosts.rs"]
 mod hosts;
 #[path = "historical_observer.rs"]
@@ -318,11 +320,28 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
     let wasm = sp_maybe_compressed_blob::decompress(&code, MAXIMUM_EXPANDED_CODE_BYTES)
         .map_err(|e| ProbeError::new(format!("historical code decompression: {e}")))?;
     memory_bound(&wasm, heap_pages)?;
-    let wrapped = WrappedRuntimeCode(code.as_slice().into());
+    // Original :code was authenticated above. A reviewed export-only view has
+    // its own executor cache identity; it never replaces the job's original.
+    let aliases = job
+        .observation_profile
+        .as_ref()
+        .map(|profile| profile.original_globals.as_slice())
+        .unwrap_or_default();
+    let observed = global_alias::expose(&wasm, aliases)?;
+    let runtime_bytes = if aliases.is_empty() {
+        code.as_slice()
+    } else {
+        observed.as_ref()
+    };
+    let wrapped = WrappedRuntimeCode(runtime_bytes.into());
     let runtime = RuntimeCode {
         code_fetcher: &wrapped,
         heap_pages,
-        hash: job.runtime_code_blake2b_256.to_vec(),
+        hash: if aliases.is_empty() {
+            job.runtime_code_blake2b_256.to_vec()
+        } else {
+            blake2_256(runtime_bytes).to_vec()
+        },
     };
     let observation = job
         .observation_profile

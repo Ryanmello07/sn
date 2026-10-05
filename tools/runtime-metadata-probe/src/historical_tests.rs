@@ -15,6 +15,9 @@ use std::{borrow::Cow, collections::BTreeMap};
 #[path = "historical_capture_tests.rs"]
 mod capture_tests;
 
+#[path = "historical_global_alias_tests.rs"]
+mod global_alias_tests;
+
 #[path = "historical_native_execution_tests.rs"]
 mod native_execution_tests;
 
@@ -244,6 +247,7 @@ fn observation_profile(code: &[u8], export: &str, purpose: &str) -> observer::Ob
         }],
         metadata_sha256: None,
         principal_storage_prefixes: None,
+        original_globals: Vec::new(),
     }
 }
 

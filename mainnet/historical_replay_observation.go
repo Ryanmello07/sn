@@ -24,6 +24,14 @@ type historicalReplayObservationProfile struct {
 	Rules                    []historicalReplayHookRule `json:"rules"`
 	MetadataSha256           *historicalReplayDigest    `json:"metadata_sha256,omitempty"`
 	PrincipalStoragePrefixes []string                   `json:"principal_storage_prefixes,omitempty"`
+	OriginalGlobals          []historicalOriginalGlobal `json:"original_globals,omitempty"`
+}
+
+// The engine may expose only these existing globals to its read-only host.
+// It verifies export-only transformation before assigning a distinct cache key.
+type historicalOriginalGlobal struct {
+	GlobalIndex uint32 `json:"global_index"`
+	ExportName  string `json:"export_name"`
 }
 
 type historicalReplayHookRule struct {
@@ -169,6 +177,9 @@ func (self *historicalReplayObservationProfile) validate(job historicalReplayJob
 	}
 	if self.PrincipalStoragePrefixes != nil && self.Schema != historicalNativeProfileSchema {
 		return errors.New("principal storage scope requires native profile")
+	}
+	if err := self.validateOriginalGlobals(); err != nil {
+		return err
 	}
 	for index, rule := range self.Rules {
 		if !(historicalReplayPurpose(rule.Purpose) || self.Schema == historicalNativeProfileSchema && historicalNativePurpose(rule.Purpose)) || rule.FunctionBodySha256 == (historicalReplayDigest{}) || rule.OffsetStart >= rule.OffsetEnd {

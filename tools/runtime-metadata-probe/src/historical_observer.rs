@@ -31,8 +31,8 @@ pub struct HookRule {
 
 /// An admitted original callsite supplies the layout, never the captured bytes.
 /// Address arithmetic and every pointer read are checked against actual memory.
-/// Existing exported globals can anchor a reviewed stack layout; no export or
-/// original Wasm instruction is added to make a profile work.
+/// Existing exported globals or explicitly declared export-only aliases can
+/// anchor a reviewed layout; no original Wasm instruction or global is added.
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MemoryCapture {
@@ -130,6 +130,8 @@ pub struct ObservationProfile {
     pub metadata_sha256: Option<[u8; 32]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub principal_storage_prefixes: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub original_globals: Vec<super::global_alias::OriginalGlobal>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -285,9 +287,48 @@ impl HistoricalObserver {
                 principal_prefixes.push(prefix);
             }
         }
+        for capture in profile.rules.iter().flat_map(|rule| &rule.memory) {
+            for global in [
+                capture.global.as_ref(),
+                capture
+                    .repeat
+                    .as_ref()
+                    .and_then(|repeat| repeat.count.global.as_ref()),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if global.starts_with("__urnetwork_observe_global_")
+                    && !profile
+                        .original_globals
+                        .iter()
+                        .any(|alias| alias.export_name == *global)
+                {
+                    return Err(ProbeError::new("original capture alias is undeclared"));
+                }
+            }
+        }
+        for alias in &profile.original_globals {
+            let used = profile
+                .rules
+                .iter()
+                .flat_map(|rule| &rule.memory)
+                .any(|capture| {
+                    capture.global.as_ref() == Some(&alias.export_name)
+                        || capture.repeat.as_ref().is_some_and(|repeat| {
+                            repeat.count.global.as_ref() == Some(&alias.export_name)
+                        })
+                });
+            if profile.schema != "urnetwork-original-wasm-native-observation-v2" || !used {
+                return Err(ProbeError::new(
+                    "original global alias requires an exact native capture use",
+                ));
+            }
+        }
+        let observed = super::global_alias::expose(wasm, &profile.original_globals)?;
         let original = bodies(wasm)?;
         let mut normalized =
-            sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(wasm)
+            sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(&observed)
                 .map_err(|e| ProbeError::new(format!("observer SDK runtime normalization: {e}")))?;
         normalized
             .convert_memory_import_into_export()

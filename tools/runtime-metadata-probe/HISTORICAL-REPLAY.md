@@ -158,3 +158,21 @@ Original economic call ranges and layouts, complete principal storage/cause
 coverage, original-block replay and independent signed producer authority are
 still required before production observations can be admitted. No synthetic
 fixture address or whole-function name match substitutes for those inputs.
+
+A profile may now explicitly declare up to four `original_globals`, appended to
+its existing JSON field order. Each entry has `global_index` and the exact name
+`__urnetwork_observe_global_INDEX`; indices must be increasing. The engine
+permits only a defined original i32 global and an unused export name. It appends
+that export while proving every non-export section byte-identical and every
+original export unchanged and in order. Its execution-cache key hashes this
+export view, separately from the authenticated original `:code` and job hashes.
+The observer only reads the alias. Empty declarations preserve old wire bytes
+and the old executor identity. Capture and strict replay still require the same
+complete post-state result.
+
+This makes a reviewed original stack global accessible without inserting or
+changing instructions. It does not identify a selected caller's stack frame:
+a layout must account for the actual nested-call frames at that exact original
+host call. The focused Wasmtime regression checks a precise decoded call range
+and live original memory; actual runtime473 ranges and field layouts remain a
+separate review and execution obligation.

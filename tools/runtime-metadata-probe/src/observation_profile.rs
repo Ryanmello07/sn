@@ -412,12 +412,19 @@ fn inspect_with_limits(
     })
 }
 
-fn validate_global(global: &Option<String>, inspection: &Inspection) -> Result<(), ProbeError> {
+fn validate_global(
+    global: &Option<String>,
+    inspection: &Inspection,
+    profile: &ObservationProfile,
+) -> Result<(), ProbeError> {
     if let Some(name) = global {
         if !inspection.globals.iter().any(|global| {
             global.value_type == format!("{:?}", ValType::I32)
                 && !global.imported
-                && global.exports.contains(name)
+                && (global.exports.contains(name)
+                    || profile.original_globals.iter().any(|alias| {
+                        alias.global_index == global.index && alias.export_name == *name
+                    }))
         }) {
             return Err(ProbeError::new(
                 "capture base is not an original defined exported i32 global",
@@ -427,11 +434,15 @@ fn validate_global(global: &Option<String>, inspection: &Inspection) -> Result<(
     Ok(())
 }
 
-fn validate_memory(memory: &[MemoryCapture], inspection: &Inspection) -> Result<(), ProbeError> {
+fn validate_memory(
+    memory: &[MemoryCapture],
+    inspection: &Inspection,
+    profile: &ObservationProfile,
+) -> Result<(), ProbeError> {
     for capture in memory {
-        validate_global(&capture.global, inspection)?;
+        validate_global(&capture.global, inspection, profile)?;
         if let Some(repeat) = &capture.repeat {
-            validate_global(&repeat.count.global, inspection)?;
+            validate_global(&repeat.count.global, inspection, profile)?;
         }
     }
     Ok(())
@@ -492,7 +503,7 @@ pub fn assemble_profile(code: &[u8], proposal: &ProfileProposal) -> Result<Vec<u
                 "profile instruction boundary, original body or complete call review differs",
             ));
         }
-        validate_memory(&rule.memory, &inspection)?;
+        validate_memory(&rule.memory, &inspection, &proposal.profile)?;
     }
     let wasm =
         sp_maybe_compressed_blob::decompress(code, MAXIMUM_EXPANDED_BYTES).map_err(parse_error)?;
