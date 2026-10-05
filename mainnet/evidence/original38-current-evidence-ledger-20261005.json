@@ -358,20 +358,86 @@
     }
   ],
   "confirmed_current_implementation_work": {
-    "classification": "SUPPORTED_EXPORTER_AND_STATUS_IMPLEMENTATION_GAP",
-    "current_metrics_source": {
-      "blob": "61c8ea59c1bdd05f79a3da0869cbc1c9b0da96b4",
-      "commit": "f9df3d52ca92df123fdf7007264bfdd4384b6b78",
-      "path": "mainnet/economic_conservation_metrics.go",
-      "sha256": "87b6d62e6f03cd4dcc67e74140bcd359a2d417714ed7fc8565e7c171daf7483e"
+    "classification": "SUPPORTED_OBSERVER_AND_DASHBOARD_SOURCE_IMPLEMENTED_UNQUALIFIED",
+    "consumer": {
+      "intake": {
+        "bytes": 13215,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261004/domain-dashboard-ph15-9a37239e-intake.json",
+        "sha256": "207e209de3884127533339456ca95b135bc279b501d57d8ae359ffa8f471b621"
+      },
+      "main": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f",
+      "prior_conservation33_evidence_preserved": {
+        "control_pass": 1,
+        "fail": 0,
+        "receipt": {
+          "bytes": 32800,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/final482050-main-xops-control1-conservation33-v3.receipt.json",
+          "sha256": "12f8057abd7f8d31eee68a08819066bf1043d1be2e03575329e0014fa5b54f04"
+        },
+        "resource_errors": [],
+        "scope": "Original482 source only; does not qualify new provider/progress consumers.",
+        "skip": 0,
+        "status": "PASS_MAIN_CONTROL1_AND33_NO_SKIPS",
+        "suite_pass": 33,
+        "test_invocations": 34,
+        "unchanged_components": [
+          {
+            "blob": "3ccac78e8487583d65927610760fd1d5aaad63cc",
+            "equal_to_commit": "482050c3194412b620940d22d87acc00a91847b2",
+            "path": "main/ansible/files/sn-mainnet-monitor/deployment.py"
+          },
+          {
+            "blob": "51fcb784a5900277c6e8843865547dcf37cd9457",
+            "equal_to_commit": "482050c3194412b620940d22d87acc00a91847b2",
+            "path": "main/ansible/tests/test_sn_mainnet_monitor_conservation.py"
+          }
+        ],
+        "unique_roots": 33
+      },
+      "required_environment": {
+        "SN_MAINNET_PROMTOOL": "/mnt/data/sn-testnet/mainnet-monitor-deployment-20261002/tools/promtool",
+        "SN_MAINNET_SOURCE": "Git repository containing exact producer624cf1e00f45dac61bc5675e4a21eb2a8dd121e5"
+      },
+      "selected_test_ids": [
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_all_original_dashboard_queries_parse_in_prometheus",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_backlog_survives_source_loss_while_measured_progress_is_unknown",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_caught_up_zero_estimate_does_not_manufacture_a_measurement_rate",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_progress_guard_removal_exposes_unknown_estimate_or_zero_rate",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_progress_values_cannot_borrow_peer_known_flags",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_provider_absent_census_and_each_unknown_value_stay_blank",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_provider_and_progress_require_a_current_complete_sample",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_provider_guard_removal_exposes_an_unadmitted_zero",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_provider_partial_coverage_and_known_zero_retain_their_original_values",
+        "test_sn_mainnet_dashboard.MainnetDashboardPromqlTests.test_rate_interval_requires_its_two_positive_observations",
+        "test_sn_mainnet_dashboard.MainnetDashboardSourceTests.test_every_queried_metric_has_an_original_public_producer",
+        "test_sn_mainnet_dashboard.MainnetDashboardTests.test_export_matches_closed_metric_contract_and_keeps_all_fourteen_chain_gauges"
+      ],
+      "status": "UNEXECUTED",
+      "targeted_tests": 12,
+      "tree": "860774c4594761e42a6efe910051eeffac0e2ee6"
     },
-    "finding": "Existing36 conservation gauges do not expose complete reliability/provider-window coverage and conservation progress/ETA. Monitoring and Dashboard are implementing truthful supported status; unavailable facts must stay unknown and cannot imply financial authority.",
-    "future_scope": "Add actual authored roots/controls when source freezes; no speculative count or pass.",
-    "owners": [
-      "/root/astra_monitoring_operations",
-      "/root/astra_domain_dashboard"
-    ],
-    "state": "IN_PROGRESS_UNFROZEN_UNQUALIFIED"
+    "limit": "The narrow supported-observer gap is implemented. Full PH15 is not declared complete, and unsupported facts do not become authority.",
+    "producer": {
+      "causal_controls": "4_GROUPS_UNEXECUTED",
+      "commit": "624cf1e00f45dac61bc5675e4a21eb2a8dd121e5",
+      "intake": {
+        "bytes": 5429,
+        "path": "/mnt/data/urnetwork/astra-monitoring-operations-20261005/ph15-status-evidence/INTAKE.json",
+        "sha256": "c84b25f6071c948b722bf2b631e233ae2b941ff63e96c7f3ecd03b299165a853"
+      },
+      "merged_sn_main": "dddd686da6bcd66598f27c5176b406387fda1750",
+      "new_coverage_progress_gauges": 36,
+      "normal": "UNEXECUTED",
+      "old_financial_gauges_preserved": 36,
+      "race": "UNEXECUTED",
+      "status_output": "operational_progress after original durable acknowledgment",
+      "total_fixed_gauges": 72
+    },
+    "remaining_original_ph15": [
+      "Normal/race and original four producer control executions; twelve targeted consumer tests with real Promtool/source gates.",
+      "Other owners actual submission/finalization receipts and durable incident recurrence/resolution histories.",
+      "Original provider/window inputs, deployed measured rates, collector/receiver ingestion, on-call delivery and outage/deadlock rehearsals."
+    ]
   },
   "conservative_source_limit_not_new_defect": {
     "classification": "HONEST_UNKNOWN_WITH_NO_CURRENT_AUTHORIZING_CANCELLATION_OPERATION",
@@ -384,9 +450,9 @@
     }
   },
   "controls_preservation_and_delta": {
-    "bytes": 37699,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/control-catalog-addendum.json",
-    "sha256": "67d952e271791e6b7d4ebfe60fe9fc15322347fcd1f622ffd7627937fd178f25"
+    "bytes": 41779,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/control-catalog-addendum.json",
+    "sha256": "4dc8aa2ee0e1637dcbf3d3dc484121cc24e10800bc94949d670acfcdf2e9a4c7"
   },
   "corrected_failures_not_reopened_as_code_bugs": [
     "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
@@ -419,24 +485,32 @@
       "run": 113,
       "skip": 0
     },
-    "additive_control_groups": 32,
-    "current_go_roots_per_mode": 2733,
+    "additive_control_groups": 36,
+    "current_go_roots_per_mode": 2755,
+    "current_mainnet_roots_per_mode": 292,
     "current_server_full_model": 1865,
+    "current_sn_roots_per_mode": 498,
     "original_native_overlap_with_prior2637": 0,
     "original_requirements": 38,
     "outcomes_closed": 0,
     "pending_native86_originals": 0,
+    "ph15_consumer_python_roots_unrun": 12,
+    "ph15_existing_neighbors_not_recounted": 10,
+    "ph15_new_go_roots": 17,
+    "ph15_restored_existing_go_roots": 5,
+    "ph15_targeted_producer_roots": 32,
     "ready_native86_originals": 38,
     "ready_native86_profiles": 9,
     "restored_original_native_roots_per_mode": 86,
     "retained_control_groups": 227,
     "rows_demonstrated_to_have_only_deployment_work_left": 0,
-    "source_catalog_control_groups": 259
+    "source_catalog_control_groups": 263
   },
   "current_default_product_tuple": {
     "connect": "026b850248352b72255be7a966e391e0a15e74c1",
     "server": "d64c9beb49a8637ce753103e9ea34521cc55f597",
-    "sn": "5b873c942c57ff2a47ad9a896a529bf59e9ec5e6"
+    "sn": "dddd686da6bcd66598f27c5176b406387fda1750",
+    "xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
   },
   "current_portable_evidence": {
     "bytes": 41675,
@@ -453,9 +527,9 @@
     "After authorized activation: three complete native emission intervals and one full50400-block UR settlement/claim cycle."
   ],
   "latest_checkpoint": {
-    "bytes": 20440,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-complete-checkpoint/server8-and-native113-progress-20261005.json",
-    "sha256": "b815a104ddd5af61fa8ec1fb0a6201bf407a351cf55e92a05afa07a4e07a2dd5"
+    "bytes": 6027,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/ph15-source-implementation-and-scope-20261005.json",
+    "sha256": "25f139de56c4103db606a3aed406defc1cb6d102cdef6b21f88f67424fe7e074"
   },
   "native86_asset_mapping": {
     "map": {
@@ -500,6 +574,11 @@
     "bytes": 75710,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261004/sol-final-coverage-audit-20261004.json",
     "sha256": "12cdefbefbe1b671da91c2e27350e8bcda2af7c53fa231083c671fe8729d7559"
+  },
+  "prior_checkpoint_preserved": {
+    "bytes": 20440,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-complete-checkpoint/server8-and-native113-progress-20261005.json",
+    "sha256": "b815a104ddd5af61fa8ec1fb0a6201bf407a351cf55e92a05afa07a4e07a2dd5"
   },
   "prior_failure_classification_preserved": [
     {
@@ -663,10 +742,10 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/nativefee-main9-to-default-current-applicability.json",
     "sha256": "60de07a44585f9ea32d1641514203bf35cab4e615216ce0fb930cb982b48f493"
   },
-  "reviewed_documentation_commit": "f9df3d52ca92df123fdf7007264bfdd4384b6b78",
+  "reviewed_documentation_commit": "dddd686da6bcd66598f27c5176b406387fda1750",
   "rows": [
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -692,7 +771,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -719,7 +798,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -745,7 +824,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -779,7 +858,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -805,7 +884,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -834,7 +913,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -860,7 +939,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -886,7 +965,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -912,7 +991,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -946,7 +1025,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -990,7 +1069,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1034,7 +1113,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1065,7 +1144,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1085,7 +1164,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1094,14 +1173,19 @@
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Alert delivery/on-call and measured work-rate ETA.",
       "id": "PH-15",
-      "implementation": "Existing36 conservation gauges, other chain/controller metrics and dashboard/rules exist. Supported reliability/provider-window coverage and conservation progress/ETA are not yet fully exposed; Monitoring and Dashboard own the narrow implementation.",
-      "known_source_or_composition_limit": "Truthful supported exporter/status coverage is a confirmed implementation gap. Unavailable facts remain unknown; new values must not create financial authority or imply live readiness.",
+      "implementation": "Merged SN624 producer and Xops9a37239 consumer implement supported provider/window coverage and acknowledged conservation progress/ETA. The original36 financial gauges remain, with36 new fixed scalars and operational_progress JSON. Source is implemented but unqualified; local observed cadence and target-only ETA do not create future/repair estimates or financial authority.",
+      "known_source_or_composition_limit": "No remaining source defect is asserted for the narrow merged extension. Its current normal/race/control and consumer tests are unrun. Full PH15 other-owner status/history and live evidence remain separate obligations.",
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Published xops482 conservation33/33 PASS plus separate control invocation; prior311 retained. Current Go producer/monitor/repair normal remains pending.",
+      "normal": "Original Xops482 conservation33/33 PASS plus separate control invocation and prior311 remain retained. New PH15 producer32 and consumer12 are UNEXECUTED; prior conservation success does not qualify the new consumers.",
       "original_complete_requirement": "Complete status domains, truthful progress/ETA, independent missing-host detection and observed operational signals.",
       "outcome_complete": false,
-      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Finish and freeze the narrow metrics/status change, append its actual roots/controls, and qualify current normal/race/exporter/dashboard behavior. Live ingestion/alert delivery and measured ETA remain separate.",
+      "ph15_source_and_scope": {
+        "bytes": 6027,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/ph15-source-implementation-and-scope-20261005.json",
+        "sha256": "25f139de56c4103db606a3aed406defc1cb6d102cdef6b21f88f67424fe7e074"
+      },
+      "race": "PH15 producer32 current race qualification is UNEXECUTED; prior component race receipts retain their original scopes.",
+      "remaining_software_evidence": "Execute all32 selected PH15 producer roots per normal/race mode, four operative control groups, and twelve targeted Xops consumer tests with actual source/Promtool prerequisites. Preserve other owners transaction/finalization and incident-history requirements; live ingestion/on-call delivery and measured operational rates remain separate.",
       "required_outcome": "Status/operations: actionable failure classes, progress and evidence-based ETA",
       "retained_component_evidence": {
         "bytes": 1968,
@@ -1112,7 +1196,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1142,7 +1226,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1168,7 +1252,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1194,7 +1278,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1228,7 +1312,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1254,7 +1338,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1280,7 +1364,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1306,7 +1390,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1332,7 +1416,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1358,7 +1442,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1393,7 +1477,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1413,7 +1497,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1433,7 +1517,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1460,7 +1544,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1480,7 +1564,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1510,7 +1594,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1536,7 +1620,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1564,7 +1648,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1584,7 +1668,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1628,7 +1712,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1655,7 +1739,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1681,7 +1765,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1707,7 +1791,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment,21 restored native Go and4 PH15 groups remain required (263 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1737,7 +1821,7 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v7",
+  "schema": "original38-current-evidence-ledger-v8",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
@@ -1812,14 +1896,32 @@
         "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification34-v1.stderr",
         "sha256": "3ff34b9a662b7067e083d537669f1cdfe2ff2cc0026b5b4d55a90edde17b1078"
       }
+    },
+    {
+      "causal_controls": "UNEXECUTED",
+      "component": "PH15 supported observer and dashboard",
+      "consumer_python_targeted_roots": 12,
+      "controls": 4,
+      "evidence": {
+        "bytes": 6027,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/ph15-source-implementation-and-scope-20261005.json",
+        "sha256": "25f139de56c4103db606a3aed406defc1cb6d102cdef6b21f88f67424fe7e074"
+      },
+      "normal": "UNEXECUTED",
+      "producer_new_roots": 17,
+      "producer_preselected_neighbors": 10,
+      "producer_restored_existing_roots": 5,
+      "producer_selected_roots": 32,
+      "race": "UNEXECUTED",
+      "status": "MERGED_SOURCE_IMPLEMENTED_UNQUALIFIED"
     }
   ],
   "source_selection": {
-    "bytes": 2148,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/HANDOFF.json",
-    "sha256": "61b549493116ec3b123138907422757625e1e2b581e447502f94465b719338c7"
+    "bytes": 2109,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-dddd-ph15/SCOPE-HANDOFF.json",
+    "sha256": "dab70e37f307df0f8793d2fd95deea25961f435ce31b925a92359b862544ec11"
   },
-  "status": "All38 original outcomes remain open. Eight normal Server compilers actually pass on frozen f0b/026/983 with joined waits and protected images; their bodies/race/controls and later payment graph remain separate. Full Rust113 including ignored roots actually passes113/113 with zero failures/skips/not-run,61 exports and closed outer process. All9 native fixture profiles/38 originals are ready; original Rust controls and current Go native86 consumers remain unqualified. PH13 canceled attribution remains honestly unknown without an authorizer; PH15 supported exporter/status implementation is in progress. Preserve2733 Go roots per mode and259 source controls plus retained component results.",
+  "status": "All38 original outcomes remain open. Eight normal Server compilers actually pass on frozen f0b/026/983 with joined waits and protected images; their bodies/race/controls and later payment graph remain separate. Full Rust113 including ignored roots actually passes113/113 with zero failures/skips/not-run,61 exports and closed outer process. All9 native fixture profiles/38 originals are ready; original Rust controls and current Go native86 consumers remain unqualified. PH13 canceled attribution remains honestly unknown without an authorizer; PH15 supported observer/exporter and dashboard source is merged and unqualified. Preserve original2733 Go roots and259 controls;17 new roots plus5 previously omitted existing neighbors give2755 Go roots per mode, and4 new controls give263 source groups. Retained component receipts do not qualify these changes.",
   "supersedes": {
     "bytes": 124390,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",
