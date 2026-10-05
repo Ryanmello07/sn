@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/validator"
 )
 
@@ -32,13 +33,14 @@ type nativeTreasuryDeployment struct {
 // The native approver pins the independently signed economic approval bytes.
 // Public policy verification does not grant validator transaction authority.
 type nativeTreasuryAuthority struct {
-	Schema         string                   `json:"schema"`
-	Policy         validator.TreasuryPolicy `json:"public_policy"`
-	PolicyHash     [32]byte                 `json:"public_policy_hash"`
-	ApprovalSigner [32]byte                 `json:"economic_approval_signer"`
-	ApprovalHash   string                   `json:"economic_approval_hash"`
-	Approval       []byte                   `json:"original_signed_economic_approval"`
-	Deployment     nativeTreasuryDeployment `json:"economic_deployment"`
+	MigrationComplete *safeCurrentStorageWitness `json:"migration_complete,omitempty"`
+	Schema            string                     `json:"schema"`
+	Policy            validator.TreasuryPolicy   `json:"public_policy"`
+	PolicyHash        [32]byte                   `json:"public_policy_hash"`
+	ApprovalSigner    [32]byte                   `json:"economic_approval_signer"`
+	ApprovalHash      string                     `json:"economic_approval_hash"`
+	Approval          []byte                     `json:"original_signed_economic_approval"`
+	Deployment        nativeTreasuryDeployment   `json:"economic_deployment"`
 }
 
 // Legacy signatures cannot silently enroll a treasury through an optional field.
@@ -68,6 +70,9 @@ func (self *nativeTreasuryAuthority) validate() error {
 	if self.Deployment.ConfigHash == ([32]byte{}) || self.Deployment.ConfigHash != approval.ConfigHash || self.Deployment.ParentPolicyHash == ([32]byte{}) || self.Deployment.ParentPolicyHash != approval.Proposal.ParentPolicyHash || self.Deployment.PolicyId != approval.Proposal.PolicyId || self.Deployment.EffectiveEpoch != approval.Proposal.EffectiveEpoch || self.Deployment.Activation.Number != activation || self.Deployment.Activation.Hash != fmt.Sprintf("0x%x", approval.Production.ActivationNativeHash) || !rootCanonicalHash(self.Deployment.Activation.Hash) || approval.ValidFromNativeBlock > approval.ValidThroughNativeBlock || activation > approval.ValidFromNativeBlock || approval.FirstNativeEpoch > approval.Production.ValidThroughNativeEpoch {
 		return errors.New("native treasury original economic deployment or activation window differs")
 	}
+	if err := self.validateMigration(approval.Proposal.Runtime); err != nil {
+		return err
+	}
 	hash, err := self.Policy.Hash()
 	if err != nil || hash != self.PolicyHash {
 		return errors.Join(errors.New("native treasury public policy hash differs"), err)
@@ -78,7 +83,11 @@ func (self *nativeTreasuryAuthority) validate() error {
 // Runtime renewal cannot infer a new source capability from its version number.
 func nativeExecutionRuntimeSource(treasury *nativeTreasuryAuthority) string {
 	if treasury != nil {
-		return nativeTreasuryRuntimeSource
+		envelope, err := validator.VerifyTreasuryApproval(treasury.Approval, treasury.ApprovalSigner, treasury.ApprovalHash)
+		if err != nil || envelope == nil || !crv4.ReviewedNativeOwnerSource(envelope.Approval.Proposal.Runtime.SourceCommit) {
+			return ""
+		}
+		return envelope.Approval.Proposal.Runtime.SourceCommit
 	}
 	return frontierMappingSourceCommit
 }
@@ -97,7 +106,7 @@ func (self *nativeTreasuryAuthority) validateScope(policy economicEmissionPolicy
 		return err
 	}
 	approval, runtime := envelope.Approval, envelope.Approval.Proposal.Runtime
-	if approval.NativeChain != policy.Network.NativeChain || fmt.Sprintf("0x%x", runtime.GenesisHash) != policy.Network.GenesisHash || runtime.Netuid != policy.Netuid || runtime.SourceCommit != nativeTreasuryRuntimeSource || runtime.SourceCommit != policy.Runtime.RuntimeSourceCommit || runtime.Version != policy.Runtime.RuntimeVersion || fmt.Sprintf("0x%x", runtime.CodeHash) != policy.Runtime.RuntimeCodeHash || fmt.Sprintf("0x%x", runtime.MetadataHash) != policy.Runtime.RuntimeMetadataHash || policy.From.Number < self.Deployment.Activation.Number || policy.From.Number == self.Deployment.Activation.Number && policy.From.Hash != self.Deployment.Activation.Hash || boundary.Number < approval.ValidFromNativeBlock || boundary.Number > approval.ValidThroughNativeBlock || uint32(policy.MaximumUids) > approval.MaximumSubnetUids {
+	if approval.NativeChain != policy.Network.NativeChain || fmt.Sprintf("0x%x", runtime.GenesisHash) != policy.Network.GenesisHash || runtime.Netuid != policy.Netuid || !crv4.ReviewedNativeOwnerSource(runtime.SourceCommit) || runtime.SourceCommit != policy.Runtime.RuntimeSourceCommit || runtime.Version != policy.Runtime.RuntimeVersion || fmt.Sprintf("0x%x", runtime.CodeHash) != policy.Runtime.RuntimeCodeHash || fmt.Sprintf("0x%x", runtime.MetadataHash) != policy.Runtime.RuntimeMetadataHash || policy.From.Number < self.Deployment.Activation.Number || policy.From.Number == self.Deployment.Activation.Number && policy.From.Hash != self.Deployment.Activation.Hash || boundary.Number < approval.ValidFromNativeBlock || boundary.Number > approval.ValidThroughNativeBlock || uint32(policy.MaximumUids) > approval.MaximumSubnetUids {
 		return errors.New("native treasury approval belongs to another runtime, deployment or native block window")
 	}
 	if epoch != nil && (*epoch < approval.FirstNativeEpoch || *epoch > approval.Production.ValidThroughNativeEpoch) {
@@ -349,6 +358,9 @@ func validateNativeTreasuryPrincipal(authority *nativeTreasuryAuthority, princip
 	}
 	if principal == nil || principal.Effects == nil || principal.Availability == nil {
 		return errors.New("native treasury requires original stake availability and complete stake causes")
+	}
+	if authority.MigrationComplete != nil && principal.Parent != authority.Deployment.Activation {
+		return errors.New("native treasury principal opening differs from its original migration-complete activation")
 	}
 	hotkeys := nativeTreasuryPrincipalHotkeys(authority.Policy)
 	for _, query := range principal.Queries {

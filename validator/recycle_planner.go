@@ -62,7 +62,7 @@ func (self OwnerRecycleProposal) Validate(parent protocol.Policy) error {
 	}
 	if self.Schema == TreasuryProposalSchema {
 		if self.Treasury == nil || self.Remainder != "ordinary_treasury_credit" || self.OwnerAllocation != "equal_exact_registered" ||
-			self.Treasury.MaxWeightLimitU16 != parent.Steering.MaxWeightLimitU16 || self.Runtime.SourceCommit != ownerRecycleSourceCommit470 {
+			self.Treasury.MaxWeightLimitU16 != parent.Steering.MaxWeightLimitU16 || !crv4.ReviewedNativeOwnerSource(self.Runtime.SourceCommit) {
 			return errors.New("treasury proposal requires its complete public policy, ordinary credit source and unchanged cap")
 		}
 		if err := self.Treasury.Validate(); err != nil {
@@ -75,7 +75,7 @@ func (self OwnerRecycleProposal) Validate(parent protocol.Policy) error {
 		return errors.New("economic successor requires exactly one tenth provider allocation")
 	}
 	if self.Runtime.GenesisHash == ([32]byte{}) || self.Runtime.CodeHash == ([32]byte{}) || self.Runtime.MetadataHash == ([32]byte{}) || self.Runtime.Netuid != 25 ||
-		self.Runtime.SourceCommit != ownerRecycleSourceCommit && self.Runtime.SourceCommit != ownerRecycleSourceCommit470 {
+		self.Runtime.SourceCommit != ownerRecycleSourceCommit && !crv4.ReviewedNativeOwnerSource(self.Runtime.SourceCommit) {
 		return errors.New("owner-recycle requires nonzero network/artifact pins, netuid 25 and the exact reviewed source profile")
 	}
 	version := self.Runtime.Version

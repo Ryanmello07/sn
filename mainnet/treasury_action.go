@@ -117,10 +117,10 @@ func (self treasuryConfig) validate(key string) error {
 	return nil
 }
 
-// Independent chain pins admit precisely the reviewed runtime470 codec.
+// Independent chain pins select an exact artifact with reviewed owner semantics.
 func (self treasuryChainPolicy) validate() error {
-	if strings.TrimSpace(self.NativeChain) == "" || self.EvmChainId != mainnetEvmChainId || self.RuntimeSourceCommit != rootPassiveSource || self.RuntimeVersion.SpecName != "node-subtensor" || self.RuntimeVersion.SpecVersion != 470 || self.RuntimeVersion.TransactionVersion != 1 || self.RuntimeVersion.StateVersion != 1 {
-		return errors.New("treasury requires reviewed native runtime470 source and mainnet chain identity")
+	if strings.TrimSpace(self.NativeChain) == "" || self.EvmChainId != mainnetEvmChainId || !nativeOwnerRuntimeProfile(self.rootReceiptProfile) {
+		return errors.New("treasury requires reviewed native owner capabilities and exact mainnet runtime identity")
 	}
 	for _, hash := range []string{self.GenesisHash, self.RuntimeCodeHash, self.RuntimeMetadataHash} {
 		if !rootCanonicalHash(hash) {
