@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
