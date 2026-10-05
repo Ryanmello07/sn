@@ -79,20 +79,25 @@ func TestAdjacentHeaderUploadRejectsCanonicalSwitch(t *testing.T) {
 			client := native.API.Client.(*validatorRuntimeIdentityTestClient)
 			original := client.callContext
 			reads := 0
+			timestampRead := false
 			client.callContext = func(ctx context.Context, result any, method string, args ...any) error {
 				if method == "chain_getBlockHash" && len(args) == 1 && args[0] == uint64(150) {
 					reads++
-					if !closing || reads == 2 {
+					if !closing || timestampRead {
 						return setReleaseHistoricalTestResult(result, types.Hash{0xee}.Hex())
 					}
 				}
-				return original(ctx, result, method, args...)
+				err := original(ctx, result, method, args...)
+				if err == nil && method == "state_getStorage" {
+					timestampRead = true
+				}
+				return err
 			}
 			got, err := ValidatorUploadNativeObserverContext(t.Context(), native, owner.config.Deployment)
 			if err == nil || got != (ValidatorUploadNativeObserver{}) {
 				t.Fatalf("upload retained canonical switch warm=%t closing=%t: %+v %v", warm, closing, got, err)
 			}
-			if closing && reads != 2 {
+			if closing && (!timestampRead || reads != 3) {
 				t.Fatalf("closing control did not reach both canonical reads: %d %v", reads, err)
 			}
 		}
