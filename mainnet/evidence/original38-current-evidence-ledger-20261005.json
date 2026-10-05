@@ -4,6 +4,340 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/final-status-v4/actual-results-addendum-v3.json",
     "sha256": "aa99ec67cf946c9329ee2236e3f3d615a44ce11d01afbbe6166f1d83937746b0"
   },
+  "actual_rust113_full_suite": {
+    "actual_command": [
+      "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/main-b13-renewal-normal-libtest-v1",
+      "--include-ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "adoption": {
+      "bytes": 3922,
+      "path": "/home/by/urnetwork/sn/mainnet/evidence/future108-main-b13-full113-body-adoption-v1-20261005.json",
+      "sha256": "24c03c901202389ada256bc08fd3210709db93c930088d2e1b66fea3f04d75fa"
+    },
+    "controls_passes_inferred": 0,
+    "fresh_list_matches_original_expected_roots": true,
+    "fresh_list_roots": 113,
+    "full_body_intent": {
+      "bytes": 2083,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1-02.intent.json",
+      "sha256": "b0e5b157a0d2f51d5f7dc7f518d04e171e9b377138b1b2a6fd275d0600859927"
+    },
+    "go_native86_passes_inferred": 0,
+    "job": {
+      "bytes": 129704,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-job-v1.json",
+      "sha256": "49b8ff7903e9009eefc898e8b0fc701e9fa5b7be98492ff5e31d0af75e20bb96"
+    },
+    "launch_intent": {
+      "bytes": 37135,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.intent.json",
+      "sha256": "e8704c69b8ec9f6f42260680003d054867e91f1dad5f2923801f204be6ae1748"
+    },
+    "launch_observation_preserved": {
+      "authority": "Actual launch confirmed by Root and sole executor; body command intent retained.",
+      "invocation": "9fa10eddcea6461cad1f7c308342074a",
+      "main_pid": 3563554,
+      "unit": "sn-main-b13-full113-body-v1-20261005.service"
+    },
+    "original_controls": "Original7 Rust control groups remain separately required. Corrected renewal omission result is separately retained; it does not qualify all7.",
+    "outer_terminal": {
+      "active_state": "inactive",
+      "exit": 0,
+      "main_pid": 0,
+      "sub_state": "dead"
+    },
+    "phases": [
+      {
+        "classification": "PASS_LIST",
+        "exit": 0,
+        "operation": "list",
+        "receipt": {
+          "bytes": 14784,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1-01.receipt.json",
+          "sha256": "3158a89a77465b3deecd4cf9248b25edced5104d1201fc11676ba0ac4aa186e1"
+        },
+        "tree_joined": true,
+        "wait": {
+          "bytes": 2032,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1-01.process-result.json",
+          "sha256": "b97ec1f59593302c2d5cf1dded35d6c0d765c4dcc6ddf9e53fb91a16915edc91"
+        }
+      },
+      {
+        "classification": "PASS",
+        "exit": 0,
+        "operation": "full",
+        "receipt": {
+          "bytes": 18027,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1-02.receipt.json",
+          "sha256": "dccd42486a8bd3e0ce72b76dfd154ce8644cd07650de6d6a97884066a4840e02"
+        },
+        "tree_joined": true,
+        "wait": {
+          "bytes": 2233,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1-02.process-result.json",
+          "sha256": "17f4efd855b2f88d7e0b91740f55dcdb81e36dcac469b1964d8d3d81cdab0de4"
+        }
+      }
+    ],
+    "qualification_limit": "Normal Rust suite only. Original controls and current Go native86 consumers remain separately required; no Go/race/deployment result follows from Rust normal PASS. Original Rust38 37PASS/1FAIL and targeted renewal/control receipts remain unchanged.",
+    "receipt": {
+      "bytes": 54046,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
+      "sha256": "18d9e580c00009e8abd1c74f4b110aeb7778976f29cd4dc6e2315c66c9124359"
+    },
+    "receipt_source_tuples": {
+      "rust": {
+        "core": "7ca8e222e3496552146f2d97eb09237401662c99",
+        "server": "3e1fe2d786e0f1b066fbcfd4dd37214352498f7f",
+        "sn": "b13a422536f2e247a0e01f70de9e1cb8569ff366"
+      }
+    },
+    "resource_errors": [],
+    "retained_compiled_image": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/main-b13-renewal-normal-libtest-v1",
+    "retained_export_files": 61,
+    "retained_image_sha256": "f31f0851298ee600208ab41faff8bfc6ffce9d55735233f5767fd07520a9f712",
+    "source_expected113": {
+      "bytes": 10809,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/rust-full113-recipe/EXPECTED-113.txt",
+      "sha256": "5f9464561d0e9587949c3df3345df6fd4bbeab4d56e56b11562c3eeacb2c6ccf"
+    },
+    "source_recipe": {
+      "bytes": 13032,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/rust-full113-recipe/FULL113-RECIPE.json",
+      "sha256": "87efd52983979863464968d377cd587a5a754995dedee667d97ac704afeb6880"
+    },
+    "status": "PASS_MAIN_RUST_FULL113",
+    "totals": {
+      "fail": 0,
+      "incomplete": 0,
+      "not_run": 0,
+      "pass": 113,
+      "planned": 113,
+      "run": 113,
+      "skip": 0
+    },
+    "user_terminal": {
+      "bytes": 2051,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1-user-terminal-readback.json",
+      "sha256": "91616a61dde0b3000c3f04efe4925a77d26164419dc4eefb6af6d3ab6d70c2e9"
+    }
+  },
+  "actual_server8_compilers": {
+    "body_passes_inferred": 0,
+    "control_kills_inferred": 0,
+    "earlier_precompiler_refusal_preserved": {
+      "bytes": 14450,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v1.receipt.json",
+      "sha256": "b19f8a6c325bebbe61e79b0cf9fd521da3f35d0c50a2fd8ede3f1eace9de6262"
+    },
+    "later_payment_graph_inheritance": false,
+    "normal_compiler_passes": 8,
+    "phases": [
+      {
+        "actual_wait": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-root.process-result.json",
+          "sha256": "670e944a9c46857a47b32c379c63eed83af49e7b8957c7bc8da4b399231a45a4"
+        },
+        "body_result": null,
+        "id": "root",
+        "mode": "normal",
+        "package": ".",
+        "receipt": {
+          "bytes": 9612,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-root.receipt.json",
+          "sha256": "596345d755db1e79dac8fac8b548979a160d0e14f6a3a72afede3b899afe551e"
+        },
+        "retained_image": {
+          "bytes": 79933400,
+          "links": 1,
+          "mode": 320,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/default-server8-continuation-v2-root.test",
+          "sha256": "2679484d8ad4903b012a716c65fed6257ca67aa1438ab0b9623e557472fbedd4"
+        },
+        "status": "COMPILE_PASS_BODY_PENDING"
+      },
+      {
+        "actual_wait": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-controller.process-result.json",
+          "sha256": "821503d9b6255e4a39b4e10b15ff51c4e3ae60ba61e618dbab519cef5d80309f"
+        },
+        "body_result": null,
+        "id": "controller",
+        "mode": "normal",
+        "package": "./controller",
+        "receipt": {
+          "bytes": 9675,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-controller.receipt.json",
+          "sha256": "4f47ec40bb920ef316d9a3c8e00ac547aec12119f1f088a0ff1f5dcfbe754ff6"
+        },
+        "retained_image": {
+          "bytes": 113238848,
+          "links": 1,
+          "mode": 320,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/default-server8-continuation-v2-controller.test",
+          "sha256": "909be078daa88a065f86a976f4a12ef9293c0a190160114f56ea9717260213cf"
+        },
+        "status": "COMPILE_PASS_BODY_PENDING"
+      },
+      {
+        "actual_wait": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-model.process-result.json",
+          "sha256": "a315fba37661a2208aa434374056cd44b3d410d94235a3348443e7907672877e"
+        },
+        "body_result": null,
+        "id": "model",
+        "mode": "normal",
+        "package": "./model",
+        "receipt": {
+          "bytes": 9634,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-model.receipt.json",
+          "sha256": "3f55e420fbcba69b8590ebb9229044182f386337f0e28391e5ba18228cf68862"
+        },
+        "retained_image": {
+          "bytes": 86928112,
+          "links": 1,
+          "mode": 320,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/default-server8-continuation-v2-model.test",
+          "sha256": "d5bb878f7f408439d97efca5370b5bb3dca589f95f0c7dbaeaecd0d5a54e0d3f"
+        },
+        "status": "COMPILE_PASS_BODY_PENDING"
+      },
+      {
+        "actual_wait": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-monitor.process-result.json",
+          "sha256": "bc83e2715b6956ea049236ecc8252a01ebbdba085d41047b89b06c25a018e58b"
+        },
+        "body_result": null,
+        "id": "monitor",
+        "mode": "normal",
+        "package": "./monitor",
+        "receipt": {
+          "bytes": 9650,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-monitor.receipt.json",
+          "sha256": "712e612b16f14a6638ac4515b699d71345850dae17c8ccd21c400539c48cdf9d"
+        },
+        "retained_image": {
+          "bytes": 95724152,
+          "links": 1,
+          "mode": 320,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/default-server8-continuation-v2-monitor.test",
+          "sha256": "e50374b414933113b1cbd7ccf8d2290b859a566cc426784dcf95930e1fb478c2"
+        },
+        "status": "COMPILE_PASS_BODY_PENDING"
+      },
+      {
+        "actual_wait": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-native-cli.process-result.json",
+          "sha256": "275600cb258f06e00d5bb942c884466a930da5371af464eb0418ad03f46d8807"
+        },
+        "body_result": null,
+        "id": "native-cli",
+        "mode": "normal",
+        "package": "./cli/stnativefees",
+        "receipt": {
+          "bytes": 9686,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-native-cli.receipt.json",
+          "sha256": "4d764fd6c7044ea554e5992c86f1f1a423ec3d1baa520bad560a79e11744698a"
+        },
+        "retained_image": {
+          "bytes": 73633816,
+          "links": 1,
+          "mode": 320,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/default-server8-continuation-v2-native-cli.test",
+          "sha256": "40d7bdd9eed36701909c6af080a89590e253f8a25722c0ffd51bdb40ad06eff2"
+        },
+        "status": "COMPILE_PASS_BODY_PENDING"
+      },
+      {
+        "actual_wait": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-api.process-result.json",
+          "sha256": "dd6be2f6d9b3f4dfafe7588fd703183b14e27d9e4d87fd37244bc8f1594b1e43"
+        },
+        "body_result": null,
+        "id": "api",
+        "mode": "normal",
+        "package": "./api",
+        "receipt": {
+          "bytes": 9618,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-api.receipt.json",
+          "sha256": "925e3fe28f47fa3d3660db335a5ee984462ca0ca581688db696b15dd7718f56c"
+        },
+        "retained_image": {
+          "bytes": 99272960,
+          "links": 1,
+          "mode": 320,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/default-server8-continuation-v2-api.test",
+          "sha256": "e39b97e38e172e7900631e5ba9cd9f3ea06a0444ab512911612e3ea63b6c22ff"
+        },
+        "status": "COMPILE_PASS_BODY_PENDING"
+      },
+      {
+        "actual_wait": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-proxy.process-result.json",
+          "sha256": "ce6ba18a1d85fa68efb3ecf7803f8e14647a0dead47e0c0d5f6c95e90ccb60b8"
+        },
+        "body_result": null,
+        "id": "proxy",
+        "mode": "normal",
+        "package": "./proxy",
+        "receipt": {
+          "bytes": 9636,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-proxy.receipt.json",
+          "sha256": "8c6324a1f9c7301fde6321e1a03ffe5e27d225d6ec2799b859343b441f61c38c"
+        },
+        "retained_image": {
+          "bytes": 128848248,
+          "links": 1,
+          "mode": 320,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/default-server8-continuation-v2-proxy.test",
+          "sha256": "fcb3e8571931d6f4c6c1e0d4b828b4c1ed22c68ea03eff5c605047ddaa409c88"
+        },
+        "status": "COMPILE_PASS_BODY_PENDING"
+      },
+      {
+        "actual_wait": {
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-taskworker-work.process-result.json",
+          "sha256": "5b0a187e7b92d524e7202d8a3d32335f14f5c80b950ef102a484452d6c7313fc"
+        },
+        "body_result": null,
+        "id": "taskworker-work",
+        "mode": "normal",
+        "package": "./taskworker/work",
+        "receipt": {
+          "bytes": 9716,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-taskworker-work.receipt.json",
+          "sha256": "50eb8ae75b20cc1e09a7a1866f3623c71c3448a94a3e51c60b01e56a2dd82857"
+        },
+        "retained_image": {
+          "bytes": 110832416,
+          "links": 1,
+          "mode": 320,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/images/default-server8-continuation-v2-taskworker-work.test",
+          "sha256": "b840b502d6bfec66c2925b39eb0282ea78bfcdf2ba697f31ecb5a1c609c1c3cc"
+        },
+        "status": "COMPILE_PASS_BODY_PENDING"
+      }
+    ],
+    "race_passes_inferred": 0,
+    "receipt": {
+      "bytes": 48513,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2.receipt.json",
+      "sha256": "8515b4496d79a8c57651911f272717d4d8cacff258fb5217a4f08df392e53cff"
+    },
+    "source_tuple": {
+      "core": "026b850248352b72255be7a966e391e0a15e74c1",
+      "server": "9836322d6c06ce0207fd5d754b025fc48cb11c83",
+      "sn": "f0b7e52ab009746e05c3f6fb718243658881790d"
+    },
+    "user_terminal": {
+      "bytes": 3223,
+      "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-user-terminal-readback.json",
+      "sha256": "98d871d6e75102fab3863414fed1baac572b46f23354785d29c2b97a34a74771"
+    }
+  },
   "author_execution": {
     "binary_lists": 0,
     "compilers": 0,
@@ -12,21 +346,6 @@
     "test_bodies": 0
   },
   "confirmed_current_failure_classification": [
-    {
-      "actual": {
-        "bytes": 14450,
-        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v1.receipt.json",
-        "sha256": "b19f8a6c325bebbe61e79b0cf9fd521da3f35d0c50a2fd8ede3f1eace9de6262"
-      },
-      "current": {
-        "bytes": 22088,
-        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2.intent.json",
-        "sha256": "581dc704c4491afa13614630fd220560100176269b90beeb0f99fc1afaab81e1"
-      },
-      "finding": "PRECOMPILER_HARNESS_REFUSAL; caller requested128MiB logs while qualified process helper requires64MiB. No compiler child, image, process result or Wait was created.",
-      "kind": "historical_harness_refusal_corrected_continuation_live",
-      "product_source_compiler_failure": false
-    },
     {
       "actual": {
         "bytes": 2922,
@@ -38,6 +357,32 @@
       "product_go_code_defect": false
     }
   ],
+  "confirmed_current_implementation_work": {
+    "classification": "SUPPORTED_EXPORTER_AND_STATUS_IMPLEMENTATION_GAP",
+    "current_metrics_source": {
+      "blob": "61c8ea59c1bdd05f79a3da0869cbc1c9b0da96b4",
+      "commit": "f9df3d52ca92df123fdf7007264bfdd4384b6b78",
+      "path": "mainnet/economic_conservation_metrics.go",
+      "sha256": "87b6d62e6f03cd4dcc67e74140bcd359a2d417714ed7fc8565e7c171daf7483e"
+    },
+    "finding": "Existing36 conservation gauges do not expose complete reliability/provider-window coverage and conservation progress/ETA. Monitoring and Dashboard are implementing truthful supported status; unavailable facts must stay unknown and cannot imply financial authority.",
+    "future_scope": "Add actual authored roots/controls when source freezes; no speculative count or pass.",
+    "owners": [
+      "/root/astra_monitoring_operations",
+      "/root/astra_domain_dashboard"
+    ],
+    "state": "IN_PROGRESS_UNFROZEN_UNQUALIFIED"
+  },
+  "conservative_source_limit_not_new_defect": {
+    "classification": "HONEST_UNKNOWN_WITH_NO_CURRENT_AUTHORIZING_CANCELLATION_OPERATION",
+    "finding": "Existing settled/adjudication operations and original reports cannot create an actual cancellation decision/time. Historical canceled rows remain in the census with unknown attribution; context cancellation and zero-byte cleanup are not cancellation authority.",
+    "scope": "No newly discovered execution bug or newly added authorizer/test gate. Preserve existing conservative assertions and original source authority boundaries.",
+    "source_audit": {
+      "bytes": 6668,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-cancellation-review/HANDOFF.json",
+      "sha256": "ee132cc26c8434c79e6da20e94c0481c0f2e72fcd4b2468e04d03ca0e74b2bc5"
+    }
+  },
   "controls_preservation_and_delta": {
     "bytes": 37699,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/control-catalog-addendum.json",
@@ -51,6 +396,7 @@
     "Historical owner fixture, signed-NUL model indexing, stale ClosedWork API and carry6%-vs99% fixture failures retain their original receipts and named source corrections; only their exact later passed subsets are credited."
   ],
   "counts": {
+    "actual_frozen_server_normal_compilers_passed": 8,
     "actual_nativefee_normal_roots": {
       "fail": 0,
       "pass": 13,
@@ -63,12 +409,25 @@
       "run": 13,
       "skip": 0
     },
+    "actual_rust_full_suite_exports": 61,
+    "actual_rust_full_suite_normal": {
+      "fail": 0,
+      "incomplete": 0,
+      "not_run": 0,
+      "pass": 113,
+      "planned": 113,
+      "run": 113,
+      "skip": 0
+    },
     "additive_control_groups": 32,
     "current_go_roots_per_mode": 2733,
     "current_server_full_model": 1865,
     "original_native_overlap_with_prior2637": 0,
     "original_requirements": 38,
     "outcomes_closed": 0,
+    "pending_native86_originals": 0,
+    "ready_native86_originals": 38,
+    "ready_native86_profiles": 9,
     "restored_original_native_roots_per_mode": 86,
     "retained_control_groups": 227,
     "rows_demonstrated_to_have_only_deployment_work_left": 0,
@@ -94,9 +453,48 @@
     "After authorized activation: three complete native emission intervals and one full50400-block UR settlement/claim cycle."
   ],
   "latest_checkpoint": {
-    "bytes": 10528,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/checkpoint/original-native-and-payment-progress-20261005.json",
-    "sha256": "25deb267a1c61a032df8ee14f87d1c60451e57fe575ccfc7ca95fee2d4e01dfb"
+    "bytes": 20440,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-complete-checkpoint/server8-and-native113-progress-20261005.json",
+    "sha256": "b815a104ddd5af61fa8ec1fb0a6201bf407a351cf55e92a05afa07a4e07a2dd5"
+  },
+  "native86_asset_mapping": {
+    "map": {
+      "bytes": 46074,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/rust-full113-recipe/NATIVE86-RETAINED-ENVIRONMENT-v2.json",
+      "sha256": "74acb421b30f00dfc580b8d668f252591b1aa76a8ea8c0eea7065036d6ea81a4"
+    },
+    "newly_ready_exporters": {
+      "conservation-drained": 5,
+      "producer-contiguous": 5
+    },
+    "pending_exporters": [],
+    "pending_originals": 0,
+    "pending_profiles": 0,
+    "predecessor_map_preserved": {
+      "bytes": 28657,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/rust-full113-recipe/NATIVE86-RETAINED-ENVIRONMENT-v1.json",
+      "sha256": "66eebe33aa5182bd909192899bc006f9c7d3867bc3a03e6e2af93b1fb3732547"
+    },
+    "previous_profile_records_preserved": 7,
+    "previous_protected_originals_preserved": 29,
+    "retained_originals": 38,
+    "retained_profiles": 9,
+    "status": "All9 original fixture profiles are ready. The two generic profiles have distinct actual five-job exports from passing original full113 exporter roots; no renewal substitution. Asset readiness does not qualify Go consumers."
+  },
+  "next_execution_state": {
+    "actual_resource_holder_readback": {
+      "bytes": 885,
+      "path": "/home/by/urnetwork/sn/mainnet/evidence/canonical-generation3-actual-readback-20261005.json",
+      "sha256": "51bf7cad9031d3d26646624d6f9836d1ee4efadecb4fd9696dadc98cf0a218a6"
+    },
+    "holder_receipt": {
+      "bytes": 41775,
+      "path": "/mnt/data/sn-testnet/sol-canonical-lease-generation3-108-20261005/holder-receipt-v1.json",
+      "sha256": "bcae9e28d9e1f3a2eca8cd239abf368fd02e0023005fa67c0d7ffaef674f0972"
+    },
+    "pid_at_readback": 3567744,
+    "scope": "This holder is resource admission, not a compiler or test result. Root reports a seven-unaffected-package compiler variant being prepared while two changing components are deferred; no launch or pass is inferred and source is unchanged.",
+    "status": "HELD_ACTUAL_RESOURCE_ADMISSION_ONLY"
   },
   "old_sol_audit": {
     "bytes": 75710,
@@ -171,6 +569,33 @@
       }
     }
   ],
+  "prior_failure_classification_preserved_v5": [
+    {
+      "actual": {
+        "bytes": 14450,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v1.receipt.json",
+        "sha256": "b19f8a6c325bebbe61e79b0cf9fd521da3f35d0c50a2fd8ede3f1eace9de6262"
+      },
+      "current": {
+        "bytes": 22088,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2.intent.json",
+        "sha256": "581dc704c4491afa13614630fd220560100176269b90beeb0f99fc1afaab81e1"
+      },
+      "finding": "PRECOMPILER_HARNESS_REFUSAL; caller requested128MiB logs while qualified process helper requires64MiB. No compiler child, image, process result or Wait was created.",
+      "kind": "historical_harness_refusal_corrected_continuation_live",
+      "product_source_compiler_failure": false
+    },
+    {
+      "actual": {
+        "bytes": 2922,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification34-v1.receipt.json",
+        "sha256": "801a37817308480dfcbcabade2963a3a27d76caa3128945349d4e2f03a65e427"
+      },
+      "finding": "Expected regex exceeds bound did not match actual closed directory name bytes exceed bound.",
+      "kind": "test_diagnostic_mismatch_corrected_source_retest_pending",
+      "product_go_code_defect": false
+    }
+  ],
   "prior_full_requirement_mapping": {
     "bytes": 152568,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/main-published-verification/requirements-and-retained-evidence.json",
@@ -206,6 +631,24 @@
         "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-current-adjacent6-v1.receipt.json",
         "sha256": "91a25e6c847cde452acd9a900e9aee6429bf81ddf1a84ed5f5bc3923284ca14a"
       }
+    },
+    {
+      "actual": {
+        "bytes": 48513,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2.receipt.json",
+        "sha256": "8515b4496d79a8c57651911f272717d4d8cacff258fb5217a4f08df392e53cff"
+      },
+      "finding": "Server8 process log-bound caller corrected64MiB; all8 actual normal compilers pass on their frozen graph. No body/race/current payment qualification follows.",
+      "original": {
+        "bytes": 14450,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v1.receipt.json",
+        "sha256": "b19f8a6c325bebbe61e79b0cf9fd521da3f35d0c50a2fd8ede3f1eace9de6262"
+      },
+      "user_terminal": {
+        "bytes": 3223,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/default-server8-continuation-v2-user-terminal-readback.json",
+        "sha256": "98d871d6e75102fab3863414fed1baac572b46f23354785d29c2b97a34a74771"
+      }
     }
   ],
   "result_reuse": {
@@ -220,7 +663,7 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/nativefee-main9-to-default-current-applicability.json",
     "sha256": "60de07a44585f9ea32d1641514203bf35cab4e615216ce0fb930cb982b48f493"
   },
-  "reviewed_documentation_commit": "5b873c942c57ff2a47ad9a896a529bf59e9ec5e6",
+  "reviewed_documentation_commit": "f9df3d52ca92df123fdf7007264bfdd4384b6b78",
   "rows": [
     {
       "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 output,8 payment and21 restored native Go groups remain required (259 distinct source groups; original native Rust2 already counted), with no blanket current kill claim.",
@@ -312,15 +755,20 @@
       ],
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Reviewed source/semantic authority for observed runtime472 remains absent.",
+      "full_rust113_evidence": {
+        "bytes": 54046,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
+        "sha256": "18d9e580c00009e8abd1c74f4b110aeb7778976f29cd4dc6e2315c66c9124359"
+      },
       "id": "PH-04",
       "implementation": "Purpose/runtime-bound historical reads, upgrade renewal and native replay mechanisms are implemented.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls.",
       "original_complete_requirement": "Approved actual runtime/code/finality; upgrade-block signing, execution-parent and post-state consumers, including both validator roles.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Execute current Go historical/renewal/finality consumers using retained actual originals; retain new Rust results. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
+      "remaining_software_evidence": "Execute current Go historical/renewal/finality consumers using retained actual originals; retain new Rust results. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Native-chain consumers: compatible upgrades and block-correct historical decoding",
       "retained_component_evidence": {
         "bytes": 8321,
@@ -346,7 +794,7 @@
       "original_complete_requirement": "Complete nonempty-head lineage, invalidation, cold/warm replay and work-count qualification on the final graph.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Qualify nonempty immutable lineage, invalidation and cold/warm reuse/work counts on current inputs. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
+      "remaining_software_evidence": "Qualify nonempty immutable lineage, invalidation and cold/warm reuse/work counts on current inputs. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Historical verifiers: durable, dependency-bound successful proof reuse",
       "retained_component_evidence": {
         "bytes": 14760,
@@ -474,15 +922,20 @@
       ],
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Actual epoch boundary and approved renewal authority.",
+      "full_rust113_evidence": {
+        "bytes": 54046,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
+        "sha256": "18d9e580c00009e8abd1c74f4b110aeb7778976f29cd4dc6e2315c66c9124359"
+      },
       "id": "PH-10",
       "implementation": "Original-epoch renewal and completed-work retention are implemented; corrected renewal fixture preserves actual read/write observations.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls.",
       "original_complete_requirement": "Partial fleet renewal, delayed review, interrupted epoch progress and exact final boundary behavior without repeating completed work.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Run four current public Go renewal consumers against all five repaired original exports; test partial/delayed/interrupted renewal. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
+      "remaining_software_evidence": "Run four current public Go renewal consumers against all five repaired original exports; test partial/delayed/interrupted renewal. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Epoch, fleet and evidence scheduling: resumable partial renewals and correct windows",
       "retained_component_evidence": {
         "bytes": 8321,
@@ -504,6 +957,11 @@
       ],
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Funded reserves and authentic native fee witness.",
+      "full_rust113_evidence": {
+        "bytes": 54046,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
+        "sha256": "18d9e580c00009e8abd1c74f4b110aeb7778976f29cd4dc6e2315c66c9124359"
+      },
       "id": "PH-11",
       "implementation": "Conserved source accounting, shared claim/carry bounds, signed gas ceilings and native-fee originals/denomination settlement are implemented.",
       "known_product_boundary_failure": {
@@ -516,11 +974,11 @@
       },
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
       "original_complete_requirement": "Complete native-income versus opening-capital accounting, actual fees/refunds, funding bounds and 10/90 conformance under authentic authority.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
-      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Complete current original native-fee and shared funding bounds, denomination, liability retention/refund and10/90 tests/controls. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
+      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Complete current original native-fee and shared funding bounds, denomination, liability retention/refund and10/90 tests/controls. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Treasury and bootstrap: conserved lifetime spend, reserve and funding semantics",
       "retained_component_evidence": {
         "bytes": 17304,
@@ -543,6 +1001,11 @@
       ],
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Authenticated chain/code/credit history and observed settlement cycle.",
+      "full_rust113_evidence": {
+        "bytes": 54046,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
+        "sha256": "18d9e580c00009e8abd1c74f4b110aeb7778976f29cd4dc6e2315c66c9124359"
+      },
       "id": "PH-12",
       "implementation": "Original entitlement/recipient, carry, Claim and legacy settlement mechanisms are implemented; capital-use fixture correction is on main.",
       "known_product_boundary_failure": {
@@ -555,11 +1018,11 @@
       },
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
       "original_complete_requirement": "Complete deposits/capture/carry/claims, original earning attribution, immutable vault liabilities and actual runtime rollback/transfer behavior.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
-      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Run corrected large-claim carry and small-credit neighbor, actual original capture/replay and Solidity/control scopes. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
+      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Run corrected large-claim carry and small-credit neighbor, actual original capture/replay and Solidity/control scopes. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Contracts, operator and claims: complete settlement conservation and authorization",
       "retained_component_evidence": {
         "bytes": 7092,
@@ -580,13 +1043,13 @@
       "external_live_authority_or_rehearsal": "Real expected roster, keys and endpoint identity.",
       "id": "PH-13",
       "implementation": "Original creation/session/open receipts, participant replay and payout consumers are implemented; canceled historical attribution remains explicitly unknown.",
-      "known_source_or_composition_limit": "Canceled historical work is still unknown; a missing original disposition/time cannot be promoted to complete payout attribution.",
+      "known_source_or_composition_limit": "Audited current production has no authorizing cancellation operation or original cancellation clock. Retain canceled rows and explicit unknown attribution; SQL labels, context cancellation and zero-byte cleanup cannot manufacture that authority. This is a deliberate conservative boundary, not a newly discovered bug.",
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
       "original_complete_requirement": "Join actual producers, SDK, Server and validator consumers; prove complete paid/free/companion work, two-origin replay and immutable identity histories.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Prove nonempty actual ingress\u2192creation/session/work\u2192payout\u2192provider-window/Claim; establish original canceled-work evidence without inventing completeness.",
+      "remaining_software_evidence": "Prove nonempty actual ingress\u2192creation/session/work\u2192payout\u2192provider-window/Claim using independently admitted originals. Preserve existing canceled-work unknown/refusal coverage; the source audit adds no authorizer or new qualification gate.",
       "required_outcome": "Provider, operator and validator protocol: identity isolation and durable proof progress",
       "retained_component_evidence": {
         "bytes": 12882,
@@ -594,6 +1057,11 @@
         "hash_matches_checkpoint": true,
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-signed-catalog1b5-qualification-20261003.json",
         "sha256": "d46aadd282bea0eb7b129d05c38e7a7ec23eac909829ab3742da2af396bbe620"
+      },
+      "source_limit_audit": {
+        "bytes": 6668,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/provider-cancellation-review/HANDOFF.json",
+        "sha256": "ee132cc26c8434c79e6da20e94c0481c0f2e72fcd4b2468e04d03ca0e74b2bc5"
       }
     },
     {
@@ -626,14 +1094,14 @@
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Alert delivery/on-call and measured work-rate ETA.",
       "id": "PH-15",
-      "implementation": "Chain/conservation/controller metrics and dashboard/rules are implemented; reliability/provider-window coverage remains explicitly unknown.",
-      "known_source_or_composition_limit": "Reliability/provider-window metric domains are still explicitly unknown; conservation gauges alone do not supply complete status/ETA coverage.",
+      "implementation": "Existing36 conservation gauges, other chain/controller metrics and dashboard/rules exist. Supported reliability/provider-window coverage and conservation progress/ETA are not yet fully exposed; Monitoring and Dashboard own the narrow implementation.",
+      "known_source_or_composition_limit": "Truthful supported exporter/status coverage is a confirmed implementation gap. Unavailable facts remain unknown; new values must not create financial authority or imply live readiness.",
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
       "normal": "Published xops482 conservation33/33 PASS plus separate control invocation; prior311 retained. Current Go producer/monitor/repair normal remains pending.",
       "original_complete_requirement": "Complete status domains, truthful progress/ETA, independent missing-host detection and observed operational signals.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Qualify remaining current metric producers/status domains; supply truthful reliability/provider-window coverage and progress/ETA evidence.",
+      "remaining_software_evidence": "Finish and freeze the narrow metrics/status change, append its actual roots/controls, and qualify current normal/race/exporter/dashboard behavior. Live ingestion/alert delivery and measured ETA remain separate.",
       "required_outcome": "Status/operations: actionable failure classes, progress and evidence-based ETA",
       "retained_component_evidence": {
         "bytes": 1968,
@@ -659,7 +1127,7 @@
       "implementation": "Deterministic normal/race/control selections and protected execution mechanisms exist. Named process/peer regressions pass; affected Unix-socket roots pass after short owned TMPDIR correction.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending. Optional inactive helper31 failed; after its bounded-mount correction the34-root follow-up records33PASS1FAIL. The remaining exact diagnostic assertion is corrected on main and awaits its one-root retest; peer50 and other harness results remain separate.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending. Optional inactive helper31 failed; after its bounded-mount correction the34-root follow-up records33PASS1FAIL. The remaining exact diagnostic assertion is corrected on main and awaits its one-root retest; peer50 and other harness results remain separate. Eight Server normal compilers pass with joined waits on frozenf0b/026/983; compilation supplies no body/race/control or laterd64 result.",
       "original_complete_requirement": "Deterministic causal controls, affected normal/race/vet and actual complete release/rollout/restore/recovery qualification with exact custody.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
@@ -736,11 +1204,16 @@
       ],
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Reviewed historical and current runtime sources.",
+      "full_rust113_evidence": {
+        "bytes": 54046,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
+        "sha256": "18d9e580c00009e8abd1c74f4b110aeb7778976f29cd4dc6e2315c66c9124359"
+      },
       "id": "PH-19",
       "implementation": "Historical runtime and approved ancestry remain distinct from current signing authority.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls.",
       "original_complete_requirement": "Actual approved upgrade-boundary execution and post-state replay without weakening current signing or rewriting historical proof.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
@@ -1022,7 +1495,7 @@
       "implementation": "Current mains and default sibling graphs are bound; prior workspace nine-package compilers passed.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending. Eight Server normal compilers pass with joined waits on frozenf0b/026/983; compilation supplies no body/race/control or laterd64 result.",
       "original_complete_requirement": "Integrate, qualify and reproducibly build one exact accepted production tuple, then bind published/running artifact identity.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
@@ -1073,15 +1546,20 @@
       ],
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Independent semantic/source authority for selected runtime.",
+      "full_rust113_evidence": {
+        "bytes": 54046,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
+        "sha256": "18d9e580c00009e8abd1c74f4b110aeb7778976f29cd4dc6e2315c66c9124359"
+      },
       "id": "MG-04",
       "implementation": "Purpose-scoped native continuity, exact historical runtime and renewal/replay mechanisms exist.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls.",
       "original_complete_requirement": "Approved actual runtime and complete signing/execution/history behavior across simulator-independent production roles and both validators.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Complete current Go native consumers and required Rust/control scope; targeted renewal pass is not full113 suite. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
+      "remaining_software_evidence": "Complete current Go native consumers and the original Rust/control scope; full Rust113 normal has passed, while its original causal controls remain separate. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Runtime and native continuity",
       "retained_component_evidence": null
     },
@@ -1117,6 +1595,11 @@
       ],
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Approved economics, reserves, deposits and actual observed native/settlement outcomes.",
+      "full_rust113_evidence": {
+        "bytes": 54046,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/main-b13-full113-body-v1.receipt.json",
+        "sha256": "18d9e580c00009e8abd1c74f4b110aeb7778976f29cd4dc6e2315c66c9124359"
+      },
       "id": "MG-06",
       "implementation": "Original-work,10/90 entitlement, conserved funding, gas and native-fee original settlement mechanisms are implemented.",
       "known_product_boundary_failure": {
@@ -1129,11 +1612,11 @@
       },
       "known_source_or_composition_limit": "Complete original-work/reliability-to-recipient economic composition is not demonstrated; synthetic receipts do not create live authority.",
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Original Rust38 37PASS/1FAIL, targeted renewal1PASS/5 exports and its separate omission control remain retained. The subsequent full Rust113 normal suite actually passes all113 roots with61 exports, zero failures/skips/not-run and joined waits; it does not qualify Go consumers or the remaining original controls. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
       "original_complete_requirement": "Exact original-work/reliability and recipient lineage, native 10/90 conformance, real reserves/deposits/claims and owner/operator custody; observe first-send outcomes prospectively.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
-      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Qualify actual nonempty participant-to-payout, corrected carry, native proof/denomination and immutable recipient/liability paths. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; generic producer/conservation exports remain separately required.",
+      "remaining_software_evidence": "Qualify merged retired-wallet/lost-Circle-ACK original-request continuity (10 new +2 changed roots and8 controls). Complete five nativefee causal controls and changed downstream consumers. Qualify actual nonempty participant-to-payout, corrected carry, native proof/denomination and immutable recipient/liability paths. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Economics, settlement and custody",
       "retained_component_evidence": {
         "bytes": 1814,
@@ -1161,7 +1644,7 @@
       "original_complete_requirement": "Approved service SLOs, real routing/on-call/deadman, continuous conservation and exercised root/operator/validator repair.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Execute current monitor22/repair/producer consumers and remaining rule/operations scopes; xops33 already retained.",
+      "remaining_software_evidence": "Execute current monitor22/repair/producer consumers and remaining rule/operations scopes; xops33 already retained. Finish and qualify the PH15 supported metrics/status change; current36 conservation metric semantics remain preserved.",
       "required_outcome": "Continuous monitoring and bounded repair",
       "retained_component_evidence": {
         "bytes": 15116,
@@ -1239,7 +1722,7 @@
       "implementation": "Release/rollout/acceptance requirements and blocked October6 policy exist; no activation or production acceptance is established.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending. Eight Server normal compilers pass with joined waits on frozenf0b/026/983; compilation supplies no body/race/control or laterd64 result.",
       "original_complete_requirement": "Complete prelaunch qualification and rollout/rollback/outage rehearsal; after approved activation observe three complete native emission intervals and a full 50,400-block UR settlement/claim cycle.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
@@ -1254,7 +1737,7 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v5",
+  "schema": "original38-current-evidence-ledger-v7",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
@@ -1336,10 +1819,10 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/HANDOFF.json",
     "sha256": "61b549493116ec3b123138907422757625e1e2b581e447502f94465b719338c7"
   },
-  "status": "All38 original outcomes remain open. Current selection preserves prior2637 plus10 payment and86 omitted original-native roots (2733 per mode). Payment continuity is source-fixed on main, not yet qualified. Optional helper33P1F has a merged diagnostic-only correction pending targeted retest. Frozen983 Server8 continuation has launched; no terminal compiler result follows. Retained nativefee13/replay7/arin13 and release95 pass-union results remain unchanged.",
+  "status": "All38 original outcomes remain open. Eight normal Server compilers actually pass on frozen f0b/026/983 with joined waits and protected images; their bodies/race/controls and later payment graph remain separate. Full Rust113 including ignored roots actually passes113/113 with zero failures/skips/not-run,61 exports and closed outer process. All9 native fixture profiles/38 originals are ready; original Rust controls and current Go native86 consumers remain unqualified. PH13 canceled attribution remains honestly unknown without an authorizer; PH15 supported exporter/status implementation is in progress. Preserve2733 Go roots per mode and259 source controls plus retained component results.",
   "supersedes": {
-    "bytes": 94709,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/final-status-v4/original38-current-evidence-ledger-v4.json",
-    "sha256": "0b5137f41ef40843c0e0a285b3d3cba4194130b87de83d7e47823c6d8ff53909"
+    "bytes": 124390,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",
+    "sha256": "bd952a29c2021eb96213f675acb1bcbb4b96460d7cf9c13f20098d5c2743142b"
   }
 }
