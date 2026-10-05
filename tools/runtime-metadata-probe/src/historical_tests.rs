@@ -24,6 +24,9 @@ mod host_snapshot_tests;
 #[path = "historical_epoch_layout_tests.rs"]
 mod epoch_layout_tests;
 
+#[path = "historical_metadata_scope_tests.rs"]
+mod metadata_scope_tests;
+
 #[path = "historical_native_execution_tests.rs"]
 mod native_execution_tests;
 

@@ -223,8 +223,11 @@ func nativeCaptureVector(record historicalReplayObservation, label string, count
 // alpha amounts. Read absence, omitted captures or ambiguous order refuse.
 func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecutionAdmission, block economicEmissionBlock, job historicalReplayJob, report historicalReplayReport, drainKeys [3]nativeExecutionDrain, metadata *types.Metadata) (*nativeExecutionOutcome, error) {
 	profile, trace := job.ObservationProfile, report.HookObservations
-	if profile == nil || profile.Schema != historicalNativeProfileSchema || trace == nil || (profile.MetadataSha256 != nil) != (admission.FeeCensus != nil) {
+	if profile == nil || profile.Schema != historicalNativeProfileSchema || trace == nil {
 		return nil, errors.New("native execution omits its dedicated original-memory profile")
+	}
+	if err := validateNativeExecutionMetadataScope(profile, admission.FeeCensus); err != nil {
+		return nil, err
 	}
 	if err := admission.FeeCensus.validate(); err != nil {
 		return nil, err

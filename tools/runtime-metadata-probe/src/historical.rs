@@ -35,6 +35,8 @@ pub mod global_alias;
 mod host_snapshot;
 #[path = "historical_hosts.rs"]
 mod hosts;
+#[path = "historical_metadata_scope.rs"]
+mod metadata_scope;
 #[path = "historical_observer.rs"]
 pub mod observer;
 #[path = "historical_principal.rs"]
@@ -402,12 +404,13 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
         parent.hash(),
     )?;
     // Decode metadata from the same original code with storage/offchain hosts
-    // absent. A witness cannot supply a substituted layout for its events.
+    // absent. The pin does not select fee accounting or require fee pallets
+    // when only native storage and allocation callsites are selected.
     let event_layout = job
         .observation_profile
         .as_ref()
-        .and_then(|profile| profile.metadata_sha256)
-        .map(|expected| {
+        .filter(|profile| profile.metadata_sha256.is_some())
+        .map(|profile| {
             let metadata_executor =
                 WasmExecutor::<crate::StatelessMetadataHostFunctions>::builder()
                     .with_allow_missing_host_functions(true)
@@ -418,9 +421,10 @@ pub fn replay_historical_json(raw: &[u8]) -> Result<Vec<u8>, ProbeError> {
             let raw =
                 crate::execute_runtime_api(&metadata_executor, &runtime, "Metadata_metadata")?;
             let metadata: sp_core::OpaqueMetadata = scale_exact("original runtime metadata", &raw)?;
-            fee_events::EventLayout::from_generated(metadata.as_slice(), expected)
+            metadata_scope::event_layout(profile, metadata.as_slice())
         })
-        .transpose()?;
+        .transpose()?
+        .flatten();
     // Consensus seals are external to runtime execution. Keep their original
     // header hash in the report and refuse seals placed between runtime items.
     let mut execution_header = child.clone();
