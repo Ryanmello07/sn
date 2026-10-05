@@ -1,4 +1,9 @@
 {
+  "actual_results_addendum": {
+    "bytes": 11510,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/final-status-v4/actual-results-addendum-v3.json",
+    "sha256": "aa99ec67cf946c9329ee2236e3f3d615a44ce11d01afbbe6166f1d83937746b0"
+  },
   "author_execution": {
     "binary_lists": 0,
     "compilers": 0,
@@ -7,6 +12,93 @@
     "test_bodies": 0
   },
   "confirmed_current_failure_classification": [
+    {
+      "body_failure_claimed": false,
+      "finding": "A durable Circle payment request loses retry continuity after its selected wallet is removed. DepositWallet owns exact-request continuation; fresh-send wallet and cutoff admission remain required.",
+      "kind": "source_confirmed_product_gap",
+      "owner": "/root/astra_deposit_wallet_review",
+      "qualification": "Correction and targeted normal/race/control evidence pending.",
+      "source": "Server9836322d"
+    },
+    {
+      "actual_counts": {
+        "assertion_failures": 6,
+        "errors": 25,
+        "pass": 0,
+        "run": 31,
+        "skip": 0
+      },
+      "finding": "SourceVerification._Mounts rejects ambiguous stacked mount mapping (source line227).",
+      "kind": "inactive_optional_harness_failure",
+      "owner": "/root/astra_release_integration",
+      "product_go_code_defect_claimed": false,
+      "qualification": "Corrective source, positive regressions and18 controls remain pending; active full hashing and Server qualification are unaffected.",
+      "receipt": {
+        "bytes": 2923,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-source-verification31-v1.receipt.json",
+        "sha256": "c3096bcdd26ef1878c3041a0f5ae15d862ca0a0a407afb851e19be628c7110da"
+      }
+    }
+  ],
+  "controls_preservation_and_delta": {
+    "bytes": 234575,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/final-status-v4/controls-preservation-and-delta-v2.json",
+    "sha256": "2fba6f1da2f8d253274dba64a8389bd98a88ff0bb4c362a326fbf0a3eaabf953"
+  },
+  "corrected_failures_not_reopened_as_code_bugs": [
+    "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
+    "Original Rust renewal fixture failure corrected and exact normal1PASS plus causal omitted-read kill retained.",
+    "Original xops32PASS1FAIL formatting control corrected; canonical482 control1 then33PASS retained.",
+    "Original joint-adapter29PASS1FAIL corrected; canonical33PASS retained, separate later observation/peer defects still need qualification.",
+    "Historical owner fixture, signed-NUL model indexing, stale ClosedWork API and carry6%-vs99% fixture failures retain their original receipts and named source corrections; only their exact later passed subsets are credited."
+  ],
+  "counts": {
+    "actual_nativefee_normal_roots": {
+      "fail": 0,
+      "pass": 13,
+      "run": 13,
+      "skip": 0
+    },
+    "actual_nativefee_race_roots": {
+      "fail": 0,
+      "pass": 13,
+      "run": 13,
+      "skip": 0
+    },
+    "additive_control_groups": 3,
+    "current_go_roots_per_mode": 2637,
+    "current_server_full_model": 1865,
+    "original_requirements": 38,
+    "outcomes_closed": 0,
+    "retained_control_groups": 227,
+    "rows_demonstrated_to_have_only_deployment_work_left": 0,
+    "source_catalog_control_groups": 230
+  },
+  "current_default_product_tuple": {
+    "connect": "026b850248352b72255be7a966e391e0a15e74c1",
+    "server": "9836322d6c06ce0207fd5d754b025fc48cb11c83",
+    "sn": "4991966f658e149da2658c41a4fba785c91e5798"
+  },
+  "current_portable_evidence": {
+    "bytes": 41675,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/current-portable-evidence-catalog-v2.json",
+    "sha256": "988955c17bd0842a4447093dd0ae281733aa0606ab057cfa2642e217f062328f"
+  },
+  "external_authority_never_supplied_by_software_tests": [
+    "Independently approved genesis/runtime/code/checkpoint/finality and true deployed route/identity.",
+    "Owner-local Ledger originals with no Snow access; separately identified root coldkey/hotkey and device custody for actual mutations.",
+    "Installed contracts/Safe/vault and actual reserves; both active root role and two UR instances.",
+    "Both operator/host/client-key domains and all old payout planners replaced before relying on new lock.",
+    "October6 inclusive new earnings while all pre-cutoff USDC obligations/retries remain payable without conversion/double pay; activation blocked until real fields/authority supplied.",
+    "Real backup/media recovery, production sizing, deployment rollback/outage, monitoring ingestion/delivery, deadman and on-call/repair drills.",
+    "After authorized activation: three complete native emission intervals and one full50400-block UR settlement/claim cycle."
+  ],
+  "old_sol_audit": {
+    "bytes": 75710,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261004/sol-final-coverage-audit-20261004.json",
+    "sha256": "12cdefbefbe1b671da91c2e27350e8bcda2af7c53fa231083c671fe8729d7559"
+  },
+  "prior_failure_classification_preserved": [
     {
       "evidence_id": "nativefee11_direct",
       "failed_root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
@@ -45,59 +137,47 @@
       "product_failure_proven": false
     }
   ],
-  "corrected_failures_not_reopened_as_code_bugs": [
-    "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
-    "Original Rust renewal fixture failure corrected and exact normal1PASS plus causal omitted-read kill retained.",
-    "Original xops32PASS1FAIL formatting control corrected; canonical482 control1 then33PASS retained.",
-    "Original joint-adapter29PASS1FAIL corrected; canonical33PASS retained, separate later observation/peer defects still need qualification.",
-    "Historical owner fixture, signed-NUL model indexing, stale ClosedWork API and carry6%-vs99% fixture failures retain their original receipts and named source corrections; only their exact later passed subsets are credited."
-  ],
-  "counts": {
-    "actual_nativefee_normal_roots": {
-      "fail": 1,
-      "pass": 10,
-      "run": 11,
-      "skip": 0
-    },
-    "current_go_roots_per_mode": 2508,
-    "current_server_full_model": 1824,
-    "original_requirements": 38,
-    "outcomes_closed": 0,
-    "retained_control_groups": 227,
-    "rows_demonstrated_to_have_only_deployment_work_left": 0
-  },
-  "current_default_product_tuple": {
-    "core": "026b850248352b72255be7a966e391e0a15e74c1",
-    "server": "c198263137730fe7fce7e9b83b6b6c298b3f9eba",
-    "sn": "fcfd5acde5c0a77eaedcbc2f39ce35f5f53052f4"
-  },
-  "current_portable_evidence": {
-    "bytes": 41675,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/current-portable-evidence-catalog-v2.json",
-    "sha256": "988955c17bd0842a4447093dd0ae281733aa0606ab057cfa2642e217f062328f"
-  },
-  "external_authority_never_supplied_by_software_tests": [
-    "Independently approved genesis/runtime/code/checkpoint/finality and true deployed route/identity.",
-    "Owner-local Ledger originals with no Snow access; separately identified root coldkey/hotkey and device custody for actual mutations.",
-    "Installed contracts/Safe/vault and actual reserves; both active root role and two UR instances.",
-    "Both operator/host/client-key domains and all old payout planners replaced before relying on new lock.",
-    "October6 inclusive new earnings while all pre-cutoff USDC obligations/retries remain payable without conversion/double pay; activation blocked until real fields/authority supplied.",
-    "Real backup/media recovery, production sizing, deployment rollback/outage, monitoring ingestion/delivery, deadman and on-call/repair drills.",
-    "After authorized activation: three complete native emission intervals and one full50400-block UR settlement/claim cycle."
-  ],
-  "old_sol_audit": {
-    "bytes": 75710,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261004/sol-final-coverage-audit-20261004.json",
-    "sha256": "12cdefbefbe1b671da91c2e27350e8bcda2af7c53fa231083c671fe8729d7559"
-  },
   "prior_full_requirement_mapping": {
     "bytes": 152568,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/main-published-verification/requirements-and-retained-evidence.json",
     "sha256": "6e5a764298868912e8bcab8b42dd3015ab399c95c56c32a1639a9e68a967e547"
   },
+  "resolved_targeted_failures": [
+    {
+      "actual": {
+        "bytes": 11086,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-main470-nativefee13-v1.receipt.json",
+        "sha256": "05e64ffd6ede3b59035aa047b756d9e5a57a7193d08aa8c32f7669465675e4cc"
+      },
+      "finding": "Promoted bytes.Buffer.ReadFrom bypassed guarded nativefee Write/cap/cancellation hook. Named-buffer correction and protected fixture have actual13PASS each mode.",
+      "remaining": "Five causal controls and changed downstream consumers."
+    },
+    {
+      "actual_peer": {
+        "bytes": 6294,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-peer-admission50-v1.receipt.json",
+        "sha256": "65507657bef3046ac0d22e9df9f246755e9a926b703eb70afe5064a79e4d8015"
+      },
+      "finding": "Named process/peer recovery regressions have process38 and peer50 passes; old interrupted jobs remain unchanged."
+    },
+    {
+      "actual": {
+        "bytes": 14054,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-current-socket4-v2.receipt.json",
+        "sha256": "71c31f2095831195a7e791e34eec95c4d256b4debb3809677f7942982c6fa7e1"
+      },
+      "finding": "Release-builder Unix socket fixture paths exceeded the kernel bound under long TMPDIR. Only the two failed roots per mode were rerun with a short owned directory, all passing; source/assertions unchanged.",
+      "original": {
+        "bytes": 56637,
+        "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-current-adjacent6-v1.receipt.json",
+        "sha256": "91a25e6c847cde452acd9a900e9aee6429bf81ddf1a84ed5f5bc3923284ca14a"
+      }
+    }
+  ],
   "result_reuse": {
+    "adjacent_packages": "Use exact current release-builder4, arin4 and mainnet fixture3 root outcomes from the completed package/selected receipts. Preserve original release93P2F per mode and separate2PASS retries; never double count child helper roots or rewrite original batch status.",
     "claim129_restore129": "Four actual historical normal/racePASS remain valid. Complete current-input equality is disproven by changed imported Core inventory; Restore fixture also changed. Do not relabel or weaken scale.",
-    "nativefee11": "Retained Main9 normal image has exact executable-component applicability to current default nativefee under60de. Actual direct11 normal result is10PASS1FAIL0SKIP with no resource errors and completed Wait. Preserve ten individual passes and the failing cancellation boundary; do not claim package PASS or transfer to a future corrective source without a new dependency/source assessment.",
+    "nativefee11": "Original11 remains10PASS1FAIL. Corrected nativefee470 has13PASS normal and13PASS race;2017 actual input pins remain equal atSN499. Reuse these component positives without rerun; no whole Server/current graph or causal-control result follows.",
     "scope_rule": "Execute each selected root/mode once on current applicable image. Do not repeat successful work solely for receipt/harness bookkeeping; preserve actual prior Waits/LIST/exports.",
     "three2048": "No complete current-sourcePASS supplied; exact originals are prerequisites, not consumer results. Run retained full2048 cases normally/race."
   },
@@ -106,10 +186,10 @@
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/nativefee-main9-to-default-current-applicability.json",
     "sha256": "60de07a44585f9ea32d1641514203bf35cab4e615216ce0fb930cb982b48f493"
   },
-  "reviewed_documentation_commit": "46ec54fd21e97c31c62aa9124d5d54fa3c9dabd8",
+  "reviewed_documentation_commit": "2f2c7b0e3b157a79cc36a86db64bd7610e88dc76",
   "rows": [
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -135,7 +215,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -147,10 +227,11 @@
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
       "normal": "Prior exact component results retained; current default-graph affected normal scope still pending.",
+      "open_source_confirmed_gap": "Durable Circle retry after wallet removal: original request continuation correction/qualification pending; no cutoff or fresh-send authority relaxation.",
       "original_complete_requirement": "Final signed-attempt census, nonce/outcome reconciliation and exact-byte/no-duplicate-spend behavior across all deployed owners.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Execute current all-owner original/replacement/cancel census, nonce/outcome and duplicate-effect tests.",
+      "remaining_software_evidence": "Correct and qualify retired-wallet/lost-Circle-ACK retry continuity. Execute current all-owner original/replacement/cancel census, nonce/outcome and duplicate-effect tests.",
       "required_outcome": "Native/EVM submitters: one logical action, reconciled signed attempts and exact custody",
       "retained_component_evidence": {
         "bytes": 5266,
@@ -161,7 +242,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -187,7 +268,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -216,7 +297,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -242,7 +323,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -271,7 +352,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -297,7 +378,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -323,7 +404,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -349,7 +430,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -378,7 +459,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -392,17 +473,21 @@
       "id": "PH-11",
       "implementation": "Conserved source accounting, shared claim/carry bounds, signed gas ceilings and native-fee originals/denomination settlement are implemented.",
       "known_product_boundary_failure": {
-        "evidence_id": "nativefee11_direct",
-        "root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
-        "state": "Root cause/correction and exact targeted positive/causal qualification pending NativeWitness."
+        "actual": {
+          "bytes": 11086,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-main470-nativefee13-v1.receipt.json",
+          "sha256": "05e64ffd6ede3b59035aa047b756d9e5a57a7193d08aa8c32f7669465675e4cc"
+        },
+        "state": "CORRECTED_AND_NORMAL_RACE_QUALIFIED; causal controls/downstream pending"
       },
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee11 normal is10PASS1FAIL0SKIP: cancellation-after-output failed with nil error; current component applicability is proven separately.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
+      "open_source_confirmed_gap": "Durable Circle retry after wallet removal: original request continuation correction/qualification pending; no cutoff or fresh-send authority relaxation.",
       "original_complete_requirement": "Complete native-income versus opening-capital accounting, actual fees/refunds, funding bounds and 10/90 conformance under authentic authority.",
       "outcome_complete": false,
-      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Correct and qualify the demonstrated nativefee cancellation-after-output boundary. Complete current original native-fee and shared funding bounds, denomination, liability retention/refund and10/90 tests/controls.",
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
+      "remaining_software_evidence": "Correct and qualify retired-wallet/lost-Circle-ACK retry continuity. Complete five nativefee causal controls and changed downstream consumers. Complete current original native-fee and shared funding bounds, denomination, liability retention/refund and10/90 tests/controls.",
       "required_outcome": "Treasury and bootstrap: conserved lifetime spend, reserve and funding semantics",
       "retained_component_evidence": {
         "bytes": 17304,
@@ -413,7 +498,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -427,17 +512,21 @@
       "id": "PH-12",
       "implementation": "Original entitlement/recipient, carry, Claim and legacy settlement mechanisms are implemented; capital-use fixture correction is on main.",
       "known_product_boundary_failure": {
-        "evidence_id": "nativefee11_direct",
-        "root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
-        "state": "Root cause/correction and exact targeted positive/causal qualification pending NativeWitness."
+        "actual": {
+          "bytes": 11086,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-main470-nativefee13-v1.receipt.json",
+          "sha256": "05e64ffd6ede3b59035aa047b756d9e5a57a7193d08aa8c32f7669465675e4cc"
+        },
+        "state": "CORRECTED_AND_NORMAL_RACE_QUALIFIED; causal controls/downstream pending"
       },
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee11 normal is10PASS1FAIL0SKIP: cancellation-after-output failed with nil error; current component applicability is proven separately.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
+      "open_source_confirmed_gap": "Durable Circle retry after wallet removal: original request continuation correction/qualification pending; no cutoff or fresh-send authority relaxation.",
       "original_complete_requirement": "Complete deposits/capture/carry/claims, original earning attribution, immutable vault liabilities and actual runtime rollback/transfer behavior.",
       "outcome_complete": false,
-      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Correct and qualify the demonstrated nativefee cancellation-after-output boundary. Run corrected large-claim carry and small-credit neighbor, actual original capture/replay and Solidity/control scopes.",
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
+      "remaining_software_evidence": "Correct and qualify retired-wallet/lost-Circle-ACK retry continuity. Complete five nativefee causal controls and changed downstream consumers. Run corrected large-claim carry and small-credit neighbor, actual original capture/replay and Solidity/control scopes.",
       "required_outcome": "Contracts, operator and claims: complete settlement conservation and authorization",
       "retained_component_evidence": {
         "bytes": 7092,
@@ -448,7 +537,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -474,7 +563,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -494,7 +583,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -521,7 +610,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -533,14 +622,14 @@
       "deployment_only_remaining_established": false,
       "external_live_authority_or_rehearsal": "Independent build provenance and production-path rehearsal.",
       "id": "PH-16",
-      "implementation": "Deterministic normal/race/control selections and protected execution mechanisms exist; current harness observation/recovery defects still block execution.",
+      "implementation": "Deterministic normal/race/control selections and protected execution mechanisms exist. Named process/peer regressions pass; affected Unix-socket roots pass after short owned TMPDIR correction.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Product nativefee11 actually ran after the earlier peer refusal:10PASS1FAIL; that original peer interruption is historical, not evidence that no bodies have now run.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending. Optional inactive source-proof helper31 actually failed (6 assertion failures,25 errors); peer50 and other retained harness successes remain separate.",
       "original_complete_requirement": "Deterministic causal controls, affected normal/race/vet and actual complete release/rollout/restore/recovery qualification with exact custody.",
       "outcome_complete": false,
-      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Fix and qualify three observed harness seams, complete2508 normal/race and existing227 controls, plus retained wider requirement scopes.",
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
+      "remaining_software_evidence": "Complete current2637 normal/race and original227 plus3 additive causal obligations, reusing verified component results. Preserve all wider original requirements and qualify the Circle continuity correction. Correct and qualify optional source-proof helper before adoption; active full hashing remains available.",
       "required_outcome": "Qualification and evidence: deterministic faults, composed coverage and independent replay",
       "retained_component_evidence": {
         "bytes": 6133,
@@ -551,7 +640,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -577,7 +666,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -603,7 +692,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -632,7 +721,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -658,7 +747,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -684,7 +773,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -710,7 +799,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -736,7 +825,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -762,7 +851,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -773,17 +862,20 @@
       "id": "PH-25",
       "implementation": "Lifecycle owners retain original SDK close/publication and join owned children on stop.",
       "known_product_boundary_failure": {
-        "evidence_id": "nativefee11_direct",
-        "root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
-        "state": "Root cause/correction and exact targeted positive/causal qualification pending NativeWitness."
+        "actual": {
+          "bytes": 11086,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-main470-nativefee13-v1.receipt.json",
+          "sha256": "05e64ffd6ede3b59035aa047b756d9e5a57a7193d08aa8c32f7669465675e4cc"
+        },
+        "state": "CORRECTED_AND_NORMAL_RACE_QUALIFIED; causal controls/downstream pending"
       },
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Actual nativefee11 normal is10PASS1FAIL0SKIP: cancellation-after-output failed with nil error; current component applicability is proven separately.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
       "original_complete_requirement": "Deployment stop joins every owned child and pending publication without callback self-join or lost original liability; actual cgroup/unit rehearsal.",
       "outcome_complete": false,
-      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Correct and qualify the demonstrated nativefee cancellation-after-output boundary. Run current actual public close, original publication custody, cancellation and stop/join tests and controls.",
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
+      "remaining_software_evidence": "Complete five nativefee causal controls and changed downstream consumers. Run current actual public close, original publication custody, cancellation and stop/join tests and controls.",
       "required_outcome": "Supervisor lifecycle: explicit deployment stop joins every owned workload child",
       "retained_component_evidence": {
         "bytes": 32739,
@@ -794,7 +886,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -814,7 +906,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -829,12 +921,12 @@
       "original_complete_requirement": "Both operators and all validator/provider consumers must join original eligibility, binding, wallet consent and policy authority through rollover.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Run full model1824 and current controller/monitor/whole-work eligibility, wallet consent, first-partial and rollover controls.",
+      "remaining_software_evidence": "Run full model1865 and current controller/monitor/whole-work eligibility, wallet consent, first-partial and rollover controls.",
       "required_outcome": "Policy activation: coherent validator evidence and client-key domains across operators",
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -861,7 +953,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -881,7 +973,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -896,10 +988,10 @@
       "implementation": "Current mains and default sibling graphs are bound; prior workspace nine-package compilers passed.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Product nativefee11 actually ran after the earlier peer refusal:10PASS1FAIL; that original peer interruption is historical, not evidence that no bodies have now run.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending.",
       "original_complete_requirement": "Integrate, qualify and reproducibly build one exact accepted production tuple, then bind published/running artifact identity.",
       "outcome_complete": false,
-      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
       "remaining_software_evidence": "Complete current default-module compilers and normal/race/control validation; preserve original source/generated/schema/config identities.",
       "required_outcome": "Reproducible production release",
       "retained_component_evidence": {
@@ -911,7 +1003,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -937,7 +1029,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -960,7 +1052,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -975,12 +1067,12 @@
       "original_complete_requirement": "Actual two-operator host, credential, network and policy topology; fresh processed-key/proof progress through the production transition.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Execute full current model1824 plus controller/monitor catalog/identity/Oct6 transitions and controls.",
+      "remaining_software_evidence": "Execute full current model1865 plus controller/monitor catalog/identity/Oct6 transitions and controls.",
       "required_outcome": "Policy and identity rollover",
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Corrected renewal omitted-read control is an actual intended1FAIL101; other original Rust controls remain separate.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -994,17 +1086,21 @@
       "id": "MG-06",
       "implementation": "Original-work,10/90 entitlement, conserved funding, gas and native-fee original settlement mechanisms are implemented.",
       "known_product_boundary_failure": {
-        "evidence_id": "nativefee11_direct",
-        "root": "TestInvokeNativeFeeCancellationAfterOutputCannotSettle",
-        "state": "Root cause/correction and exact targeted positive/causal qualification pending NativeWitness."
+        "actual": {
+          "bytes": 11086,
+          "path": "/mnt/data/sn-testnet/sol-runtime-fd-qualification-20261004/evidence/sol-main470-nativefee13-v1.receipt.json",
+          "sha256": "05e64ffd6ede3b59035aa047b756d9e5a57a7193d08aa8c32f7669465675e4cc"
+        },
+        "state": "CORRECTED_AND_NORMAL_RACE_QUALIFIED; causal controls/downstream pending"
       },
       "known_source_or_composition_limit": "Complete original-work/reliability-to-recipient economic composition is not demonstrated; synthetic receipts do not create live authority.",
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee11 normal is10PASS1FAIL0SKIP: cancellation-after-output failed with nil error; current component applicability is proven separately.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Rust37 original passes plus corrected renewal1PASS/5 exports and separate earlier capture exporter are retained; no full113 pass. Actual nativefee47013/13 normalPASS, zero skips/resource errors; original10P1F and96fixture5P8F remain historical.",
+      "open_source_confirmed_gap": "Durable Circle retry after wallet removal: original request continuation correction/qualification pending; no cutoff or fresh-send authority relaxation.",
       "original_complete_requirement": "Exact original-work/reliability and recipient lineage, native 10/90 conformance, real reserves/deposits/claims and owner/operator custody; observe first-send outcomes prospectively.",
       "outcome_complete": false,
-      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Correct and qualify the demonstrated nativefee cancellation-after-output boundary. Qualify actual nonempty participant-to-payout, corrected carry, native proof/denomination and immutable recipient/liability paths.",
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Actual nativefee47013/13 racePASS, zero skips/resource errors; component evidence only.",
+      "remaining_software_evidence": "Correct and qualify retired-wallet/lost-Circle-ACK retry continuity. Complete five nativefee causal controls and changed downstream consumers. Qualify actual nonempty participant-to-payout, corrected carry, native proof/denomination and immutable recipient/liability paths.",
       "required_outcome": "Economics, settlement and custody",
       "retained_component_evidence": {
         "bytes": 1814,
@@ -1015,7 +1111,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim. Current xops clock-ahead control1 and embedded counterfactuals actually pass; does not prove every227 control.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1042,7 +1138,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1068,7 +1164,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1094,7 +1190,7 @@
       }
     },
     {
-      "causal_controls": "Prior exact causal evidence retained; current source-applicable227 catalog remains required, with no blanket current kill claim.",
+      "causal_controls": "Prior exact causal evidence retained; original227 obligations plus3 additive source controls remains required, with no blanket current kill claim.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1109,11 +1205,11 @@
       "implementation": "Release/rollout/acceptance requirements and blocked October6 policy exist; no activation or production acceptance is established.",
       "known_source_or_composition_limit": null,
       "limit": "This evidence mapping is not a new broad source audit or a claim that every original implementation obligation is complete. A missing test/result is not by itself a confirmed code defect.",
-      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Product nativefee11 actually ran after the earlier peer refusal:10PASS1FAIL; that original peer interruption is historical, not evidence that no bodies have now run.",
+      "normal": "Prior exact component results retained; current default-graph affected normal scope still pending. Nativefee13, arin13, replay7 current normalPASS; source-identical release95 pass union and peer50 toolingPASS retained. Full current selection remains pending.",
       "original_complete_requirement": "Complete prelaunch qualification and rollout/rollback/outage rehearsal; after approved activation observe three complete native emission intervals and a full 50,400-block UR settlement/claim cycle.",
       "outcome_complete": false,
-      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending.",
-      "remaining_software_evidence": "Complete software scope including2508 modes,227 controls, original wider gates and composed recovery/rollback/outage rehearsal.",
+      "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
+      "remaining_software_evidence": "Complete remaining software scope across2637 selected roots per mode, original227 controls plus3 additive groups, original wider gates and composed recovery/rollback/outage rehearsal. Reuse actual component positives on unchanged complete inputs.",
       "required_outcome": "Qualification, rollout and actual acceptance",
       "retained_component_evidence": {
         "bytes": 920,
@@ -1124,16 +1220,21 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v2",
+  "schema": "original38-current-evidence-ledger-v4",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
     "sha256": "4187085b66193dc9e7f0496ec9c90c6c820a88bf3ce3da43e391b63dc9e222a9"
   },
-  "status": "EVIDENCE_RECONCILED;38 original outcomes remain open; actual nativefee cancellation boundary failure separated from harness failures and missing qualification",
+  "source_selection": {
+    "bytes": 2465954,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/positive-partitions.json",
+    "sha256": "105c2eef2e51d2c206eb6aae8a5ece791034ee995c22133957f8d09f1ee73051"
+  },
+  "status": "All38 original outcomes remain open. Nativefee13, selected replay7 and arin13 passed normally/race; release-build95 has a source-identical pass union across original93 and targeted2 per mode. Optional inactive source-proof helper31 failed; Circle continuity source gap and other qualification/live requirements remain open.",
   "supersedes": {
-    "bytes": 83040,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/default-current-large-scope/original38-current-evidence-ledger.json",
-    "sha256": "7dd3ba11492799c2b7b4498c0dd33ef33e79bf6604cd058726a19f58c4b5e63f"
+    "bytes": 93412,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-499-983-coverage/original38-current-evidence-ledger-v3.json",
+    "sha256": "0916102fe9fe21d54333d288d926b8492b507aedf4a0f9b19fbde7f82a4bba61"
   }
 }
