@@ -1,5 +1,13 @@
 # Mainnet launch and operations plan
 
+## Local dependency validation and retained results — October 5
+
+SN main `9c7a2842` now selects all twelve replacement modules from local paths, including Connect, SDK and Connect's SCTP fork. Server main also uses sibling substitutions. Keep external dependency versions pinned. Validate ordinary module resolution with `GOWORK=off`, using the actual sibling checkouts and their module sums; a workspace can mask obsolete published dependencies and therefore cannot establish that the declared module configuration builds. Record each sibling revision with the release so local substitution remains reproducible. Current sibling changes require affected validation; unchanged components retain their original evidence.
+
+The [nine-package normal compiler result](evidence/main-nine-normal-compiler-result-20261005.json) passes all nine phases on the earlier SN `babb0af5` / Connect `7ca8e222` / Server `3e1fe2d7` workspace tuple. Those retained images support test execution on those exact inputs. They do not validate the newer sibling-default graph, test bodies, race behavior or deployment. The corrected Rust fixture still needs its targeted test and missing exports; the monitoring conservation scope has passed as recorded below.
+
+The concurrency adapter's actual thirty-test run completes **29 PASS / 1 FAIL / 0 SKIP**, with no resource errors. A generation-refusal test expected a different refusal diagnostic; preserve that failure and prove the correction before using the adapter for parallel product jobs. An earlier wrapper refused before launching tests because unrelated stopped Docker containers existed. Admission now checks running workloads and the exact owned database resources. Historical foreign stopped containers are not active resource consumers and must not be deleted to make qualification pass. Resource and process checks must protect owned work while allowing unrelated, independently bounded validation to continue.
+
 ## Code frozen on main — October 5
 
 The reviewed mainnet code is committed, merged and pushed in all four repositories. The [code freeze manifest](evidence/main-code-freeze-20261005.json) records SN `babb0af5`, Connect `7ca8e222`, Server `3e1fe2d7` and xops `482050c3`, with independently checked remote heads. This is a code freeze, not a verified release or deployment.
