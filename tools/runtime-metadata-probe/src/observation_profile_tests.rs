@@ -19,6 +19,7 @@ fn fixture() -> (Vec<u8>, ProfileProposal) {
     let function = &inspected.functions[0];
     let start = function.instructions.as_ref().unwrap()[0].offset;
     let rule = HookRule {
+        host_snapshot: None,
         purpose: "native-epoch".to_owned(),
         function_index: 1,
         function_body_sha256: function.function_body_sha256,
@@ -239,6 +240,7 @@ fn original_profile_indirect_call_review_binds_table_and_type() {
             principal_storage_prefixes: None,
             original_globals: Vec::new(),
             rules: vec![HookRule {
+                host_snapshot: None,
                 purpose: "fee-withdraw".to_owned(),
                 function_index: 1,
                 function_body_sha256: function.function_body_sha256,
@@ -337,6 +339,7 @@ fn original_profile_assembly_preserves_replay_memory_admission() {
                 principal_storage_prefixes: None,
                 original_globals: Vec::new(),
                 rules: vec![HookRule {
+                    host_snapshot: None,
                     purpose: "fee-withdraw".to_owned(),
                     function_index: 1,
                     function_body_sha256: function.function_body_sha256,

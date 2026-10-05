@@ -29,6 +29,8 @@ pub mod capture;
 pub mod fee_events;
 #[path = "historical_global_alias.rs"]
 pub mod global_alias;
+#[path = "historical_host_snapshot.rs"]
+mod host_snapshot;
 #[path = "historical_hosts.rs"]
 mod hosts;
 #[path = "historical_observer.rs"]

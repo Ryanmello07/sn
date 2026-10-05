@@ -27,6 +27,8 @@ pub struct HookRule {
     pub offset_end: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub memory: Vec<MemoryCapture>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_snapshot: Option<String>,
 }
 
 /// An admitted original callsite supplies the layout, never the captured bytes.
@@ -325,6 +327,7 @@ impl HistoricalObserver {
                 ));
             }
         }
+        super::host_snapshot::validate(&profile, wasm)?;
         let observed = super::global_alias::expose(wasm, &profile.original_globals)?;
         let original = bodies(wasm)?;
         let mut normalized =
@@ -630,8 +633,9 @@ fn observe_value(
 fn selected_purpose(observer: &Observer) -> Option<String> {
     let mut selected = None;
     for rule in &observer.profile.rules {
-        if observer.stack.iter().any(|frame| {
-            frame.function_index == rule.function_index
+        if observer.stack.iter().enumerate().any(|(index, frame)| {
+            (rule.host_snapshot.is_none() || index == 0)
+                && frame.function_index == rule.function_index
                 && frame.function_offset >= rule.offset_start
                 && frame.function_offset < rule.offset_end
         }) {
@@ -770,8 +774,9 @@ impl<H: HostFunctions> HostFunctions for ObservedHosts<H> {
                         .rules
                         .iter()
                         .filter(|rule| {
-                            stack.iter().any(|frame| {
-                                frame.function_index == rule.function_index
+                            stack.iter().enumerate().any(|(index, frame)| {
+                                (rule.host_snapshot.is_none() || index == 0)
+                                    && frame.function_index == rule.function_index
                                     && frame.function_offset >= rule.offset_start
                                     && frame.function_offset < rule.offset_end
                             })
@@ -867,6 +872,17 @@ impl<H: HostFunctions> HostFunctions for ObservedHosts<H> {
                                 .0;
                             observer.stack = stack;
                             observer.memory = memory;
+                            let snapshot = observer.profile.rules.iter().find_map(|rule| {
+                                let frame = observer.stack.first()?;
+                                (rule.function_index == frame.function_index
+                                    && frame.function_offset >= rule.offset_start
+                                    && frame.function_offset < rule.offset_end)
+                                    .then(|| rule.host_snapshot.clone())
+                                    .flatten()
+                            });
+                            if let Some(name) = snapshot {
+                                observe(ext, "host", name.as_bytes(), None);
+                            }
                         })
                         .expect("observer execution context absent");
                     }
