@@ -43,6 +43,8 @@ retention and descendant reaping. Their protocol/runtime peers are explicitly
 synthetic. These tests were authored without execution; they do not qualify an
 original native Wasm engine, signed production policy or live fee outcome.
 `TestNativeFeeOutcomeExportSettlementFixtures` supplies the explicit Server
-public-model join fixture. It requires an existing private directory selected
-by `URNETWORK_NATIVE_FEE_EXPORT_DIRECTORY` and publishes `pair.json` and
-`missing.json`; the consumer separately pins the selected `mainnet.test` ELF.
+public-model join fixture. For qualification, select an existing private
+persistent directory with `URNETWORK_NATIVE_FEE_EXPORT_DIRECTORY`; the exporter
+publishes `pair.json` and `missing.json`. An ordinary package test uses its own
+temporary directory and performs the same proof and original-custody checks.
+The Server consumer separately pins the selected `mainnet.test` ELF.

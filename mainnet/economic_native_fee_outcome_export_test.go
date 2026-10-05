@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/urfoundation/sn/nativefee"
 )
@@ -12,9 +14,13 @@ import (
 // This test-only export lets the Server public model test consume an actual
 // owned verifier outcome without exposing a production constructor. The nested
 // runtime peer is synthetic; signed receipt/GRANDPA verification is real.
-// Qualification must provide the explicitly selected private output directory.
+// Qualification selects a persistent output directory. An ordinary package
+// test uses its own temporary output and performs the same proof checks.
 func TestNativeFeeOutcomeExportSettlementFixtures(t *testing.T) {
 	directory := os.Getenv("URNETWORK_NATIVE_FEE_EXPORT_DIRECTORY")
+	if directory == "" {
+		directory = t.TempDir()
+	}
 	if !filepath.IsAbs(directory) || filepath.Clean(directory) != directory {
 		t.Fatal("set URNETWORK_NATIVE_FEE_EXPORT_DIRECTORY to the selected private fixture output directory")
 	}
@@ -24,6 +30,35 @@ func TestNativeFeeOutcomeExportSettlementFixtures(t *testing.T) {
 	}
 	for _, mode := range []string{"pair", "missing"} {
 		exportNativeFeeSettlementFixture(t, directory, mode)
+		raw, err := os.ReadFile(filepath.Join(directory, mode+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var manifest nativeFeeSettlementFixtureManifest
+		if err := decodePlanJson(raw, &manifest); err != nil {
+			t.Fatal(err)
+		}
+		verified, err := nativefee.Invoke(t.Context(), manifest.Authority, manifest.Request, manifest.TransactionHash, time.Minute)
+		if mode == "missing" {
+			if err == nil || verified != nil {
+				t.Fatal("exported missing refund acquired settlement authority")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal("exported original proof does not execute", err)
+		}
+		if verified.Facts().TransactionHash != manifest.TransactionHash || verified.Facts().DebitRao != "750" || len(verified.Facts().Originals) != 7 {
+			t.Fatal("exported original outcome differs")
+		}
+		retained := 0
+		if err := verified.RetainOriginals(t.Context(), func(_ string, _ nativefee.Reference, reader io.Reader) error {
+			retained++
+			_, err := io.Copy(io.Discard, reader)
+			return err
+		}); err != nil || retained != 7 {
+			t.Fatal("exported original proof closure is incomplete", err, retained)
+		}
 	}
 }
 
@@ -52,7 +87,7 @@ func exportNativeFeeSettlementFixture(t *testing.T, directory, mode string) {
 		name      string
 		reference *planFileReference
 	}{
-		{"archive.json", &request.Context.Archive}, {"collection.json", &request.Context.Collection}, {"checkpoint.json", &request.Context.Checkpoint}, {"finality.json", &request.Context.FinalityProof}, {"job.json", &request.Context.Job},
+		{name: "archive.json", reference: &request.Context.Archive}, {name: "collection.json", reference: &request.Context.Collection}, {name: "checkpoint.json", reference: &request.Context.Checkpoint}, {name: "finality.json", reference: &request.Context.FinalityProof}, {name: "job.json", reference: &request.Context.Job},
 	} {
 		raw, err := os.ReadFile(input.reference.Path)
 		if err != nil {
