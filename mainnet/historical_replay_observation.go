@@ -321,7 +321,10 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 		return err
 	}
 	fees := trace.FeeEvents
-	if profile.MetadataSha256 == nil && fees == nil {
+	if !historicalProfileFeeEvents(profile) {
+		if fees != nil {
+			return errors.New("historical fee candidates lack explicit metadata-pinned fee callsites")
+		}
 		return nil
 	}
 	if profile.MetadataSha256 == nil || fees == nil || fees.MetadataSha256 != *profile.MetadataSha256 || fees.Authority != "original-runtime-metadata-and-unapproved-callsite-profile" || len(fees.Events) > len(observations) || len(fees.Candidates) > len(fees.Events) || fees.UnmatchedFeeEvents > uint64(len(fees.Events)) {
