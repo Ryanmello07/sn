@@ -607,8 +607,14 @@ func TestValidatorActivationCancellationJoinsAndReleasesOwnership(t *testing.T) 
 		return original(ctx, path, args)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
 	done := make(chan int, 1)
+	joined := false
+	defer func() {
+		cancel()
+		if !joined {
+			<-done
+		}
+	}()
 	go func() { _, code, _ := f.command(ctx, "admit", nil); done <- code }()
 	<-entered
 	if store, err := openValidatorActivationStore(f.chain.storageContext(t.Context()), f.approval, f.key, false, f.now); !errors.Is(err, durablevolume.ErrBusy) {
@@ -618,7 +624,9 @@ func TestValidatorActivationCancellationJoinsAndReleasesOwnership(t *testing.T) 
 		t.Fatal("concurrent activation did not reach the original busy owner", err)
 	}
 	cancel()
-	if code := <-done; code == 0 {
+	code := <-done
+	joined = true
+	if code == 0 {
 		t.Fatal("canceled activation reported success")
 	}
 	select {
