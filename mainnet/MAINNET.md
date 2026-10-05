@@ -10,6 +10,8 @@ All seven compilers on the retained SN475/Core07/Server87d inputs passed. The [c
 
 The [current Rust result](evidence/main-rust38-result-20261005.json) completes all 38 pending roots: 37 pass, one fails, no skips; all processes joined with no resource errors. Twenty-four of 29 planned exports are retained. The runtime-renewal fixture counts two observed host calls as one principal operation; source review identifies the read/write pair while production monetary projection admits the write. Correct and verify that fixture and its adjacent pair/mutation checks; do not infer that its five missing exports exist or block unrelated Go qualification.
 
+The [canonical-main monitoring result](evidence/main-xops-conservation33-result-20261005.json) passes the corrected control, then all 33 conservation roots with no failures/skips: 34 invocations, 33 unique tests. The process joined and resource checks passed. Preserve the original 32-pass/one-fail result; production alert ingestion and delivery remain separate launch checks. The Rust fixture correction is pushed in main `b13a4225`; its targeted rebuild and verification remain pending.
+
 ## Current status after the missed deadline — October 5
 
 **The October 5 01:00 UTC deadline was missed. All 38 original outcomes remain open.** This [source/receipt checkpoint](evidence/carry-compiler-checkpoint-20261005.json), frozen at 04:47 UTC, supersedes the earlier current-state summaries. No deployment, live signing authority, October 6 transition or final acceptance is established.

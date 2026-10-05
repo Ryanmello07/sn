@@ -14,6 +14,8 @@ The [current Rust result](evidence/main-rust38-result-20261005.json) completes a
 
 A runtime hook spanning a complete principal function can observe both its storage read and write. Preserve both original records, join them to the independent mutation census, and validate amounts and opening/closing stock. Monetary projection must select effect-bearing operations rather than counting every hook record as a deposit. Deterministic renewal tests must exercise original replay, capture and reduced replay across the upgrade boundary, including withdrawals and refunds. A fixture count failure warrants a fixture correction when the original execution and production projection agree; retain the failed run and prove the corrected assertions.
 
+The [canonical-main monitoring result](evidence/main-xops-conservation33-result-20261005.json) passes the corrected control, then all 33 conservation roots with no failures/skips: 34 invocations, 33 unique tests. The process joined and resource checks passed. Preserve the original 32-pass/one-fail result; production alert ingestion and delivery remain separate launch checks. The Rust fixture correction is pushed in main `b13a4225`; its targeted rebuild and verification remain pending.
+
 ## Current status after the missed deadline — October 5
 
 **The October 5 01:00 UTC deadline was missed. All 38 original outcomes remain open.** This [source/receipt checkpoint](evidence/carry-compiler-checkpoint-20261005.json), frozen at 04:47 UTC, supersedes the earlier current-state summaries. No deployment, live signing authority, October 6 transition or final acceptance is established.
