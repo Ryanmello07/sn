@@ -1,5 +1,11 @@
 # Mainnet prelaunch fixes
 
+## Runtime migration hardening — October 5
+
+The admission fixes through `a70dae9c` remove numeric-version admission from the affected owner, treasury and discovery paths while preserving reviewed source capabilities, exact runtime artifacts and independent approval. A signed native treasury authority can carry a bounded storage witness proving migration completion at its exact activation parent. Authenticate both the migration marker and runtime-code commitment against that parent's trie; reject incomplete migration, a different runtime, substituted later blocks and an unrelated principal parent. Historical authorities without this witness preserve their original encoding and may not inherit a newer migration marker.
+
+The selected mainnet runtime tests passed 26/26; five validator roots and the actual Rust treasury exporter/consumer qualification remain pending. Production capture/replay still needs a reviewed actual runtime-473 execution profile; synthetic exporter mappings and function-name inventories are not substitutes. Preserve these separate requirements when preparing the activation proposal. No runtime number change alone should erase retained progress or require unrelated work to restart.
+
 ## Current economic decision — October 5
 
 The user selected **10% of the native miner allocation for providers and 90% retained in a spendable network-improvement treasury**, replacing the earlier owner-recycle choice. The [treasury successor](TREASURY-EMISSIONS.md) is implemented in merged source and awaits execution qualification and deployment. Treasury custody is a **hardware-Ledger multisig**: private keys stay on Ledger devices; `vault/main/sn.yml` holds only public account, signatory, threshold and device references. Validators receive public inputs only. The treasury is separate from provider claim collateral and the immutable, one-way `STReserveSink`.

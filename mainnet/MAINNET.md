@@ -1,5 +1,11 @@
 # Mainnet launch and operations plan
 
+## Runtime migration and focused qualification — October 5, 19:45 UTC
+
+The runtime-473 admission correction is merged through `a70dae9c`. Admission verifies the reviewed source capability and an authenticated migration-completion witness at the exact signed activation parent; a runtime number alone grants no authority. A later completed-migration snapshot cannot authorize an earlier activation. The 26 selected mainnet runtime roots passed; the remaining five validator roots and five Rust treasury roots are pending. Retained recovery results are 55/55 focused roots and 23/23 SDK race roots. These results do not qualify the production execution profile.
+
+The actual runtime-473 capture/replay profile remains an engineering prerequisite. A named-function census or synthetic fixture profile does not establish production callsite semantics. Qualify the actual profile against the official runtime bytes, then obtain scoped authority approvals. Reserve multisig derivation, registered recipient generations, signer qualification, contract deployment and loaded activation configuration remain separate launch inputs. Postactivation settlement intervals are an acceptance stage after activation, rather than evidence that can be supplied before signing the launch.
+
 ## Current economic decision — October 5
 
 The user selected **10% of the native miner allocation for providers and 90% retained in a spendable network-improvement treasury**, replacing the earlier owner-recycle choice. The [treasury successor](TREASURY-EMISSIONS.md) is implemented in merged source and awaits execution qualification and deployment. Treasury custody is a **hardware-Ledger multisig**: private keys stay on Ledger devices; `vault/main/sn.yml` holds only public account, signatory, threshold and device references. Validators receive public inputs only. The treasury is separate from provider claim collateral and the immutable, one-way `STReserveSink`.
