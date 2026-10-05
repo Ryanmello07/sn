@@ -248,6 +248,15 @@ func runHistoricalReplay(ctx context.Context, request historicalReplayRequest, h
 	if job.PrincipalEffects {
 		maximumReportBytes += historicalPrincipalReportLimit
 	}
+	for _, query := range job.PrincipalQueries {
+		if query.Availability {
+			maximumReportBytes += historicalAvailabilityReportLimit
+			if job.PrincipalEffects {
+				maximumReportBytes += historicalAvailabilityReportLimit
+			}
+			break
+		}
+	}
 	output, err := runHistoricalProofWorker(owner, cancel, historicalProofWorkerRequest{Engine: request.Engine, Input: raw, Directory: filepath.Dir(request.Job.Path), MaximumReport: maximumReportBytes}, hooks)
 	if err != nil {
 		return nil, err

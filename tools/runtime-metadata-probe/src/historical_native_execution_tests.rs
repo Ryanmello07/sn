@@ -663,6 +663,7 @@ fn fixture_with_runtime_upgrade(
                     hotkey: [0x11; 32],
                     coldkey: [0x33; 32],
                     netuid: 25,
+                    availability: false,
                 }]
             }),
         },
@@ -1043,6 +1044,7 @@ fn historical_native_principal_exports_original_parent_jobs() {
         hotkey: [0x11; 32],
         coldkey: [0x33; 32],
         netuid: 25,
+        availability: false,
     }]);
     let error = super::capture_tests::collect(&missing)
         .err()
