@@ -26,9 +26,11 @@ const (
 
 // Instance-only seams observe real reads without replacing transport or
 // authority. No exported command option can shorten the production allowance.
+// An additional failure can only join a completed failed read's original cause.
 type onchainReadRetryHooks struct {
-	withTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)
-	wait        func(context.Context, time.Duration) error
+	withTimeout         func(context.Context, time.Duration) (context.Context, context.CancelFunc)
+	wait                func(context.Context, time.Duration) error
+	additionalReadError func(error) error
 }
 
 // Tests attach a clock to one actual public submission, never process state.
@@ -62,6 +64,9 @@ func retryOnchainRead[T any](parent context.Context, read func(context.Context) 
 		}
 		if err == nil {
 			return value, nil
+		}
+		if hooks.additionalReadError != nil {
+			err = errors.Join(err, hooks.additionalReadError(err))
 		}
 		lastErr = err
 		if !retryableOnchainRead(err, false) {
@@ -120,13 +125,13 @@ func retryableOnchainRead(err error, finality bool) bool {
 		case *rpc.HTTPError:
 			return cause.StatusCode == http.StatusRequestTimeout || cause.StatusCode == http.StatusTooEarly || cause.StatusCode == http.StatusTooManyRequests || cause.StatusCode >= 500 && cause.StatusCode <= 599
 		case *net.DNSError:
-			if cause.IsNotFound || !cause.IsTimeout && !cause.IsTemporary {
+			if cause.IsNotFound {
 				return false
 			}
 			if underlying := cause.Unwrap(); underlying != nil {
 				return visit(underlying, depth+1)
 			}
-			return true
+			return cause.IsTimeout || cause.IsTemporary
 		case *websocket.CloseError:
 			switch cause.Code {
 			case websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseInternalServerErr, websocket.CloseServiceRestart, websocket.CloseTryAgainLater:

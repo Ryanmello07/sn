@@ -458,6 +458,9 @@ func TestOnchainReceiptReadsRefuseMixedHardTransportCauses(t *testing.T) {
 			&net.DNSError{IsTimeout: true, UnwrapErr: &os.PathError{Op: "read", Path: "synthetic-custody", Err: context.DeadlineExceeded}},
 			&net.DNSError{IsTimeout: true, UnwrapErr: errors.Join(io.EOF, hard)},
 			&net.DNSError{IsTimeout: true, IsNotFound: true, UnwrapErr: syscall.ECONNRESET},
+			&net.DNSError{IsNotFound: true, UnwrapErr: syscall.ECONNRESET},
+			&net.DNSError{UnwrapErr: &os.PathError{Op: "read", Path: "synthetic-custody", Err: context.DeadlineExceeded}},
+			&net.DNSError{},
 			&net.DNSError{IsTemporary: true, UnwrapErr: context.Canceled},
 		} {
 			calls, waits := 0, 0
@@ -487,7 +490,7 @@ func TestOnchainReceiptReadsRefuseMixedHardTransportCauses(t *testing.T) {
 // DNS availability flags and complete transient children retain recovery at the
 // actual finality owner. The next read traverses a real HTTP server and parser.
 func TestOnchainFinalityRecoversCompleteDnsAvailability(t *testing.T) {
-	for _, cause := range []error{&net.DNSError{IsTimeout: true}, &net.DNSError{IsTemporary: true, UnwrapErr: syscall.ECONNRESET}} {
+	for _, cause := range []error{&net.DNSError{IsTimeout: true}, &net.DNSError{IsTemporary: true, UnwrapErr: syscall.ECONNRESET}, &net.DNSError{UnwrapErr: syscall.ECONNRESET}, &net.DNSError{UnwrapErr: context.DeadlineExceeded}} {
 		fixture := newOnchainReadTestServer(t, nil)
 		base := &http.Transport{Proxy: nil}
 		calls, waits := 0, 0
@@ -511,6 +514,48 @@ func TestOnchainFinalityRecoversCompleteDnsAvailability(t *testing.T) {
 		if err != nil || waits != 1 || calls != 6 || fixture.count("eth_getBlockByNumber") != 5 {
 			t.Fatalf("complete DNS availability lost recovery: cause=%T calls=%d waits=%d err=%v", cause, calls, waits, err)
 		}
+	}
+}
+
+// A public submission retains the actual unavailable identity result beneath
+// an unflagged DNS wrapper. The next real read leads to one original send.
+func TestOnchainSubmitRecoversDnsWrappedOriginalRead(t *testing.T) {
+	fixture := newOnchainReadTestServer(t, func(method string, count int) int {
+		if method == "eth_chainId" && count == 1 {
+			return http.StatusServiceUnavailable
+		}
+		return 0
+	})
+	parent, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	waits, faults := 0, 0
+	ctx, budgets := onchainReadTestContext(t, parent, func(ctx context.Context, _ time.Duration) error { waits++; return ctx.Err() })
+	hooks := ctx.Value(onchainReadRetryHooksKey{}).(onchainReadRetryHooks)
+	hooks.additionalReadError = func(err error) error {
+		faults++
+		return &net.DNSError{Err: "synthetic wrapped original read", Name: "identity.example", UnwrapErr: err}
+	}
+	ctx = context.WithValue(ctx, onchainReadRetryHooksKey{}, hooks)
+	prepared, before, broadcast := 0, 0, 0
+	var original []byte
+	var originalHash common.Hash
+	result, err := SubmitWithHooks(ctx, fixture.params(false), SubmitHooks{
+		Prepared: func(hash common.Hash, raw []byte) error {
+			prepared++
+			originalHash, original = hash, bytes.Clone(raw)
+			return nil
+		},
+		BeforeBroadcast: func(common.Hash) error { before++; return nil },
+		Broadcast:       func(common.Hash) error { broadcast++; return nil },
+	})
+	if err != nil || result == nil || faults != 1 || waits != 1 || budgets.Load() != 5 || prepared != 1 || before != 1 || broadcast != 1 || fixture.count("eth_chainId") != 2 || fixture.count("eth_sendRawTransaction") != 1 || fixture.count("eth_getTransactionReceipt") != 1 || fixture.count("eth_getBlockByNumber") != 5 {
+		t.Fatalf("public submission lost original DNS child recovery: result=%v err=%v faults=%d waits=%d budgets=%d", result, err, faults, waits, budgets.Load())
+	}
+	fixture.stateLock.Lock()
+	sameOriginal := bytes.Equal(original, fixture.firstRaw) && originalHash == fixture.firstHash
+	fixture.stateLock.Unlock()
+	if len(original) == 0 || !sameOriginal {
+		t.Fatal("DNS recovery replaced the originally prepared transaction")
 	}
 }
 
