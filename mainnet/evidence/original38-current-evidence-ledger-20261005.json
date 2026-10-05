@@ -29,6 +29,11 @@
       "sha256": "5fdea5c6bd4c7eca14bc0b9f3ae01708522ed1f6c50d042f5472e6b388657e5a"
     },
     "body_pid": 3628898,
+    "future_skipped_input_addendum": {
+      "bytes": 7896,
+      "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/skip-inputs.json",
+      "sha256": "d83ecbfb182411c61403d12fd201b439a26c174494deb3ed4b6e87a8818a1cc6"
+    },
     "future_skipped_input_recipe": {
       "bytes": 9866,
       "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/model-skipped-input-followup/HANDOFF.json",
@@ -63,6 +68,7 @@
       "sha256": "d84195d91f660ca43e132b702421f981c8380f7532e76f5a8fad07dec055f9f6"
     },
     "observed_at": "2026-10-05T12:17:22.146183+00:00",
+    "original_skip_scope_limit": "The bound finite observation records8 original SKIPs; input readiness is not execution or an allowance. Active inert pro.yml exists. Two historical profiles remain prospective; no full-model terminal is claimed.",
     "owner_unit": "sn-current-624-d64-fullmodel1865-v6-model-normal-owner-20261005.service",
     "source_tuple": {
       "core": "026b850248352b72255be7a966e391e0a15e74c1",
@@ -602,11 +608,11 @@
     "test_bodies": 0
   },
   "completion_complement": {
-    "combined_deduplicated_obligations_per_mode": 2998,
-    "master_per_mode": 2840,
-    "scope_limit": "Master2840 excludes companion obligations only for accounting; all remain explicitly required, no new execution credit.",
+    "combined_deduplicated_obligations_per_mode": 3013,
+    "master_per_mode": 2849,
+    "scope_limit": "Master2849 retains separate116 existing, upstream51 (18 already master) and SDK15 obligations. Combined deduplicated3013 is completion accounting, not a claim of newly authored tests or execution.",
     "sdk_separate_per_mode": 15,
-    "separate_existing_per_mode": 110,
+    "separate_existing_per_mode": 116,
     "separate_upstream_required": 51,
     "upstream_additional_disjoint_per_mode": 33,
     "upstream_already_master": 18
@@ -794,9 +800,9 @@
     "skip": 0
   },
   "controls_preservation_and_delta": {
-    "bytes": 283150,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-516-decision-route/control-catalog-addendum.json",
-    "sha256": "d46a4ba0bab27e69bea5c7168718ef8191d3919d5874e2cd1f3127cd769af969"
+    "bytes": 296889,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/control-catalog-addendum.json",
+    "sha256": "43ed492fbee789900eb01db2659cc550fbe616f3625052762a7437b4277c2bd4"
   },
   "corrected_failures_not_reopened_as_code_bugs": [
     "Published module sums/declarations now resolve all4 actual default graphs; compiler/runtime proof still pending.",
@@ -849,17 +855,17 @@
       "run": 113,
       "skip": 0
     },
-    "additive_control_groups": 143,
+    "additive_control_groups": 150,
     "arin_new_fixture_control_groups": 3,
     "arin_new_model_roots": 1,
-    "current_go_roots_per_mode": 2840,
+    "current_go_roots_per_mode": 2849,
     "current_mainnet_roots_per_mode": 302,
     "current_server_api_handlers": 10,
     "current_server_controller_roots_per_mode": 101,
     "current_server_full_model": 1866,
     "current_server_roots_per_mode": 2044,
-    "current_sn_roots_per_mode": 564,
-    "current_validator_roots_per_mode": 95,
+    "current_sn_roots_per_mode": 573,
+    "current_validator_roots_per_mode": 104,
     "decision_finality_new_control_groups": 13,
     "decision_finality_new_validator_roots": 16,
     "fp2_new_control_groups": 4,
@@ -888,10 +894,13 @@
     "restored_existing_payment_neighbors": 2,
     "restored_original_native_roots_per_mode": 86,
     "retained_control_groups": 227,
+    "route_identity_new_cases": 56,
+    "route_identity_new_control_groups": 7,
+    "route_identity_new_validator_roots": 9,
     "rows_demonstrated_to_have_only_deployment_work_left": 0,
     "runtime_identity_new_control_groups": 11,
     "runtime_identity_new_go_roots": 7,
-    "separate_existing_completion_adjacent_roots_per_mode": 110,
+    "separate_existing_completion_adjacent_roots_per_mode": 116,
     "separate_existing_identity_adjacent_roots_per_mode": 28,
     "separate_existing_repair_adjacent_roots_per_mode": 14,
     "separate_sdk_control_groups": 12,
@@ -901,8 +910,8 @@
     "separate_upstream_already_master_roots_per_mode": 18,
     "separate_upstream_outside_master_roots_per_mode": 33,
     "separate_upstream_required_roots_per_mode": 51,
-    "source_catalog_control_groups": 370,
-    "source_control_groups_including_separate_sdk": 382,
+    "source_catalog_control_groups": 377,
+    "source_control_groups_including_separate_sdk": 389,
     "upload_finality_new_control_groups": 7,
     "upload_finality_new_go_roots": 11
   },
@@ -910,13 +919,13 @@
     "connect": "026b850248352b72255be7a966e391e0a15e74c1",
     "sdk": "e3f4f3fb56e59eb9fdb12c1f87594209c505e5e9",
     "server": "67467b263ff311da66ec96b3e9d007850bbfc627",
-    "sn": "516b397ac85776b97bd8fd99a75228c429f0fbed",
+    "sn": "ee81380ce97a7654979623d59164a178f6dca408",
     "xops": "9a37239ebeebbb5efea4f63a56191f91f3c4ad8f"
   },
   "current_portable_evidence": {
-    "bytes": 3986,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-516-decision-route/sn/mainnet/evidence/evm-decision-route-source-and-scope-20261005.json",
-    "sha256": "00a1c665ffd300dda8e3a8d8a8709f0576b7b47ca6bde281a6dda764cb43ace7"
+    "bytes": 3265,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+    "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
   },
   "external_authority_never_supplied_by_software_tests": [
     "Independently approved genesis/runtime/code/checkpoint/finality and true deployed route/identity.",
@@ -1094,17 +1103,11 @@
       "tree": "f37f32e043c845ea7dfb63e5a2917c275571b735"
     }
   },
-  "known_pending_source_work": [
-    {
-      "component": "recycle_operators.checkRoute immediate identity",
-      "limit": "A completed wrong early identity must be checked before a later RPC timeout; no route-source roots or controls counted before its frozen/merged intake.",
-      "status": "AUTHORING_SEPARATE_FIX"
-    }
-  ],
+  "known_pending_source_work": [],
   "latest_checkpoint": {
-    "bytes": 3986,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-516-decision-route/sn/mainnet/evidence/evm-decision-route-source-and-scope-20261005.json",
-    "sha256": "00a1c665ffd300dda8e3a8d8a8709f0576b7b47ca6bde281a6dda764cb43ace7"
+    "bytes": 3265,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+    "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
   },
   "native86_asset_mapping": {
     "map": {
@@ -1151,11 +1154,11 @@
     "sha256": "12cdefbefbe1b671da91c2e27350e8bcda2af7c53fa231083c671fe8729d7559"
   },
   "prior_checkpoint_preserved": {
-    "bytes": 12621,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5e71-ph12-arin/sn/mainnet/evidence/ph12-auth-arin-source-and-scope-20261005.json",
-    "sha256": "69447cdbd0896c15b36a2886301a6f0f2d677355ed22d7fef34559291228ec6e"
+    "bytes": 3986,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-516-decision-route/sn/mainnet/evidence/evm-decision-route-source-and-scope-20261005.json",
+    "sha256": "00a1c665ffd300dda8e3a8d8a8709f0576b7b47ca6bde281a6dda764cb43ace7"
   },
-  "prior_checkpoint_status_preserved": "All38 original outcomes remain open. Master2824 roots/mode preserves prior2787 and adds37 owned merged roots:SNminer20, Serverhandlers10/controller6/model1. SN548/mainnet302/validator79, Core224,VLESS8,Server2044/controller101/model1866 selected. All357 operative source groups remain required:prior290 plus67 additions. The extra SN redundant-defense diagnostic and SDK12 controls are separately preserved. Separate existing109 and SDK15 obligations remain explicit. PH12 provider credentials/original consent/retained replay, SDK exact NoId decoding and ARIN transaction setup are source fixed and unqualified. The upstream ac53 finite source review found no confirmed regression; its relevant roots remain a separate pending recipe. Thus1866 is the maintained owned model selection, not an exhaustive current model census. The frozen624/Core026/d64 fullmodel run has known four failures and one unallowed GeoLite2 fixture skip; no terminal or current-module PASS is claimed. Retained Forge226/five-artifact evidence applies only under its exact input proof; carry3 and original prior-carry control remain pending. Actual targeted passes and every original authority/rehearsal requirement remain unchanged. The upstream recipe preserves51 relevant roots:18 already master and33 disjoint additions, while three diagnostic declarations are not new mainnet obligations. The original2824 master, separate109 neighbors and SDK15 are unchanged. FP2 source674 strengthens one existing oracle and adds four pending controls, without a new root or production change. SDK12 controls are separate from core357; combined operative groups369 exclude the one extra SN diagnostic.",
+  "prior_checkpoint_status_preserved": "All38 original outcomes remain open. Preserve every prior2824 master tuple and357 operative control group; merged516 adds16 validator decision-finality roots and13 controls, yielding2840/core370 (SN564,validator95,mainnet302 unchanged). SDK15/12 controls, extra SN diagnostic, upstream51 recipe and all existing adjacent obligations remain separate and required. Decision source is implemented/unqualified; the immediate checkRoute identity follow-up remains separately unmerged. The frozen624/Core026/d64 model run retains its known failures/skips with no terminal or newer-source pass. All retained actual component results and external authority/rehearsal requirements remain unchanged.",
   "prior_failure_classification_preserved": [
     {
       "evidence_id": "nativefee11_direct",
@@ -1321,7 +1324,7 @@
   "reviewed_documentation_commit": "8776b03884fcca74d827dc613bd8233d2dc5f7a3",
   "rows": [
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1361,7 +1364,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1417,10 +1420,19 @@
         "path": "/home/by/urnetwork/sn/mainnet/evidence/customer-final-race-qualification-20261003.json",
         "sha256": "138253034e509103211bf57f10a61b999ef3d59c19eb6286b30fa0d5e6322513"
       },
+      "route_identity_source_update": {
+        "evidence": {
+          "bytes": 3265,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+          "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+        },
+        "implementation": "Opening/closing EVM route checks compare each completed chain/genesis identity before another read. Null remains unavailable; malformed or completed contradictions remain hard, preserving original error causes and read budgets.",
+        "qualification": "Nine new roots/56cases, six existing neighbors and seven controls require normal/race execution."
+      },
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1462,6 +1474,15 @@
         "path": "/home/by/urnetwork/sn/mainnet/evidence/monitor-policy-renewal-qualification-20261003.json",
         "sha256": "5cee15514cae38a39ffe021c489f57ffaa93346701754b353a7be823d663e5cd"
       },
+      "route_identity_source_update": {
+        "evidence": {
+          "bytes": 3265,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+          "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+        },
+        "implementation": "Opening/closing EVM route checks compare each completed chain/genesis identity before another read. Null remains unavailable; malformed or completed contradictions remain hard, preserving original error causes and read budgets.",
+        "qualification": "Nine new roots/56cases, six existing neighbors and seven controls require normal/race execution."
+      },
       "runtime_identity_source_update": {
         "evidence": {
           "bytes": 13769,
@@ -1478,7 +1499,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1535,7 +1556,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1561,7 +1582,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1590,7 +1611,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1630,7 +1651,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1656,7 +1677,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1691,7 +1712,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1725,7 +1746,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -1769,7 +1790,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "contract_reuse_update": {
         "actual_forge_roots_retained": 226,
         "actual_forge_suites": 20,
@@ -1853,6 +1874,15 @@
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-evm-current0f-qualification-20261003.json",
         "sha256": "3a42e698575b353be08e817a508b945355beeb5db8bce934b81d0dd42d9208ea"
       },
+      "route_identity_source_update": {
+        "evidence": {
+          "bytes": 3265,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+          "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+        },
+        "implementation": "Opening/closing EVM route checks compare each completed chain/genesis identity before another read. Null remains unavailable; malformed or completed contradictions remain hard, preserving original error causes and read budgets.",
+        "qualification": "Nine new roots/56cases, six existing neighbors and seven controls require normal/race execution."
+      },
       "separate_sdk_source_update": {
         "evidence": {
           "bytes": 6529,
@@ -1874,7 +1904,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1946,7 +1976,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -1975,7 +2005,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2033,7 +2063,7 @@
         "race": "UNEXECUTED",
         "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
       },
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2057,7 +2087,7 @@
       "original_complete_requirement": "Deterministic causal controls, affected normal/race/vet and actual complete release/rollout/restore/recovery qualification with exact custody.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
-      "remaining_software_evidence": "Complete the preserved2840 master normal/race selection, separate110 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all370 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate.",
+      "remaining_software_evidence": "Complete the preserved2849 master normal/race selection, separate116 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all377 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate.",
       "required_outcome": "Qualification and evidence: deterministic faults, composed coverage and independent replay",
       "retained_component_evidence": {
         "bytes": 6133,
@@ -2086,7 +2116,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2112,7 +2142,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2168,6 +2198,15 @@
         "path": "/home/by/urnetwork/sn/mainnet/evidence/runtime-observation6fa-short-partition-root-review-20261004.json",
         "sha256": "7eb71d1db11448cdee7e8f7a38644a668f1708d2fea0d2b9d67bcc51a9394ceb"
       },
+      "route_identity_source_update": {
+        "evidence": {
+          "bytes": 3265,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+          "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+        },
+        "implementation": "Opening/closing EVM route checks compare each completed chain/genesis identity before another read. Null remains unavailable; malformed or completed contradictions remain hard, preserving original error causes and read budgets.",
+        "qualification": "Nine new roots/56cases, six existing neighbors and seven controls require normal/race execution."
+      },
       "runtime_identity_source_update": {
         "evidence": {
           "bytes": 13769,
@@ -2184,7 +2223,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2218,7 +2257,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2244,7 +2283,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2284,7 +2323,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2310,7 +2349,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2336,7 +2375,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2362,7 +2401,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2397,7 +2436,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2417,7 +2456,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2446,7 +2485,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2487,7 +2526,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2514,6 +2553,15 @@
       "remaining_software_evidence": "Qualify exact current public identity/runtime/finality admission and refusal controls.",
       "required_outcome": "Mainnet identity",
       "retained_component_evidence": null,
+      "route_identity_source_update": {
+        "evidence": {
+          "bytes": 3265,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+          "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+        },
+        "implementation": "Opening/closing EVM route checks compare each completed chain/genesis identity before another read. Null remains unavailable; malformed or completed contradictions remain hard, preserving original error causes and read budgets.",
+        "qualification": "Nine new roots/56cases, six existing neighbors and seven controls require normal/race execution."
+      },
       "runtime_identity_source_update": {
         "evidence": {
           "bytes": 13769,
@@ -2530,7 +2578,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "contract_reuse_update": {
         "actual_forge_roots_retained": 226,
         "actual_forge_suites": 20,
@@ -2585,7 +2633,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2611,7 +2659,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2664,6 +2712,15 @@
       "remaining_software_evidence": "Complete current Go native consumers and the original Rust/control scope; full Rust113 normal has passed, while its original causal controls remain separate. Preserve and execute the original native86 roots and21 Go controls with exact original fixtures, including four corrected-runtime renewal consumers; all9 fixture profiles/38 originals, including distinct generic producer/conservation outputs, are now ready; their current Go consumer executions remain required.",
       "required_outcome": "Runtime and native continuity",
       "retained_component_evidence": null,
+      "route_identity_source_update": {
+        "evidence": {
+          "bytes": 3265,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+          "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+        },
+        "implementation": "Opening/closing EVM route checks compare each completed chain/genesis identity before another read. Null remains unavailable; malformed or completed contradictions remain hard, preserving original error causes and read budgets.",
+        "qualification": "Nine new roots/56cases, six existing neighbors and seven controls require normal/race execution."
+      },
       "runtime_identity_source_update": {
         "evidence": {
           "bytes": 13769,
@@ -2680,7 +2737,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2700,7 +2757,7 @@
       "retained_component_evidence": null
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "contract_reuse_update": {
         "actual_forge_roots_retained": 226,
         "actual_forge_suites": 20,
@@ -2784,6 +2841,15 @@
         "path": "/home/by/urnetwork/sn/mainnet/evidence/native-split-conformance-source-finding-20261003.json",
         "sha256": "1e2a599a48145641e656263f85f2b43e606a16d32bb8cd9c21d43d793be37c1b"
       },
+      "route_identity_source_update": {
+        "evidence": {
+          "bytes": 3265,
+          "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+          "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+        },
+        "implementation": "Opening/closing EVM route checks compare each completed chain/genesis identity before another read. Null remains unavailable; malformed or completed contradictions remain hard, preserving original error causes and read budgets.",
+        "qualification": "Nine new roots/56cases, six existing neighbors and seven controls require normal/race execution."
+      },
       "separate_sdk_source_update": {
         "evidence": {
           "bytes": 6529,
@@ -2805,7 +2871,7 @@
       "source_fix_awaiting_qualification": "Retired-wallet/lost-Circle-ACK correction is merged in Serverd64; ten new and two changed public roots plus eight controls await current-input execution. Fresh-send and cutoff authority remain unchanged."
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -2846,7 +2912,7 @@
       }
     },
     {
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "contract_reuse_update": {
         "actual_forge_roots_retained": 226,
         "actual_forge_suites": 20,
@@ -2936,7 +3002,7 @@
         "race": "UNEXECUTED",
         "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
       },
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile"
@@ -2983,7 +3049,7 @@
         "race": "UNEXECUTED",
         "source_owner": "d3382fd64e53017fd5cc9d16509464f8b613037f"
       },
-      "causal_controls": "Original227 and every prior130 addition preserved;13 decision-finality groups bring core total370. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
+      "causal_controls": "Original227 and every prior143 addition preserved;7 route-identity groups bring core total377. SDK12 and the extra SN redundant-defense diagnostic remain separate. No blanket current causal-kill qualification.",
       "current_evidence_ids": [
         "default_metadata",
         "main9_compile",
@@ -3007,7 +3073,7 @@
       "original_complete_requirement": "Complete prelaunch qualification and rollout/rollback/outage rehearsal; after approved activation observe three complete native emission intervals and a full 50,400-block UR settlement/claim cycle.",
       "outcome_complete": false,
       "race": "Prior exact component race receipts retained where documented; current affected race scope still pending. Nativefee13, arin13, replay7 racePASS and release95 pass union retained; remaining affected race scope pending.",
-      "remaining_software_evidence": "Complete the preserved2840 master normal/race selection, separate110 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all370 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate.",
+      "remaining_software_evidence": "Complete the preserved2849 master normal/race selection, separate116 existing neighbors, SDK15, the separate upstream51 recipe (18 already master;33 further roots) and all377 operative source-control obligations plus the separately retained SN diagnostic and SDK12 controls. Keep original wider requirements and independent exact-input reuse. Qualify merged PH12/ARIN and prior Circle continuity changes on selected current inputs; retain the frozen d64 fullmodel failures/fixture skip and all original receipts. Live authority and rollout/recovery/outage rehearsal remain separate.",
       "required_outcome": "Qualification, rollout and actual acceptance",
       "retained_component_evidence": {
         "bytes": 920,
@@ -3036,7 +3102,7 @@
       }
     }
   ],
-  "schema": "original38-current-evidence-ledger-v17",
+  "schema": "original38-current-evidence-ledger-v18",
   "scope2508": {
     "bytes": 2869,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/mainnet-long5-current-default/HANDOFF.json",
@@ -3367,14 +3433,30 @@
       "owner_commit": "4e398c32b018b7ef7590a6b5a7c4b8462675e347",
       "race": "UNEXECUTED",
       "source_commit": "516b397ac85776b97bd8fd99a75228c429f0fbed"
+    },
+    {
+      "cases": 56,
+      "component": "EVM owner-recycle route identity",
+      "controls": 7,
+      "evidence": {
+        "bytes": 3265,
+        "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/sn/mainnet/evidence/route-identity-and-skip-inputs-20261005.json",
+        "sha256": "835ed909aea03ebf4bc89b1cb362907f7462dc04fdeceac063b31f9d1658fc69"
+      },
+      "existing_neighbors": 6,
+      "new_roots": 9,
+      "normal": "UNEXECUTED",
+      "owner_commit": "f92d20529cc5f765e57720eee927d9c623279459",
+      "race": "UNEXECUTED",
+      "source_commit": "ee81380ce97a7654979623d59164a178f6dca408"
     }
   ],
   "source_selection": {
-    "bytes": 3351,
-    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-516-decision-route/SCOPE-HANDOFF.json",
-    "sha256": "305fafd56f3ff49a6d3a307367977219230cd8ce6e482d95bb5b8361c588f7cd"
+    "bytes": 3446,
+    "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-ee813-route-identity/SCOPE-HANDOFF.json",
+    "sha256": "f407700f31a7f4494866f4c5e97d28547c4918f321b5e36affeec292e6adcd39"
   },
-  "status": "All38 original outcomes remain open. Preserve every prior2824 master tuple and357 operative control group; merged516 adds16 validator decision-finality roots and13 controls, yielding2840/core370 (SN564,validator95,mainnet302 unchanged). SDK15/12 controls, extra SN diagnostic, upstream51 recipe and all existing adjacent obligations remain separate and required. Decision source is implemented/unqualified; the immediate checkRoute identity follow-up remains separately unmerged. The frozen624/Core026/d64 model run retains its known failures/skips with no terminal or newer-source pass. All retained actual component results and external authority/rehearsal requirements remain unchanged.",
+  "status": "All38 original outcomes remain open. Preserve every prior2840 master tuple and370 operative control group; mergedee813 adds9 validator route-identity roots/56cases and7 controls, yielding2849/core377 (SN573,validator104,mainnet302 unchanged). Six previously unselected existing route neighbors join the required companion116. SDK15/12 controls, extra SN diagnostic and upstream51 recipe remain separately required. The identified route source gap is fixed; normal/race/control qualification remains pending. Frozen624/Core026/d64 failures and original skips remain actual with no terminal or newer-source pass. All retained component results and external authority/rehearsal requirements remain unchanged.",
   "supersedes": {
     "bytes": 124390,
     "path": "/mnt/data/sn-testnet/mainnet-parallel-20261005/current-main-5b873-d64-native86/server8-rust113-checkpoint/original38-current-evidence-ledger-v6.json",
