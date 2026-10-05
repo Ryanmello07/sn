@@ -26,6 +26,10 @@ mod epoch_layout_tests;
 
 #[path = "historical_metadata_scope_tests.rs"]
 mod metadata_scope_tests;
+#[path = "historical_recipient_layout_tests.rs"]
+mod recipient_layout_tests;
+#[path = "historical_storage_call_tests.rs"]
+mod storage_call_tests;
 
 #[path = "historical_native_execution_tests.rs"]
 mod native_execution_tests;
@@ -262,11 +266,14 @@ fn observation_profile(code: &[u8], export: &str, purpose: &str) -> observer::Ob
             memory: Vec::new(),
             host_snapshot: None,
             state_reads: Vec::new(),
+            storage_call: None,
+            recipient_owner: false,
         }],
         metadata_sha256: None,
         principal_storage_prefixes: None,
         original_globals: Vec::new(),
         epoch_layout: None,
+        recipient_layout: None,
     }
 }
 

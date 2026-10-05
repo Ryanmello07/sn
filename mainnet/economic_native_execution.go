@@ -128,6 +128,7 @@ func (self nativeExecutionAdmission) validate(policy economicEmissionPolicy, blo
 // FixedPointTolerance covers the observed final normalization and u64 casts;
 // it does not excuse Yuma disagreement or grant an economic activation approval.
 type nativeExecutionOutcome struct {
+	RecipientInputs        []nativeRecipientInputProvenance    `json:"original_recipient_inputs,omitempty"`
 	EpochInputs            *nativeEpochInputProvenance         `json:"original_epoch_inputs,omitempty"`
 	Treasury               *nativeTreasuryAmounts              `json:"treasury_income,omitempty"`
 	FeeCensus              *nativeFeeCensusProjection          `json:"original_fee_census,omitempty"`
@@ -258,6 +259,10 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 	if err != nil {
 		return nil, err
 	}
+	recipientLayout, err := newNativeRecipientStorageLayout(profile, metadata, policy.Netuid)
+	if err != nil {
+		return nil, err
+	}
 	var drains []*historicalReplayObservation
 	var epoch, emission *historicalReplayObservation
 	recipients := []historicalReplayObservation{}
@@ -284,7 +289,9 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 		// The same original runtime callsite can execute for several subnets.
 		// Its actual netuid remains part of the authenticated memory capture.
 		var netuid uint64
-		if epochLayout != nil && record.Purpose == "native-drain" {
+		if recipientLayout != nil && nativeRecipientStoragePurpose(record.Purpose) {
+			netuid, err = recipientLayout.netuidFor(*record)
+		} else if epochLayout != nil && record.Purpose == "native-drain" {
 			netuid, err = nativeEpochDrainNetuid(*record, drainKeys)
 		} else {
 			netuid, err = nativeCaptureUint(*record, "netuid", 2)
@@ -311,9 +318,12 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 				return nil, errors.New("native original emission precedes or repeats normalization")
 			}
 			emission = record
-		case "native-miner-credit", "native-owner-recycle":
-			if emission == nil || record.Operation != "set" {
+		case "native-miner-capture", "native-miner-credit", "native-owner-recycle", "native-recipient-owner-hotkey", "native-recipient-auto-stake", "native-recipient-owner":
+			if emission == nil || recipientLayout == nil && (record.Operation != "set" || record.Purpose != "native-miner-credit" && record.Purpose != "native-owner-recycle") || recipientLayout != nil && record.Operation != "get" && record.Operation != "set" {
 				return nil, errors.New("native recipient effect precedes original normalization")
+			}
+			if recipientLayout != nil && len(recipients) >= 6*rootCensusLimit+1 {
+				return nil, errors.New("native original recipient component census exceeds its finite bound")
 			}
 			recipients = append(recipients, *record)
 		default:
@@ -466,40 +476,44 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 		return nil, err
 	}
 	providerTotal, ownerTotal, residualTotal, capturedTotal := new(big.Int), new(big.Int), new(big.Int), new(big.Int)
-	effects := make([]nativeExecutionEffect, 0, len(recipients))
-	for _, record := range recipients {
-		hotkey, err := nativeCapture(record, "hotkey", 32)
+	inputs := make([]nativeRecipientInput, 0, len(recipients))
+	if recipientLayout != nil {
+		inputs, err = recipientLayout.decode(recipients)
 		if err != nil {
 			return nil, err
 		}
-		identity, exists := byHotkey["0x"+hex.EncodeToString(hotkey)]
+	} else {
+		for _, record := range recipients {
+			input, err := decodeNativeLegacyRecipient(record)
+			if err != nil {
+				return nil, err
+			}
+			inputs = append(inputs, input)
+		}
+	}
+	effects := make([]nativeExecutionEffect, 0, len(inputs))
+	for _, input := range inputs {
+		identity, exists := byHotkey[input.hotkey]
 		if !exists || used[identity.Hotkey] {
 			return nil, errors.New("native recipient effect changed or duplicated original generation")
 		}
 		uid := identity.Uid
 		used[identity.Hotkey] = true
-		coldkey, err := nativeCapture(record, "coldkey", 32)
-		if err != nil {
-			return nil, err
-		}
-		result.Recipients[uid].Coldkey = "0x" + hex.EncodeToString(coldkey)
+		result.Recipients[uid].Coldkey = input.coldkey
 		if provider, ok := providers[identity.Hotkey]; ok && provider.Coldkey != result.Recipients[uid].Coldkey {
 			return nil, errors.New("native provider reward owner changed")
 		}
-		gross, err := nativeCaptureUint(record, "gross", 8)
-		if err != nil {
-			return nil, err
-		}
+		gross := input.gross
 		if gross != emitted[uid] {
 			return nil, errors.New("native reward, capture and actual recycling do not conserve original emission")
 		}
-		effect := nativeExecutionEffect{Ordinal: record.Ordinal, Recipient: result.Recipients[uid], Branch: record.Purpose, Gross: fmt.Sprint(gross), Liquid: "0", Collateral: "0", Recycled: "0"}
+		effect := nativeExecutionEffect{Ordinal: input.record.Ordinal, Recipient: result.Recipients[uid], Branch: input.branch, Gross: fmt.Sprint(gross), Liquid: "0", Collateral: "0", Recycled: "0"}
 		_, effect.Provider = providers[identity.Hotkey]
-		if record.Purpose == "native-owner-recycle" {
+		if input.branch == "native-owner-recycle" {
 			// The admitted original body/range identifies the owner Recycle
 			// branch, excluding burn, root recycling and separate owner cut.
-			recycled, err := nativeCaptureUint(record, "recycled", 8)
-			if err != nil || recycled != gross {
+			recycled := input.recycled
+			if recycled != gross {
 				return nil, errors.New("native owner recycling differs from original entitlement")
 			}
 			if effect.Provider || admission.Treasury != nil && nativeTreasuryRecipient(admission.Treasury.Policy, effect.Recipient) {
@@ -508,17 +522,13 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 			ownerTotal.Add(ownerTotal, new(big.Int).SetUint64(recycled))
 			effect.Recycled = fmt.Sprint(recycled)
 		} else {
-			captured, err := nativeCaptureUint(record, "captured", 8)
-			if err != nil {
-				return nil, err
-			}
-			liquid, err := nativeCaptureUint(record, "liquid", 8)
-			if err != nil || captured > gross || liquid != gross-captured {
+			captured, liquid := input.captured, input.liquid
+			if captured > gross || liquid != gross-captured {
 				return nil, errors.New("native collateral capture and liquid reward do not conserve original entitlement")
 			}
 			capturedTotal.Add(capturedTotal, new(big.Int).SetUint64(captured))
 			effect.Liquid, effect.Collateral = fmt.Sprint(liquid), fmt.Sprint(captured)
-			effect.Treasury, err = deriveNativeTreasuryRecipient(admission.Treasury, record, effect)
+			effect.Treasury, err = deriveNativeStorageTreasuryRecipient(admission.Treasury, input, effect)
 			if err != nil {
 				return nil, err
 			}
@@ -538,6 +548,9 @@ func deriveNativeExecution(policy economicEmissionPolicy, admission nativeExecut
 			} else {
 				residualTotal.Add(residualTotal, new(big.Int).SetUint64(gross))
 			}
+		}
+		if input.provenance != nil {
+			result.RecipientInputs = append(result.RecipientInputs, *input.provenance)
 		}
 		effects = append(effects, effect)
 	}

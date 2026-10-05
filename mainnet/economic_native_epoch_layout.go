@@ -123,6 +123,9 @@ func (self *nativeEpochStorageLayout) hasRecords() bool {
 }
 
 func validateHistoricalExecutionState(rule historicalReplayHookRule, record historicalNativeObservation) error {
+	if rule.RecipientOwner {
+		return validateHistoricalRecipientOwnerState(record)
+	}
 	if len(rule.StateReads) == 0 {
 		if record.ExecutionState != nil {
 			return errors.New("native original observation invented execution-state reads")

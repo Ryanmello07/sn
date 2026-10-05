@@ -404,13 +404,24 @@ func validateNativeTreasuryProfile(authority nativeProducerAuthority) error {
 	if authority.Profile == nil {
 		return errors.New("native treasury has no original callsite reader")
 	}
+	if err := errors.Join(authority.Profile.validateEpochLayout(), authority.Profile.validateRecipientLayout()); err != nil {
+		return err
+	}
+	if authority.Profile.RecipientLayout != nil {
+		return validateNativeStorageTreasuryProfile(authority.Profile)
+	}
 	epoch, credit := false, false
+	counter := false
 	for _, rule := range authority.Profile.Rules {
 		var required []string
 		switch rule.Purpose {
 		case "native-epoch":
 			epoch = true
-			required = []string{"subnet-epoch"}
+			if authority.Profile.EpochLayout == nil {
+				required = []string{"subnet-epoch"}
+			}
+		case "native-epoch-index":
+			counter = true
 		case "native-miner-credit":
 			credit = true
 			required = []string{"subnet-owner", "subnet-owner-hotkey", "owner-hotkeys", "auto-stake-destination", "stake-destination"}
@@ -427,7 +438,7 @@ func validateNativeTreasuryProfile(authority nativeProducerAuthority) error {
 			}
 		}
 	}
-	if !epoch || !credit {
+	if !epoch || !credit || authority.Profile.EpochLayout != nil && !counter {
 		return errors.New("native treasury reader omitted original epoch or ordinary credit")
 	}
 	return nil

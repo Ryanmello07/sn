@@ -26,6 +26,7 @@ type historicalReplayObservationProfile struct {
 	PrincipalStoragePrefixes []string                   `json:"principal_storage_prefixes,omitempty"`
 	OriginalGlobals          []historicalOriginalGlobal `json:"original_globals,omitempty"`
 	EpochLayout              *string                    `json:"epoch_layout,omitempty"`
+	RecipientLayout          *string                    `json:"recipient_layout,omitempty"`
 }
 
 // The engine may expose only these existing globals to its read-only host.
@@ -44,6 +45,8 @@ type historicalReplayHookRule struct {
 	Memory             []historicalNativeCapture `json:"memory,omitempty"`
 	HostSnapshot       *string                   `json:"host_snapshot,omitempty"`
 	StateReads         []string                  `json:"state_reads,omitempty"`
+	StorageCall        *historicalStorageCall    `json:"storage_call,omitempty"`
+	RecipientOwner     bool                      `json:"recipient_owner,omitempty"`
 }
 
 type historicalNativeCapture struct {
@@ -190,12 +193,18 @@ func (self *historicalReplayObservationProfile) validate(job historicalReplayJob
 	if err := self.validateEpochLayout(); err != nil {
 		return err
 	}
+	if err := self.validateRecipientLayout(); err != nil {
+		return err
+	}
 	if err := self.validateOriginalGlobals(); err != nil {
 		return err
 	}
 	for index, rule := range self.Rules {
 		if !(historicalReplayPurpose(rule.Purpose) || self.Schema == historicalNativeProfileSchema && historicalNativePurpose(rule.Purpose)) || rule.FunctionBodySha256 == (historicalReplayDigest{}) || rule.OffsetStart >= rule.OffsetEnd {
 			return errors.New("historical observation rule identity or range differs")
+		}
+		if err := validateHistoricalStorageCallRule(self, rule); err != nil {
+			return err
 		}
 		if err := validateHistoricalHostSnapshotRule(self, rule); err != nil {
 			return err
@@ -204,7 +213,7 @@ func (self *historicalReplayObservationProfile) validate(job historicalReplayJob
 			return err
 		}
 		for _, prior := range self.Rules[:index] {
-			if prior.FunctionIndex == rule.FunctionIndex && rule.OffsetStart < prior.OffsetEnd && prior.OffsetStart < rule.OffsetEnd {
+			if (prior.StorageCall != nil && rule.StorageCall != nil || prior.FunctionIndex == rule.FunctionIndex && rule.OffsetStart < prior.OffsetEnd && prior.OffsetStart < rule.OffsetEnd) && historicalStoragePathsOverlap(prior, rule) {
 				return errors.New("historical observation rules overlap")
 			}
 		}
@@ -288,10 +297,13 @@ func validateHistoricalReplayObservations(job historicalReplayJob, trace *histor
 		}
 		matches := 0
 		for _, rule := range profile.Rules {
-			for frameIndex, frame := range observation.Stack {
-				if rule.FunctionIndex == frame.FunctionIndex && frame.FunctionOffset >= rule.OffsetStart && frame.FunctionOffset < rule.OffsetEnd {
+			for frameIndex := range observation.Stack {
+				if historicalRuleMatchesAt(rule, observation.Stack, frameIndex) {
 					if err := validateHistoricalHostSnapshotRecord(profile, rule, observation, frameIndex); err != nil {
 						return err
+					}
+					if rule.StorageCall != nil && rule.StorageCall.Operation != observation.Operation {
+						return errors.New("original storage call operation differs")
 					}
 					if rule.Purpose != observation.Purpose {
 						return errors.New("historical observation purpose contradicts original profile")
