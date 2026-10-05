@@ -81,7 +81,7 @@ Usage:
 		[--allow-client-registration | --adopt-legacy-provider-key]
         [--api_url=<api_url>]
         [--connect_url=<connect_url>]
-        [--wallet=<coldkey_ss58> [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]]
+        [--wallet=<coldkey_ss58> [--provider-jwt=<path>] [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>] [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]]
 		[--test-egress-source-ip=<source_ip>]
         [--max-memory=<mem>]
         [-v...]
@@ -95,17 +95,17 @@ Usage:
     	[--port=<port>]
         [--api_url=<api_url>]
         [--connect_url=<connect_url>]
-        [--wallet=<coldkey_ss58> [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]]
+        [--wallet=<coldkey_ss58> [--provider-jwt=<path>] [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>] [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]]
 		[--test-egress-source-ip=<source_ip>]
         [--max-memory=<mem>]
         [-v...]
-    provider wallet set <coldkey_ss58> [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]
+    provider wallet set <coldkey_ss58> [--provider-jwt=<path> | --legacy-network-wallet] [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>] [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]
         [--api_url=<api_url>]
         [-v...]
-    provider wallet challenge <coldkey_ss58>
+    provider wallet challenge <coldkey_ss58> [--provider-jwt=<path> | --legacy-network-wallet] [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>]
         [--api_url=<api_url>]
         [-v...]
-    provider claim [--epoch=<epoch>] [--rpc=<rpc_url>]... [--key_file=<key_file>] [--dry-run]
+    provider claim [--provider-jwt=<path> | --legacy-coldkey=<coldkey_ss58>] [--epoch=<epoch>] [--rpc=<rpc_url>]... [--key_file=<key_file>] [--dry-run]
         [--api_url=<api_url>]
         [-v...]
     provider claim-daemon --config=<path>
@@ -175,6 +175,13 @@ Options:
     				                 password anyways, if you don't specify it using this option.
     -p --port=<port>                 Status server port [default: 0].
     --max-memory=<mem>               Set the maximum amount of memory in bytes, or the suffixes b, kib, mib, gib may be used [This is a soft limit].
+    --wallet-from-epoch=<epoch>     First prospective earning epoch in the signed provider mapping.
+    --wallet-through-epoch=<epoch>  Last inclusive earning epoch; at most 65536 epochs.
+                                     Omit both to use the next epoch through the finite 65536-epoch window.
+    --provider-jwt=<path>           Select one retained provider JWT; default: .provider.jwt in the provider state directory.
+    --legacy-network-wallet         Explicit network-wallet compatibility; never selects a provider wallet.
+    --legacy-coldkey=<coldkey_ss58>   Read a legacy network-only proof for this original committed coldkey.
+                                     Uses the network JWT; never substitutes the current network wallet.
     --wallet=<coldkey_ss58>          Also set the subnet claim wallet at startup, same as provider wallet set.
                                      A failure is logged and does not block providing.
     --coldkey_seed_file=<path>       With --wallet / wallet set: the coldkey's 32-byte sr25519 seed (raw, or 64 hex
@@ -475,12 +482,6 @@ func provide(opts docopt.Opts) {
 	ctx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	defer stopSignals()
 
-	// subnet claim wallet (sn/PLAN.md 7.3, decision D-2): validate the
-	// ss58 coldkey locally, prove it with --coldkey_seed_file or
-	// --message/--signature (sn_wallet.go) and idempotently register it
-	// with the platform before providing starts.
-	provideSetWallet(ctx, apiUrl, opts)
-
 	allProxySettings := readProxySettings()
 	providerCount := len(allProxySettings)
 	if providerCount == 0 {
@@ -504,6 +505,16 @@ func provide(opts docopt.Opts) {
 		fmt.Fprintf(os.Stderr, "signed close evidence unavailable: %v\n", domainErr)
 	}
 	settings := providerRunSettings{apiUrl: apiUrl, connectUrl: connectUrl, port: port, proxySettings: allProxySettings, memoryPlan: memoryPlan, testEgressDialer: testEgressDialer, allowClientRegistration: allowClientRegistration, adoptLegacyProviderKey: adoptLegacyProviderKey}
+	settings.wallet, _ = opts.String("--wallet")
+	if settings.wallet != "" {
+		settings.walletProof, err = snWalletProofFromOpts(opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "subnet wallet not set: %v; continuing to provide\n", err)
+			settings.wallet = ""
+		}
+	} else if misuse := snProvideWalletMisuse(opts); misuse != "" {
+		fmt.Fprintln(os.Stderr, misuse)
+	}
 	settings.closeReportDomainHash = domainHash
 	settings.workCapturePath, _ = opts.String("--whole-work-capture")
 	settings.workCaptureSha256, _ = opts.String("--whole-work-capture-sha256")
@@ -659,6 +670,30 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 				output.observe(providerStartupRecoveryRequired, index, true, err, 0, nil)
 			}
 			return err
+		}
+
+		// Each authenticated slot owns its optional wallet set. A fresh or
+		// proxy provider never borrows the direct provider's credential.
+		if self.wallet != "" {
+			proof := snWalletProof{}
+			if self.walletProof != nil {
+				proof = *self.walletProof
+			}
+			if proof.credentials.jwtFile == "" {
+				proof.credentials.jwtFile = clientJwtPath
+			}
+			proof.credentials.original = byClientJwt
+			walletStrategy := connect.NewClientStrategy(proxyCtx, clientStrategySettings)
+			walletErr := snSetWallet(proxyCtx, walletStrategy, self.apiUrl, self.wallet, &proof)
+			walletStrategy.Close()
+			if hooks, ok := proxyCtx.Value(providerRegistrationHooksKey{}).(providerRegistrationHooks); ok && hooks.afterWallet != nil {
+				if err := hooks.afterWallet(walletErr); err != nil {
+					return errors.Join(walletErr, err)
+				}
+			}
+			if walletErr != nil {
+				fmt.Fprintf(os.Stderr, "provider %d subnet wallet not set: %v; continuing to provide\n", index, walletErr)
+			}
 		}
 
 		callbacks := &providerAuthenticationCallbacks{diagnostics: output, provider: index, clientJwtPath: clientJwtPath, networkJwtPath: networkJwtPath, cancel: cancel, custody: keyOwner}

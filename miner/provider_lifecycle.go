@@ -17,6 +17,8 @@ import (
 
 // Configuration is copied before workers start and is immutable for one run.
 type providerRunSettings struct {
+	wallet                  string
+	walletProof             *snWalletProof
 	apiUrl                  string
 	connectUrl              string
 	port                    int

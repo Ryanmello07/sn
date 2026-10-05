@@ -45,6 +45,7 @@ type providerRegistrationTestRecord struct {
 // One fixture models versioned server dedup and deliberately non-idempotent
 // legacy allocation. Real PostgreSQL allocation is independently qualified.
 type providerRegistrationFixture struct {
+	walletHandler  http.HandlerFunc
 	test           *testing.T
 	dir            string
 	server         *httptest.Server
@@ -195,6 +196,13 @@ func (self *providerRegistrationFixture) observeCustody(body []byte, request sdk
 // Allocation happens before a lost-reply barrier. A subsequent versioned call
 // can return only the same client; the legacy route allocates on every call.
 func (self *providerRegistrationFixture) serveHttp(w http.ResponseWriter, r *http.Request) {
+	self.stateLock.Lock()
+	walletHandler := self.walletHandler
+	self.stateLock.Unlock()
+	if walletHandler != nil && strings.HasPrefix(r.URL.Path, "/sn/") {
+		walletHandler(w, r)
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 16*1024))
 	closeErr := r.Body.Close()
 	if err != nil || closeErr != nil {
