@@ -39,6 +39,10 @@ func init() {
 		historicalCaptureSyntheticPeer()
 		os.Exit(0)
 	}
+	if len(os.Args) == 2 && os.Args[1] == "--historical-proof-capture-feed-v1" {
+		historicalArchiveCaptureSyntheticPeer()
+		os.Exit(0)
+	}
 	if len(os.Args) != 2 || os.Args[1] != "--historical-proof-replay-v1" {
 		os.Exit(6)
 	}

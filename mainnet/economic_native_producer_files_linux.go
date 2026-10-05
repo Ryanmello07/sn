@@ -77,11 +77,22 @@ type nativeProducerFiles struct {
 }
 
 func openNativeProducerFiles(ctx context.Context, execution *nativeExecutionPolicy) (_ *nativeProducerFiles, resultErr error) {
-	directory, err := durablepath.Open(ctx, execution.Directory, durablevolume.ReadWrite, false)
+	files, err := openNativeEvidenceFiles(ctx, execution.Directory, execution.Producer.MaximumBytes, execution.Producer.MaximumEntries)
 	if err != nil {
 		return nil, err
 	}
-	self := &nativeProducerFiles{ctx: ctx, directory: directory, path: execution.Directory, policy: *execution.Producer}
+	files.policy = *execution.Producer
+	return files, nil
+}
+
+// The file owner grants only exclusive bounded evidence custody. An unsigned
+// capture may use it without constructing a producer or financial authority.
+func openNativeEvidenceFiles(ctx context.Context, path string, maximumBytes, maximumEntries uint64) (_ *nativeProducerFiles, resultErr error) {
+	directory, err := durablepath.Open(ctx, path, durablevolume.ReadWrite, false)
+	if err != nil {
+		return nil, err
+	}
+	self := &nativeProducerFiles{ctx: ctx, directory: directory, path: path, policy: nativeExecutionProducerPolicy{MaximumBytes: maximumBytes, MaximumEntries: maximumEntries}}
 	defer func() {
 		if resultErr != nil {
 			resultErr = errors.Join(resultErr, self.close())
