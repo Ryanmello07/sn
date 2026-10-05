@@ -196,11 +196,10 @@ require (
 	src.agwa.name/tlshacks v0.0.4 // indirect
 )
 
-// Versioned replacements retain the client-authentication source floor and
-// durable-volume v2 admission, bounded v3 custody inventory and reviewed fresh
-// namespace preparation. They also cover sibling modules'
-// v0.0.0 placeholders without selecting an older local checkout implicitly.
-replace github.com/urnetwork/connect => github.com/urnetwork/connect v0.0.0-20261003195725-2ea8d82ea5cb
+// The sibling Connect checkout supplies original contract creation custody to
+// both main modules. Go ignores dependency replacements, so SN declares this
+// source explicitly as Server does; a workspace override is not required.
+replace github.com/urnetwork/connect => ../connect
 
 replace github.com/urnetwork/sdk => github.com/urnetwork/sdk v0.0.0-20261003032453-9ae95704a230
 
