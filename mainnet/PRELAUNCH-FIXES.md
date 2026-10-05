@@ -6,7 +6,7 @@ The reviewed mainnet code is committed, merged and pushed in all four repositori
 
 Verification now runs against these combined main versions. Collect ordinary failures across the complete normal, race, model and causal-control scopes; fix them in targeted commits on main. Retain successful results when their complete source, dependency, tool and configuration inputs are unchanged. Do not require separate branch qualification before merging reviewed fixes. Deployment and signing retain their own approval and readiness requirements.
 
-All seven compilers on the retained SN475/Core07/Server87d inputs passed. SN application code matches that selected source; additional upstream Connect and Server changes require verification of the final main dependency graph. The historical results and all 38 outcome requirements below remain intact.
+All seven compilers on the retained SN475/Core07/Server87d inputs passed. The [combined-main dependency result](evidence/published-main-metadata-result-20261005.json) now verifies the exact frozen main archives, checksum-pinned published gvisor dependency and three offline import graphs: seven phases exited zero and joined, with no resource errors. This establishes dependency resolution, not test behavior. Verify the main package images and execute the complete normal/race selections, including all 1,823 current Server model roots, without repeating the smaller model subset separately. Reuse older images only where complete compiler inputs match. The historical results and all 38 outcome requirements below remain intact.
 
 ## Current status after the missed deadline — October 5
 
