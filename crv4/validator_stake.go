@@ -158,14 +158,9 @@ func readValidatorStakeAtContext(ctx context.Context, chain *Chain, query Valida
 	if err != nil {
 		return empty, err
 	}
-	canonical, err := validatorIdentityBlockHashAtContext(ctx, chain, query.BlockNumber)
-	if err != nil {
-		return empty, err
-	}
-	if canonical != query.BlockHash {
-		return empty, errors.New("validator stake canonical block changed during observation")
-	}
-	if err := ctx.Err(); err != nil {
+	if err := closeValidatorReadFinalityContext(ctx, chain,
+		finalityReadWitness{hash: query.BlockHash, number: query.BlockNumber},
+		finalityReadWitness{hash: identity.FinalizedHash, number: identity.FinalizedNumber}); err != nil {
 		return empty, err
 	}
 	return observation, nil
