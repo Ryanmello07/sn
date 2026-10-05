@@ -99,7 +99,7 @@ func retryableClaimApiReadCause(err error, depth int, budget *minerReadCauseBudg
 			return false
 		}
 		return cause.StatusCode == http.StatusRequestTimeout || cause.StatusCode == http.StatusTooEarly || cause.StatusCode == http.StatusTooManyRequests || cause.StatusCode >= 500 && cause.StatusCode <= 599
-	case *os.PathError, *url.Error, *net.OpError:
+	case *os.PathError, *os.LinkError, *url.Error, *net.OpError, *net.DNSError:
 		return retryableEthRpcCause(err, false, depth, budget)
 	case interface{ Unwrap() []error }:
 		if !budget.admit(err, depth) {

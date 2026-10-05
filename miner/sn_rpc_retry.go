@@ -104,7 +104,8 @@ func retryableEthRpcCause(err error, transportOrigin bool, depth int, budget *mi
 	if !budget.admit(err, depth) || err == context.Canceled {
 		return false
 	}
-	if _, fileError := err.(*os.PathError); fileError {
+	switch err.(type) {
+	case *os.PathError, *os.LinkError:
 		return false
 	}
 	if err == context.DeadlineExceeded || err == net.ErrClosed || err == syscall.ECONNRESET || err == syscall.ECONNREFUSED || err == syscall.EPIPE || err == syscall.ETIMEDOUT || err == syscall.ENETUNREACH || err == syscall.EHOSTUNREACH {
@@ -122,6 +123,16 @@ func retryableEthRpcCause(err error, transportOrigin bool, depth int, budget *mi
 		return retryableEthRpcCause(cause.Err, true, depth+1, budget)
 	case *net.OpError:
 		return retryableEthRpcCause(cause.Err, true, depth+1, budget)
+	case *net.DNSError:
+		// A standard DNS leaf has an optional wrapped cause. Permanent
+		// metadata cannot borrow a transient child or sibling's authority.
+		if cause.IsNotFound || !cause.IsTimeout && !cause.IsTemporary {
+			return false
+		}
+		if cause.UnwrapErr != nil {
+			return retryableEthRpcCause(cause.UnwrapErr, transportOrigin, depth+1, budget)
+		}
+		return true
 	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		causes := joined.Unwrap()
