@@ -255,6 +255,7 @@ func TestSubstrateReadDnsPublicReadKeepsOriginalHardCause(t *testing.T) {
 		{Err: "synthetic resolver timeout", Name: "rpc.example", IsTimeout: true, UnwrapErr: hard},
 		{Err: "synthetic resolver timeout", Name: "rpc.example", IsTimeout: true, UnwrapErr: errors.Join(context.DeadlineExceeded, hard)},
 		{Err: "synthetic resolver timeout", Name: "rpc.example", IsTimeout: true, UnwrapErr: &os.PathError{Op: "read", Path: "synthetic-resolver-config", Err: context.DeadlineExceeded}},
+		{Err: "synthetic resolver timeout", Name: "rpc.example", IsTimeout: true, UnwrapErr: &os.LinkError{Op: "rename", Old: "synthetic-resolver-old", New: "synthetic-resolver-new", Err: context.DeadlineExceeded}},
 		{Err: "synthetic resolver timeout", Name: "rpc.example", IsTimeout: true, UnwrapErr: context.Canceled},
 	} {
 		fixture := newSubstrateReadDnsFixture(t, types.Hash{43}, func(int) error { return cause })
@@ -264,6 +265,50 @@ func TestSubstrateReadDnsPublicReadKeepsOriginalHardCause(t *testing.T) {
 		requests, dials, replies, closes := fixture.snapshot()
 		if err == nil || !errors.Is(err, cause) || !HasSubstrateReadTransportCause(err) || RetryableSubstrateReadTransportError(err) || receiptScanUnavailable(err) || len(requests) != 1 || dials != 1 || replies != 0 || closes != 0 || budget.attempts != 1 || budget.elapsed != 0 {
 			t.Fatalf("hard original DNS cause was replayed or erased: requests=%d dials=%d replies=%d closes=%d attempts=%d elapsed=%s error=%v", len(requests), dials, replies, closes, budget.attempts, budget.elapsed, err)
+		}
+	}
+}
+
+// A local file operation cannot borrow retry authority from an actual native
+// read failure retained below it, including alongside a separate read marker.
+func TestSubstrateReadHttpFileLinkCannotBorrowPhysicalMarker(t *testing.T) {
+	cause := &net.DNSError{Err: "synthetic resolver timeout", Name: "rpc.example", IsTimeout: true}
+	fixture := newSubstrateReadDnsFixture(t, types.Hash{43}, func(int) error { return cause })
+	budget, hooks := newSubstrateReadTestBudget(t, 75*time.Second)
+	fixture.client.readRetry = hooks
+	original := fixture.chain.CheckCanonicalBlockAtContext(t.Context(), types.Hash{43}, 100)
+	requests, dials, replies, closes := fixture.snapshot()
+	if !errors.Is(original, cause) || !errors.Is(original, context.DeadlineExceeded) || !RetryableSubstrateReadTransportError(original) || len(requests) != 4 || dials != 4 || replies != 0 || closes != 0 || budget.attempts != 4 || budget.elapsed != 300*time.Second {
+		t.Fatalf("file-link fixture did not obtain the actual native read failure: requests=%d dials=%d replies=%d closes=%d attempts=%d elapsed=%s error=%v", len(requests), dials, replies, closes, budget.attempts, budget.elapsed, original)
+	}
+	for _, local := range []error{
+		&os.PathError{Op: "read", Path: "synthetic-local-state", Err: original},
+		&os.LinkError{Op: "rename", Old: "synthetic-local-old", New: "synthetic-local-new", Err: original},
+	} {
+		for _, err := range []error{local, errors.Join(original, local), errors.Join(local, original)} {
+			if !errors.Is(err, local) || !errors.Is(err, cause) || !HasSubstrateReadTransportCause(err) || RetryableSubstrateReadTransportError(err) || substrateRPCDisconnected(err) || receiptScanUnavailable(err) {
+				t.Fatalf("local file cause borrowed an actual native marker: %v", err)
+			}
+		}
+	}
+}
+
+// Raw local failures also remain hard in the receipt continuation fallback,
+// which has no physical marker to route through the native HTTP classifier.
+func TestSubstrateReadReceiptRejectsRawLocalFileCauses(t *testing.T) {
+	for _, child := range []error{context.DeadlineExceeded, context.Canceled} {
+		if !receiptScanUnavailable(child) {
+			t.Fatal("pure caller interruption lost its existing partial-scan semantics")
+		}
+		for _, local := range []error{
+			&os.PathError{Op: "read", Path: "synthetic-receipt-state", Err: child},
+			&os.LinkError{Op: "rename", Old: "synthetic-receipt-old", New: "synthetic-receipt-new", Err: child},
+		} {
+			for _, err := range []error{local, errors.Join(child, local), errors.Join(local, child)} {
+				if HasSubstrateReadTransportCause(err) || receiptScanUnavailable(err) {
+					t.Fatalf("raw local file cause acquired partial receipt authority: %v", err)
+				}
+			}
 		}
 	}
 }

@@ -109,7 +109,7 @@ func receiptScanUnavailableBounded(err error, depth int, budget *substrateReadCa
 		return true
 	}
 	switch cause := err.(type) {
-	case *os.PathError:
+	case *os.PathError, *os.LinkError:
 		return false
 	case syscall.Errno:
 		return cause.Timeout()

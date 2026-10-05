@@ -151,7 +151,8 @@ func classifySubstrateReadHttpErrorBounded(err error, depth int, budget *substra
 	if !budget.admit(err, depth) || err == context.Canceled || err == gsrpcgeth.ErrClientQuit {
 		return false, false
 	}
-	if _, localFile := err.(*os.PathError); localFile {
+	switch err.(type) {
+	case *os.PathError, *os.LinkError:
 		return false, false
 	}
 	if _, rpcError := err.(gsrpcgeth.Error); rpcError {

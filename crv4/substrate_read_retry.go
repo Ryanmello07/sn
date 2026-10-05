@@ -54,7 +54,8 @@ func retryableSubstrateRpcReadTransportBounded(err error, transportOrigin, allow
 	if _, rpcError := err.(gsrpcgeth.Error); rpcError {
 		return false
 	}
-	if _, localFile := err.(*os.PathError); localFile {
+	switch err.(type) {
+	case *os.PathError, *os.LinkError:
 		return false
 	}
 	if err == context.DeadlineExceeded || err == net.ErrClosed {
