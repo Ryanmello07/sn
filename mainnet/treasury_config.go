@@ -97,17 +97,25 @@ func (self treasuryDescriptor) validate() error {
 // Alias, duplicate and merge keys cannot hide unknown or private-key fields.
 func decodeTreasuryDescriptor(raw []byte) (treasuryDescriptor, error) {
 	var result treasuryDescriptor
+	if err := decodeTreasuryYaml(raw, &result); err != nil {
+		return result, err
+	}
+	return result, result.validate()
+}
+
+// Receiving and sending descriptors share strict syntax without sharing authority.
+func decodeTreasuryYaml(raw []byte, result any) error {
 	if len(raw) == 0 || len(raw) > treasuryDescriptorLimit {
-		return result, errors.New("treasury descriptor exceeds bound")
+		return errors.New("treasury descriptor exceeds bound")
 	}
 	var document yaml.Node
 	decoder := yaml.NewDecoder(bytes.NewReader(raw))
 	if err := decoder.Decode(&document); err != nil {
-		return result, err
+		return err
 	}
 	var trailing yaml.Node
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return result, errors.New("treasury descriptor requires exactly one YAML document")
+		return errors.New("treasury descriptor requires exactly one YAML document")
 	}
 	var inspect func(*yaml.Node, int) error
 	inspect = func(node *yaml.Node, depth int) error {
@@ -132,14 +140,14 @@ func decodeTreasuryDescriptor(raw []byte) (treasuryDescriptor, error) {
 		return nil
 	}
 	if err := inspect(&document, 0); err != nil {
-		return result, err
+		return err
 	}
 	decoder = yaml.NewDecoder(bytes.NewReader(raw))
 	decoder.KnownFields(true)
-	if err := decoder.Decode(&result); err != nil {
-		return result, err
+	if err := decoder.Decode(result); err != nil {
+		return err
 	}
-	return result, result.validate()
+	return nil
 }
 
 // Only an explicitly named local public descriptor is opened, under its pin.

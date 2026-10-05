@@ -36,8 +36,13 @@ func runTreasuryCommandWithAdapter(ctx context.Context, args []string, stdout, s
 		flags.SetOutput(stderr)
 		path := flags.String("custody", "", "explicit owner-local public custody YAML")
 		pin := flags.String("custody-sha256", "", "independent descriptor file SHA-256")
-		if parseErr := flags.Parse(args[1:]); parseErr != nil || flags.NArg() != 0 || *path == "" {
-			err = errors.New("treasury describe requires --custody FILE --custody-sha256 HASH")
+		destinationPath := flags.String("destination", "", "explicit receive-only public destination YAML")
+		destinationHash := flags.String("destination-sha256", "", "independent public destination file SHA-256")
+		if parseErr := flags.Parse(args[1:]); parseErr != nil || flags.NArg() != 0 ||
+			(*path == "") == (*destinationPath == "") || *path == "" && *pin != "" || *destinationPath == "" && *destinationHash != "" {
+			err = errors.New("treasury describe requires exactly one pinned --destination or --custody file")
+		} else if *destinationPath != "" {
+			value, err = readTreasuryDestination(ctx, *destinationPath, *destinationHash)
 		} else {
 			value, err = readTreasuryDescriptor(ctx, *path, *pin)
 		}
@@ -68,12 +73,26 @@ func treasuryPlanCommand(ctx context.Context, args []string, stderr io.Writer) (
 	path := flags.String("input", "", "public action/observation/metadata/route JSON")
 	custodyPath := flags.String("custody", "", "explicit public custody YAML")
 	custodyHash := flags.String("custody-sha256", "", "independent custody file hash")
+	destinationPath := flags.String("destination", "", "explicit receive-only public destination YAML")
+	destinationHash := flags.String("destination-sha256", "", "independent public destination file hash")
 	if err := flags.Parse(args[1:]); err != nil || flags.NArg() != 0 || *path == "" {
 		return nil, errors.New("treasury review requires --input FILE")
 	}
 	raw, _, err := readBootstrapRootFile(ctx, *path, ownerSigningRequestLimit)
 	if err != nil {
 		return nil, err
+	}
+	var kind struct {
+		Schema string `json:"schema"`
+	}
+	if err := json.Unmarshal(raw, &kind); err != nil {
+		return nil, err
+	}
+	if *destinationPath != "" || *destinationHash != "" || kind.Schema == treasuryDestinationInputSchema {
+		if *custodyPath != "" || *custodyHash != "" || args[0] == "plan" {
+			return nil, errors.New("treasury receive-only input cannot select signing custody or an executable plan")
+		}
+		return treasuryDestinationCommand(ctx, args[0], raw, *destinationPath, *destinationHash)
 	}
 	var input treasuryPlanInput
 	if err := decodePlanJson(raw, &input); err != nil {
@@ -126,26 +145,33 @@ func treasuryPlanCommand(ctx context.Context, args []string, stderr io.Writer) (
 			Approved    bool   `json:"approved"`
 		}{Policy: policy, Hash: "0x" + hex.EncodeToString(hash[:]), Observation: input.Observation.ContentHash}, nil
 	}
-	if input.Route.ReadRetrySeconds == 0 {
-		input.Route.ReadRetrySeconds = 300
+	return treasuryObserve(ctx, input.Action.Policy, input.Route, func(ctx context.Context, chain *rootCanonicalChain, hash string, number uint64) (treasuryObservation, error) {
+		return chain.treasuryObservationAt(ctx, input.Action, hash, number)
+	})
+}
+
+// Receiving and signing observations share the same bounded finality closure.
+func treasuryObserve(ctx context.Context, policy treasuryChainPolicy, route ownedSubmissionRoute, observe func(context.Context, *rootCanonicalChain, string, uint64) (treasuryObservation, error)) (any, error) {
+	if route.ReadRetrySeconds == 0 {
+		route.ReadRetrySeconds = 300
 	}
-	if input.Route.SendTimeoutSeconds == 0 {
-		input.Route.SendTimeoutSeconds = 60
+	if route.SendTimeoutSeconds == 0 {
+		route.SendTimeoutSeconds = 60
 	}
-	if input.Route.ReadRetrySeconds < 60 || input.Route.ReadRetrySeconds > 900 {
+	if route.ReadRetrySeconds < 60 || route.ReadRetrySeconds > 900 {
 		return nil, errors.New("treasury observation read owner requires 60 through 900 seconds")
 	}
-	client, err := newOwnedSubmissionClient(input.Route)
+	client, err := newOwnedSubmissionClient(route)
 	if err != nil {
 		return nil, err
 	}
 	defer client.httpClient.CloseIdleConnections()
-	p := input.Action.Policy
+	p := policy
 	chain, err := newRootCanonicalChain(client, identityExpectation{NativeChain: p.NativeChain, GenesisHash: p.GenesisHash, EvmChainId: p.EvmChainId}, []rootReceiptProfile{p.rootReceiptProfile})
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(input.Route.ReadRetrySeconds)*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(route.ReadRetrySeconds)*time.Second)
 	defer cancel()
 	if err := chain.network(ctx); err != nil {
 		return nil, err
@@ -154,7 +180,7 @@ func treasuryPlanCommand(ctx context.Context, args []string, stderr io.Writer) (
 	if err != nil {
 		return nil, err
 	}
-	result, err := chain.treasuryObservationAt(ctx, input.Action, point.Hash, point.Number)
+	result, err := observe(ctx, chain, point.Hash, point.Number)
 	if err != nil {
 		return nil, err
 	}

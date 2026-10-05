@@ -142,7 +142,9 @@ func cloneNativeTreasuryAmounts(value *nativeTreasuryAmounts) *nativeTreasuryAmo
 		return nil
 	}
 	result := *value
-	result.Policy.Signatories = append([][32]byte{}, value.Policy.Signatories...)
+	if value.Policy.Signatories != nil {
+		result.Policy.Signatories = append([][32]byte{}, value.Policy.Signatories...)
+	}
 	result.Policy.Recipients = append([]validator.TreasuryRecipient{}, value.Policy.Recipients...)
 	if value.Policy.AutoStakeDestination != nil {
 		destination := *value.Policy.AutoStakeDestination

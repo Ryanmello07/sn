@@ -1,33 +1,44 @@
 # Native treasury emissions — October 5, 2026
 
 The selected launch policy is **10% of the native miner allocation for providers
-and 90% retained for future network improvements**. This supersedes the September
-27 owner-recycle choice. Retain the full miner tranche for distribution instead
-of deliberately recycling its remainder. This document defines the explicit
-successor and its custody command interface. Treasury validator approvals and
-steering, native multisig bootstrap and lifecycle, and native accounting and monitoring
-are implemented in merged source. Execution qualification, actual identity
-provisioning, deployment and activation remain pending.
+and 90% received by `ur-reserve` for future network improvements**. The user has
+specified that `ur-reserve` only receives funds and does not send funds. The
+receive-only launch uses the supplied native account and public recipient
+hotkeys. It does not require multisig reconstruction, signatory identities,
+Ledger device configuration or qualification of reserve spending. This
+supersedes the September 27 owner-recycle choice and the earlier mandatory
+reserve-signing workflow.
+
+Retain the full miner tranche for distribution instead of deliberately recycling
+its remainder. The receive-only descriptor, signed validator routing and native
+accounting are distinct from the optional multisig sending tools below. Actual
+recipient registration, runtime/profile qualification, signed policy, deployment
+and activation remain required. Historical qualification evidence retains its
+original scope.
 
 ## Native routing and custody
 
-The reviewed runtime is v470, source
+The earlier runtime review covers v470, source
 `923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d`. Its owner-directed incentive branch
 recycles or burns; it never credits a treasury. Recycling reduces outstanding
 alpha and issuance. Changing `RecycleOrBurn` cannot select a wallet.
 [Distribution source](https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/coinbase/run_coinbase.rs#L659),
 [alpha accounting](https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/coinbase/alpha.rs#L38).
+Current launch still requires the actual runtime-473 capture/replay profile and
+its independent authority; these retained v470 references do not qualify it.
 
-Use a dedicated native multisig treasury coldkey owning at least two ordinary
-registered SN25 hotkeys. Its signatories and any reserve hotkey signing keys stay
-on their owners' Ledger devices; no private keys or seeds leave the hardware.
-The multisig account must differ from `SubnetOwner`; neither recipient may belong to
-that owner's registered `OwnedHotkeys` or equal `SubnetOwnerHotkey`. The existing
-signed `32768/65535` per-recipient cap requires at least two usable treasury UIDs
+Use the supplied native treasury account as the coldkey owning at least two
+ordinary registered SN25 recipient hotkeys. Native incentive reception requires
+no reserve or recipient signature. The account must differ from `SubnetOwner`;
+neither recipient may belong to that owner's registered `OwnedHotkeys` or equal
+`SubnetOwnerHotkey`. The existing signed `32768/65535` per-recipient cap requires
+at least two usable treasury UIDs
 for a 90% row, initially 45% each. These are explicit treasury recipients, never
-invented provider contributions. Registration uses ordinary coldkey authority,
-subject to current eligibility, capacity, fees and collateral; no chain-root
-allocation override is assumed. An owner key alone cannot force the result.
+invented provider contributions. If they are not already registered to the
+supplied account, one-time external registration is a prerequisite. Registration
+uses ordinary coldkey authority, subject to current eligibility, capacity, fees
+and collateral; a public descriptor cannot register a hotkey or invent its
+ownership or generation. No chain-root allocation override is assumed.
 [Registration source](https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/subnets/registration.rs#L70).
 
 Ordinary miner rewards become native alpha stake controlled by the recipient's
@@ -47,20 +58,20 @@ SS58 prefix 42 to native AccountId32
 `0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`.
 Its checksum and canonical encoding round trip were checked using the same
 public Base58/BLAKE2b rule as [the existing SS58 helpers](../ss58/ss58.go).
-The user confirmed this is a **2-of-3 multisig**. This pins the user-provided
-account and threshold, not a verified multisig derivation. The complete sorted
-set of three public signatory accounts remains required; its native
-derivation must equal this account before the custody descriptor is accepted.
-No recipient hotkeys or registered UID generations have been supplied here.
+This exact AccountId32 is the receive-only destination; accepting it does not
+depend on deriving it from signatories. The earlier **2-of-3 multisig** statement
+is optional sending-custody information. If that workflow is selected later,
+its complete actual signer set must derive the same account under the strict
+custody contract. No recipient hotkeys or registered UID generations have been
+supplied here.
 
-The anticipated `vault/main/sn.yml` contains its **public descriptor only**:
-account, threshold, public signatories, recipient hotkeys and references to
-owner-local Ledger configuration. No coldkey
-or hotkey seed, private key, mnemonic or online signer belongs there. Native
-incentive reception needs no always-on treasury signer. This review does not read
-or create the actual vault file or choose missing identities. Validator inputs
-receive only the public policy projection below. Establish hardware recovery and rotation
-before activation; changing signatories or threshold changes the native account.
+The anticipated `vault/main/sn.yml` can contain the **public destination
+descriptor only**: network, genesis, account and recipient hotkeys. It contains
+no signatory or device references, coldkey or hotkey seed, private key, mnemonic
+or online signer. The CLI takes its explicit absolute path; it does not load a
+vault resource implicitly. This documentation does not read or create the
+actual vault file or choose missing identities. Validators receive the public
+policy projection below.
 
 Direct native treasury custody requires no new Solidity contract.
 [`STSettlementVault`](../evm/src/STSettlementVault.sol) continues to secure the
@@ -71,80 +82,101 @@ would require separately qualified ownership, precompile and withdrawal behavior
 
 ## Public configuration contract
 
-The [custody reader](treasury_config.go) opens an explicitly selected absolute
-file path under an independently accepted SHA-256 pin. Use the mainnet tool's
-`treasury describe --custody FILE --custody-sha256 HASH` command, with `FILE` set
-to the actual absolute path of the anticipated `vault/main/sn.yml`. The CLI has
-no `Vault.SimpleResource("sn.yml")` lookup or environment fallback. Describe
-validates only the public descriptor and does not open its device references.
+The [public destination reader](treasury_destination.go) opens an explicitly selected absolute file path
+under an independently accepted SHA-256 pin. Use the mainnet tool's
+`treasury describe --destination FILE --destination-sha256 HASH` command, with
+`FILE` set to the actual absolute path of the anticipated `vault/main/sn.yml`.
+The CLI has no `Vault.SimpleResource("sn.yml")` lookup or environment fallback.
+Describe validates only the public descriptor.
 
 The independent `Config.SimpleResource("sn.yml")` reader in Server parses the
 public earnings schedule strictly. Do not insert the following fields into
 `config/main/sn.yml`, replace that schedule, or reuse `st.yml`'s legacy
 `treasury_hotkey` deposit-staging field.
 
-This non-secret template matches the custody parser. Empty
-identities and empty file references are deliberately invalid; they are not
-runnable defaults. The threshold and three signatory slots reflect the user's
-confirmed 2-of-3 wallet.
+The receive-only descriptor has this separate schema. The empty genesis is a
+placeholder requiring the independently approved native hash. An empty recipient
+list is valid for describing the known destination; it does not admit routing.
+The descriptor accepts up to 100 recipient hotkeys. When known,
+`recipient_hotkeys` contains canonical AccountId32 strings sorted by raw bytes,
+not device records or invented UID/generation values.
 
 ```yaml
-schema: urnetwork-native-treasury-custody-v1
+schema: urnetwork-native-treasury-destination-v1
 profile: mainnet
 netuid: 25
 genesis_hash: ""                       # independently approved native hash
-multisig:
-  # User-selected 2-of-3 account; actual signatories must derive it.
-  account_id: "0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410"
-  threshold: 2                         # user-confirmed 2-of-3
-  signatories:                         # all N accounts, sorted by raw bytes
-    - account_id: ""
-      signature_scheme: ed25519        # selected native Ledger workflow
-      device_config: {path: "", bytes: 0, sha256: ""}
-    - account_id: ""
-      signature_scheme: ed25519
-      device_config: {path: "", bytes: 0, sha256: ""}
-    - account_id: ""
-      signature_scheme: ed25519
-      device_config: {path: "", bytes: 0, sha256: ""}
-recipient_hotkeys:                     # sorted by raw AccountId32
-  - account_id: ""
-    device_config: {path: "", bytes: 0, sha256: ""}
-  - account_id: ""
-    device_config: {path: "", bytes: 0, sha256: ""}
+account_id: "0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410"
+recipient_hotkeys: []                  # actual public hotkeys when supplied
 ```
 
 Account IDs and native hashes use canonical nonzero `0x`-prefixed lowercase
 32-byte hex, matching native admission. An SS58 display address must decode to
-the same account; a 20-byte EVM address is not a substitute. File references use
-the existing `path`/`bytes`/`sha256` shape: absolute owner-local path, positive
-exact byte count and canonical `0x`-prefixed SHA-256. They reference public
-Ledger configuration and are never executable commands, seeds or validator
-signing files. No validator export includes these local device paths.
+the same account; a 20-byte EVM address is not a substitute. Recipient hotkeys
+must be unique and distinct from the destination account. No signing-custody
+fields are accepted in this descriptor.
 
-The descriptor admits two through 100 recipient hotkeys, distinct from the
-multisig account and every signatory. The signed validator policy has its own
-bounded roster validation; parsing a custody descriptor is not equivalent to
-admitting that policy. The separate signed economic policy binds these public
-fields; the custody file cannot authorize emissions or spending by itself:
+`treasury observe --destination FILE --destination-sha256 HASH --input INPUT`
+uses the explicitly supplied route and runtime/network inputs to authenticate
+the account's recipient state at a canonical finalized block. Observation
+requires at least two declared public recipient hotkeys.
+`treasury policy-plan --destination FILE --destination-sha256 HASH --input INPUT`
+requires the complete authenticated roster: at least two registered hotkeys,
+their actual `Owner`, UID and registration generation, and exact owner-set
+exclusion. Its result remains unsigned with `approved: false`. Missing
+registrations require the one-time external registration and a fresh observation;
+the receive-only path neither creates registrations nor invokes reserve signing.
+
+The [receive-only input JSON](treasury_destination_command.go) uses schema
+`urnetwork-native-treasury-destination-input-v1`, with `policy`, `destination`
+and `owned_route`. Policy planning additionally uses the retained `observation`
+and exact `runtime_metadata_scale`. The independently pinned destination file
+may supply the `destination` field; if both are provided, they must agree.
+The input contains no reserve signing action, signer nonce, deposit or fee
+allowance. `--destination` and `--custody` cannot be selected together.
+
+The generated economic policy uses
+`urnetwork-native-treasury-receive-policy-v1`. Its compatibility carrier
+`multisig_account` holds the receiver; `threshold: 0` and `signatories: null`
+assert no sending custody. The original strict multisig policy schema keeps its
+own derivation and hash rules. The separately signed receive-only policy binds
+these public fields; parsing a destination or preparing an unsigned policy does
+not authorize emissions:
 
 | Public policy field | Required meaning |
 | --- | --- |
 | Network/runtime and predecessor policy | Exact approved network, runtime/source, advancing policy/activation boundary and unchanged historical authority |
-| Multisig account, threshold, sorted signatories | Derived native account with unique signatories and threshold `2..N`, `N <= 100`; no device paths |
-| Treasury recipient roster | At least two exact hotkey/UID/registration generations owned by that multisig; no provider-role overlap |
+| Treasury account | Exact supplied native AccountId32, selected for receive-only routing; no signing custody or device paths |
+| Treasury recipient roster | At least two exact hotkey/UID/registration generations owned by that account; no provider-role overlap |
 | Allocation denominator | Full actual native miner allocation before distribution, excluding other emission tranches and principal |
 | Distribution fractions | `1/1` distributed: providers `1/10`, treasury `9/10`; no deliberate owner recycle or deferred provider liability |
 | Per-recipient cap and assurance | Existing `32768/65535` cap and observed-native-target with exact runtime tolerance; theta applies only to providers |
 | Auto-stake destination | Omitted means authenticated absence; a supplied public AccountId32 must match original native storage exactly |
 
-Owner-set exclusion, multisig derivation, identity uniqueness and cap checks are
-mandatory validation, never caller-disableable flags. Reject unknown fields,
-duplicate keys/identities, multiple YAML documents, excessive input and incomplete
-references. Require authenticated native ownership and registration readback;
-public key possession or successful parsing alone supplies neither.
+Owner-set exclusion, identity uniqueness and cap checks are mandatory validation,
+never caller-disableable flags. Reject unknown fields, duplicate keys/identities,
+multiple YAML documents and excessive input. Require authenticated native
+ownership and registration readback; the supplied address or successful parsing
+alone supplies neither. Multisig derivation remains mandatory only for the
+separate selected multisig custody/policy mode.
 
-## Hardware multisig execution
+## Optional hardware multisig execution
+
+This workflow is unselected for the receive-only launch. The existing
+`urnetwork-native-treasury-custody-v1` schema and
+`--custody FILE --custody-sha256 HASH` interface remain strict and separate. They
+require the complete native multisig account, threshold, sorted public signatories and
+recipient device references; the destination descriptor cannot substitute for
+them or supply spending authority. The earlier 2-of-3 confirmation may be used
+only with its actual complete signatory set, whose derivation must equal the
+supplied account.
+
+Custody device references use the `path`/`bytes`/`sha256` shape: absolute
+owner-local path, positive exact byte count and canonical `0x`-prefixed SHA-256.
+They identify public Ledger configuration, never commands or keys. The custody
+descriptor requires two through 100 recipient hotkeys, distinct from its native
+account and every signatory. These requirements apply only when this optional
+registration, liquidation or sending workflow is selected.
 
 Pinned v470 installs native `Multisig` at pallet index 13 using SDK
 `cacb4310f20c7cac83eb3ccd8ed5a5ad4212608a` (`pallet-multisig` 41.0.0).
@@ -169,7 +201,7 @@ The [treasury commands](treasury_command.go) implement this separation:
 
 | Stage | Commands and retained authority |
 | --- | --- |
-| Read and review | `describe` validates the pinned descriptor. `observe`, `plan` and `policy-plan` consume an explicit `--input` JSON, optionally binding that same descriptor with `--custody` and `--custody-sha256`. Observation pins native finality; plans remain unsigned. `policy-plan` returns `approved: false`. |
+| Read and review | `describe --custody FILE --custody-sha256 HASH` validates the strict custody descriptor. Multisig `observe`, `plan` and `policy-plan` consume an explicit `--input` JSON, optionally binding that descriptor with the same custody flags. Observation pins native finality; plans remain unsigned. `policy-plan` returns `approved: false`. Receive-only `--destination` supports `describe`, `observe` and `policy-plan`, and supplies no action-plan or signing authority. |
 | Permanent host custody | `reserve`, `export`, `import-reply`, `status`, `reconcile` and `submit` require the original signed `--config`, independent `--approval-key`, `--accept-action-hash` and `--production-authority-hash`. Export retains original metadata; imported replies require an exact file pin. Unknown outcomes retain the original request and bounded submission allowance. |
 | Owner-local Ledger | `inspect-request`, `ledger-plan` and `sign` require the original `--request`, independently accepted request hash, signatory account, genesis and approval key. `sign` additionally requires the descriptor's exact `--device-config` and permanent `--owner-state`; no host private key is accepted. |
 
@@ -180,7 +212,8 @@ pins and app version. The supported signing path is Ed25519 at
 `m/44'/354'/account'/0'/index'`. The local journal retains a returned signature;
 an unresolved device issuance cannot trigger a fresh signing call. A verified
 signature alone does not prove Ledger provenance; qualify the actual device
-workflow before use.
+workflow before using these optional custody operations. This qualification is
+not a reserve receiving prerequisite.
 
 Supported inner calls are bounded SN25 `register_limit`, `remove_stake_limit`
 with partial execution disabled, and `transfer_keep_alive`, wrapped in native
@@ -228,15 +261,19 @@ The merged [validator successor](../validator/TREASURY-PRODUCTION.md) uses an
 explicit `treasury_approval` selector, distinct signed domains and the complete
 ordinary recipient roster through measured preparation, submission and recovery.
 It preserves original owner-recycle bytes and read-only historical authority.
-The merged multisig implementation supplies the public parser and the custody
-commands above. Merged native accounting and monitoring add explicit treasury
-schemas; legacy recycling and residual amounts retain their historical meaning.
-The integrated treasury source and original availability capture/replay fixture
-still require execution qualification together. Existing owner-recycle results
-remain evidence for their original scope; they do not qualify treasury execution
+The receive-only successor admits the supplied account and authenticated
+recipient roster without a reserve signing configuration. The existing strict
+multisig parser and custody commands remain optional. Native accounting and
+monitoring retain explicit treasury schemas; legacy recycling and residual
+amounts retain their historical meaning. The integrated receive-only routing,
+accounting and original availability capture/replay path still require execution
+qualification together. Existing owner-recycle and multisig results remain
+evidence for their original scope; they do not qualify the receive-only successor
 or establish a live treasury outcome.
 
-1. Bind exact coldkey ownership, UID/hotkey generations, owner-set exclusion,
+1. Accept the supplied destination account and obtain the public recipient
+   hotkeys. If necessary, complete one-time external registration. Bind exact
+   coldkey ownership, UID/hotkey generations, owner-set exclusion,
    masks and caps at the applicable native execution boundary. Ordinary treasury
    registrations lack owner immunity: monitor pruning, re-registration,
    ownership changes and permit effects. Missing recipients must fail the

@@ -36,8 +36,6 @@ import (
 // provider proof bytes and validator identities remain those actually replayed.
 func configureTreasuryProductionTest(t *testing.T, fixture *ownerRecycleProductionTestFixture) {
 	t.Helper()
-	measurement := fixture.operator.measurement
-	admission, cfg := measurement.admission, fixture.cfg
 	policy := &TreasuryPolicy{Schema: TreasuryPolicySchema, Threshold: 2,
 		Signatories: [][32]byte{{0x51}, {0x52}, {0x53}}, ProviderShare: protocol.Rational{Numerator: 1, Denominator: 10},
 		TreasuryShare: protocol.Rational{Numerator: 9, Denominator: 10}, MaxWeightLimitU16: 32768}
@@ -46,6 +44,15 @@ func configureTreasuryProductionTest(t *testing.T, fixture *ownerRecycleProducti
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureTreasuryProductionTestWithPolicy(t, fixture, policy)
+}
+
+// Both explicit public policy schemas use the same authenticated native
+// ownership, exact roster and independent production-approval fixture.
+func configureTreasuryProductionTestWithPolicy(t *testing.T, fixture *ownerRecycleProductionTestFixture, policy *TreasuryPolicy) {
+	t.Helper()
+	measurement := fixture.operator.measurement
+	admission, cfg := measurement.admission, fixture.cfg
 	_, provider, err := DecodeReleaseMeasurementArtifactV2(t.Context(), measurement.encoded, measurement.provider.options(t))
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +194,12 @@ func TestTreasuryProductionPreparesExactMeasuredSuccessor(t *testing.T) {
 // Each raw native fault is refused by the actual public pinned census. Restored
 // storage is a positive control and never reuses a successful observer cache.
 func TestTreasuryAdmissionRejectsRecipientAndOwnerDrift(t *testing.T) {
-	fixture := newTreasuryProductionTestFixture(t)
+	testTreasuryAdmissionRejectsRecipientAndOwnerDrift(t, newTreasuryProductionTestFixture(t))
+}
+
+// Each explicit policy schema retains the same production native admission.
+func testTreasuryAdmissionRejectsRecipientAndOwnerDrift(t *testing.T, fixture *ownerRecycleProductionTestFixture) {
+	t.Helper()
 	admission := fixture.operator.measurement.admission
 	policy := admission.approval.Proposal.Treasury
 	recipient := policy.Recipients[0]

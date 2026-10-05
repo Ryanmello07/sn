@@ -1,5 +1,6 @@
-// Public treasury policy commits native custody and the complete ordinary-credit
-// roster. It contains no signing device references, keys or payout assertions.
+// Public treasury policy commits a native receiving account and the complete
+// ordinary-credit roster. Only the original custody schema proves its public
+// multisig derivation; neither schema grants signing or withdrawal authority.
 package validator
 
 import (
@@ -13,6 +14,7 @@ import (
 )
 
 const TreasuryPolicySchema = "urnetwork-native-treasury-policy-v1"
+const TreasuryReceivePolicySchema = "urnetwork-native-treasury-receive-policy-v1"
 const TreasuryProposalSchema = "urnetwork-native-treasury-proposal-v1"
 const TreasuryApprovalSchema = "urnetwork-native-treasury-approval-v1"
 const TreasuryProductionScope = "urnetwork-native-treasury-production-v1"
@@ -26,7 +28,9 @@ type TreasuryRecipient struct {
 	RegistrationBlock uint64   `json:"registration_block"`
 }
 
-// Signatories are public canonical AccountIds; hardware details stay owner-local.
+// MultisigAccount retains its original wire name for both schemas. The receive
+// schema treats it only as a public destination and rejects signing metadata;
+// the custody schema requires its exact public threshold and signatory set.
 // A nil destination grants only an absent AutoStakeDestination storage value.
 type TreasuryPolicy struct {
 	Schema               string              `json:"schema"`
@@ -43,14 +47,20 @@ type TreasuryPolicy struct {
 // The first successor fixes its split and current cap; a missing recipient may
 // never cause a smaller roster, a provider-only row or an increased cap.
 func (self TreasuryPolicy) Validate() error {
-	if self.Schema != TreasuryPolicySchema || self.ProviderShare != (protocol.Rational{Numerator: 1, Denominator: 10}) ||
+	if (self.Schema != TreasuryPolicySchema && self.Schema != TreasuryReceivePolicySchema) || self.ProviderShare != (protocol.Rational{Numerator: 1, Denominator: 10}) ||
 		self.TreasuryShare != (protocol.Rational{Numerator: 9, Denominator: 10}) || self.MaxWeightLimitU16 != 32768 ||
 		len(self.Recipients) < 2 || len(self.Recipients) > maximumTreasuryRecipients {
 		return errors.New("treasury policy requires its exact schema, 10/90 split, current cap and bounded complete roster")
 	}
-	account, err := crv4.DeriveNativeMultisigAccount(self.Signatories, self.Threshold)
-	if err != nil || account == ([32]byte{}) || account != self.MultisigAccount {
-		return errors.Join(errors.New("treasury public multisig derivation differs"), err)
+	if self.Schema == TreasuryReceivePolicySchema {
+		if self.MultisigAccount == ([32]byte{}) || self.Threshold != 0 || self.Signatories != nil {
+			return errors.New("treasury receiving policy requires a nonzero public account and no signing metadata")
+		}
+	} else {
+		account, err := crv4.DeriveNativeMultisigAccount(self.Signatories, self.Threshold)
+		if err != nil || account == ([32]byte{}) || account != self.MultisigAccount {
+			return errors.Join(errors.New("treasury public multisig derivation differs"), err)
+		}
 	}
 	hotkeyKVs := make(map[[32]byte]bool, len(self.Recipients))
 	for index, recipient := range self.Recipients {
@@ -76,7 +86,7 @@ func (self TreasuryPolicy) Hash() ([32]byte, error) {
 	if err != nil {
 		return [32]byte{}, err
 	}
-	return sha256.Sum256(append([]byte(TreasuryPolicySchema+"\n"), raw...)), nil
+	return sha256.Sum256(append([]byte(self.Schema+"\n"), raw...)), nil
 }
 
 // Successors share bounded carrier layouts, but require distinct explicit

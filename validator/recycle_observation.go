@@ -307,7 +307,7 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 					return nil, err
 				}
 				if !bytes.Equal(coldkey, policy.MultisigAccount[:]) {
-					return nil, errors.New("treasury recipient Owner differs from the approved native multisig")
+					return nil, errors.New("treasury recipient Owner differs from the approved native receiving account")
 				}
 				treasuryRecipients = append(treasuryRecipients, recipient)
 			}

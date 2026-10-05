@@ -19,6 +19,9 @@ import (
 const treasuryObservationSchema = "urnetwork-native-treasury-observation-v1"
 const treasuryRowLimit = 256 * 1024
 
+// One exact-key reader serves native capture and retained observation replay.
+type treasuryStorageReader func(context.Context, string, []byte) ([]byte, bool, error)
+
 // Each row is an original raw value, including explicit native absence.
 type treasuryStorageRow struct {
 	Key string  `json:"key"`
@@ -129,173 +132,13 @@ func treasuryReadFacts(ctx context.Context, a treasuryAction, metadata *types.Me
 	if a.Operation == "cancel_as_multi" {
 		return treasuryCancellationFacts(ctx, a, metadata, number, read)
 	}
-	specs := []rootStorageSpec{
-		{name: "NetworksAdded", keys: []string{"u16"}, hashers: []string{"identity"}, value: "bool"},
-		{name: "SubnetworkN", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u16"},
-		{name: "MaxAllowedUids", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u16"},
-		{name: "NetworkRegisteredAt", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
-		{name: "RegisteredSubnetCounter", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
-		{name: "NetworkRegistrationAllowed", keys: []string{"u16"}, hashers: []string{"identity"}, value: "bool"},
-		{name: "SubnetOwner", keys: []string{"u16"}, hashers: []string{"identity"}, value: "account"},
-		{name: "SubnetOwnerHotkey", keys: []string{"u16"}, hashers: []string{"identity"}, value: "account"},
-		{name: "Burn", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
-		{name: "Owner", keys: []string{"account"}, hashers: []string{"blake128concat"}, value: "account"},
-		{name: "OwnedHotkeys", keys: []string{"account"}, hashers: []string{"blake128concat"}, value: "accounts"},
-		{name: "Uids", keys: []string{"u16", "account"}, hashers: []string{"identity", "blake128concat"}, value: "u16", optional: true},
-		{name: "Keys", keys: []string{"u16", "u16"}, hashers: []string{"identity", "identity"}, value: "account"},
-		{name: "BlockAtRegistration", keys: []string{"u16", "u16"}, hashers: []string{"identity", "identity"}, value: "u64"},
-		{name: "IsNetworkMember", keys: []string{"account", "u16"}, hashers: []string{"blake128concat", "identity"}, value: "bool"},
-		{name: "AutoStakeDestination", keys: []string{"account", "u16"}, hashers: []string{"blake128concat", "identity"}, value: "account", optional: true},
-	}
-	entries, err := observationStorageProfile(metadata, specs)
+	f, err = treasuryReadRecipientFacts(ctx, a.Descriptor.destination(), metadata, number, read, true)
 	if err != nil {
 		return f, err
 	}
-	get := func(name string, args ...[]byte) ([]byte, bool, error) {
-		key, err := types.CreateStorageKey(metadata, "SubtensorModule", name, args...)
-		if err != nil {
-			return nil, false, err
-		}
-		fallback := entries[name].Fallback
-		if entries[name].Modifier.IsOptional {
-			fallback = nil
-		}
-		data, present, err := read(ctx, key.Hex(), fallback)
-		if err != nil {
-			return nil, false, err
-		}
-		shape := ""
-		for _, s := range specs {
-			if s.name == name {
-				shape = s.value
-			}
-		}
-		width := map[string]int{"bool": 1, "u16": 2, "u64": 8, "account": 32}[shape]
-		if !present && entries[name].Modifier.IsOptional {
-			return nil, false, nil
-		}
-		if shape == "accounts" {
-			r := rootScaleReader{data: data}
-			n, err := r.compact()
-			if err != nil || n > rootCensusLimit || len(data)-r.offset != int(n)*32 {
-				return nil, false, errors.New("treasury owner hotkey census exceeds bound or is truncated")
-			}
-			return data, present, nil
-		}
-		if len(data) != width || shape == "bool" && data[0] > 1 {
-			return nil, false, errors.New("treasury storage field width/value changed")
-		}
-		return data, present, nil
-	}
-	net := []byte{25, 0}
-	values := map[string][]byte{}
-	for _, name := range []string{"NetworksAdded", "SubnetworkN", "MaxAllowedUids", "NetworkRegisteredAt", "RegisteredSubnetCounter", "NetworkRegistrationAllowed", "SubnetOwner", "SubnetOwnerHotkey", "Burn"} {
-		raw, present, err := get(name, net)
-		if err != nil {
-			return f, err
-		}
-		if (name == "SubnetOwner" || name == "NetworkRegisteredAt") && !present {
-			return f, errors.New("treasury subnet identity is missing")
-		}
-		values[name] = raw
-	}
-	if values["NetworksAdded"][0] != 1 {
-		return f, errors.New("treasury subnet does not exist")
-	}
-	f.SubnetOwner = "0x" + hex.EncodeToString(values["SubnetOwner"])
-	ownerHotkey := "0x" + hex.EncodeToString(values["SubnetOwnerHotkey"])
-	if !rootCanonicalHash(f.SubnetOwner) || f.SubnetOwner == a.Descriptor.Multisig.AccountId {
-		return f, fmt.Errorf("%w: treasury multisig cannot be subnet owner", errRpcIntegrity)
-	}
-	ownerAccount, _ := hex.DecodeString(f.SubnetOwner[2:])
-	ownedRaw, _, err := get("OwnedHotkeys", ownerAccount)
-	if err != nil {
-		return f, err
-	}
-	ownedReader := rootScaleReader{data: ownedRaw}
-	ownedCount, _ := ownedReader.compact()
-	ownerHotkeys := map[string]bool{}
-	for i := uint64(0); i < ownedCount; i++ {
-		raw, _ := ownedReader.take(32)
-		hotkey := "0x" + hex.EncodeToString(raw)
-		if !rootCanonicalHash(hotkey) || ownerHotkeys[hotkey] {
-			return f, fmt.Errorf("%w: treasury owner hotkey census repeats an invalid identity", errRpcIntegrity)
-		}
-		ownerHotkeys[hotkey] = true
-	}
-	f.Count = binary.LittleEndian.Uint16(values["SubnetworkN"])
-	f.Capacity = binary.LittleEndian.Uint16(values["MaxAllowedUids"])
-	f.RegistrationBlock = binary.LittleEndian.Uint64(values["NetworkRegisteredAt"])
-	f.SubnetGeneration = binary.LittleEndian.Uint64(values["RegisteredSubnetCounter"])
-	f.RegistrationAllowed = values["NetworkRegistrationAllowed"][0] == 1
-	f.Burn = binary.LittleEndian.Uint64(values["Burn"])
-	if f.Capacity == 0 || f.Count > f.Capacity || f.Count > rootCensusLimit || f.RegistrationBlock > number {
-		return f, fmt.Errorf("%w: treasury subnet capacity/generation contradiction", errRpcIntegrity)
-	}
-	uids := map[uint16]bool{}
-	for _, recipient := range a.Descriptor.RecipientHotkeys {
-		hotkey, _ := hex.DecodeString(recipient.AccountId[2:])
-		owner, owned, err := get("Owner", hotkey)
-		if err != nil {
-			return f, err
-		}
-		coldkey := "0x" + hex.EncodeToString(owner)
-		if recipient.AccountId == ownerHotkey || ownerHotkeys[recipient.AccountId] || owned && coldkey != a.Descriptor.Multisig.AccountId {
-			return f, fmt.Errorf("%w: treasury hotkey is an owner or belongs to another coldkey", errRpcIntegrity)
-		}
-		uid, registered, err := get("Uids", net, hotkey)
-		if err != nil {
-			return f, err
-		}
-		member, _, err := get("IsNetworkMember", hotkey, net)
-		if err != nil {
-			return f, err
-		}
-		if !registered {
-			if member[0] != 0 {
-				return f, fmt.Errorf("%w: absent treasury UID has membership", errRpcIntegrity)
-			}
-			f.Missing++
-			continue
-		}
-		id := binary.LittleEndian.Uint16(uid)
-		if !owned || member[0] != 1 || id >= f.Count || uids[id] {
-			return f, fmt.Errorf("%w: treasury UID/owner/membership contradiction", errRpcIntegrity)
-		}
-		uids[id] = true
-		forward, present, err := get("Keys", net, uid)
-		if err != nil {
-			return f, err
-		}
-		if !present || !bytes.Equal(forward, hotkey) {
-			return f, fmt.Errorf("%w: treasury forward/reverse registration mismatch", errRpcIntegrity)
-		}
-		generation, present, err := get("BlockAtRegistration", net, uid)
-		if err != nil {
-			return f, err
-		}
-		block := uint64(0)
-		if present {
-			block = binary.LittleEndian.Uint64(generation)
-		}
-		if !present || block > number || block < f.RegistrationBlock {
-			return f, fmt.Errorf("%w: treasury registration generation invalid", errRpcIntegrity)
-		}
-		f.Recipients = append(f.Recipients, subnetRegistration{Uid: id, Hotkey: recipient.AccountId, Coldkey: coldkey, RegistrationBlock: block})
-	}
+	f.Deposit = deposit
 	if err := rootAccountProfile(metadata); err != nil {
 		return f, err
-	}
-	multisig, _ := hex.DecodeString(a.Descriptor.Multisig.AccountId[2:])
-	destination, present, err := get("AutoStakeDestination", multisig, net)
-	if err != nil {
-		return f, err
-	}
-	if present {
-		f.AutoStakeDestination = "0x" + hex.EncodeToString(destination)
-		if !rootCanonicalHash(f.AutoStakeDestination) {
-			return f, errors.New("treasury auto-stake destination is invalid")
-		}
 	}
 	for i, account := range []string{a.Owner, a.Descriptor.Multisig.AccountId} {
 		raw, _ := hex.DecodeString(account[2:])
@@ -358,11 +201,212 @@ func treasuryReadFacts(ctx context.Context, a treasuryAction, metadata *types.Me
 	return f, nil
 }
 
+// Receiving observes ownership and generations; registration additionally reads
+// its burn/availability fields without weakening the shared recipient checks.
+func treasuryReadRecipientFacts(ctx context.Context, destination treasuryDestination, metadata *types.Metadata, number uint64, read treasuryStorageReader, registration bool) (treasuryFacts, error) {
+	var f treasuryFacts
+	if ctx == nil || read == nil || len(destination.RecipientHotkeys) < 2 {
+		return f, errors.New("treasury routing requires an owned reader and at least two declared recipients")
+	}
+	if err := destination.validate(); err != nil {
+		return f, err
+	}
+	specs := []rootStorageSpec{
+		{name: "NetworksAdded", keys: []string{"u16"}, hashers: []string{"identity"}, value: "bool"},
+		{name: "SubnetworkN", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u16"},
+		{name: "MaxAllowedUids", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u16"},
+		{name: "NetworkRegisteredAt", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
+		{name: "RegisteredSubnetCounter", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
+		{name: "NetworkRegistrationAllowed", keys: []string{"u16"}, hashers: []string{"identity"}, value: "bool"},
+		{name: "SubnetOwner", keys: []string{"u16"}, hashers: []string{"identity"}, value: "account"},
+		{name: "SubnetOwnerHotkey", keys: []string{"u16"}, hashers: []string{"identity"}, value: "account"},
+		{name: "Burn", keys: []string{"u16"}, hashers: []string{"identity"}, value: "u64"},
+		{name: "Owner", keys: []string{"account"}, hashers: []string{"blake128concat"}, value: "account"},
+		{name: "OwnedHotkeys", keys: []string{"account"}, hashers: []string{"blake128concat"}, value: "accounts"},
+		{name: "Uids", keys: []string{"u16", "account"}, hashers: []string{"identity", "blake128concat"}, value: "u16", optional: true},
+		{name: "Keys", keys: []string{"u16", "u16"}, hashers: []string{"identity", "identity"}, value: "account"},
+		{name: "BlockAtRegistration", keys: []string{"u16", "u16"}, hashers: []string{"identity", "identity"}, value: "u64"},
+		{name: "IsNetworkMember", keys: []string{"account", "u16"}, hashers: []string{"blake128concat", "identity"}, value: "bool"},
+		{name: "AutoStakeDestination", keys: []string{"account", "u16"}, hashers: []string{"blake128concat", "identity"}, value: "account", optional: true},
+	}
+	if !registration {
+		filtered := make([]rootStorageSpec, 0, len(specs)-2)
+		for _, spec := range specs {
+			if spec.name != "NetworkRegistrationAllowed" && spec.name != "Burn" {
+				filtered = append(filtered, spec)
+			}
+		}
+		specs = filtered
+	}
+	entries, err := observationStorageProfile(metadata, specs)
+	if err != nil {
+		return f, err
+	}
+	get := func(name string, args ...[]byte) ([]byte, bool, error) {
+		key, err := types.CreateStorageKey(metadata, "SubtensorModule", name, args...)
+		if err != nil {
+			return nil, false, err
+		}
+		fallback := entries[name].Fallback
+		if entries[name].Modifier.IsOptional {
+			fallback = nil
+		}
+		data, present, err := read(ctx, key.Hex(), fallback)
+		if err != nil {
+			return nil, false, err
+		}
+		shape := ""
+		for _, s := range specs {
+			if s.name == name {
+				shape = s.value
+			}
+		}
+		width := map[string]int{"bool": 1, "u16": 2, "u64": 8, "account": 32}[shape]
+		if !present && entries[name].Modifier.IsOptional {
+			return nil, false, nil
+		}
+		if shape == "accounts" {
+			r := rootScaleReader{data: data}
+			n, err := r.compact()
+			if err != nil || n > rootCensusLimit || len(data)-r.offset != int(n)*32 {
+				return nil, false, errors.New("treasury owner hotkey census exceeds bound or is truncated")
+			}
+			return data, present, nil
+		}
+		if len(data) != width || shape == "bool" && data[0] > 1 {
+			return nil, false, errors.New("treasury storage field width/value changed")
+		}
+		return data, present, nil
+	}
+	net := []byte{25, 0}
+	values := map[string][]byte{}
+	names := []string{"NetworksAdded", "SubnetworkN", "MaxAllowedUids", "NetworkRegisteredAt", "RegisteredSubnetCounter", "SubnetOwner", "SubnetOwnerHotkey"}
+	if registration {
+		names = append(names, "NetworkRegistrationAllowed", "Burn")
+	}
+	for _, name := range names {
+		raw, present, err := get(name, net)
+		if err != nil {
+			return f, err
+		}
+		if (name == "SubnetOwner" || name == "NetworkRegisteredAt") && !present {
+			return f, errors.New("treasury subnet identity is missing")
+		}
+		values[name] = raw
+	}
+	if values["NetworksAdded"][0] != 1 {
+		return f, errors.New("treasury subnet does not exist")
+	}
+	f.SubnetOwner = "0x" + hex.EncodeToString(values["SubnetOwner"])
+	ownerHotkey := "0x" + hex.EncodeToString(values["SubnetOwnerHotkey"])
+	if !rootCanonicalHash(f.SubnetOwner) || f.SubnetOwner == destination.AccountId {
+		return f, fmt.Errorf("%w: treasury receiving account cannot be subnet owner", errRpcIntegrity)
+	}
+	ownerAccount, _ := hex.DecodeString(f.SubnetOwner[2:])
+	ownedRaw, _, err := get("OwnedHotkeys", ownerAccount)
+	if err != nil {
+		return f, err
+	}
+	ownedReader := rootScaleReader{data: ownedRaw}
+	ownedCount, _ := ownedReader.compact()
+	ownerHotkeys := map[string]bool{}
+	for i := uint64(0); i < ownedCount; i++ {
+		raw, _ := ownedReader.take(32)
+		hotkey := "0x" + hex.EncodeToString(raw)
+		if !rootCanonicalHash(hotkey) || ownerHotkeys[hotkey] {
+			return f, fmt.Errorf("%w: treasury owner hotkey census repeats an invalid identity", errRpcIntegrity)
+		}
+		ownerHotkeys[hotkey] = true
+	}
+	f.Count = binary.LittleEndian.Uint16(values["SubnetworkN"])
+	f.Capacity = binary.LittleEndian.Uint16(values["MaxAllowedUids"])
+	f.RegistrationBlock = binary.LittleEndian.Uint64(values["NetworkRegisteredAt"])
+	f.SubnetGeneration = binary.LittleEndian.Uint64(values["RegisteredSubnetCounter"])
+	if registration {
+		f.RegistrationAllowed = values["NetworkRegistrationAllowed"][0] == 1
+		f.Burn = binary.LittleEndian.Uint64(values["Burn"])
+	}
+	if f.Capacity == 0 || f.Count > f.Capacity || f.Count > rootCensusLimit || f.RegistrationBlock > number {
+		return f, fmt.Errorf("%w: treasury subnet capacity/generation contradiction", errRpcIntegrity)
+	}
+	uids := map[uint16]bool{}
+	for _, recipient := range destination.RecipientHotkeys {
+		hotkey, _ := hex.DecodeString(recipient[2:])
+		owner, owned, err := get("Owner", hotkey)
+		if err != nil {
+			return f, err
+		}
+		coldkey := "0x" + hex.EncodeToString(owner)
+		if recipient == ownerHotkey || ownerHotkeys[recipient] || owned && coldkey != destination.AccountId {
+			return f, fmt.Errorf("%w: treasury hotkey is an owner or belongs to another coldkey", errRpcIntegrity)
+		}
+		uid, registered, err := get("Uids", net, hotkey)
+		if err != nil {
+			return f, err
+		}
+		member, _, err := get("IsNetworkMember", hotkey, net)
+		if err != nil {
+			return f, err
+		}
+		if !registered {
+			if member[0] != 0 {
+				return f, fmt.Errorf("%w: absent treasury UID has membership", errRpcIntegrity)
+			}
+			f.Missing++
+			continue
+		}
+		id := binary.LittleEndian.Uint16(uid)
+		if !owned || member[0] != 1 || id >= f.Count || uids[id] {
+			return f, fmt.Errorf("%w: treasury UID/owner/membership contradiction", errRpcIntegrity)
+		}
+		uids[id] = true
+		forward, present, err := get("Keys", net, uid)
+		if err != nil {
+			return f, err
+		}
+		if !present || !bytes.Equal(forward, hotkey) {
+			return f, fmt.Errorf("%w: treasury forward/reverse registration mismatch", errRpcIntegrity)
+		}
+		generation, present, err := get("BlockAtRegistration", net, uid)
+		if err != nil {
+			return f, err
+		}
+		block := uint64(0)
+		if present {
+			block = binary.LittleEndian.Uint64(generation)
+		}
+		if !present || block > number || block < f.RegistrationBlock {
+			return f, fmt.Errorf("%w: treasury registration generation invalid", errRpcIntegrity)
+		}
+		f.Recipients = append(f.Recipients, subnetRegistration{Uid: id, Hotkey: recipient, Coldkey: coldkey, RegistrationBlock: block})
+	}
+	multisig, _ := hex.DecodeString(destination.AccountId[2:])
+	autoStakeRaw, present, err := get("AutoStakeDestination", multisig, net)
+	if err != nil {
+		return f, err
+	}
+	if present {
+		f.AutoStakeDestination = "0x" + hex.EncodeToString(autoStakeRaw)
+		if !rootCanonicalHash(f.AutoStakeDestination) {
+			return f, errors.New("treasury auto-stake destination is invalid")
+		}
+	}
+	sort.Slice(f.Recipients, func(i, j int) bool { return f.Recipients[i].Uid < f.Recipients[j].Uid })
+	return f, nil
+}
+
 // Replayed observation values are complete, unique and exact-key addressed.
 func (self treasuryObservation) facts(ctx context.Context, a treasuryAction, metadata *types.Metadata) (treasuryFacts, error) {
+	return self.replay(ctx, treasuryObservationSchema, treasuryObservationScope(a), func(read treasuryStorageReader) (treasuryFacts, error) {
+		return treasuryReadFacts(ctx, a, metadata, self.FinalizedNumber, read)
+	})
+}
+
+// Scope and exact consumed rows cannot cross receiving and execution domains.
+func (self treasuryObservation) replay(ctx context.Context, schema, scope string, readFacts func(treasuryStorageReader) (treasuryFacts, error)) (treasuryFacts, error) {
 	claimed := self.ContentHash
 	self.ContentHash = ""
-	if self.Schema != treasuryObservationSchema || self.ScopeHash != treasuryObservationScope(a) || claimed != rootObjectHash(self) || !rootCanonicalHash(self.FinalizedHash) || self.FinalizedNumber == 0 || len(self.Rows) > 1024 {
+	if self.Schema != schema || self.ScopeHash != scope || claimed != rootObjectHash(self) || !rootCanonicalHash(self.FinalizedHash) || self.FinalizedNumber == 0 || len(self.Rows) > 1024 {
 		return treasuryFacts{}, errors.New("treasury observation scope or bound changed")
 	}
 	rows := map[string]*string{}
@@ -373,7 +417,7 @@ func (self treasuryObservation) facts(ctx context.Context, a treasuryAction, met
 		rows[row.Key] = row.Raw
 	}
 	used := map[string]bool{}
-	f, err := treasuryReadFacts(ctx, a, metadata, self.FinalizedNumber, func(ctx context.Context, key string, fallback []byte) ([]byte, bool, error) {
+	f, err := readFacts(func(ctx context.Context, key string, fallback []byte) ([]byte, bool, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
@@ -472,13 +516,20 @@ func (f treasuryFacts) admits(a treasuryAction, initial bool) error {
 
 // Every RPC row is retained once at an authenticated finalized hash.
 func (self *rootCanonicalChain) treasuryObservationAt(ctx context.Context, a treasuryAction, hash string, number uint64) (treasuryObservation, error) {
-	result := treasuryObservation{Schema: treasuryObservationSchema, ScopeHash: treasuryObservationScope(a), FinalizedNumber: number, FinalizedHash: hash}
-	runtime, err := self.nativeRuntimeAt(ctx, hash)
+	return self.captureTreasuryObservation(ctx, treasuryObservationSchema, treasuryObservationScope(a), hash, number, self.nativeRuntimeAt, func(metadata *types.Metadata, read treasuryStorageReader) (treasuryFacts, error) {
+		return treasuryReadFacts(ctx, a, metadata, number, read)
+	})
+}
+
+// Each observation authenticates its selected runtime and retains exact raw rows.
+func (self *rootCanonicalChain) captureTreasuryObservation(ctx context.Context, schema, scope, hash string, number uint64, loadRuntime func(context.Context, string) (rootReceiptRuntime, error), readFacts func(*types.Metadata, treasuryStorageReader) (treasuryFacts, error)) (treasuryObservation, error) {
+	result := treasuryObservation{Schema: schema, ScopeHash: scope, FinalizedNumber: number, FinalizedHash: hash}
+	runtime, err := loadRuntime(ctx, hash)
 	if err != nil {
 		return result, err
 	}
 	seen := map[string]treasuryStorageRow{}
-	_, err = treasuryReadFacts(ctx, a, runtime.metadata, number, func(ctx context.Context, key string, fallback []byte) ([]byte, bool, error) {
+	_, err = readFacts(runtime.metadata, func(ctx context.Context, key string, fallback []byte) ([]byte, bool, error) {
 		row, exists := seen[key]
 		if !exists {
 			var raw *string

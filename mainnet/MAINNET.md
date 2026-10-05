@@ -1,18 +1,20 @@
 # Mainnet launch and operations plan
 
+## Current reserve and economic decision — October 5
+
+The user selected **10% of the native miner allocation for providers and 90% received by `ur-reserve` for future network improvements**. `ur-reserve` only receives funds and does not send funds. Use the supplied native address and public recipient hotkeys; reserve receiving does not require multisig reconstruction, signatory identities, Ledger device configuration or general spending/signing qualification. This supersedes the earlier mandatory reserve-signing workflow and the owner-recycle economic choice. The treasury remains separate from provider claim collateral and the immutable, one-way `STReserveSink`.
+
+The receive-only destination is `5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR` (native AccountId32 `0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`). Its prefix-42 SS58 checksum and round trip are valid. The [public destination descriptor](TREASURY-EMISSIONS.md#public-configuration-contract), schema `urnetwork-native-treasury-destination-v1`, contains `profile`, `netuid`, `genesis_hash`, `account_id` and public `recipient_hotkeys`. It may live at an explicitly selected absolute path to `vault/main/sn.yml`; it must not be added to the strict earnings schedule in `config/main/sn.yml`. Use `treasury describe --destination FILE --destination-sha256 HASH`; the same destination flags select receive-only `observe` and `policy-plan` with their explicit `--input`.
+
+Describe accepts the known address with an empty recipient list. Routing still requires at least two actual registered SN25 recipient hotkeys under the existing cap, authenticated `Owner`/UID/registration generations, owner-set exclusion, and an independently signed runtime and economic policy. No recipient hotkeys or registered generations have been supplied here. If they are missing on chain, one-time external registration and fresh readback are required. The receive-only path does not register keys or authorize reserve spending. The earlier confirmed **2-of-3 multisig** information applies only to the optional, unselected sending-custody workflow; its strict derivation and Ledger requirements remain intact for that workflow.
+
+The [receive-only treasury successor](TREASURY-EMISSIONS.md) still needs focused execution qualification and deployment. Existing recycle and multisig qualification retain their original scopes. Preserve the 38 original requirements, their counts and all retained evidence; earlier economic or mandatory reserve-custody statements below are historical. Owner, root and contract actions retain their own signing and authority requirements. The October 6 inclusive new-earnings boundary, pre-cutoff USDC obligations and `activation: blocked` remain unchanged. No keys, transactions or deployment are supplied by this decision.
+
 ## Runtime migration and focused qualification — October 5, 19:45 UTC
 
 The runtime-473 admission correction is merged through `a70dae9c`. Admission verifies the reviewed source capability and an authenticated migration-completion witness at the exact signed activation parent; a runtime number alone grants no authority. A later completed-migration snapshot cannot authorize an earlier activation. The [31-root runtime result](/mnt/data/sn-testnet/sol-focused-recovery-61-20261005/sn473-normal-v1/evidence/sn473-normal.owner.receipt.json) passes all 26 mainnet and five validator roots with actual retained assets, no skips and no resource errors. Five Rust treasury roots are pending. Retained recovery results are 55/55 focused roots and 23/23 SDK race roots. These results do not qualify the production execution profile.
 
-The actual runtime-473 capture/replay profile remains an engineering prerequisite. A named-function census or synthetic fixture profile does not establish production callsite semantics. Qualify the actual profile against the official runtime bytes, then obtain scoped authority approvals. Reserve multisig derivation, registered recipient generations, signer qualification, contract deployment and loaded activation configuration remain separate launch inputs. Postactivation settlement intervals are an acceptance stage after activation, rather than evidence that can be supplied before signing the launch.
-
-## Current economic decision — October 5
-
-The user selected **10% of the native miner allocation for providers and 90% retained in a spendable network-improvement treasury**, replacing the earlier owner-recycle choice. The [treasury successor](TREASURY-EMISSIONS.md) is implemented in merged source and awaits execution qualification and deployment. Treasury custody is a **hardware-Ledger multisig**: private keys stay on Ledger devices; `vault/main/sn.yml` holds only public account, signatory, threshold and device references. Validators receive public inputs only. The treasury is separate from provider claim collateral and the immutable, one-way `STReserveSink`.
-
-The user-selected reserve public account is `5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR` (native AccountId32 `0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`). Its prefix-42 SS58 checksum and round trip are valid. The user confirmed **2-of-3 multisig** custody. The [public custody example](TREASURY-EMISSIONS.md#public-configuration-contract) pins that account and threshold while leaving the three sorted signatories and recipient hotkeys unresolved. Multisig derivation, registered generations and activation approval remain required; the address alone establishes none of them.
-
-Current source includes treasury steering and signed approvals, the native multisig custody/lifecycle commands, and native treasury accounting and monitoring. The new treasury execution scope remains unqualified; existing recycle qualification and the earlier finite launch-path review retain their original scope and do not establish treasury acceptance. Preserve the 38 original requirements, their counts and all retained evidence. Earlier economic statements below describe the superseded policy. The October 6 inclusive new-earnings boundary, pre-cutoff USDC obligations and `activation: blocked` remain unchanged. No keys, transactions or deployment are supplied by this decision.
+The actual runtime-473 capture/replay profile remains an engineering prerequisite. A named-function census or synthetic fixture profile does not establish production callsite semantics. Qualify the actual profile against the official runtime bytes, then obtain scoped authority approvals. Registered recipient generations, contract deployment and loaded activation configuration remain separate launch inputs. Reserve receiving requires no signing-custody qualification. Postactivation settlement intervals are an acceptance stage after activation, rather than evidence that can be supplied before signing the launch.
 
 ## Local dependency validation and retained results — October 5
 
@@ -2957,9 +2959,21 @@ sn-mainnet plan --outline > /secure/ur-mainnet/review/outline.json
 sn-mainnet plan --config /secure/ur-mainnet/plan-config.json > /secure/ur-mainnet/review/blocked-plan.json
 ```
 
-The JSON config and release-input schema are in [PLAN.md](PLAN.md). The resulting
-blocked-plan hash cannot be passed as executable apply authority. Review schema
-v2 separates action preconditions from produced postconditions: deployed getter
+The current [JSON schemas](PLAN.md) are `urnetwork-mainnet-plan-config-v2` and
+`urnetwork-mainnet-release-input-v2`. Bound review carries inline
+`treasury_destination` with the public destination schema, native account,
+genesis and any supplied recipient hotkeys; it carries no reserve signing
+fields. The default outline and current bound review use
+`urnetwork-mainnet-blocked-plan-v3`, with the `1/10` provider and `9/10`
+ordinary-native-treasury target and a `treasury-policy` requirement. Reserve
+signing custody and an owner Recycle-mode transition are not gates for this
+receive-only plan. Actual registered generations and independent signed
+economic/runtime authority remain required. Explicit historical v1 config and
+release schemas retain the original owner-recycle v2 review output.
+
+The resulting blocked-plan hash cannot be passed as executable apply authority.
+Current review preserves the separation of action preconditions from produced
+postconditions: deployed getter
 proofs follow installation, revealed/applied validator rows follow activation,
 and realized native economics follow the first approved submission. None is a
 circular prerequisite to its own producer.

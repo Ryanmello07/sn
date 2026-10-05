@@ -35,13 +35,14 @@ type planNetwork struct {
 // This narrow JSON config does not accept private keys, authority flags or
 // action payloads. Rich executable configuration remains a separate interface.
 type bootstrapPlanConfig struct {
-	Schema       string            `json:"schema"`
-	DeploymentId string            `json:"deployment_id"`
-	Netuid       uint16            `json:"netuid"`
-	Network      planNetwork       `json:"network"`
-	Snapshot     planFileReference `json:"snapshot"`
-	SourceLock   planFileReference `json:"source_lock"`
-	Release      planFileReference `json:"release"`
+	Schema              string               `json:"schema"`
+	DeploymentId        string               `json:"deployment_id"`
+	Netuid              uint16               `json:"netuid"`
+	Network             planNetwork          `json:"network"`
+	Snapshot            planFileReference    `json:"snapshot"`
+	SourceLock          planFileReference    `json:"source_lock"`
+	Release             planFileReference    `json:"release"`
+	TreasuryDestination *treasuryDestination `json:"treasury_destination,omitempty"`
 }
 
 // Supplemental manifests are retained by hash for review only. Their presence
@@ -73,8 +74,8 @@ type planInputBinding struct {
 	ContentHash string `json:"content_hash,omitempty"`
 }
 
-// The launch target is 10% of native miner allocation, before withholding;
-// owner recycling is a chain outcome, with zero reserve-credit interpretation.
+// Fractions and reserve credit describe the selected target only. Original
+// native execution supplies actual credits; this review grants no readiness.
 type planEconomics struct {
 	Denominator         string `json:"denominator"`
 	ProviderNumerator   uint64 `json:"provider_numerator"`
@@ -111,25 +112,26 @@ type planAction struct {
 // A domain-separated blocked review record cannot be confused with a future
 // executable plan schema or signed authorization.
 type bootstrapPlan struct {
-	Schema            string                      `json:"schema"`
-	Status            string                      `json:"status"`
-	ApplyAuthority    bool                        `json:"apply_authority"`
-	ActivationReady   bool                        `json:"activation_ready"`
-	DeploymentId      string                      `json:"deployment_id"`
-	Netuid            uint16                      `json:"netuid"`
-	Network           planNetwork                 `json:"network"`
-	FinalizedHash     string                      `json:"finalized_hash"`
-	FinalizedNumber   uint64                      `json:"finalized_number"`
-	EvmHash           string                      `json:"evm_hash"`
-	EvmNumber         uint64                      `json:"evm_number"`
-	ObservationTrust  string                      `json:"observation_trust"`
-	RuntimeVersion    crv4.RuntimeVersionIdentity `json:"runtime_version"`
-	Inputs            []planInputBinding          `json:"inputs"`
-	Economics         planEconomics               `json:"economics"`
-	Requirements      []planRequirement           `json:"requirements"`
-	Actions           []planAction                `json:"actions"`
-	ExecutionBlockers []string                    `json:"execution_blockers"`
-	ContentHash       string                      `json:"content_hash"`
+	Schema              string                      `json:"schema"`
+	Status              string                      `json:"status"`
+	ApplyAuthority      bool                        `json:"apply_authority"`
+	ActivationReady     bool                        `json:"activation_ready"`
+	DeploymentId        string                      `json:"deployment_id"`
+	Netuid              uint16                      `json:"netuid"`
+	Network             planNetwork                 `json:"network"`
+	FinalizedHash       string                      `json:"finalized_hash"`
+	FinalizedNumber     uint64                      `json:"finalized_number"`
+	EvmHash             string                      `json:"evm_hash"`
+	EvmNumber           uint64                      `json:"evm_number"`
+	ObservationTrust    string                      `json:"observation_trust"`
+	RuntimeVersion      crv4.RuntimeVersionIdentity `json:"runtime_version"`
+	Inputs              []planInputBinding          `json:"inputs"`
+	Economics           planEconomics               `json:"economics"`
+	Requirements        []planRequirement           `json:"requirements"`
+	Actions             []planAction                `json:"actions"`
+	ExecutionBlockers   []string                    `json:"execution_blockers"`
+	ContentHash         string                      `json:"content_hash"`
+	TreasuryDestination *treasuryDestination        `json:"treasury_destination,omitempty"`
 }
 
 // Keep requirements explicit rather than accepting a boolean "approved"
@@ -238,10 +240,14 @@ func validateBootstrapDependencies(requirements []planRequirement, actions []pla
 // Validation is intentionally distinct from approval; all actions remain
 // blocked even if every supplemental review file has a matching hash.
 func buildBootstrapPlan(config bootstrapPlanConfig, snapshot finalizedSnapshotEnvelope, lock sourceLock, release bootstrapReleaseInput, inputs []planInputBinding) (bootstrapPlan, error) {
-	if config.Schema != bootstrapPlanConfigSchema || config.Netuid != 25 || !planLabel(config.DeploymentId) ||
+	treasury := config.Schema == bootstrapTreasuryPlanConfigSchema
+	if (config.Schema != bootstrapPlanConfigSchema && !treasury) || config.Netuid != 25 || !planLabel(config.DeploymentId) ||
 		config.Network.EvmChainId != mainnetEvmChainId || strings.TrimSpace(config.Network.NativeChain) == "" ||
 		!rootCanonicalHash(config.Network.GenesisHash) {
 		return bootstrapPlan{}, errors.New("plan requires its exact schema, deployment ID, SN25 and independently supplied mainnet chain/genesis/EVM964")
+	}
+	if err := validateBootstrapPlanDestination(config, treasury); err != nil {
+		return bootstrapPlan{}, err
 	}
 	expected := identityExpectation{NativeChain: config.Network.NativeChain, GenesisHash: config.Network.GenesisHash, EvmChainId: mainnetEvmChainId}
 	if err := expected.match(snapshot.Runtime.Identity); err != nil {
@@ -253,12 +259,19 @@ func buildBootstrapPlan(config bootstrapPlanConfig, snapshot finalizedSnapshotEn
 	if err := validatePlanSourceLock(lock); err != nil {
 		return bootstrapPlan{}, err
 	}
-	if release.Schema != bootstrapReleaseInputSchema || release.DeploymentId != config.DeploymentId || release.Netuid != config.Netuid ||
+	releaseSchema := bootstrapReleaseInputSchema
+	if treasury {
+		releaseSchema = bootstrapTreasuryReleaseInputSchema
+	}
+	if release.Schema != releaseSchema || release.DeploymentId != config.DeploymentId || release.Netuid != config.Netuid ||
 		release.SnapshotContentHash != snapshot.ContentHash || release.SourceLockContentHash != lock.ContentHash ||
 		release.RuntimeVersion != snapshot.Runtime.Version || release.RuntimeCodeHash != snapshot.Runtime.CodeHash || release.RuntimeMetadataHash != snapshot.Runtime.MetadataHash {
 		return bootstrapPlan{}, errors.New("release input does not bind the exact deployment, snapshot, source lock and complete runtime artifacts")
 	}
 	requirements := bootstrapRequirements()
+	if treasury {
+		requirements = bootstrapTreasuryRequirements()
+	}
 	inputByRequirement := map[string]planReviewInput{}
 	for _, input := range release.ReviewInputs {
 		if _, ok := inputByRequirement[input.Requirement]; ok {
@@ -279,6 +292,9 @@ func buildBootstrapPlan(config bootstrapPlanConfig, snapshot finalizedSnapshotEn
 		return bootstrapPlan{}, errors.New("unrecognized release review requirement")
 	}
 	actions := bootstrapActions()
+	if treasury {
+		actions = bootstrapTreasuryActions()
+	}
 	if err := validateBootstrapDependencies(requirements, actions); err != nil {
 		return bootstrapPlan{}, err
 	}
@@ -299,11 +315,20 @@ func buildBootstrapPlan(config bootstrapPlanConfig, snapshot finalizedSnapshotEn
 			"Revalidate current identity, runtime, generations and retained receipts at execution; an offline snapshot cannot establish present readiness",
 		},
 	}
+	if treasury {
+		plan.Schema = bootstrapTreasuryPlanSchema
+		plan.Economics = bootstrapTreasuryEconomics()
+		destination := *config.TreasuryDestination
+		if destination.RecipientHotkeys != nil {
+			destination.RecipientHotkeys = append([]string{}, destination.RecipientHotkeys...)
+		}
+		plan.TreasuryDestination = &destination
+	}
 	encoded, err := json.Marshal(plan)
 	if err != nil {
 		return bootstrapPlan{}, err
 	}
-	digest := sha256.Sum256(append([]byte(bootstrapPlanSchema+"\x00"), encoded...))
+	digest := sha256.Sum256(append([]byte(plan.Schema+"\x00"), encoded...))
 	plan.ContentHash = "sha256:" + hex.EncodeToString(digest[:])
 	return plan, nil
 }
