@@ -229,6 +229,29 @@ func TestNativeTreasuryMigrationRetainedOriginalParents(t *testing.T) {
 		}
 		runtime := validator.OwnerRecycleRuntimePin{SourceCommit: crv4.NativeOwnerSource473}
 		copy(runtime.CodeHash[:], code)
+		// A decoding or incomplete-path error cannot count as the negative's
+		// expected missing marker. First prove the original fixture's cause.
+		number, err := value.Witness.Header.authenticate(value.Witness.At)
+		if err != nil || number != value.Number {
+			t.Fatal("retained original header failed authentication", value.Name, err)
+		}
+		rootBytes, err := rootReceiptHex(value.Witness.Header.StateRoot, 32)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var root [32]byte
+		copy(root[:], rootBytes)
+		trie, err := newSafeCurrentStorageTrie(t.Context(), value.Witness.Nodes)
+		if err != nil {
+			t.Fatal("retained original trie is malformed", value.Name, err)
+		}
+		if hash, present, err := trie.commitment(t.Context(), root, []byte(":code")); err != nil || !present || hash != runtime.CodeHash {
+			t.Fatal("retained original code commitment differs", value.Name, err)
+		}
+		marker, present, err := trie.read(t.Context(), root, nativeTreasuryMigrationKey())
+		if err != nil || present != value.Complete || value.Complete && !bytes.Equal(marker, []byte{1}) {
+			t.Fatal("retained original marker cause differs", value.Name, present, marker, err)
+		}
 		authority := &nativeTreasuryAuthority{MigrationComplete: &value.Witness, Deployment: nativeTreasuryDeployment{Activation: economicEmissionBoundary{Number: value.Number, Hash: value.Witness.At}}}
 		err = authority.validateMigration(runtime)
 		if (err == nil) != value.Complete {
