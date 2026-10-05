@@ -78,6 +78,16 @@ func retryableSubstrateRpcReadTransportBounded(err error, transportOrigin, allow
 		return retryableSubstrateRpcReadTransportBounded(cause.Err, true, allowReconnectMarker, depth+1, budget)
 	case *net.OpError:
 		return retryableSubstrateRpcReadTransportBounded(cause.Err, true, allowReconnectMarker, depth+1, budget)
+	case *net.DNSError:
+		// The optional child is absent on ordinary resolver timeout leaves.
+		// A missing name and every actual child retain their hard priority.
+		if cause.IsNotFound {
+			return false
+		}
+		if cause.UnwrapErr != nil {
+			return retryableSubstrateRpcReadTransportBounded(cause.UnwrapErr, transportOrigin, allowReconnectMarker, depth+1, budget)
+		}
+		return cause.IsTimeout || cause.IsTemporary
 	case *websocket.CloseError:
 		switch cause.Code {
 		case websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseAbnormalClosure,
