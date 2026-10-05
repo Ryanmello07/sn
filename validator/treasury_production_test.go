@@ -81,7 +81,8 @@ func configureTreasuryProductionTest(t *testing.T, fixture *ownerRecycleProducti
 	}
 	if _, exists := entries["AutoStakeDestination"]; !exists {
 		id := types.NewSi1LookupTypeIDFromUInt(30000)
-		keys := fixture.metadata.AsMetadataV14.EfficientLookup[entries["Keys"].Type.AsMap.Key.Int64()]
+		keyEntry := entries["Keys"]
+		keys := fixture.metadata.AsMetadataV14.EfficientLookup[keyEntry.Type.AsMap.Key.Int64()]
 		if keys == nil || !keys.Def.IsTuple || len(keys.Def.Tuple) != 2 {
 			t.Fatal("synthetic key metadata is not an exact tuple")
 		}
