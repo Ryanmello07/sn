@@ -9,7 +9,8 @@ The owner set the root validator's terms ([operator discovery design](../docs/OP
 - **Deployment.** The validator runs on snow as a systemd service installed by `xops/main/ansible/run-validator.sh`, which builds the binary locally the way `run-edges.sh` builds `warpctl`. The unit runs `validator run --config=<path> --progress-file=<path> --durable-volumes=<path> --durable-volumes-sha256=<hash> --operators-refresh=1h`.
 - **Weights.** The validator weights only the operators pinned in its signed release config. `--operators-refresh` reports drift between `ur.xyz/operators.yml` and the pinned operators; it never changes weights, evidence or protocol state.
 
-- **Dedicated hotkey** (owner decision, October 6). The validator hotkey is a dedicated hotkey with its own coldkey, kept off snow. It is not the SN25 owner hotkey, and the SN25 owner Ledger signs none of its operations.
+- **Dedicated hotkey** (owner decision, October 6). The validator hotkey is the dedicated `ur-mainnet` hotkey, not the SN25 owner hotkey, and the SN25 owner Ledger signs none of its operations.
+- **Multisig coldkey.** Its coldkey is the `ur-mainnet` 2-of-3 native multisig `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are `brien-ur-mainnet` (Brien's Ledger, `m/44'/354'/10'/0'/0'`), `jack-ur` and `keith-ur`, the same pattern as the other `ur-*` multisigs. Registration, stake and take changes are multisig calls; `validator take status` reads them back.
 
 One runtime consequence needs its own step. Unless auto parent delegation is disabled first, `root_register` makes the hotkey the full-weight parent of every subnet owner hotkey, SN25's included. Our SN25 stake weight would then go to the SN25 owner hotkey, which is ours but doesn't run this validator. The validator's coldkey disables it with `set_auto_parent_delegation_enabled(hotkey, false)` before root registration. [LAUNCH.md](LAUNCH.md#root-validator-on-netuid-0) has the sequence.
 

@@ -90,7 +90,7 @@ messages and reviewed pins, never seed phrases or copied keys.
 | Coordinator governance Safe owners | Exact evidence-anchor Safe EIP-712 transaction | Accepted ordered Safe signatures |
 | Safe relayer | Exact outer EIP-1559 `execTransaction` transaction | Binary signed relayer transaction |
 | Operator signers | Their separately approved deposit and payout-root operations | Role-specific EVM signatures |
-| Coldkey that owns the validator hotkey | Root registration, auto parent opt-out and the 18% takes ([root validator](#root-validator-on-netuid-0)) | Finalized native extrinsics, journaled by `validator take` |
+| `ur-mainnet` 2-of-3 multisig (Brien's Ledger account 10, Jack, Keith), which owns the validator hotkey | SN25 and root registration, root stake, auto parent opt-out and the 18% takes ([root validator](#root-validator-on-netuid-0)) | Finalized native multisig calls |
 
 The Ledger Polkadot owner path is not an Ethereum signing interface. Establish
 EVM signer custody separately. `STCoordinator.rootSigner` signs operator payout
@@ -414,11 +414,23 @@ and focused-test receipts. Existing code-only evidence is not a mainnet capture.
 The owner decided on October 6 ([operator discovery design](../docs/OPERATOR-DISCOVERY.md),
 sections 1.6 and 7):
 
-- Our validator hotkey is a **dedicated hotkey**, not the SN25 owner hotkey. It is
-  the `hotkey_seed_file` of the signed UR validator config, sits on root (netuid 0)
-  and validates SN25. Its own coldkey signs every step below. The SN25 owner Ledger
-  stays owner-local setup custody and signs none of them
+- Our validator hotkey is the dedicated hotkey **`ur-mainnet`** (btcli wallet
+  `root/subtensor/wallets/ur-mainnet`, hotkey `default`), not the SN25 owner hotkey.
+  It is the `hotkey_seed_file` of the signed UR validator config, sits on root
+  (netuid 0) and validates SN25. The SN25 owner Ledger stays owner-local setup
+  custody and signs nothing here
   ([current root participation](ROOT-CURRENT-PARTICIPANT.md)).
+- Its coldkey is the **`ur-mainnet` 2-of-3 native multisig**
+  `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are:
+  - `brien-ur-mainnet`, `5Fy6EbewyBPJi565JP1P5zgFsiGXfwSs8ZYpMWNJA8gpfNit`, on
+    Brien's Ledger at `m/44'/354'/10'/0'/0'`;
+  - `jack-ur`, `5GeoGiGEvUEQqTfTaUsvXqMQD4zVMNeYtYqMN8JLaMfiDp4J`;
+  - `keith-ur`, `5DFCNQmzRedo6hbZci4PTFMRuQJQ5PX6f6WrJBxDCDU3yBzS`.
+
+  It follows the same pattern as the `ur`, `ur-owner`, `ur-alpha` and `ur-reserve`
+  multisigs. btcli's multisig book (`btcli multisig show ur-mainnet`) derives that
+  address, and an independent derivation matches it. Every coldkey step below is a
+  native multisig call: one signatory proposes it and a second approves it.
 - The delegate take and the SN25 childkey take are both **18%**: 11,796/65,535,
   the runtime's default maximum for each. `validator take status` prints the
   live bounds, and the commands refuse a take above them.
@@ -430,11 +442,17 @@ sections 1.6 and 7):
 - It runs on snow as a systemd service installed by
   `xops/main/ansible/run-validator.sh`.
 
-The coldkey that owns the hotkey signs every step below; keep its seed off the
-validator host. Without `--apply`, each `validator` command is a dry run: it reads
-the live values at an authenticated finalized block and prints the current and
-target values, the exact call with its call data, the extrinsic hash and the
-quoted fee.
+Each coldkey step is `btcli call <Pallet.call> --args <json> --multisig ur-mainnet`,
+signed by one signatory. Brien signs on the Ledger with `--ledger
+--ledger-account 10`. A second signatory then approves the pending call, which
+`btcli multisig pending ur-mainnet` lists. Preview each call with `--dry-run`
+first. The multisig account pays the burn, the multisig deposit and the fees,
+so fund `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3` before the first call.
+
+`validator take status --config=<path>` reads the live values at an
+authenticated finalized block without any key; use it before and after each
+step. `validator take set` and `take childkey` sign with a coldkey seed file,
+so they are not used for this multisig-owned hotkey.
 
 ### Register the hotkey on root
 
@@ -450,50 +468,54 @@ pending children, or is itself the owner hotkey. We own SN25, but the SN25 owner
 hotkey doesn't run this validator. Left on, our validator's SN25 weight would move
 to the owner hotkey, and so would the stake of everyone keyed to us.
 
-With btcli (bittensor 11) and the coldkey's wallet:
+With btcli (bittensor 11) through the multisig:
 
 ```bash
-HOTKEY_SS58=<hotkey ss58 printed by validator take status>
+HOTKEY_SS58=<ur-mainnet hotkey ss58, from validator take status>
+MULTISIG=(--multisig ur-mainnet --ledger --ledger-account 10 --network "$MAINNET_RPC")
 btcli call SubtensorModule.set_auto_parent_delegation_enabled \
-  --args "{\"hotkey\": \"$HOTKEY_SS58\", \"enabled\": false}" \
-  --wallet "$COLDKEY_WALLET" --network "$MAINNET_RPC" --dry-run
+  --args "{\"hotkey\": \"$HOTKEY_SS58\", \"enabled\": false}" "${MULTISIG[@]}" --dry-run
 btcli subnets burn-cost 0 --network "$MAINNET_RPC"
-btcli subnets register --netuid 0 --hotkey "$HOTKEY_SS58" \
-  --wallet "$COLDKEY_WALLET" --network "$MAINNET_RPC" --dry-run
+btcli call SubtensorModule.root_register \
+  --args "{\"hotkey\": \"$HOTKEY_SS58\"}" "${MULTISIG[@]}" --dry-run
 ```
 
-Review each dry run, then repeat it without `--dry-run`. The burn charged is the
+Review each dry run, then repeat it without `--dry-run` and have a second
+signatory approve it. The burn charged is the
 one at inclusion. When the root network is full, the hotkey's root stake must be
 at least the lowest-staked non-immune member's. Where the burn needs retained
 approvals and an explicit balance-exposure acknowledgement, use the reviewed
 `sn-mainnet root-register` workflow in MAINNET.md instead. Registration stores an
 18% delegate take for a hotkey that has none stored yet.
 
-### Set and verify the takes
+### Register on SN25, stake and set the takes
 
-A mainnet production config journals in owner-local custody, so it needs
-`--durable-volumes` and `--durable-volumes-sha256` naming that declaration, as
-`validator register` and `validator stake add` do. Other configs journal without
-them.
+The multisig also signs the hotkey's SN25 registration and its stake.
+`validator register` and `validator stake add` sign with a coldkey seed file, so
+use their dry runs only to read the live burn and pool price.
 
 ```bash
+btcli call SubtensorModule.register_limit \
+  --args "{\"netuid\": 25, \"hotkey\": \"$HOTKEY_SS58\", \"limit_price\": $BURN_LIMIT_RAO}" \
+  "${MULTISIG[@]}" --dry-run
+btcli call SubtensorModule.add_stake \
+  --args "{\"hotkey\": \"$HOTKEY_SS58\", \"netuid\": 0, \"amount_staked\": $ROOT_STAKE_RAO}" \
+  "${MULTISIG[@]}" --dry-run
+btcli call SubtensorModule.set_childkey_take \
+  --args "{\"hotkey\": \"$HOTKEY_SS58\", \"netuid\": 25, \"take\": 11796}" \
+  "${MULTISIG[@]}" --dry-run
 VALIDATOR=/absolute/path/validator
-OWNER=(
-  --durable-volumes="$OWNER_DECLARATION"
-  --durable-volumes-sha256="$OWNER_DECLARATION_SHA256"
-)
 "$VALIDATOR" take status --config="$VALIDATOR_CONFIG"
-"$VALIDATOR" take set --take=18 --config="$VALIDATOR_CONFIG" \
-  --coldkey_seed_file="$COLDKEY_SEED" "${OWNER[@]}"
-"$VALIDATOR" take childkey --netuid=25 --take=18 --config="$VALIDATOR_CONFIG" \
-  --coldkey_seed_file="$COLDKEY_SEED" "${OWNER[@]}"
 ```
 
-Review each dry run, then repeat it with `--apply`. That signs, journals the exact
-bytes under `<state_dir>/native`, waits for finality and checks the stored take in
-the inclusion block. `take set` picks `decrease_take` or `increase_take`; a take
-that is still the runtime default is pinned with `decrease_take`. The quoted fee
-must stay under `--fee_limit_rao` (default 10,000,000 rao).
+Review each dry run, then repeat it without `--dry-run` and have a second
+signatory approve it.
+- Root registration stores the runtime's 18% default delegate take for a hotkey
+  with none stored yet, so `take status` normally shows the delegate take already
+  at 11,796.
+- If it doesn't, pin it with `SubtensorModule.decrease_take`
+  (`{"hotkey": ..., "take": 11796}`) through the same multisig.
+- 11,796/65,535 is 18%, the runtime maximum for both takes.
 
 An increase waits `TxDelegateTakeRateLimit` (delegate) or `TxChildkeyTakeRateLimit`
 (childkey) blocks after the last change. Both are 216,000 blocks, about 30 days, by
