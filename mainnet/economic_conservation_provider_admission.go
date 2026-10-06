@@ -140,6 +140,12 @@ func (self *economicConservationArchiveView) verifyProviderOriginals(ctx context
 	if 0 < len(originals.NetworkWallets) {
 		measurement.NetworkWalletOriginalsHash = rootObjectHash(originals.NetworkWallets)
 	}
+	if 0 < len(originals.HotkeyDelegations) {
+		measurement.HotkeyDelegationOriginalsHash = rootObjectHash(originals.HotkeyDelegations)
+	}
+	if 0 < len(originals.HotkeyConsents) {
+		measurement.HotkeyConsentOriginalsHash = rootObjectHash(originals.HotkeyConsents)
+	}
 	measurement.BindingOriginalsHash = rootObjectHash(originals.Bindings)
 	measurement.TrialAuthorityHash = selected.AttemptAuthority.SHA256
 	measurement.TrialOriginalsHash = hex.EncodeToString(attempts.OriginalHash[:])

@@ -51,17 +51,38 @@ type economicNetworkWalletOriginal struct {
 	Originals []protocol.WalletMappingConsent `json:"originals"`
 }
 
+// A hotkey delegation chain selected by the roster's delegation head. It is
+// retained only for networks with a provider that falls back past the network
+// consent to it.
+type economicHotkeyDelegationOriginal struct {
+	NetworkId [16]byte                        `json:"network_id"`
+	Originals []protocol.WalletMappingConsent `json:"originals"`
+}
+
+// The global hotkey consent chain from generation 1 through the head that the
+// network's delegation effective at the epoch names, retained beside that
+// delegation chain.
+type economicHotkeyConsentOriginal struct {
+	NetworkId [16]byte                              `json:"network_id"`
+	Originals []protocol.HotkeyWalletMappingConsent `json:"originals"`
+}
+
 // Portable originals are bounded by the original physical and logical profile.
 // A compact projection cannot replace any one of these independent components.
 // Wallets holds one entry per expected provider with a provider head, in
 // roster order; NetworkWallets one per consulted network, ordered by network,
 // and is omitted when empty so evidence without network consents is unchanged.
+// HotkeyDelegations and HotkeyConsents hold one entry each per network that
+// falls back to hotkey mode, ordered by network, and are omitted when empty in
+// the same way.
 type economicProviderOriginals struct {
-	Work           *payoutartifact.WholeWorkInventory        `json:"work"`
-	Wallets        []economicProviderWalletOriginal          `json:"wallets"`
-	NetworkWallets []economicNetworkWalletOriginal           `json:"network_wallets,omitempty"`
-	Bindings       *validator.ProviderAttemptBindingOriginal `json:"bindings"`
-	Attempts       json.RawMessage                           `json:"attempts"`
+	Work              *payoutartifact.WholeWorkInventory        `json:"work"`
+	Wallets           []economicProviderWalletOriginal          `json:"wallets"`
+	NetworkWallets    []economicNetworkWalletOriginal           `json:"network_wallets,omitempty"`
+	HotkeyDelegations []economicHotkeyDelegationOriginal        `json:"hotkey_delegations,omitempty"`
+	HotkeyConsents    []economicHotkeyConsentOriginal           `json:"hotkey_consents,omitempty"`
+	Bindings          *validator.ProviderAttemptBindingOriginal `json:"bindings"`
+	Attempts          json.RawMessage                           `json:"attempts"`
 }
 
 // Private cached results are reachable only through an admitted original
@@ -199,13 +220,32 @@ func economicNetworkWalletExpected(authority *payoutartifact.WholeWorkAuthority,
 	return protocol.NetworkWalletMappingHistoryExpectation{Domain: authority.Domain, NetworkId: networkId, HeadHash: [32]byte(raw), Generation: wallet.WalletGeneration, Epoch: authority.Epoch}, nil
 }
 
+// The roster's delegation head for networkId. A network without a pinned
+// delegation reports an absent chain with the zero expectation, which hotkey
+// resolution also reads as absent.
+func economicHotkeyDelegationExpected(authority *payoutartifact.WholeWorkAuthority, networkId [16]byte) (protocol.HotkeyNetworkDelegationHistoryExpectation, error) {
+	delegation, found := authority.HotkeyDelegation(networkId)
+	if !found {
+		return protocol.HotkeyNetworkDelegationHistoryExpectation{}, protocol.WalletMappingAbsentError()
+	}
+	raw, err := hex.DecodeString(delegation.DelegationHeadHash)
+	if err != nil || len(raw) != 32 || hex.EncodeToString(raw) != delegation.DelegationHeadHash || delegation.DelegationGeneration == 0 || delegation.DelegationGeneration > protocol.MaxWalletMappingHistory {
+		return protocol.HotkeyNetworkDelegationHistoryExpectation{}, protocol.ErrWalletMappingIntegrity
+	}
+	return protocol.HotkeyNetworkDelegationHistoryExpectation{Domain: authority.Domain, NetworkId: networkId, HeadHash: [32]byte(raw), Generation: delegation.DelegationGeneration, Epoch: authority.Epoch}, nil
+}
+
 // Resolves every expected provider's earning wallet from the retained
-// originals: the provider's own chain first, its network's chain only when
-// the provider chain is absent or has no consent effective at the epoch
-// (protocol.SelectEarningWallet). Both kinds pass the same prospective gate.
-// The evidence must be exactly what the resolution consults: one provider
-// chain per expected provider with a head, in roster order, and one network
-// chain per network some provider fell back to, ordered by network.
+// originals with settlement's precedence (protocol.SelectEarningWalletWithHotkey):
+// the provider's own chain first; its network's chain only when the provider
+// chain is absent or has no consent effective at the epoch; and its network's
+// hotkey delegation only when the network chain is in turn absent or not
+// effective (protocol.ResolveHotkeyEarningWallet). Every kind passes the same
+// prospective gate. The evidence must be exactly what the resolution consults:
+// one provider chain per expected provider with a head, in roster order; one
+// network chain per network some provider fell back to; and one delegation
+// chain and one global consent chain per network some provider fell back to
+// hotkey mode for; each of the last three ordered by network.
 func economicProviderEarningWallets(ctx context.Context, authority *payoutartifact.WholeWorkAuthority, originals *economicProviderOriginals, rootSigner common.Address, startBlock uint64, startUnix int64) (map[[16]byte]*protocol.EarningWallet, error) {
 	if authority == nil || originals == nil {
 		return nil, protocol.ErrWalletMappingUnavailable
@@ -217,6 +257,22 @@ func economicProviderEarningWallets(ctx context.Context, authority *payoutartifa
 			return nil, errors.Join(errRpcIntegrity, protocol.ErrWalletMappingIntegrity)
 		}
 		networkOriginals[original.NetworkId] = original.Originals
+		priorNetworkId = original.NetworkId
+	}
+	delegationOriginals := map[[16]byte][]protocol.WalletMappingConsent{}
+	for index, original := range originals.HotkeyDelegations {
+		if index > 0 && bytes.Compare(priorNetworkId[:], original.NetworkId[:]) >= 0 {
+			return nil, errors.Join(errRpcIntegrity, protocol.ErrWalletMappingIntegrity)
+		}
+		delegationOriginals[original.NetworkId] = original.Originals
+		priorNetworkId = original.NetworkId
+	}
+	consentOriginals := map[[16]byte][]protocol.HotkeyWalletMappingConsent{}
+	for index, original := range originals.HotkeyConsents {
+		if index > 0 && bytes.Compare(priorNetworkId[:], original.NetworkId[:]) >= 0 {
+			return nil, errors.Join(errRpcIntegrity, protocol.ErrWalletMappingIntegrity)
+		}
+		consentOriginals[original.NetworkId] = original.Originals
 		priorNetworkId = original.NetworkId
 	}
 	networkWallets := map[[16]byte]*protocol.VerifiedNetworkWalletMapping{}
@@ -253,6 +309,37 @@ func economicProviderEarningWallets(ctx context.Context, authority *payoutartifa
 		}
 		return protocol.NetworkEarningWallet(clientId, verified), nil
 	}
+	hotkeyWallets := map[[16]byte]*protocol.EarningWallet{}
+	hotkeyErrs := map[[16]byte]error{}
+	consultedHotkeyNetworkIds := map[[16]byte]bool{}
+	// resolves a network's hotkey evidence once, however many providers fall
+	// back to it; a hotkey wallet differs between the network's providers only
+	// in its client
+	hotkeyWallet := func(clientId [16]byte, networkId [16]byte) (*protocol.EarningWallet, error) {
+		consultedHotkeyNetworkIds[networkId] = true
+		if err, failed := hotkeyErrs[networkId]; failed {
+			return nil, err
+		}
+		wallet := hotkeyWallets[networkId]
+		if wallet == nil {
+			expected, err := economicHotkeyDelegationExpected(authority, networkId)
+			if err != nil && !errors.Is(err, protocol.ErrWalletMappingAbsent) {
+				hotkeyErrs[networkId] = err
+				return nil, err
+			}
+			// an unpinned network keeps the zero expectation: resolution reads it
+			// as absent, and refuses any originals supplied for it
+			wallet, err = protocol.ResolveHotkeyEarningWallet(ctx, clientId, protocol.HotkeyEarningWalletEvidence{Delegations: delegationOriginals[networkId], DelegationExpected: expected, Consents: consentOriginals[networkId]}, rootSigner, startBlock, startUnix)
+			if err != nil {
+				hotkeyErrs[networkId] = err
+				return nil, err
+			}
+			hotkeyWallets[networkId] = wallet
+		}
+		owned := *wallet
+		owned.ClientId = clientId
+		return &owned, nil
+	}
 	wallets := make(map[[16]byte]*protocol.EarningWallet, len(authority.ExpectedProviders))
 	walletIndex := 0
 	for _, provider := range authority.ExpectedProviders {
@@ -281,8 +368,10 @@ func economicProviderEarningWallets(ctx context.Context, authority *payoutartifa
 			}
 			return protocol.ProviderEarningWallet(verified), nil
 		}()
-		wallet, err := protocol.SelectEarningWallet(providerWallet, providerErr, func() (*protocol.EarningWallet, error) {
+		wallet, err := protocol.SelectEarningWalletWithHotkey(providerWallet, providerErr, func() (*protocol.EarningWallet, error) {
 			return networkWallet(provider.ClientId, provider.NetworkId)
+		}, func() (*protocol.EarningWallet, error) {
+			return hotkeyWallet(provider.ClientId, provider.NetworkId)
 		})
 		if err != nil {
 			return nil, economicProviderEvidenceError(err)
@@ -295,9 +384,19 @@ func economicProviderEarningWallets(ctx context.Context, authority *payoutartifa
 	if walletIndex != len(originals.Wallets) {
 		return nil, errors.Join(errRpcIntegrity, protocol.ErrWalletMappingIntegrity)
 	}
-	// no unconsulted network evidence rides along
+	// no unconsulted network or hotkey evidence rides along
 	for networkId := range networkOriginals {
 		if !consultedNetworkIds[networkId] {
+			return nil, errors.Join(errRpcIntegrity, protocol.ErrWalletMappingIntegrity)
+		}
+	}
+	for networkId := range delegationOriginals {
+		if !consultedHotkeyNetworkIds[networkId] {
+			return nil, errors.Join(errRpcIntegrity, protocol.ErrWalletMappingIntegrity)
+		}
+	}
+	for networkId := range consentOriginals {
+		if !consultedHotkeyNetworkIds[networkId] {
 			return nil, errors.Join(errRpcIntegrity, protocol.ErrWalletMappingIntegrity)
 		}
 	}

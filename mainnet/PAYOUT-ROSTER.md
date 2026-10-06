@@ -107,6 +107,8 @@ Collect originals for the already selected identities:
 | Client-key registration | The admission record retained with the SDK enrollment, or `GET /key/<client-UUID>/history`. The latter returns `history`, an array of base64 signed registration bytes. Decode a selected original into a `protocol.ClientKeyRegistration` object; retain its signature and all fields. `prepare` verifies the configured root signer, exact domain, client, key and present registration. |
 | Provider wallet consent | `POST /sn/wallet/consent/history` with `domain`, `client_id`, `head_hash` and `generation` returns `originals`. The domain is the protocol JSON object, `client_id` is the Server UUID string, `head_hash` is a 32-element numeric byte array, and `generation` is the independently selected full history head. Retain every original from generation one through that head. |
 | Network wallet consent | `POST /sn/wallet/network-consent/history` with `domain`, `network_id`, `head_hash` and `generation` returns `originals`. Use the protocol domain, the Server network UUID string and the independently selected 32-byte numeric-array head and generation from the network acceptance record. Retain the complete network chain. |
+| Hotkey delegation | `POST /sn/wallet/hotkey-delegation/history` takes the same `domain`, `network_id`, `head_hash` and `generation` fields and returns `originals`. The head and generation come from the delegation's acceptance record. Retain the complete delegation chain. |
+| Global hotkey consent | `POST /sn/wallet/hotkey-consent/history` with `hotkey_ss58`, `head_hash` and `generation` returns `originals`. Select the head that the delegation effective at the epoch names; [Hotkey delegations](#hotkey-delegations-and-the-third-earning-mode) explains how. Retain the chain from generation one through exactly that head. |
 | Epoch clock | Independently selected start/end boundaries and their exact committed RLP headers, supplied as `payoutartifact.ClosedWorkWindowClock`. The production `header_profile` is `frontier-legacy-rlp15-milliseconds`. |
 | Prior contracts | The explicit reconciled `WholeWorkPriorContract` list from verified original predecessor artifacts and whole-work witnesses. Use `[]` for a reviewed first prospective window. |
 | Work sources | The explicitly approved `protocol.ProviderWorkSourceAuthority` list of source identities, public keys, time bounds and capacities for the window, if used. The roster signature binds these declarations. |
@@ -184,26 +186,44 @@ curl --proto '=https' --fail --silent --show-error --max-time 300 \
   --output network-1-wallet-history.json
 ```
 
+A selected delegation head uses the same request body on its own route. The
+global consent request that follows it is described in
+[Hotkey delegations](#hotkey-delegations-and-the-third-earning-mode):
+
+```sh
+curl --proto '=https' --fail --silent --show-error --max-time 300 \
+  --header 'Content-Type: application/json' \
+  --data-binary @delegation-1-history-request.json \
+  "$roster_api/sn/wallet/hotkey-delegation/history" \
+  --output delegation-1-history.json
+
+curl --proto '=https' --fail --silent --show-error --max-time 300 \
+  --header 'Content-Type: application/json' \
+  --data-binary @hotkey-consent-1-history-request.json \
+  "$roster_api/sn/wallet/hotkey-consent/history" \
+  --output hotkey-consent-1-history.json
+```
+
 The head selectors come from the reviewed `mapping_hash` and
 `mapping_generation` returned by consent acceptance. The history routes return
 originals for that selection; they do not choose a latest head. Supply each full
 chain, including retained rotations that become effective after this epoch.
 The producer derives the head from the originals and checks continuity, domain,
-identities and signatures. Network and provider originals share the
-`WalletMappingConsent` JSON container, but their signed `message` prefixes,
+identities and signatures. Provider, network and delegation originals share
+the `WalletMappingConsent` JSON container, but their signed `message` prefixes,
 schemas and scopes differ. Copy them unchanged into their corresponding input
 arrays; they are not interchangeable. Before approval, compare every derived
-`wallet_head_hash` and `wallet_generation` with the independently recorded
-acceptance selection.
+`wallet_head_hash`, `wallet_generation`, `delegation_head_hash` and
+`delegation_generation` with the independently recorded acceptance selection.
 
 An empty provider `wallet_consents` array asserts independently reviewed absence
 of an own-consent chain. A failed history fetch or a missing known original must
 remain pending; it cannot be converted into an empty array to enable network
 fallback. Retain unmapped providers in the population, and resolve missing
 originals without substituting unsigned wallet database rows. With any network
-head present, every provider must supply either its full array or explicit `[]`;
-an omitted or `null` `wallet_consents` field is unknown and is refused. Existing
-v1 input handling is unchanged when no network heads are supplied.
+head or delegation present, every provider must supply either its full array or
+explicit `[]`; an omitted or `null` `wallet_consents` field is unknown and is
+refused. Existing v1 input handling is unchanged when neither is supplied.
 
 The clock object has `start` and `end` objects containing `number` and `hash`,
 RFC3339 `start_time` and `end_time`, and base64 `start_header` and `end_header`
@@ -217,9 +237,12 @@ The program accepts the strict JSON
 set. Each owner contains base64 `enrollment` bytes and a `registration` object;
 each provider contains numeric-array `client_id` and `network_id` fields and a
 `wallet_consents` array. Optional `network_wallets` entries each contain a
-numeric-array `network_id` and a complete `wallet_consents` array. Each network
-must be referenced by an expected provider and occur once. Input and prepared
-requests are bounded to 64 MiB.
+numeric-array `network_id` and a complete `wallet_consents` array. Optional
+`hotkey_delegations` entries each contain a numeric-array `network_id`, a
+boolean `network_wallet_absent`, a complete `delegation_consents` array and a
+`hotkey_consents` array. Each network must be referenced by an expected provider
+and occur at most once in each list. Input and prepared requests are bounded to
+64 MiB.
 Duplicate or unknown JSON members are rejected. A capacity refusal requires
 resolving the bound; truncating a population or consent chain would change the
 independently approved input.
@@ -258,6 +281,14 @@ network to supply the effective consent. A missing marker or a null/empty
       "wallet_history": "network-1-wallet-history.json"
     }
   ],
+  "hotkey_delegations": [
+    {
+      "network_id": "22222222222222222222222222222222",
+      "network_wallet_absent": false,
+      "delegation_history": "delegation-1-history.json",
+      "hotkey_consent_history": "hotkey-consent-1-history.json"
+    }
+  ],
   "prior_contracts": "prior-contracts.json",
   "work_sources": "work-sources.json"
 }
@@ -267,9 +298,14 @@ network to supply the effective consent. A missing marker or a null/empty
 response wrapper. `provider-1-wallet-history.json` is the consent-history response
 with its `originals` array; `network-1-wallet-history.json` is the corresponding
 network-history response. Omit the manifest's `network_wallets` field, or use
-`[]`, when no network heads are approved. `prior-contracts.json` and
-`work-sources.json` are JSON arrays, with `[]` only when the independently reviewed
-list is empty.
+`[]`, when no network heads are approved. `delegation-1-history.json` and
+`hotkey-consent-1-history.json` are the delegation-history and global
+consent-history responses. Omit `hotkey_delegations`, or use `[]`, when no
+delegation heads are approved. Set `network_wallet_absent` to `true` only after
+reviewing that the delegated network has no network consent chain. Set
+`hotkey_consent_history` to `null` only when no delegation is effective at the
+epoch. `prior-contracts.json` and `work-sources.json` are JSON arrays, with `[]`
+only when the independently reviewed list is empty.
 
 Run this helper from that directory to produce a new `input.json`. It embeds
 exact enrollment bytes, converts the explicitly selected hexadecimal identities
@@ -339,6 +375,19 @@ for network in selection.get("network_wallets", []):
         "wallet_consents": consent_history(network["wallet_history"]),
     })
 
+hotkey_delegations = []
+for delegation in selection.get("hotkey_delegations", []):
+    network_absent = delegation["network_wallet_absent"]
+    if type(network_absent) is not bool:
+        raise ValueError("network_wallet_absent must be an explicit boolean")
+    consent_file = delegation["hotkey_consent_history"]
+    hotkey_delegations.append({
+        "network_id": byte_array(delegation["network_id"], 16),
+        "network_wallet_absent": network_absent,
+        "delegation_consents": consent_history(delegation["delegation_history"]),
+        "hotkey_consents": [] if consent_file is None else consent_history(consent_file),
+    })
+
 value = {
     "schema": "urnetwork-payout-roster-input-v1",
     "complete": selection["complete"],
@@ -351,6 +400,8 @@ value = {
 }
 if network_wallets:
     value["network_wallets"] = network_wallets
+if hotkey_delegations:
+    value["hotkey_delegations"] = hotkey_delegations
 with open("input.json", "x") as output:
     json.dump(value, output, separators=(",", ":"))
     output.write("\n")
@@ -376,7 +427,7 @@ Server settlement and the independent verifier:
 | Effective consent that passes its prospective gate | The provider's own coldkey wins, including when a network head is present. |
 | Reviewed absent chain (`ErrWalletMappingAbsent`), or a fully verified chain with no effective consent (`ErrWalletMappingNotEffective`) | Try the network's effective consent and prospective gate. |
 | Missing originals, broken lineage, invalid signatures, selected legacy consent, or a failed prospective gate | No network fallback. A generic `ErrWalletMappingUnavailable` is insufficient to permit fallback. |
-| Neither eligible chain supplies an effective consent | The provider remains explicitly unmapped; it is retained in the roster. |
+| Neither eligible chain supplies an effective consent | With a delegation of the network, hotkey mode is tried next (see [Hotkey delegations](#hotkey-delegations-and-the-third-earning-mode)). Otherwise the provider remains explicitly unmapped; it is retained in the roster. |
 
 Earning intervals are inclusive `from_epoch` through `through_epoch`. The
 five-minute challenge expiry governs acceptance; it does not shorten that
@@ -388,20 +439,149 @@ second wallet selector or choose a coldkey from the current wallet projection.
 See [the network-consent design](../docs/NETWORK-WALLET-CONSENT.md) for the signed
 statement format and consent issuance workflow.
 
-For a request with network input, `prepare` also adds derived `wallet_selections`
-review metadata. Each entry identifies `client_id` and `network_id`, then has
-either `wallet` or `unavailable: true`. The wallet uses the shared protocol
-object's field names: `Mode`, `ClientId`, `NetworkId`, `Coldkey`, `OriginalHash`,
-`Generation`, `HeadHash` and `HeadGeneration`. `Mode` is `provider` or `network`;
-the selected original and generation can precede the pinned chain head. A
-selected legacy own consent remains unavailable even when a valid network
-consent exists.
+For a request with network or delegation input, `prepare` also adds derived
+`wallet_selections` review metadata. Each entry identifies `client_id` and
+`network_id`, then has either `wallet` or `unavailable: true`. The wallet uses
+the shared protocol object's field names: `Mode`, `ClientId`, `NetworkId`,
+`Coldkey`, `OriginalHash`, `Generation`, `HeadHash` and `HeadGeneration`. `Mode`
+is `provider`, `network` or `hotkey`; the selected original and generation can
+precede the pinned chain head. A selected legacy own consent remains unavailable
+even when a valid network consent exists.
 
 Review this preview with the originals; let `prepare` generate it. Signing
 rederives it and refuses changed request bytes. Settlement and verification
 resolve wallets from the signed roster and original histories, so this preview
-is not an additional authority. Requests without network inputs omit both
-`network_wallets` and `wallet_selections` and preserve their v1 encoding.
+is not an additional authority. Requests without network or delegation inputs
+omit `network_wallets`, `hotkey_delegations` and `wallet_selections` and
+preserve their v1 encoding.
+
+## Hotkey delegations and the third earning mode
+
+All-operators miners earn through a global hotkey wallet consent and per-operator
+delegations. The coldkey and the hotkey sign the global consent once, for every
+operator of the subnet. On each operator, the hotkey signs a delegation of its
+network that names one head of that global chain, and the operator co-signs
+the delegation's issuance boundary as it does for a network consent. See
+[the operator discovery design](../docs/OPERATOR-DISCOVERY.md) for the statement
+formats and the client workflow.
+
+A nonempty `hotkey_delegations` input produces
+`urnetwork-whole-work-authority-v3`, with sorted `hotkey_delegations` entries
+containing `network_id`, `delegation_head_hash` and `delegation_generation`. A v3
+roster may also carry `network_wallets`. The roster pins only the delegation
+chain; each delegation pins the global consent head it names. Without delegation
+inputs, the producer keeps the v2 or v1 schema and its canonical bytes. Use API,
+payout worker and verifier releases that support hotkey delegations for v3; older
+verifiers refuse that schema.
+
+Hotkey mode is the last of the three earning modes. The producer applies the
+shared `protocol.SelectEarningWalletWithHotkey` rules, which Server settlement
+and the independent verifier also use, and resolves hotkey mode with
+`protocol.ResolveHotkeyEarningWallet`.
+
+The network chain is consulted only when the provider's own chain falls back,
+as above. Its result decides whether hotkey mode is tried:
+
+| Network chain result for the epoch | Resolution |
+| --- | --- |
+| Effective consent that passes its prospective gate | The network consent's coldkey wins, including when a delegation head is present. |
+| Absent from the roster, or a fully verified chain with no effective consent | Try the delegation effective at the epoch, its prospective gate, then the global consent effective at the epoch in the chain through the head the delegation names. |
+| Missing originals, broken lineage, invalid signatures, or a failed prospective gate | No hotkey fallback. |
+
+When hotkey mode is tried, a network without a delegation head, or with no
+delegation or global consent effective at the epoch, leaves the provider
+explicitly unmapped; it is retained in the roster. A delegation whose acceptance
+may cross the epoch's start is unknown and also leaves the provider unmapped.
+
+The delegation passes the same gate as a network consent: the configured
+`client_key_root_signer` issued it, its issuance boundary precedes the epoch's
+start, and its acceptance expiry is no later than that start. The global consent
+has no operator signature and no expiry; the delegation that names it supplies
+both.
+
+Collect the evidence for each delegated network:
+
+1. Fetch the complete delegation chain through the head in the delegation's
+   acceptance record. The record is the `mapping_hash` and `mapping_generation`
+   returned when the delegation was accepted through `POST /sn/wallet`.
+2. Find the delegation effective at the epoch: the last generation whose
+   `from_epoch` is at most the epoch. None is effective when no generation
+   qualifies or when that generation's `through_epoch` is earlier than the
+   epoch.
+3. If one is effective, fetch the global consent chain through the
+   `consent_head_hash` and `consent_generation` it names, with its `hotkey` as an
+   SS58 address (prefix 42). Supply exactly that chain as `hotkey_consents`.
+   A later delegation generation can name a later global head; it stays in
+   `delegation_consents`, but its global chain does not replace the one this
+   epoch uses.
+4. If none is effective, supply `hotkey_consents` as `[]`.
+5. State the network's own consent chain: supply it in `network_wallets`, or set
+   `network_wallet_absent: true` after reviewing that the network has none.
+   Without either, `prepare` refuses the request, because a missing network
+   chain would otherwise let hotkey mode displace a network consent. A network
+   chain supplied together with `network_wallet_absent: true` is a
+   contradiction and is also refused.
+
+This helper performs steps 2 and 3 for one fetched delegation history. It
+writes the global consent request body, or reports that no delegation is
+effective. Replace the epoch with the reviewed epoch:
+
+```sh
+python3 - <<'PY'
+import hashlib
+import json
+import os
+from pathlib import Path
+
+os.umask(0o077)
+epoch = 123
+alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+def ss58(public_key):
+    payload = bytes([42]) + bytes(public_key)
+    checksum = hashlib.blake2b(b"SS58PRE" + payload, digest_size=64).digest()[:2]
+    number = int.from_bytes(payload + checksum, "big")
+    encoded = ""
+    while number:
+        number, remainder = divmod(number, 58)
+        encoded = alphabet[remainder] + encoded
+    return encoded
+
+prefix = "Delegate URnetwork network wallet to hotkey\n"
+selected = None
+for original in json.loads(Path("delegation-1-history.json").read_bytes())["originals"]:
+    if not original["message"].startswith(prefix):
+        raise ValueError("history contains a message that is not a hotkey delegation")
+    statement = json.loads(original["message"][len(prefix):])
+    if statement["from_epoch"] <= epoch:
+        selected = statement
+if selected is None or selected["through_epoch"] < epoch:
+    print("no delegation is effective at the epoch; supply hotkey_consents []")
+else:
+    with open("hotkey-consent-1-history-request.json", "x") as output:
+        json.dump({
+            "hotkey_ss58": ss58(selected["hotkey"]),
+            "head_hash": selected["consent_head_hash"],
+            "generation": selected["consent_generation"],
+        }, output, separators=(",", ":"))
+PY
+```
+
+The helper only selects a request. `prepare` checks every original again. It
+refuses a global chain that is missing while a delegation is effective, one that
+does not end at the named head, one of another hotkey or subnet, and any global
+chain when no delegation is effective. A delegation must name its own network,
+the configured domain and root signer, and carry every generation from the
+first.
+
+In `wallet_selections`, a hotkey-mode wallet's `Coldkey` is the global
+consent's coldkey. `OriginalHash`, `Generation`, `HeadHash` and `HeadGeneration`
+describe the delegation chain, the chain the roster pins. Five more fields
+describe the global consent: `Hotkey`, `ConsentOriginalHash`,
+`ConsentGeneration`, `ConsentHeadHash` and `ConsentHeadGeneration`. Provider- and
+network-mode wallets omit these fields, so existing requests keep their bytes.
+Review that the hotkey, the global consent's coldkey and both heads match the
+miner's approved consent before pinning the request.
 
 ## Prepare, review and pin
 
@@ -419,10 +599,11 @@ sha256sum /srv/urnetwork/payout-roster/review/request.json
 ```
 
 Independently review both `input` originals and the derived `authority` in that
-request, including the complete population, domain, epoch, clock, consent heads
-and prior-contract checkpoint, plus `wallet_selections` when present. Record the
-exact lowercase 64-character SHA-256 of the approved file. The digest printed by
-`prepare` identifies the bytes; it does not supply the independent approval.
+request, including the complete population, domain, epoch, clock, consent and
+delegation heads and prior-contract checkpoint, plus `wallet_selections` when
+present. Record the exact lowercase 64-character SHA-256 of the approved file.
+The digest printed by `prepare` identifies the bytes; it does not supply the
+independent approval.
 Preserve the canonical file unchanged:
 pretty-printing, adding a newline or editing any field changes its identity.
 
