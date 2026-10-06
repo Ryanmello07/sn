@@ -909,6 +909,83 @@ routable egress-IP-hashes (§11.1). Four rules keep the count honest:
 
 ---
 
+## 12. Running against the operator list
+
+The operator list (`operators.yml`, published at `https://ur.xyz/operators.yml`; canonical
+copy `sn/operators.yml`) names each network operator's domain, API URL and Connect URL. It
+says where operators serve, never who is weighted or paid. The contract is
+`docs/OPERATOR-DISCOVERY.md` §4.
+
+**Flag mode: measure every listed operator.** This mode never steers.
+
+```
+validator run --all-operators [--operators-url=<url>] [--operators-refresh=<duration>]
+    [--auto-register --hotkey_seed_file=<path>] [--state_dir=<path>] ...
+```
+
+- The list is cached at `<state_dir>/operators.yml` and refreshed every
+  `--operators-refresh`, a Go duration of at least `1m` (default `1h`). The last good copy
+  stays in use while the list can't be fetched.
+- Each listed operator gets the existing measurement runner on its own URLs. Its state lives
+  in `<state_dir>/operators/<domain>/`: the network JWT `jwt`, the measurement key
+  `.validator.key`, and the client JWT `.validator.jwt`. The single-operator
+  `<state_dir>/.validator.key` and `~/.urnetwork/jwt` are not used.
+- List changes:
+  - a newly listed operator starts;
+  - a delisted one stops, and its state is kept;
+  - an operator whose URLs change restarts.
+- A failed runner restarts after 30 s, doubling to 10 min. One operator never stops another.
+- **Credentials without `--auto-register`.** An operator with no JWT logs
+  `operator <domain> is awaiting auth: validator auth --operator=<domain>` and is rechecked
+  every 5 minutes.
+- **Credentials with `--auto-register`.** The hotkey signs in through the operator's existing
+  wallet sign-in and writes the JWT. The pristine operator directory's measurement identity
+  is then provisioned (`validator/MEASUREMENT-CLIENT-AUTH.md`). The seed file must already
+  exist; it is never created.
+- Without `--auto-register`, a directory with no measurement identity is refused and retried,
+  and the log names the flags that provision it.
+- With `--operators-refresh`, the list report below is also written, to
+  `<state_dir>/operators-report.json`. In flag mode no operator is pinned.
+
+**Authenticating one operator.**
+
+```
+validator auth --operator=<domain> [--operators-url=<url>] [--state_dir=<path>]
+    ([<auth_code>] | --user_auth=<user_auth> [--password=<password>] | --hotkey_seed_file=<path>) [-f]
+```
+
+This resolves the operator from the list (cached at `<state_dir>/operators.yml`) and writes
+`<state_dir>/operators/<domain>/jwt`. `--hotkey_seed_file` signs in with the hotkey instead of
+an auth code or password. Without `--operator`, `validator auth` writes `~/.urnetwork/jwt` for
+`--api_url` as before.
+
+**Production mode: weights only from the signed config.**
+
+```
+validator run --config=<path> ... [--operators-refresh=<duration> [--operators-url=<url>] [--observe-unpinned-operators]]
+```
+
+- The list is used only with `--operators-refresh`. It is cached at
+  `<config.state_dir>/operators.yml`. It never changes the signed config's operators,
+  weights, evidence or protocol state; the release runs exactly as without it.
+- **Drift report.** It is logged at startup and at each list change, and written to
+  `<config.state_dir>/operators-report.json`. It covers:
+  - each pinned operator, matched to the list by normalized `api_url`, as listed or delisted,
+    with any `connect_url` mismatch;
+  - each listed operator the config does not pin.
+
+  The file has schema `urnetwork-validator-operator-list-report-v1` and mode 0600. It holds
+  at most 16 entries per section, plus an omitted count. It is operational output; nothing
+  reads it back.
+- **`--observe-unpinned-operators`** also runs the flag-mode runner for each listed operator
+  the config does not pin, for observation only, under
+  `<config.state_dir>/observed-operators/<domain>/`. It signs in and provisions with the
+  config's `hotkey_seed_file`. Its results never reach weights, evidence or production state.
+- Pinned operators keep their configured `network_jwt_file`. A missing one is reported as
+  before and never created.
+
+---
+
 ## Appendix A — Canonical signed-message encoding
 
 All signatures are over these exact byte strings (not JSON). All integers
