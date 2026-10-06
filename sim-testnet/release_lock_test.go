@@ -637,69 +637,49 @@ func TestModuleRootRequiresExactModuleIdentity(t *testing.T) {
 	}
 }
 
-func TestOperatorProxyReleaseObservationBindsCleanCommitAndSource(t *testing.T) {
-	root := t.TempDir()
-	runTestGit(t, root, "init", "-q")
-	runTestGit(t, root, "config", "user.email", "sim-testnet@example.invalid")
-	runTestGit(t, root, "config", "user.name", "sim-testnet")
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/urnetwork/operator-proxy\n\ngo 1.26.3\n"), 0o600); err != nil {
-		t.Fatal(err)
+// Attested locks and archived approvals may still carry the retired
+// operator-proxy pins. Admission neither requires them nor relaxes their
+// canonical form, and an unreviewed repository field still fails closed.
+func TestReleaseLockAdmitsRetiredOperatorProxyPinsOnlyInCanonicalForm(t *testing.T) {
+	canonicalHash := "sha256:" + strings.Repeat("1", 64)
+	canonicalCommit := strings.Repeat("a", 40)
+	cases := []struct {
+		name     string
+		pins     map[string]any
+		admitted bool
+	}{
+		{name: "no retired pins", pins: map[string]any{}, admitted: true},
+		{name: "both retired pins", pins: map[string]any{"operator_proxy_go_source_hash": canonicalHash, "operator_proxy_commit": canonicalCommit}, admitted: true},
+		{name: "retired commit only", pins: map[string]any{"operator_proxy_commit": canonicalCommit}, admitted: true},
+		{name: "uppercase retired commit", pins: map[string]any{"operator_proxy_commit": strings.Repeat("A", 40)}},
+		{name: "branch retired commit", pins: map[string]any{"operator_proxy_commit": "synthetic-branch"}},
+		{name: "empty retired commit", pins: map[string]any{"operator_proxy_commit": ""}},
+		{name: "malformed retired source hash", pins: map[string]any{"operator_proxy_go_source_hash": "sha256:not-a-hash"}},
+		{name: "unreviewed repository field", pins: map[string]any{"operator_proxy_tree_hash": canonicalHash}},
 	}
-	source := filepath.Join(root, "proxy.go")
-	if err := os.WriteFile(source, []byte("package operatorproxy\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	runTestGit(t, root, "add", "go.mod", "proxy.go")
-	runTestGit(t, root, "commit", "-qm", "initial operator proxy")
-	first, err := observeOperatorProxyReleaseSource(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantCommit := strings.TrimSpace(string(testGitOutput(t, root, "rev-parse", "HEAD")))
-	wantHash, err := goReleaseSourceHash(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(first) != 2 || first["operator_proxy_commit"] != wantCommit || first["operator_proxy_go_source_hash"] != wantHash {
-		t.Fatalf("operator-proxy observation = %+v, want commit=%s source=%s", first, wantCommit, wantHash)
-	}
-	if err := os.WriteFile(source, []byte("package operatorproxy\n\nconst Version = 2\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := observeOperatorProxyReleaseSource(root); err == nil {
-		t.Fatal("dirty operator-proxy source was accepted")
-	}
-	runTestGit(t, root, "add", "proxy.go")
-	runTestGit(t, root, "commit", "-qm", "update operator proxy")
-	second, err := observeOperatorProxyReleaseSource(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if second["operator_proxy_commit"] == first["operator_proxy_commit"] || second["operator_proxy_go_source_hash"] == first["operator_proxy_go_source_hash"] {
-		t.Fatalf("committed operator-proxy drift was not bound: first=%+v second=%+v", first, second)
-	}
-}
-
-func TestReleaseRepositorySchemaRequiresCanonicalOperatorProxyFields(t *testing.T) {
-	repositories := map[string]any{
-		"operator_proxy_go_source_hash": "sha256:" + strings.Repeat("1", 64),
-		"operator_proxy_commit":         strings.Repeat("a", 40),
-	}
-	if err := validateReleaseRepositorySchema(repositories); err != nil {
-		t.Fatal(err)
-	}
-	delete(repositories, "operator_proxy_commit")
-	if err := validateReleaseRepositorySchema(repositories); err == nil {
-		t.Fatal("release repository schema without an operator-proxy commit was accepted")
-	}
-	repositories["operator_proxy_commit"] = strings.Repeat("A", 40)
-	if err := validateReleaseRepositorySchema(repositories); err == nil {
-		t.Fatal("noncanonical operator-proxy commit was accepted")
-	}
-	repositories["operator_proxy_commit"] = strings.Repeat("a", 40)
-	repositories["operator_proxy_go_source_hash"] = "sha256:not-a-hash"
-	if err := validateReleaseRepositorySchema(repositories); err == nil {
-		t.Fatal("noncanonical operator-proxy source hash was accepted")
+	for _, testCase := range cases {
+		for _, admission := range []struct {
+			name     string
+			lock     *ReleaseLock
+			validate func(*ReleaseLock) error
+		}{
+			{name: "current", lock: testReleaseLockFixture(t), validate: validateReleaseLockStatic},
+			{name: "archived", lock: validatorEvidenceRuntime455TestLock(t), validate: validateValidatorEvidenceHistoricalReleaseLock},
+		} {
+			lock := admission.lock
+			delete(lock.Repositories, "operator_proxy_go_source_hash")
+			delete(lock.Repositories, "operator_proxy_commit")
+			for key, value := range testCase.pins {
+				lock.Repositories[key] = value
+			}
+			err := admission.validate(lock)
+			if testCase.admitted && err != nil {
+				t.Errorf("%s lock with %s was refused: %v", admission.name, testCase.name, err)
+			}
+			if !testCase.admitted && err == nil {
+				t.Errorf("%s lock with %s was admitted", admission.name, testCase.name)
+			}
+		}
 	}
 }
 

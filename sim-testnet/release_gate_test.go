@@ -1381,7 +1381,7 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 	if err := verifyReleaseGatePrivateServiceProfile(script); err != nil {
 		t.Fatal(err)
 	}
-	const repositories = "release_repos=(sn server operator-proxy connect sdk glog goidenticons proxy userwireguard warp vault xops config)"
+	const repositories = "release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config)"
 	if !strings.Contains(script, repositories) || !strings.Contains(script, `for repo in "${release_repos[@]}"`) {
 		t.Fatal("local release gate does not check every release repository")
 	}
@@ -1754,54 +1754,7 @@ func TestReleaseGatesExerciseContractSenderRoleDiagnostic(t *testing.T) {
 	}
 }
 
-// Keep operator-proxy checks inside the module directory and make every source
-// gate explicit. Mere patch-hygiene coverage cannot prove that the independent
-// module compiles, remains tidy, or passes its concurrent behavior suite.
-func assertOperatorProxyReleaseGate(t *testing.T, scriptPath, heading string) {
-	t.Helper()
-	scriptBytes, err := os.ReadFile(scriptPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := string(scriptBytes)
-	const repositories = "release_repos=(sn server operator-proxy connect sdk glog goidenticons proxy userwireguard warp vault xops config)"
-	if strings.Count(script, repositories) != 1 || !strings.Contains(script, `for repo in "${release_repos[@]}"`) {
-		t.Fatalf("%s does not fence the complete release repository set", scriptPath)
-	}
-	start := strings.Index(script, heading)
-	if start < 0 {
-		t.Fatalf("%s has no operator-proxy gate", scriptPath)
-	}
-	section := script[start+len(heading):]
-	if end := strings.Index(section, "\necho \""); end >= 0 {
-		section = section[:end]
-	}
-	required := []string{
-		`cd "$workspace/operator-proxy"`,
-		"go mod tidy -diff",
-		"go build ./...",
-		"go vet ./...",
-		`unformatted="$(gofmt -l .)"`,
-		`if [[ -n "$unformatted" ]]`,
-		"gofmt -d .",
-		"go test -count=1 -timeout 20m ./...",
-		"go test -race -count=1 -timeout 20m ./...",
-	}
-	previous := -1
-	for _, command := range required {
-		if strings.Count(section, command) != 1 {
-			t.Errorf("%s operator-proxy gate has %d copies of %q", scriptPath, strings.Count(section, command), command)
-			continue
-		}
-		index := strings.Index(section, command)
-		if index <= previous {
-			t.Errorf("%s operator-proxy gate orders %q before its prerequisite", scriptPath, command)
-		}
-		previous = index
-	}
-}
-
-// Construct all thirteen repositories and every classified Go module without
+// Construct all twelve repositories and every classified Go module without
 // making ordinary tests depend on the developer's current dirty worktree.
 func releaseSourceFreezeFixture(t *testing.T) string {
 	t.Helper()
@@ -1812,18 +1765,18 @@ func releaseSourceFreezeFixture(t *testing.T) string {
 	}
 	var rewrites strings.Builder
 	branches := map[string]string{
-		"sn": "main", "server": "main", "operator-proxy": "main", "connect": "main",
-		"sdk": "main", "glog": "master", "goidenticons": "main", "proxy": "main",
-		"userwireguard": "master", "warp": "main", "vault": "main", "xops": "main", "config": "main",
+		"sn": "main", "server": "main", "connect": "main", "sdk": "main",
+		"glog": "master", "goidenticons": "main", "proxy": "main", "userwireguard": "master",
+		"warp": "main", "vault": "main", "xops": "main", "config": "main",
 	}
 	origins := map[string]string{
-		"sn": "urfoundation/sn", "server": "urnetwork/server", "operator-proxy": "urnetwork/operator-proxy",
+		"sn": "urfoundation/sn", "server": "urnetwork/server",
 		"connect": "urnetwork/connect", "sdk": "urnetwork/sdk", "glog": "urnetwork/glog",
 		"goidenticons": "urnetwork/goidenticons", "proxy": "urnetwork/proxy", "userwireguard": "urnetwork/userwireguard",
 		"warp": "urnetwork/warp", "vault": "urnetwork/vault", "xops": "urnetwork/xops", "config": "urnetwork/config",
 	}
 	modules := []string{
-		"connect", "glog", "goidenticons", "operator-proxy", "proxy", "sdk", "sdk/build",
+		"connect", "glog", "goidenticons", "proxy", "sdk", "sdk/build",
 		"sdk/cgo", "sdk/js", "server", "server/connect/sim-latency/baseline", "sn",
 		"sn/third_party/npipe", "userwireguard", "warp", "xops/echo", "xops/router",
 	}
@@ -1892,7 +1845,7 @@ func releaseSourceFreezeFixture(t *testing.T) string {
 }
 
 // The freeze command accepts a complete clean fixture and emits an exact
-// thirteen-repository revision/upstream snapshot.
+// twelve-repository revision/upstream snapshot.
 func TestReleaseSourceFreezeRecordsCompleteCleanWorkspace(t *testing.T) {
 	workspace := releaseSourceFreezeFixture(t)
 	command := exec.Command("../scripts/check-release-source-freeze.sh", workspace)
@@ -1901,11 +1854,11 @@ func TestReleaseSourceFreezeRecordsCompleteCleanWorkspace(t *testing.T) {
 		t.Fatalf("clean source freeze: %v", err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) != 13 {
-		t.Fatalf("source freeze recorded %d repositories, want 13: %s", len(lines), output)
+	if len(lines) != 12 {
+		t.Fatalf("source freeze recorded %d repositories, want 12: %s", len(lines), output)
 	}
 	expectedOrigins := map[string]string{
-		"sn": "github.com/urfoundation/sn", "server": "github.com/urnetwork/server", "operator-proxy": "github.com/urnetwork/operator-proxy",
+		"sn": "github.com/urfoundation/sn", "server": "github.com/urnetwork/server",
 		"connect": "github.com/urnetwork/connect", "sdk": "github.com/urnetwork/sdk", "glog": "github.com/urnetwork/glog",
 		"goidenticons": "github.com/urnetwork/goidenticons", "proxy": "github.com/urnetwork/proxy", "userwireguard": "github.com/urnetwork/userwireguard",
 		"warp": "github.com/urnetwork/warp", "vault": "github.com/urnetwork/vault", "xops": "github.com/urnetwork/xops", "config": "github.com/urnetwork/config",
@@ -2719,30 +2672,47 @@ func TestProducerGatePinsRuntime458ArtifactAndEncodingRegressions(t *testing.T) 
 	}
 }
 
-// Operator-proxy CI builds only against the reviewed sibling commits and uses
-// tidy's read-only diff mode instead of mutating its checkout before testing.
-func TestOperatorProxyCIPinsCurrentSiblingRevisions(t *testing.T) {
-	workflow, err := os.ReadFile("../../operator-proxy/.github/workflows/test.yml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(workflow)
-	for _, revision := range []string{"9ac9a96c96f5e3c2d7fd6e928b28b471567d0a54", "2bdcce5f8be023947f26a247eb5665c56b69b2e3"} {
-		if strings.Count(text, revision) != 2 {
-			t.Errorf("operator-proxy CI revision %s appears %d times, want checkout and assertion", revision, strings.Count(text, revision))
+// Both gates, the source freeze and the diagnostic inventory fence one exact
+// repository set. The retired operator-proxy module is no longer checked out,
+// tested or frozen by any of them.
+func TestReleaseGatesFenceOneRepositorySetWithoutOperatorProxy(t *testing.T) {
+	const repositories = "sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config"
+	declaration := "release_repos=(" + repositories + ")"
+	for _, gate := range []struct {
+		path        string
+		declaration string
+		loop        string
+	}{
+		{path: "../scripts/test-release-1.0-local.sh", declaration: declaration, loop: `for repo in "${release_repos[@]}"`},
+		{path: "../scripts/test-release-1.0-producer-gate.sh", declaration: declaration, loop: `for repo in "${release_repos[@]}"`},
+		{path: "../scripts/check-release-source-freeze.sh", declaration: declaration, loop: `for repo in "${release_repos[@]}"`},
+		// The diagnostic inventory can run before a gate declares its array.
+		{path: "../scripts/release-gate-jobs.sh", declaration: "for repo in " + repositories + "; do", loop: "for repo in " + repositories + "; do"},
+	} {
+		scriptBytes, err := os.ReadFile(gate.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		script := string(scriptBytes)
+		if strings.Count(script, gate.declaration) != 1 || !strings.Contains(script, gate.loop) {
+			t.Errorf("%s does not fence the exact release repository set", gate.path)
+		}
+		for _, retired := range []string{"operator-proxy", "operator_proxy"} {
+			if strings.Contains(script, retired) {
+				t.Errorf("%s still names the retired %s repository", gate.path, retired)
+			}
 		}
 	}
-	if !strings.Contains(text, "run: go mod tidy -diff") || strings.Contains(text, "git diff --exit-code go.mod go.sum") {
-		t.Fatal("operator-proxy CI does not use an immutable tidy check")
+}
+
+// A diagnostic gate admits the complete current workspace; the retired
+// operator-proxy checkout is not part of its inventory.
+func TestReleaseGateDiagnosticInventoryAcceptsCompleteWorkspace(t *testing.T) {
+	workspace := releaseSourceFreezeFixture(t)
+	output, err := exec.Command("bash", "-c", `set -euo pipefail; source ../scripts/release-gate-jobs.sh; workspace="$1"; release_gate_diagnostic_inventory`, "bash", workspace).CombinedOutput()
+	if err != nil || len(output) != 0 {
+		t.Fatalf("complete workspace failed the diagnostic inventory: %v\n%s", err, output)
 	}
-}
-
-func TestLocalReleaseGateCoversCompleteOperatorProxyModule(t *testing.T) {
-	assertOperatorProxyReleaseGate(t, "../scripts/test-release-1.0-local.sh", `echo "[release-1.0] operator-proxy module"`)
-}
-
-func TestProducerReleaseGateCoversCompleteOperatorProxyModule(t *testing.T) {
-	assertOperatorProxyReleaseGate(t, "../scripts/test-release-1.0-producer-gate.sh", `echo "[release-1.0 producer] operator-proxy source and behavior"`)
 }
 
 func TestSolidityStaticGateCoversEveryDeployedRoot(t *testing.T) {

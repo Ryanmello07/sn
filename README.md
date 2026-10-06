@@ -5,8 +5,8 @@
 This repository (`sn`) is the reference implementation of the UR Subnet — the EVM
 contract suite, miner and validator software, chain tooling, and the real-testnet
 integration harness. The operator/API implementation lives in the sibling `server`
-repository; provider probing, tunnel confinement, geolocation, bandwidth, and
-egress-health tooling live in the sibling `operator-proxy` repository.
+repository, which also runs provider egress probing (reachability, location,
+bandwidth and egress health) as recurring taskworker tasks.
 
 ![Who does what: customers, network operators, providers, validators and Yuma](diagrams/readme/01-roles.svg)
 
@@ -299,10 +299,11 @@ the finite UID budget and undermine the intended ~200-member head.
 | `chain/`, `crv4/`, `merkle/`, `ss58/`, `stabi/` | Supporting libraries (native registration/staking toolkit shared with the harness, commit‑reveal v4, Merkle trees, address encoding, contract bindings). |
 | `sim-testnet/` | Spend-capped Go harness for testnet setup, launch, scenarios, evidence, and analysis. |
 
-The release workspace also requires sibling `server` and `operator-proxy`
-checkouts. The testnet harness discovers both by Go module identity and binds
-the operator-proxy production source plus its exact clean Git commit into the
-release lock.
+The release workspace also requires a sibling `server` checkout, which the
+testnet harness discovers by Go module identity. The retired `operator-proxy`
+repository is no longer discovered, tested or locked. The existing testnet
+release lock and harness configs keep its inert fields so their published hashes
+stay valid; a fresh release-lock rendering drops them.
 
 SN pins the client-authentication SDK, Connect, and Connect's SCTP fork with
 versioned replacements in `go.mod`; these dependencies do not follow sibling
