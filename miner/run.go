@@ -552,6 +552,7 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	if err := validateProviderRegistrationSlots(self.proxySettings); err != nil {
+		output.observe(providerStartupRecoveryRequired, 0, false, err, 0, nil)
 		return err
 	}
 	providers := self.proxySettings
@@ -606,10 +607,6 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		return err
 	}
 	defer func() { returnErr = errors.Join(returnErr, status.close()) }()
-	if err := validateProviderRegistrationSlots(self.proxySettings); err != nil {
-		output.observe(providerStartupRecoveryRequired, 0, false, err, 0, nil)
-		return err
-	}
 	keyPath, err := providerStatePath(".provider.key")
 	if err != nil {
 		output.observe(providerStartupRecoveryRequired, 0, false, err, 0, nil)
