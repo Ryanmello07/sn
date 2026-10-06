@@ -414,8 +414,11 @@ and focused-test receipts. Existing code-only evidence is not a mainnet capture.
 The owner decided on October 6 ([operator discovery design](../docs/OPERATOR-DISCOVERY.md),
 sections 1.6 and 7):
 
-- Our validator hotkey, the `hotkey_seed_file` of the signed UR validator config,
-  sits on root (netuid 0) and validates SN25.
+- Our validator hotkey is a **dedicated hotkey**, not the SN25 owner hotkey. It is
+  the `hotkey_seed_file` of the signed UR validator config, sits on root (netuid 0)
+  and validates SN25. Its own coldkey signs every step below. The SN25 owner Ledger
+  stays owner-local setup custody and signs none of them
+  ([current root participation](ROOT-CURRENT-PARTICIPANT.md)).
 - The delegate take and the SN25 childkey take are both **18%**: 11,796/65,535,
   the runtime's default maximum for each. `validator take status` prints the
   live bounds, and the commands refuse a take above them.
@@ -442,9 +445,10 @@ never a limit (see [MAINNET.md](MAINNET.md#root-validator-on-netuid-0)).
 
 Disable auto parent delegation first. It is on by default, and `root_register`
 then makes the hotkey the full-weight parent of every subnet owner hotkey, SN25's
-included, which hands our SN25 stake weight to the SN25 owner hotkey. The runtime
-skips only a subnet where the hotkey already has current or pending children, or
-is itself the owner hotkey.
+included. The runtime skips only a subnet where the hotkey already has current or
+pending children, or is itself the owner hotkey. We own SN25, but the SN25 owner
+hotkey doesn't run this validator. Left on, our validator's SN25 weight would move
+to the owner hotkey, and so would the stake of everyone keyed to us.
 
 With btcli (bittensor 11) and the coldkey's wallet:
 
