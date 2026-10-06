@@ -317,13 +317,12 @@ func Run(args []string) {
 	}
 }
 
+// Authentication shares the selected state directory with provider startup and claims.
 func auth(opts docopt.Opts) {
-	home, err := os.UserHomeDir()
+	jwtPath, err := providerStatePath("jwt")
 	if err != nil {
 		panic(err)
 	}
-	urNetworkDir := filepath.Join(home, ".urnetwork")
-	jwtPath := filepath.Join(urNetworkDir, "jwt")
 
 	if _, err := os.Stat(jwtPath); !errors.Is(err, os.ErrNotExist) {
 		// jwt exists
@@ -817,10 +816,8 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 	return returnErr
 }
 
-// providerStateDir returns the absolute path of the provider state
-// directory, ~/.urnetwork — the one place `jwt`, `.provider.jwt`,
-// `network.json`, `.provider.key` and `.provider.cert` live. Does not
-// create it.
+// Resolves the shared auth, network, proxy and provider state directory.
+// URNETWORK_STATE_DIR overrides ~/.urnetwork; resolution creates no files.
 func providerStateDir() (string, error) {
 	if override := strings.TrimSpace(os.Getenv("URNETWORK_STATE_DIR")); override != "" {
 		absolute, err := filepath.Abs(override)
@@ -836,9 +833,7 @@ func providerStateDir() (string, error) {
 	return filepath.Join(home, ".urnetwork"), nil
 }
 
-// providerStatePath returns the absolute filesystem path of a named
-// provider state file under ~/.urnetwork (alongside `jwt`). Does not
-// create the directory.
+// Resolves one file in the selected state directory without creating it.
 func providerStatePath(name string) (string, error) {
 	dir, err := providerStateDir()
 	if err != nil {
@@ -1289,13 +1284,12 @@ func obfuscatePassword(password string) string {
 	}
 }
 
+// Proxy selection follows the same state directory as its provider credentials.
 func readProxyConfig() *ProxyConfig {
-	home, err := os.UserHomeDir()
+	proxyPath, err := providerStatePath("proxy")
 	if err != nil {
 		panic(err)
 	}
-	urNetworkDir := filepath.Join(home, ".urnetwork")
-	proxyPath := filepath.Join(urNetworkDir, "proxy")
 
 	if _, err := os.Stat(proxyPath); errors.Is(err, os.ErrNotExist) {
 		return &ProxyConfig{}
@@ -1314,13 +1308,12 @@ func readProxyConfig() *ProxyConfig {
 	return &proxyConfig
 }
 
+// Updates only the selected directory's proxy configuration.
 func writeProxyConfig(proxyConfig *ProxyConfig) {
-	home, err := os.UserHomeDir()
+	proxyPath, err := providerStatePath("proxy")
 	if err != nil {
 		panic(err)
 	}
-	urNetworkDir := filepath.Join(home, ".urnetwork")
-	proxyPath := filepath.Join(urNetworkDir, "proxy")
 
 	b, err := json.Marshal(proxyConfig)
 	if err != nil {
