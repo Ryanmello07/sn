@@ -20,6 +20,10 @@ import (
 )
 
 const WholeWorkAuthoritySchema = "urnetwork-whole-work-authority-v1"
+
+// A roster that pins network wallet chains. A roster without them keeps the v1
+// schema and its exact canonical bytes.
+const WholeWorkAuthorityNetworkWalletSchema = "urnetwork-whole-work-authority-v2"
 const WholeWorkInventorySchema = "urnetwork-whole-work-inventory-v1"
 const MaxWholeWorkOwners = 8192
 const MaxWholeWorkSources = 64
@@ -37,19 +41,21 @@ type WholeWorkOwner struct {
 // A new signed roster may cover each future epoch under the admitted signer.
 // Every owner, including owners with no work, owes both original boundary cuts.
 type WholeWorkAuthority struct {
-	Schema            string                                 `json:"schema"`
-	Domain            protocol.ClientKeyHistoryDomain        `json:"domain"`
-	Epoch             uint64                                 `json:"epoch"`
-	Start             Boundary                               `json:"start"`
-	End               Boundary                               `json:"end"`
-	RequestPublicKey  [32]byte                               `json:"request_public_key"`
-	ClockProfile      string                                 `json:"clock_profile"`
-	PriorContracts    []WholeWorkPriorContract               `json:"prior_contracts"`
-	Owners            []WholeWorkOwner                       `json:"owners"`
-	ExpectedProviders []WholeWorkExpectedProvider            `json:"expected_providers"`
-	WorkSources       []protocol.ProviderWorkSourceAuthority `json:"work_sources,omitempty"`
-	Signer            common.Address                         `json:"signer"`
-	Signature         [65]byte                               `json:"signature"`
+	Schema            string                          `json:"schema"`
+	Domain            protocol.ClientKeyHistoryDomain `json:"domain"`
+	Epoch             uint64                          `json:"epoch"`
+	Start             Boundary                        `json:"start"`
+	End               Boundary                        `json:"end"`
+	RequestPublicKey  [32]byte                        `json:"request_public_key"`
+	ClockProfile      string                          `json:"clock_profile"`
+	PriorContracts    []WholeWorkPriorContract        `json:"prior_contracts"`
+	Owners            []WholeWorkOwner                `json:"owners"`
+	ExpectedProviders []WholeWorkExpectedProvider     `json:"expected_providers"`
+	// the network consent chain heads, strictly ordered by network; v2 only
+	NetworkWallets []WholeWorkNetworkWallet               `json:"network_wallets,omitempty"`
+	WorkSources    []protocol.ProviderWorkSourceAuthority `json:"work_sources,omitempty"`
+	Signer         common.Address                         `json:"signer"`
+	Signature      [65]byte                               `json:"signature"`
 }
 
 // The independent authority enumerates providers even when their SDK generated
@@ -59,6 +65,25 @@ type WholeWorkExpectedProvider struct {
 	NetworkId        [16]byte `json:"network_id"`
 	WalletHeadHash   string   `json:"wallet_head_hash"`
 	WalletGeneration uint64   `json:"wallet_generation"`
+}
+
+// The pinned head of a network's consent chain. Every expected provider of the
+// network whose own chain is absent or not effective at the epoch earns to the
+// network consent effective at that epoch (protocol.SelectEarningWallet).
+type WholeWorkNetworkWallet struct {
+	NetworkId        [16]byte `json:"network_id"`
+	WalletHeadHash   string   `json:"wallet_head_hash"`
+	WalletGeneration uint64   `json:"wallet_generation"`
+}
+
+// The pinned network chain head for networkId, if the roster has one.
+func (self WholeWorkAuthority) NetworkWallet(networkId [16]byte) (WholeWorkNetworkWallet, bool) {
+	for _, wallet := range self.NetworkWallets {
+		if wallet.NetworkId == networkId {
+			return wallet, true
+		}
+	}
+	return WholeWorkNetworkWallet{}, false
 }
 
 // Asynchronous start cuts cannot date a terminal contract. Excluding prior
@@ -161,7 +186,10 @@ func (self WholeWorkAuthority) digest(ctx context.Context) ([32]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return [32]byte{}, err
 	}
-	if self.Domain.Validate() != nil || self.Schema != WholeWorkAuthoritySchema || self.Start.Number == 0 || self.End.Number <= self.Start.Number || !IsDigest(self.Start.Hash, "0x") || !IsDigest(self.End.Hash, "0x") || self.RequestPublicKey == ([32]byte{}) || self.Signer == (common.Address{}) || self.Owners == nil || len(self.Owners) > MaxWholeWorkOwners {
+	// v1 never pins network chains and v2 always does, so each roster has one
+	// canonical schema
+	schemaValid := self.Schema == WholeWorkAuthoritySchema && len(self.NetworkWallets) == 0 || self.Schema == WholeWorkAuthorityNetworkWalletSchema && 0 < len(self.NetworkWallets)
+	if self.Domain.Validate() != nil || !schemaValid || self.Start.Number == 0 || self.End.Number <= self.Start.Number || !IsDigest(self.Start.Hash, "0x") || !IsDigest(self.End.Hash, "0x") || self.RequestPublicKey == ([32]byte{}) || self.Signer == (common.Address{}) || self.Owners == nil || len(self.Owners) > MaxWholeWorkOwners {
 		return [32]byte{}, ErrClosedWorkIntegrity
 	}
 	if len(self.WorkSources) > MaxWholeWorkSources {
@@ -216,6 +244,27 @@ func (self WholeWorkAuthority) digest(ctx context.Context) ([32]byte, error) {
 		}
 		prior = provider.ClientId
 	}
+	if len(self.NetworkWallets) > MaxWholeWorkOwners {
+		return [32]byte{}, ErrClosedWorkCapacity
+	}
+	providerNetworkIds := make(map[[16]byte]bool, len(self.ExpectedProviders))
+	for _, provider := range self.ExpectedProviders {
+		providerNetworkIds[provider.NetworkId] = true
+	}
+	var priorNetworkId [16]byte
+	for index, wallet := range self.NetworkWallets {
+		if err := ctx.Err(); err != nil {
+			return [32]byte{}, err
+		}
+		// a network chain is pinned only for a network with an expected provider
+		if wallet.NetworkId == ([16]byte{}) || !providerNetworkIds[wallet.NetworkId] || index > 0 && bytes.Compare(priorNetworkId[:], wallet.NetworkId[:]) >= 0 {
+			return [32]byte{}, ErrClosedWorkIntegrity
+		}
+		if !canonicalClosedWorkDigest("sha256:"+wallet.WalletHeadHash) || wallet.WalletGeneration == 0 || wallet.WalletGeneration > protocol.MaxWalletMappingHistory {
+			return [32]byte{}, ErrClosedWorkIntegrity
+		}
+		priorNetworkId = wallet.NetworkId
+	}
 	if self.ClockProfile != "" && self.ClockProfile != FrontierWindowClockProfile || self.PriorContracts == nil || len(self.PriorContracts) > MaxClosedWorkRecords {
 		return [32]byte{}, ErrClosedWorkIntegrity
 	}
@@ -248,6 +297,9 @@ func SignWholeWorkAuthority(ctx context.Context, authority WholeWorkAuthority, k
 		return WholeWorkAuthority{}, ErrClosedWorkIntegrity
 	}
 	authority.Schema, authority.Signer = WholeWorkAuthoritySchema, crypto.PubkeyToAddress(key.PublicKey)
+	if 0 < len(authority.NetworkWallets) {
+		authority.Schema = WholeWorkAuthorityNetworkWalletSchema
+	}
 	digest, err := authority.digest(ctx)
 	if err != nil {
 		return WholeWorkAuthority{}, err
