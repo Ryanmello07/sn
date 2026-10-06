@@ -167,6 +167,10 @@ supply (location and location-group pools, public counts). The exclusion is deli
 not provider supply"). Consent works for child clients in both modes; providing does not. Examples keep top-level
 provisioning.
 
-Open (operator side, not in these repos): the roster approver that signs `WholeWorkAuthority` must emit v2 rosters with
-the network heads (`mapping_hash`/`mapping_generation` from network acceptances) for networks that rely on network mode;
-until it does, an expected provider without its own head keeps the epoch's wallet resolution unavailable, as today.
+The operator producer is implemented in this repository at `cli/payoutroster`, with reusable code in `payoutroster`.
+The [payout roster operator guide](../mainnet/PAYOUT-ROSTER.md) describes its dedicated authority host and key, Vault
+configuration, explicit complete inventory, original-history assembly, review and digest pinning, signing, publication,
+approved inbox and durable recovery. Network heads from reviewed acceptance records select the full consent histories;
+the producer derives and signs a v2 roster when network inputs are present and retains v1 bytes otherwise. It uses the
+shared wallet selector, preserves own-consent precedence and retains unmapped providers. This is a local operator tool;
+production host provisioning, key distribution and service activation remain deployment work.
