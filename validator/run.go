@@ -93,6 +93,16 @@ Usage:
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [--limit_price_rao=<n>] [--allow_partial] [--fee_limit_rao=<n>] [--apply | --dry-run]
         [-v...]
+    validator take status --config=<path> [--netuid=<id>]
+        [-v...]
+    validator take set --take=<percent> --config=<path> --coldkey_seed_file=<path>
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
+        [--fee_limit_rao=<n>] [--apply | --dry-run]
+        [-v...]
+    validator take childkey --netuid=<id> --take=<percent> --config=<path> --coldkey_seed_file=<path>
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
+        [--fee_limit_rao=<n>] [--apply | --dry-run]
+        [-v...]
     validator activate --config=<path> [--relayer_key_file=<path>] [--apply | --dry-run]
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
@@ -133,6 +143,10 @@ Options:
     --limit_price_rao=<n>        Use add_stake_limit with this maximum pool price in TAO rao per alpha
                                  instead of add_stake at the pool price.
     --allow_partial              With --limit_price_rao, allow a partial fill instead of fill-or-kill.
+    --take=<percent>             Take in percent, at most two decimals, rounded down to parts of 65535
+                                 (18 is 11796/65535); refused above the chain maximum. take set moves
+                                 the delegate take; take childkey sets the childkey take on --netuid.
+                                 take status shows both, for the config netuid and --netuid.
     --relayer_key_file=<path>    Hex secp256k1 EVM key that pays gas to publish the activations through
                                  the evidence journal; it receives no authority.
     --apply                      Sign, journal and broadcast. Without it every mutating command is a
@@ -187,6 +201,9 @@ func Run(args []string) {
 		registerCommand(opts)
 	} else if stakeCmd, _ := opts.Bool("stake"); stakeCmd {
 		stakeAddCommand(opts)
+	} else if takeCmd, _ := opts.Bool("take"); takeCmd {
+		// Before status: take status sets both commands.
+		takeCommand(opts)
 	} else if activateCmd, _ := opts.Bool("activate"); activateCmd {
 		activateCommand(opts)
 	} else if runCmd, _ := opts.Bool("run"); runCmd {

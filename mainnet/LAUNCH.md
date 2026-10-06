@@ -90,6 +90,7 @@ messages and reviewed pins, never seed phrases or copied keys.
 | Coordinator governance Safe owners | Exact evidence-anchor Safe EIP-712 transaction | Accepted ordered Safe signatures |
 | Safe relayer | Exact outer EIP-1559 `execTransaction` transaction | Binary signed relayer transaction |
 | Operator signers | Their separately approved deposit and payout-root operations | Role-specific EVM signatures |
+| Coldkey that owns the validator hotkey | Root registration, auto parent opt-out and the 18% takes ([root validator](#root-validator-on-netuid-0)) | Finalized native extrinsics, journaled by `validator take` |
 
 The Ledger Polkadot owner path is not an Ethereum signing interface. Establish
 EVM signer custody separately. `STCoordinator.rootSigner` signs operator payout
@@ -124,8 +125,9 @@ until installation readback has completed.
 3. Install the eight-action contract graph sequentially, retaining every receipt.
 4. Perform the separately approved Safe evidence-anchor successor and complete
    pristine installation readback **before operator/service population**.
-5. Configure and verify operator/validator roles, native treasury routing,
-   database earning-boundary preparation and service dependencies.
+5. Configure and verify operator/validator roles, including the
+   [root validator on netuid 0](#root-validator-on-netuid-0), native treasury
+   routing, database earning-boundary preparation and service dependencies.
 6. Assemble the final receipt, obtain review, hash it, publish matching public and
    operator identity fields, then verify actual service adoption.
 
@@ -406,6 +408,121 @@ not a final receipt producer:
 An exit 0 or `observed-prerequisites` does not assert overall activation. Preserve
 reported blockers and actual live adoption evidence separately from local build
 and focused-test receipts. Existing code-only evidence is not a mainnet capture.
+
+## Root validator on netuid 0
+
+The owner decided on October 6 ([operator discovery design](../docs/OPERATOR-DISCOVERY.md),
+sections 1.6 and 7):
+
+- Our validator hotkey, the `hotkey_seed_file` of the signed UR validator config,
+  sits on root (netuid 0) and validates SN25.
+- The delegate take and the SN25 childkey take are both **18%**: 11,796/65,535,
+  the runtime's default maximum for each. `validator take status` prints the
+  live bounds, and the commands refuse a take above them.
+- Anyone, for example through tao.com, may name our hotkey as their child on SN25.
+  The parent's coldkey alone signs `set_children`; there is no allowlist and
+  nothing for us to approve.
+- The validator weights only the operators pinned in its signed release config.
+  `--operators-refresh` reports operator-list drift and never changes weights.
+- It runs on snow as a systemd service installed by
+  `xops/main/ansible/run-validator.sh`.
+
+The coldkey that owns the hotkey signs every step below; keep its seed off the
+validator host. Without `--apply`, each `validator` command is a dry run: it reads
+the live values at an authenticated finalized block and prints the current and
+target values, the exact call with its call data, the extrinsic hash and the
+quoted fee.
+
+### Register the hotkey on root
+
+`validator register` cannot register on netuid 0. It signs `register_limit`, which
+the runtime refuses for root, and the release config rejects netuid 0. Native
+`root_register(hotkey)` has no burn ceiling, so a quoted burn is only a reading,
+never a limit (see [MAINNET.md](MAINNET.md#root-validator-on-netuid-0)).
+
+Disable auto parent delegation first. It is on by default, and `root_register`
+then makes the hotkey the full-weight parent of every subnet owner hotkey, SN25's
+included, which hands our SN25 stake weight to the SN25 owner hotkey. The runtime
+skips only a subnet where the hotkey already has current or pending children, or
+is itself the owner hotkey.
+
+With btcli (bittensor 11) and the coldkey's wallet:
+
+```bash
+HOTKEY_SS58=<hotkey ss58 printed by validator take status>
+btcli call SubtensorModule.set_auto_parent_delegation_enabled \
+  --args "{\"hotkey\": \"$HOTKEY_SS58\", \"enabled\": false}" \
+  --wallet "$COLDKEY_WALLET" --network "$MAINNET_RPC" --dry-run
+btcli subnets burn-cost 0 --network "$MAINNET_RPC"
+btcli subnets register --netuid 0 --hotkey "$HOTKEY_SS58" \
+  --wallet "$COLDKEY_WALLET" --network "$MAINNET_RPC" --dry-run
+```
+
+Review each dry run, then repeat it without `--dry-run`. The burn charged is the
+one at inclusion. When the root network is full, the hotkey's root stake must be
+at least the lowest-staked non-immune member's. Where the burn needs retained
+approvals and an explicit balance-exposure acknowledgement, use the reviewed
+`sn-mainnet root-register` workflow in MAINNET.md instead. Registration stores an
+18% delegate take for a hotkey that has none stored yet.
+
+### Set and verify the takes
+
+A mainnet production config journals in owner-local custody, so it needs
+`--durable-volumes` and `--durable-volumes-sha256` naming that declaration, as
+`validator register` and `validator stake add` do. Other configs journal without
+them.
+
+```bash
+VALIDATOR=/absolute/path/validator
+OWNER=(
+  --durable-volumes="$OWNER_DECLARATION"
+  --durable-volumes-sha256="$OWNER_DECLARATION_SHA256"
+)
+"$VALIDATOR" take status --config="$VALIDATOR_CONFIG"
+"$VALIDATOR" take set --take=18 --config="$VALIDATOR_CONFIG" \
+  --coldkey_seed_file="$COLDKEY_SEED" "${OWNER[@]}"
+"$VALIDATOR" take childkey --netuid=25 --take=18 --config="$VALIDATOR_CONFIG" \
+  --coldkey_seed_file="$COLDKEY_SEED" "${OWNER[@]}"
+```
+
+Review each dry run, then repeat it with `--apply`. That signs, journals the exact
+bytes under `<state_dir>/native`, waits for finality and checks the stored take in
+the inclusion block. `take set` picks `decrease_take` or `increase_take`; a take
+that is still the runtime default is pinned with `decrease_take`. The quoted fee
+must stay under `--fee_limit_rao` (default 10,000,000 rao).
+
+An increase waits `TxDelegateTakeRateLimit` (delegate) or `TxChildkeyTakeRateLimit`
+(childkey) blocks after the last change. Both are 216,000 blocks, about 30 days, by
+default, and every change restarts the wait. Decreases are never rate limited, so
+setting 18% once and leaving it is the safe path.
+
+Then `take status` must show:
+
+- `registration (netuid 0)` and `registration (netuid 25)` with a uid;
+- `delegate take: 11796/65535 (18.00%) stored`;
+- `auto parent delegation: false (stored)`;
+- `childkey take (netuid 25): 11796/65535 (18.00%) stored`;
+- `children (netuid 25): none`, unless the owner chose children;
+- `parents (netuid 25)`: the hotkeys that name ours as their child.
+
+### Run it on snow
+
+`xops/main/ansible/run-validator.sh` builds the validator from `sn/cli/validator`
+for linux/amd64 and linux/arm64 and stamps the version from `git describe`. It
+generates the systemd unit and runs `playbook-validator.yml` against snow. The
+unit runs this as a dedicated user, with `Restart=always`:
+
+```text
+validator run --config=<path> --progress-file=<path> --durable-volumes=<path> \
+  --durable-volumes-sha256=<hash> --operators-refresh=1h
+```
+
+The paths and hash are inventory variables; nothing secret is committed. The
+playbook refuses to start unless the config, seed and durable-volume files exist
+with the expected mode and owner. The coldkey seed never goes to snow.
+
+For the readiness receipt, retain the finalized root registration, the take
+journal entries, the `take status` output and the service's progress file.
 
 ## Assemble and review the readiness receipt
 
