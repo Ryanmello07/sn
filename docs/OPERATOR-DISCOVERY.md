@@ -463,13 +463,27 @@ kinds apart by message prefix.
   - requires that the chain through that head is stored, that its hotkey equals `hotkey_ss58`, and that the session user
     still administers the network;
   - issues a prospective challenge exactly like the network consent challenge.
-- **`GET /sn/wallet`:** entries may have `consent_scope: "hotkey"`, which carries the delegation's hotkey and the coldkey
-  of the global consent effective now. For a network session the effective wallet is, in order:
-  1. network consent;
-  2. hotkey delegation;
-  3. legacy side copy.
+- **`GET /sn/wallet`:** a network with an accepted delegation lists one network-level hotkey entry. It has no
+  `client_id`, like the network consent entry:
 
-  A client session puts its own provider consent first, ahead of all three.
+  ```json
+  {"coldkey_ss58": "<coldkey>", "set_at_millis": 0, "consent_scope": "hotkey", "hotkey_ss58": "<hotkey>",
+   "from_epoch": 0, "through_epoch": 0, "consent_head_hash": "0x<64 hex>", "consent_generation": 1,
+   "mapping_hash": "0x<64 hex>", "mapping_generation": 1}
+  ```
+
+  - `coldkey_ss58` is the coldkey of the global consent generation effective at the current epoch. When no generation is
+    effective yet, it is the head generation's coldkey.
+  - `from_epoch` and `through_epoch` are the delegation's earning epochs.
+  - `mapping_hash` and `mapping_generation` identify the delegation chain head.
+  - The new fields are omitted for the other scopes.
+  - The entry is listed after the network consent and before the legacy side copy. An old client that takes the first
+    network-level entry therefore follows settlement's order.
+  - The effective `wallet`:
+    - for a client session: its own provider consent, then the network consent, then the hotkey entry, then the client's
+      own non-consent wallet, then the side copy;
+    - for a network session: the network consent, then the hotkey entry, then the side copy.
+  - The SDK's wallet pick follows the same order.
 - **Settlement.** `GetStProviderWalletsForEpoch` applies 6.3 with roster v3.
 - **Audit.** `st_payout_wallet_resolution` records mode `hotkey` with the delegation and the selected global consent
   (hash and generation).
@@ -534,8 +548,13 @@ netuid 0 if necessary.
 ## 8. ur.xyz
 
 - **Publication:**
-  - `web/ur.xyz/scripts/sync-operators.mjs`, modeled on `sync-price.mjs`, copies `sn/operators.yml` into the public
-    directories the site serves (`react/public` and `astro/public`);
+  - follows the `price.yml` model:
+    - a tracked canonical copy in the site, `ur.xyz/operators/operators.yml`, lets a build without the sn checkout still
+      publish the list;
+    - `web/ur.xyz/scripts/sync-operators.mjs`, modeled on `sync-price.mjs` and run by hand like it, refreshes that copy
+      from `sn/operators.yml`;
+  - the site serves the tracked copy at `/operators.yml`, from `react/public`, which `sync-public` mirrors into
+    `astro/public`;
   - the nginx ur.xyz server block serves `/operators.yml` as `application/yaml`;
   - `nginx-smoke-test.sh` checks it.
 - **Docs:** `web/ur.xyz/docs/miner/README.md` and `docs/validator/README.md` document `--all-operators`,
