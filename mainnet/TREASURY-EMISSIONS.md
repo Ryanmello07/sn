@@ -65,13 +65,16 @@ its complete actual signer set must derive the same account under the strict
 custody contract. No recipient hotkeys or registered UID generations have been
 supplied here.
 
-The anticipated `vault/main/sn.yml` can contain the **public destination
-descriptor only**: network, genesis, account and recipient hotkeys. It contains
-no signatory or device references, coldkey or hotkey seed, private key, mnemonic
-or online signer. The CLI takes its explicit absolute path; it does not load a
-vault resource implicitly. This documentation does not read or create the
-actual vault file or choose missing identities. Validators receive the public
-policy projection below.
+The treasury CLI accepts a **public destination descriptor only**: network,
+genesis, account and recipient hotkeys. Its input contains no signatory or
+device references, coldkey or hotkey seed, private key, mnemonic or online
+signer. If `vault/main/sn.yml` contains root keys or any other private fields,
+extract a separate public-only descriptor and pin its exact bytes. Never pass
+the combined vault file to a public descriptor reader or output command. The
+CLI takes an explicit absolute path; it neither loads a vault resource
+implicitly nor extracts a nested descriptor. This documentation does not read
+or create the actual vault file or choose missing identities. Validators
+receive the public policy projection below.
 
 Direct native treasury custody requires no new Solidity contract.
 [`STSettlementVault`](../evm/src/STSettlementVault.sol) continues to secure the
@@ -87,7 +90,7 @@ For a destination with no registered recipients, the [runtime-473 setup note](TR
 The [public destination reader](treasury_destination.go) opens an explicitly selected absolute file path
 under an independently accepted SHA-256 pin. Use the mainnet tool's
 `treasury describe --destination FILE --destination-sha256 HASH` command, with
-`FILE` set to the actual absolute path of the anticipated `vault/main/sn.yml`.
+`FILE` set to the actual absolute path of the public-only descriptor snapshot.
 The CLI has no `Vault.SimpleResource("sn.yml")` lookup or environment fallback.
 Describe validates only the public descriptor.
 
