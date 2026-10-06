@@ -40,6 +40,100 @@ xattr -d com.apple.quarantine provider
 ```
 
 
+## Mining every listed operator
+
+`provider provide --all-operators` mines every operator in the operator list
+published at <https://ur.xyz/operators.yml>. It runs one provider process per
+operator and follows the list as it changes. The list is refetched every hour;
+`--operators-refresh=<duration>` changes that and `--operators-url=<url>`
+follows another list. The last good copy is kept as `operators.yml` in the
+provider state directory (`~/.urnetwork`, or `URNETWORK_STATE_DIR`), so mining
+continues while ur.xyz is unreachable.
+
+Each operator has its own state directory, `operators/<domain>/` below the
+provider state directory, with its own `jwt`, provider key and client JWT. A
+network saved with `choose_network` does not apply. `--all-operators` refuses
+`--api_url`, `--connect_url`, `--provider-jwt`, `--wallet` and its consent
+flags, `--adopt-legacy-provider-key`, `--test-egress-source-ip`, and the
+capture and close-report flags, which stay single-operator.
+
+The one-line auto mode signs in to every operator with your Bittensor hotkey,
+as a TAO wallet. The first sign-in creates the hotkey's network on that
+operator. No chain transaction is involved:
+
+```
+provider provide --all-operators --auto-register --hotkey_seed_file=<path>
+```
+
+The seed file holds the hotkey's 32-byte sr25519 seed, raw or as 64 hex
+characters, in a private file that the miner never creates. In auto mode every
+provider may register its new provider client: `--allow-client-registration`
+is implied.
+
+Or authenticate operators yourself, with an auth code, a user and password, or
+the hotkey:
+
+```
+provider operators                                    # the list, and which operators await auth
+provider auth --operator=<domain> <auth_code>
+provider auth --operator=<domain> --user_auth=<user_auth>
+provider auth --operator=<domain> --hotkey_seed_file=<path>
+provider provide --all-operators --allow-client-registration
+```
+
+An operator authenticated with `provider auth --operator` has no provider
+client yet, so its first run needs `--allow-client-registration`. Later runs
+don't. An operator without a jwt gets no provider: the miner logs
+`operator <domain> is awaiting auth: provider auth --operator=<domain>` and
+checks again every five minutes.
+
+- `--max-memory` is divided evenly between the providers. A provider restarts
+  when its share changes.
+- A proxy file (`provider proxy add`) in the provider state directory is copied
+  into each operator's directory when its provider starts.
+- A provider that exits restarts after 30 seconds, doubling up to 10 minutes.
+- A delisted operator's provider gets SIGTERM, then SIGKILL after 60 seconds.
+  Its directory is kept.
+- SIGINT and SIGTERM stop every provider.
+- `--port` serves the status of every operator. The providers themselves run
+  without a status port.
+- With `--all-operators`, the first provider process to take TCP 443 serves the
+  extender for the host.
+
+
+## Hotkey payout across operators
+
+One coldkey signature pays the miner on every operator. The coldkey and the
+hotkey both sign one global consent that maps the hotkey to the coldkey. It is
+kept as a chain under `hotkey-wallet/` in the provider state directory. Each
+authenticated operator then stores the chain, and the hotkey alone signs a
+delegation of the miner's network there to the chain's head. The coldkey never
+signs per operator.
+
+```
+provider wallet hotkey challenge <coldkey_ss58> --hotkey_seed_file=<path>    # prints the statement to sign
+provider wallet hotkey set <coldkey_ss58> --hotkey_seed_file=<path> --message='<printed statement>' --signature=0x<128 hex chars>
+provider wallet hotkey set <coldkey_ss58> --hotkey_seed_file=<path> --coldkey_seed_file=<path>    # or sign here
+provider wallet hotkey status
+```
+
+`set` appends the generation, then stores the chain and the delegation at every
+authenticated operator and reports each one. A failing operator never stops the
+others. Setting the same `--message` and `--signature` again resends the chain,
+and `provide --all-operators --hotkey_seed_file=<path>` keeps every
+authenticated operator delegated at start and every hour. A later generation
+changes the coldkey or the epochs. The first generation names the subnet that
+the authenticated operators state, and they must agree.
+
+Epochs, unless `--wallet-from-epoch` and `--wallet-through-epoch` choose them:
+generation 1 earns from epoch 0, and a later generation from the operators'
+current epoch plus 1. Each delegation starts at the operator's current epoch
+plus 2, past its prospective boundary. Every interval covers 65,536 epochs.
+
+An operator pays a provider by precedence: the provider's own wallet consent
+(`provider wallet set`), then a network consent, then the hotkey delegation.
+
+
 ## Subnet payout wallet (Bittensor coldkey)
 
 `provider wallet set` authenticates the retained provider credential and obtains

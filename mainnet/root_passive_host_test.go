@@ -22,7 +22,6 @@ import (
 
 	"github.com/urfoundation/sn/internal/durablefixture"
 	"github.com/urfoundation/sn/internal/durablepath"
-	"golang.org/x/sys/unix"
 )
 
 type rootPassiveHostFixture struct {
@@ -97,7 +96,7 @@ func newRootPassiveHostFixture(t *testing.T) *rootPassiveHostFixture {
 	p.DurableVolumes = &chain.root.storage.Reference
 	p.Unit.Sha256 = monitorReadDigest(p.render())
 	f.approval = rootPassiveHostApproval{Schema: rootPassiveHostSchema, Plan: p}
-	h := &repairValidatorHost{rootUid: uint32(os.Geteuid()), trustRoot: trustRoot, machinePath: filepath.Join(directory, "machine-id"), bootPath: filepath.Join(directory, "boot-id"), cgroupRoot: filepath.Join(directory, "cgroup"), cgroupType: func(string) (int64, error) { return unix.CGROUP2_SUPER_MAGIC, nil }, execute: f.execute, monotonic: func() (uint64, error) { return 150, nil }}
+	h := &repairValidatorHost{rootUid: uint32(os.Geteuid()), trustRoot: trustRoot, machinePath: filepath.Join(directory, "machine-id"), bootPath: filepath.Join(directory, "boot-id"), cgroupRoot: filepath.Join(directory, "cgroup"), cgroupType: func(string) (int64, error) { return repairValidatorCgroup2Magic, nil }, execute: f.execute, monotonic: func() (uint64, error) { return 150, nil }}
 	h.storageCommand = serviceStorageTestTransport(t)
 	f.host = &rootPassiveHost{files: &validatorActivationHost{host: h, unitDirectory: unitDirectory}, gid: uint32(os.Getegid())}
 	repairValidatorTestWrite(t, h.machinePath, []byte(p.MachineId+"\n"), 0644)

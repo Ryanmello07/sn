@@ -73,7 +73,8 @@ Collect these inputs before requesting signatures:
 - Each operator's distinct EVM `depositSigner` and `rootSigner`, native validator
   identities, signed producer configurations and durable service locations.
 - Dedicated native treasury recipient hotkeys and observed UID generations.
-- Host and owner-local durable-volume declarations and their exact hashes.
+- Host and owner-local durable-volume declarations and their exact hashes
+  (ext4, xfs or btrfs on Linux; a qualified APFS volume on macOS).
 
 Private keys belong in their existing custody: owners' Ledger devices and
 operators' secrets vaults. Request packages contain public artifacts, exact
@@ -89,6 +90,7 @@ messages and reviewed pins, never seed phrases or copied keys.
 | Coordinator governance Safe owners | Exact evidence-anchor Safe EIP-712 transaction | Accepted ordered Safe signatures |
 | Safe relayer | Exact outer EIP-1559 `execTransaction` transaction | Binary signed relayer transaction |
 | Operator signers | Their separately approved deposit and payout-root operations | Role-specific EVM signatures |
+| `ur-mainnet` 2-of-3 multisig (Brien's Ledger account 10, Jack, Keith), which owns the validator hotkey | SN25 and root registration, root stake, auto parent opt-out and the 18% takes ([root validator](#root-validator-on-netuid-0)) | Finalized native multisig calls |
 
 The Ledger Polkadot owner path is not an Ethereum signing interface. Establish
 EVM signer custody separately. `STCoordinator.rootSigner` signs operator payout
@@ -123,8 +125,9 @@ until installation readback has completed.
 3. Install the eight-action contract graph sequentially, retaining every receipt.
 4. Perform the separately approved Safe evidence-anchor successor and complete
    pristine installation readback **before operator/service population**.
-5. Configure and verify operator/validator roles, native treasury routing,
-   database earning-boundary preparation and service dependencies.
+5. Configure and verify operator/validator roles, including the
+   [root validator on netuid 0](#root-validator-on-netuid-0), native treasury
+   routing, database earning-boundary preparation and service dependencies.
 6. Assemble the final receipt, obtain review, hash it, publish matching public and
    operator identity fields, then verify actual service adoption.
 
@@ -138,7 +141,9 @@ path; do not promise that this can be completed in an hour. See
 Follow [OWNER-SIGNING.md](OWNER-SIGNING.md) and
 [OWNER-CUSTODY-PREPARATION.md](OWNER-CUSTODY-PREPARATION.md) for the full commands,
 SDK/platform qualification, metadata14/15, RFC78 proof, existing account/path,
-app version and independently authenticated pins.
+app version and independently authenticated pins. An owner signing on macOS
+needs a separately built and pinned macOS `bittensor_core` extension; the
+qualified Linux ELF build does not run there (see [MACOS.md](MACOS.md)).
 
 After fresh storage preparation and offline `bootstrap-chain apply` have
 established the original custody, the host sequence is `bootstrap-chain trim-plan`,
@@ -158,10 +163,14 @@ recovery, not deleting journals or issuing another signature casually.
 
 ### Contract graph: exact action requests
 
-Build the CLI from the reviewed checkout:
+Build the CLI from the reviewed checkout with the pinned Go 1.27.1 toolchain.
+It runs on Linux (amd64/arm64) and macOS (arm64/amd64); on macOS, custody
+volumes follow [MACOS.md](MACOS.md). Retain the binary's SHA-256 and
+`go version -m` output with the other launch locks:
 
 ```bash
-go build -o /absolute/path/sn-mainnet ./mainnet
+GOTOOLCHAIN=local CGO_ENABLED=0 go build -mod=readonly -trimpath -buildvcs=true \
+  -o /absolute/path/sn-mainnet ./mainnet
 ```
 
 The examples below use Bash. Set every variable from reviewed artifacts;
@@ -399,6 +408,147 @@ not a final receipt producer:
 An exit 0 or `observed-prerequisites` does not assert overall activation. Preserve
 reported blockers and actual live adoption evidence separately from local build
 and focused-test receipts. Existing code-only evidence is not a mainnet capture.
+
+## Root validator on netuid 0
+
+The owner decided on October 6 ([operator discovery design](../docs/OPERATOR-DISCOVERY.md),
+sections 1.6 and 7):
+
+- Our validator hotkey is the dedicated hotkey **`ur-mainnet`** (btcli wallet
+  `root/subtensor/wallets/ur-mainnet`, hotkey `default`), not the SN25 owner hotkey.
+  It is the `hotkey_seed_file` of the signed UR validator config, sits on root
+  (netuid 0) and validates SN25. The SN25 owner Ledger stays owner-local setup
+  custody and signs nothing here
+  ([current root participation](ROOT-CURRENT-PARTICIPANT.md)).
+- Its coldkey is the **`ur-mainnet` 2-of-3 native multisig**
+  `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are:
+  - `brien-ur-mainnet`, `5Fy6EbewyBPJi565JP1P5zgFsiGXfwSs8ZYpMWNJA8gpfNit`, on
+    Brien's Ledger at `m/44'/354'/10'/0'/0'`;
+  - `jack-ur`, `5GeoGiGEvUEQqTfTaUsvXqMQD4zVMNeYtYqMN8JLaMfiDp4J`;
+  - `keith-ur`, `5DFCNQmzRedo6hbZci4PTFMRuQJQ5PX6f6WrJBxDCDU3yBzS`.
+
+  It follows the same pattern as the `ur`, `ur-owner`, `ur-alpha` and `ur-reserve`
+  multisigs. btcli's multisig book (`btcli multisig show ur-mainnet`) derives that
+  address, and an independent derivation matches it. Every coldkey step below is a
+  native multisig call: one signatory proposes it and a second approves it.
+- The delegate take and the SN25 childkey take are both **18%**: 11,796/65,535,
+  the runtime's default maximum for each. `validator take status` prints the
+  live bounds, and the commands refuse a take above them.
+- Anyone, for example through tao.com, may name our hotkey as their child on SN25.
+  The parent's coldkey alone signs `set_children`; there is no allowlist and
+  nothing for us to approve.
+- The validator weights only the operators pinned in its signed release config.
+  `--operators-refresh` reports operator-list drift and never changes weights.
+- It runs on snow as a systemd service installed by
+  `xops/main/ansible/run-validator.sh`.
+
+Each coldkey step is `btcli call <Pallet.call> --args <json> --multisig ur-mainnet`,
+signed by one signatory. Brien signs on the Ledger with `--ledger
+--ledger-account 10`. A second signatory then approves the pending call, which
+`btcli multisig pending ur-mainnet` lists. Preview each call with `--dry-run`
+first. The multisig account pays the burn, the multisig deposit and the fees,
+so fund `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3` before the first call.
+
+`validator take status --config=<path>` reads the live values at an
+authenticated finalized block without any key; use it before and after each
+step. `validator take set` and `take childkey` sign with a coldkey seed file,
+so they are not used for this multisig-owned hotkey.
+
+### Register the hotkey on root
+
+`validator register` cannot register on netuid 0. It signs `register_limit`, which
+the runtime refuses for root, and the release config rejects netuid 0. Native
+`root_register(hotkey)` has no burn ceiling, so a quoted burn is only a reading,
+never a limit (see [MAINNET.md](MAINNET.md#root-validator-on-netuid-0)).
+
+Disable auto parent delegation first. It is on by default, and `root_register`
+then makes the hotkey the full-weight parent of every subnet owner hotkey, SN25's
+included. The runtime skips only a subnet where the hotkey already has current or
+pending children, or is itself the owner hotkey. We own SN25, but the SN25 owner
+hotkey doesn't run this validator. Left on, our validator's SN25 weight would move
+to the owner hotkey, and so would the stake of everyone keyed to us.
+
+With btcli (bittensor 11) through the multisig:
+
+```bash
+HOTKEY_SS58=<ur-mainnet hotkey ss58, from validator take status>
+MULTISIG=(--multisig ur-mainnet --ledger --ledger-account 10 --network "$MAINNET_RPC")
+btcli call SubtensorModule.set_auto_parent_delegation_enabled \
+  --args "{\"hotkey\": \"$HOTKEY_SS58\", \"enabled\": false}" "${MULTISIG[@]}" --dry-run
+btcli subnets burn-cost 0 --network "$MAINNET_RPC"
+btcli call SubtensorModule.root_register \
+  --args "{\"hotkey\": \"$HOTKEY_SS58\"}" "${MULTISIG[@]}" --dry-run
+```
+
+Review each dry run, then repeat it without `--dry-run` and have a second
+signatory approve it. The burn charged is the
+one at inclusion. When the root network is full, the hotkey's root stake must be
+at least the lowest-staked non-immune member's. Where the burn needs retained
+approvals and an explicit balance-exposure acknowledgement, use the reviewed
+`sn-mainnet root-register` workflow in MAINNET.md instead. Registration stores an
+18% delegate take for a hotkey that has none stored yet.
+
+### Register on SN25, stake and set the takes
+
+The multisig also signs the hotkey's SN25 registration and its stake.
+`validator register` and `validator stake add` sign with a coldkey seed file, so
+use their dry runs only to read the live burn and pool price.
+
+```bash
+btcli call SubtensorModule.register_limit \
+  --args "{\"netuid\": 25, \"hotkey\": \"$HOTKEY_SS58\", \"limit_price\": $BURN_LIMIT_RAO}" \
+  "${MULTISIG[@]}" --dry-run
+btcli call SubtensorModule.add_stake \
+  --args "{\"hotkey\": \"$HOTKEY_SS58\", \"netuid\": 0, \"amount_staked\": $ROOT_STAKE_RAO}" \
+  "${MULTISIG[@]}" --dry-run
+btcli call SubtensorModule.set_childkey_take \
+  --args "{\"hotkey\": \"$HOTKEY_SS58\", \"netuid\": 25, \"take\": 11796}" \
+  "${MULTISIG[@]}" --dry-run
+VALIDATOR=/absolute/path/validator
+"$VALIDATOR" take status --config="$VALIDATOR_CONFIG"
+```
+
+Review each dry run, then repeat it without `--dry-run` and have a second
+signatory approve it.
+- Root registration stores the runtime's 18% default delegate take for a hotkey
+  with none stored yet, so `take status` normally shows the delegate take already
+  at 11,796.
+- If it doesn't, pin it with `SubtensorModule.decrease_take`
+  (`{"hotkey": ..., "take": 11796}`) through the same multisig.
+- 11,796/65,535 is 18%, the runtime maximum for both takes.
+
+An increase waits `TxDelegateTakeRateLimit` (delegate) or `TxChildkeyTakeRateLimit`
+(childkey) blocks after the last change. Both are 216,000 blocks, about 30 days, by
+default, and every change restarts the wait. Decreases are never rate limited, so
+setting 18% once and leaving it is the safe path.
+
+Then `take status` must show:
+
+- `registration (netuid 0)` and `registration (netuid 25)` with a uid;
+- `delegate take: 11796/65535 (18.00%) stored`;
+- `auto parent delegation: false (stored)`;
+- `childkey take (netuid 25): 11796/65535 (18.00%) stored`;
+- `children (netuid 25): none`, unless the owner chose children;
+- `parents (netuid 25)`: the hotkeys that name ours as their child.
+
+### Run it on snow
+
+`xops/main/ansible/run-validator.sh` builds the validator from `sn/cli/validator`
+for linux/amd64 and linux/arm64 and stamps the version from `git describe`. It
+generates the systemd unit and runs `playbook-validator.yml` against snow. The
+unit runs this as a dedicated user, with `Restart=always`:
+
+```text
+validator run --config=<path> --progress-file=<path> --durable-volumes=<path> \
+  --durable-volumes-sha256=<hash> --operators-refresh=1h
+```
+
+The paths and hash are inventory variables; nothing secret is committed. The
+playbook refuses to start unless the config, seed and durable-volume files exist
+with the expected mode and owner. The coldkey seed never goes to snow.
+
+For the readiness receipt, retain the finalized root registration, the take
+journal entries, the `take status` output and the service's progress file.
 
 ## Assemble and review the readiness receipt
 

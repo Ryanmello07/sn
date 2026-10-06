@@ -1,5 +1,29 @@
 # Mainnet launch and operations plan
 
+## Root validator decision and take checkpoint — October 6
+
+The owner set the root validator's terms ([operator discovery design](../docs/OPERATOR-DISCOVERY.md), sections 1.6 and 7). For our own hotkey this supersedes the passive, observation-only root strategy in [Root validator on netuid 0](#root-validator-on-netuid-0); the reviewed `root-register` workflow and its custody rules keep their scope.
+
+- **18% takes.** The validator hotkey sits on root (netuid 0) and validates SN25. Its delegate take and its SN25 childkey take are both 18%, 11,796/65,535: `MaxDelegateTake` and `MaxChildkeyTake` default to 11,796 in runtimes 455 through 473, and the take commands refuse anything above the live maximum.
+- **Child hotkeys from anyone.** Anyone, for example through tao.com, may name our hotkey as their child on SN25. The parent's coldkey alone signs `set_children`; we keep no allowlist and approve nothing.
+- **Deployment.** The validator runs on snow as a systemd service installed by `xops/main/ansible/run-validator.sh`, which builds the binary locally the way `run-edges.sh` builds `warpctl`. The unit runs `validator run --config=<path> --progress-file=<path> --durable-volumes=<path> --durable-volumes-sha256=<hash> --operators-refresh=1h`.
+- **Weights.** The validator weights only the operators pinned in its signed release config. `--operators-refresh` reports drift between `ur.xyz/operators.yml` and the pinned operators; it never changes weights, evidence or protocol state.
+
+- **Dedicated hotkey** (owner decision, October 6). The validator hotkey is the dedicated `ur-mainnet` hotkey, not the SN25 owner hotkey, and the SN25 owner Ledger signs none of its operations.
+- **Multisig coldkey.** Its coldkey is the `ur-mainnet` 2-of-3 native multisig `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are `brien-ur-mainnet` (Brien's Ledger, `m/44'/354'/10'/0'/0'`), `jack-ur` and `keith-ur`, the same pattern as the other `ur-*` multisigs. Registration, stake and take changes are multisig calls; `validator take status` reads them back.
+
+One runtime consequence needs its own step. Unless auto parent delegation is disabled first, `root_register` makes the hotkey the full-weight parent of every subnet owner hotkey, SN25's included. Our SN25 stake weight would then go to the SN25 owner hotkey, which is ours but doesn't run this validator. The validator's coldkey disables it with `set_auto_parent_delegation_enabled(hotkey, false)` before root registration. [LAUNCH.md](LAUNCH.md#root-validator-on-netuid-0) has the sequence.
+
+**Code checkpoint.** `validator take status`, `take set` and `take childkey` (`validator/take.go`) sign `decrease_take`, `increase_take` and `set_childkey_take` with the coldkey seed on the `validator stake add` path. That path covers:
+- authentication of the pinned runtime, with the live take, bounds and last change read at the finalized block;
+- a check of each call's arguments against the authenticated metadata;
+- `payment_queryInfo` fee approval under `--fee_limit_rao`;
+- a dry run unless `--apply`, then journaling, finality and a readback of the stored take.
+
+`take status` also reports root and subnet registration, auto parent delegation, children and parents. `validator register` cannot register on root: it signs `register_limit`, which root refuses, and native `root_register` has no burn ceiling. Root registration therefore uses btcli or the reviewed `sn-mainnet root-register` workflow.
+
+On the uncommitted `feat/operator-discovery-take` worktree, 16/16 focused take tests pass: percent conversion and bounds, call encoding against the runtime 461 metadata and the runtime 470 projection, dry runs from hand-derived storage, and usage parsing. `go build` of `validator` and `cli/validator`, `go vet ./validator/` and `GOOS=linux go vet ./validator/` also pass. No live chain was used. No root registration, take change or deployment has happened, and `activation: blocked` is unchanged.
+
 ## Code and focused-test checkpoint — October 6
 
 The requested code changes, website guides and focused tests are complete. The [delivery checkpoint](evidence/code-delivery-checkpoint-20261006.json) binds the final paired builds, Server operator checks and website validation; its linked earlier indexes preserve exact tested source tuples and original failures. This checkpoint supersedes older current-state and unexecuted-test statements below. These scoped results do not establish a full-suite pass or mainnet readiness.
@@ -2129,6 +2153,8 @@ Nonempty intent graphs, historical provider bindings and the other launch gates
 remain open.
 
 ### Root validator on netuid 0
+
+**October 6 decision:** our validator hotkey runs on root and validates SN25 at an 18% delegate take and an 18% SN25 childkey take, and accepts child hotkeys from anyone; see [the decision record](#root-validator-decision-and-take-checkpoint--october-6). The passive observation path below remains the record of the earlier strategy.
 
 The [runtime470 source/artifact review](../docs/spec/runtime-470-audit.md) and
 [passive root service](ROOT-PASSIVE-SERVICE.md) define an implemented observation

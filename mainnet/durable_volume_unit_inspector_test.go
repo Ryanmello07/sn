@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/urfoundation/sn/internal/durableinspect"
@@ -64,8 +63,8 @@ func TestServiceStorageCredentialInspectorRealHost(t *testing.T) {
 	if err := unix.Setxattr(root, durablevolume.RootGenerationAttribute, nonce, unix.XATTR_CREATE); err != nil {
 		t.Fatal(err)
 	}
-	var state syscall.Stat_t
-	if err := syscall.Stat(root, &state); err != nil {
+	var state unix.Stat_t
+	if err := unix.Stat(root, &state); err != nil {
 		t.Fatal(err)
 	}
 	write := func(name string, raw []byte, mode os.FileMode) planFileReference {

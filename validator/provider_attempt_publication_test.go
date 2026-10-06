@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Actual original requests, physical checkpoint bytes and real dual HTTP
 // stores exercise closure, restart, resource limits and publication ownership.
@@ -18,6 +18,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/urnetwork/connect/durablesys"
 
 	"github.com/urfoundation/sn/protocol"
 	"golang.org/x/sys/unix"
@@ -360,7 +362,7 @@ func prepareProviderPublicationTestNamespace(t *testing.T, preparation ProviderA
 		directory.Close()
 		t.Fatal(err)
 	}
-	if err := unix.Fsetxattr(int(directory.Fd()), ProviderAttemptPublicationNamespaceAttribute, raw, unix.XATTR_CREATE); err != nil {
+	if err := durablesys.SetAttribute(int(directory.Fd()), ProviderAttemptPublicationNamespaceAttribute, raw, unix.XATTR_CREATE); err != nil {
 		directory.Close()
 		t.Fatal(err)
 	}

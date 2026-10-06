@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // A restore nomination is an unsigned proof candidate, never replacement
 // signing authority. Actual public preparation and original reconciliation

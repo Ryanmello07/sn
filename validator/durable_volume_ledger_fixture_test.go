@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package validator
 
@@ -15,6 +15,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/urnetwork/connect/durablesys"
 
 	"golang.org/x/sys/unix"
 )
@@ -121,7 +123,7 @@ func prepareAttemptLedgerCustodyTest(t *testing.T, ctx context.Context, root str
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := unix.Fsetxattr(int(directory.directory.Fd()), attemptLedgerCustodyAttribute, raw, unix.XATTR_CREATE); err != nil {
+	if err := durablesys.SetAttribute(int(directory.directory.Fd()), attemptLedgerCustodyAttribute, raw, unix.XATTR_CREATE); err != nil {
 		t.Fatal(err)
 	}
 	if err := directory.directory.Sync(); err != nil {

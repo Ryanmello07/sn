@@ -31,6 +31,7 @@ import (
 	"github.com/urnetwork/sdk"
 
 	"github.com/urfoundation/sn/clientauth"
+	"github.com/urfoundation/sn/operatorlist"
 )
 
 const DefaultApiUrl = "https://api.bringyour.com"
@@ -67,12 +68,22 @@ The default URLs are:
 
 A network saved with "provider choose_network" replaces these defaults;
 "provider choose_network --show" prints the network actually in effect.
+"provide --all-operators" ignores both and mines every operator in the
+operator list, by default %[3]s.
 
 Usage:
     provider auth ([<auth_code>] | --user_auth=<user_auth> [--password=<password>]) [-f]
     	[--api_url=<api_url>]
     	[--max-memory=<mem>]
     	[-v...]
+    provider auth --operator=<domain> ([<auth_code>] | --user_auth=<user_auth> [--password=<password>] | --hotkey_seed_file=<path>) [-f]
+        [--operators-url=<url>]
+        [-v...]
+    provider provide --all-operators [--operators-url=<url>] [--operators-refresh=<duration>]
+        [--auto-register --hotkey_seed_file=<path> | --hotkey_seed_file=<path>]
+        [--port=<port>] [--max-memory=<mem>] [--allow-client-registration]
+        [-v...]
+    provider operators [--operators-url=<url>] [-v...]
     provider provide [--port=<port>]
 		[--close-report-domain=<path>]
 		[--whole-work-capture=<path> --whole-work-capture-sha256=<hash>]
@@ -106,6 +117,14 @@ Usage:
     provider wallet challenge <coldkey_ss58> [--provider-jwt=<path> | --legacy-network-wallet] [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>]
         [--api_url=<api_url>]
         [-v...]
+    provider wallet hotkey challenge <coldkey_ss58> --hotkey_seed_file=<path>
+        [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>] [--operators-url=<url>]
+        [-v...]
+    provider wallet hotkey set <coldkey_ss58> --hotkey_seed_file=<path>
+        [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]
+        [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>] [--operators-url=<url>]
+        [-v...]
+    provider wallet hotkey status [--hotkey_seed_file=<path>] [--operators-url=<url>] [-v...]
     provider claim [--provider-jwt=<path> | --legacy-coldkey=<coldkey_ss58>] [--epoch=<epoch>] [--rpc=<rpc_url>]... [--key_file=<key_file>] [--dry-run]
         [--api_url=<api_url>]
         [-v...]
@@ -179,18 +198,22 @@ Options:
     --wallet-from-epoch=<epoch>     First prospective earning epoch in the signed provider mapping.
     --wallet-through-epoch=<epoch>  Last inclusive earning epoch; at most 65536 epochs.
                                      Omit both to use the next epoch through the finite 65536-epoch window.
+                                     With wallet hotkey: the global consent's epochs. Omitted, generation 1 earns
+                                     from epoch 0 and a later one from the operators' current epoch plus 1, each
+                                     through 65535 epochs later.
     --provider-jwt=<path>           Select one retained provider JWT; default: .provider.jwt in the provider state directory.
     --legacy-network-wallet         Explicit network-wallet compatibility; never selects a provider wallet.
     --legacy-coldkey=<coldkey_ss58>   Read a legacy network-only proof for this original committed coldkey.
                                      Uses the network JWT; never substitutes the current network wallet.
     --wallet=<coldkey_ss58>          Also set the subnet claim wallet at startup, same as provider wallet set.
                                      A failure is logged and does not block providing.
-    --coldkey_seed_file=<path>       With --wallet / wallet set: the coldkey's 32-byte sr25519 seed (raw, or 64 hex
+    --coldkey_seed_file=<path>       With --wallet / wallet set / wallet hotkey set: the coldkey's 32-byte sr25519 seed (raw, or 64 hex
                                      chars with an optional 0x prefix) in a private file that is never created here.
                                      The CLI fetches the wallet challenge and signs it, proving the coldkey; refused
                                      unless the seed derives <coldkey_ss58>. The seed never leaves the host.
     --message=<text>                 With --wallet / wallet set: the challenge printed by "provider wallet challenge",
                                      signed elsewhere (a literal \n stands for a newline). Needs --signature.
+                                     With wallet hotkey set: the statement "provider wallet hotkey challenge" printed.
     --signature=<hex>                The coldkey's 64-byte sr25519 signature over --message, hex (0x optional), made
                                      in the "substrate" signing context over the exact UTF-8 text (LF line endings,
                                      no trailing newline) or over that text wrapped in <Bytes>...</Bytes> (what a
@@ -219,7 +242,26 @@ Options:
 	--manifest=<path>                  Canonical urnetwork-fleet-manifest-v1 JSON file.
 	--client_id=<hex>                  Stable 16-byte UR client identity from the fleet manifest.
 	--client_seed_file=<path>          Raw or hex 32-byte Ed25519 client key seed.
-	--hotkey_seed_file=<path>          Hex/raw 32-byte sr25519 fleet hotkey seed.
+	--hotkey_seed_file=<path>          Hex/raw 32-byte sr25519 hotkey seed in a private file that is never created
+	                                   here: the fleet hotkey, or the miner hotkey that signs in to operators
+	                                   as a TAO wallet (--auto-register, auth --operator) and signs the hotkey
+	                                   wallet consent and each operator's delegation (wallet hotkey).
+	--all-operators                    provide: run one provider per operator in the operator list, each in its
+	                                   own state directory operators/<domain> below the provider state directory.
+	                                   Excludes --api_url, --connect_url, --provider-jwt, the wallet, capture,
+	                                   close-report and test egress flags, and --adopt-legacy-provider-key.
+	                                   With --hotkey_seed_file and a hotkey wallet chain, every authenticated
+	                                   operator gets the chain and a delegation to its head at start and hourly.
+	--operators-url=<url>              The operator list (https, or http only for loopback); default %[3]s.
+	                                   The last good copy is kept as operators.yml in the provider state directory.
+	--operators-refresh=<duration>     How often --all-operators refetches the operator list, as a Go duration
+	                                   of at least 1m; default 1h. Providers follow the list as it changes.
+	--auto-register                    With --all-operators: sign in with the hotkey of --hotkey_seed_file to each
+	                                   operator that has no jwt, creating the hotkey's network there at the first
+	                                   sign-in; no chain transaction. New operator directories need a new provider
+	                                   client, so every provider also gets --allow-client-registration.
+	--operator=<domain>                auth: authenticate to this operator from the operator list and write its
+	                                   jwt in operators/<domain> below the provider state directory.
 	--valid_from_epoch=<e>             First settlement epoch in which a binding is active.
 	--valid_to_epoch=<e>               Last settlement epoch in which a binding is active.
 	--effective_epoch=<e>              Future epoch at which a fleet revocation takes effect.
@@ -237,6 +279,7 @@ Options:
     --proxy_file=<proxy_file>        A path to a file where each line contains on entry as host:port, host:port:user:pass, host:port::, or key@host:port`,
 		DefaultApiUrl,
 		DefaultConnectUrl,
+		operatorlist.DefaultUrl,
 	)
 }
 
@@ -245,6 +288,11 @@ Options:
 // the subnet's provider: it runs the provide/proxy/auth flows plus the on-chain
 // wallet / claim / fleet actions (formerly connect/provider).
 func Run(args []string) {
+	// docopt alone would answer these with the whole usage text
+	if err := operatorArgsError(args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	opts, err := docopt.ParseArgs(mainUsage(), args, RequireVersion())
 
 	if err != nil {
@@ -287,7 +335,9 @@ func Run(args []string) {
 			proxyRemove(opts)
 		}
 	} else if wallet, _ := opts.Bool("wallet"); wallet {
-		if set, _ := opts.Bool("set"); set {
+		if hotkey, _ := opts.Bool("hotkey"); hotkey {
+			hotkeyWalletCmd(opts)
+		} else if set, _ := opts.Bool("set"); set {
 			walletSet(opts)
 		} else if challenge, _ := opts.Bool("challenge"); challenge {
 			walletChallenge(opts)
@@ -303,9 +353,17 @@ func Run(args []string) {
 			panic(err)
 		}
 	} else if auth_, _ := opts.Bool("auth"); auth_ {
-		auth(opts)
+		if _, err := opts.String("--operator"); err == nil {
+			operatorAuthCmd(opts)
+		} else {
+			auth(opts)
+		}
 	} else if provide_, _ := opts.Bool("provide"); provide_ {
-		provide(opts)
+		if allOperators, _ := opts.Bool("--all-operators"); allOperators {
+			provideAllOperatorsCmd(opts)
+		} else {
+			provide(opts)
+		}
 	} else if authProvide, _ := opts.Bool("auth-provide"); authProvide {
 		auth(opts)
 		provide(opts)
@@ -314,6 +372,8 @@ func Run(args []string) {
 			fmt.Printf("%s\n", err)
 			os.Exit(1)
 		}
+	} else if operators, _ := opts.Bool("operators"); operators {
+		operatorsCmd(opts)
 	}
 }
 
@@ -323,19 +383,8 @@ func auth(opts docopt.Opts) {
 	if err != nil {
 		panic(err)
 	}
-
-	if _, err := os.Stat(jwtPath); !errors.Is(err, os.ErrNotExist) {
-		// jwt exists
-		if force, _ := opts.Bool("-f"); !force {
-			fmt.Printf("%s exists. Overwrite? [yN]\n", jwtPath)
-
-			reader := bufio.NewReader(os.Stdin)
-			confirm, _ := reader.ReadString('\n')
-			if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
-				return
-			}
-
-		}
+	if !confirmJwtOverwrite(opts, jwtPath) {
+		return
 	}
 
 	apiUrl, err := resolveApiUrl(opts)
@@ -353,6 +402,61 @@ func auth(opts docopt.Opts) {
 	ctx, cancel := context.WithCancel(event.Ctx())
 	defer cancel()
 
+	byJwt, err := networkLogin(ctx, opts, apiUrl, terminalLoginPrompts())
+	if err != nil {
+		panic(err)
+	}
+	if byJwt != "" {
+		if err := clientauth.WriteToken(jwtPath, byJwt); err != nil {
+			panic(err)
+		}
+		fmt.Printf("Jwt written to %s\n", jwtPath)
+	}
+}
+
+// Without -f, an existing jwt is replaced only when the user answers y.
+func confirmJwtOverwrite(opts docopt.Opts, jwtPath string) bool {
+	if _, err := os.Stat(jwtPath); errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	if force, _ := opts.Bool("-f"); force {
+		return true
+	}
+	fmt.Printf("%s exists. Overwrite? [yN]\n", jwtPath)
+	reader := bufio.NewReader(os.Stdin)
+	confirm, _ := reader.ReadString('\n')
+	return strings.ToLower(strings.TrimSpace(confirm)) == "y"
+}
+
+// Reads what the command line left out of a login. Tests replace the terminal.
+type loginPrompts struct {
+	password func() (string, error)
+	authCode func() (string, error)
+}
+
+func terminalLoginPrompts() loginPrompts {
+	stdin := int(syscall.Stdin)
+	return loginPrompts{
+		password: func() (string, error) {
+			fmt.Print("Enter password: ")
+			passwordBytes, err := term.ReadPassword(stdin)
+			if err != nil {
+				return "", err
+			}
+			fmt.Printf("\n")
+			return string(passwordBytes), nil
+		},
+		authCode: func() (string, error) {
+			return readAuthCode(os.Stdin, os.Stdout, term.IsTerminal(stdin), func() ([]byte, error) {
+				return term.ReadPassword(stdin)
+			})
+		},
+	}
+}
+
+// The network jwt from a user and password, or else from an auth code,
+// prompting for the password or code when the command line has none.
+func networkLogin(ctx context.Context, opts docopt.Opts, apiUrl string, prompts loginPrompts) (string, error) {
 	clientStrategy := connect.NewClientStrategyWithDefaults(ctx)
 	defer clientStrategy.Close()
 	api := sdk.NewApi(ctx, clientStrategy, apiUrl)
@@ -360,73 +464,52 @@ func auth(opts docopt.Opts) {
 		_ = api.CloseAndWait(context.Background())
 	}()
 
-	var byJwt string
 	if userAuth, err := opts.String("--user_auth"); err == nil {
-		// user_auth and password
-
-		var password string
-		if password, err = opts.String("--password"); err == nil && password == "" {
-			fmt.Print("Enter password: ")
-			passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+		// an absent --password is not a string, so it prompts too
+		password, err := opts.String("--password")
+		if err != nil || password == "" {
+			password, err = prompts.password()
 			if err != nil {
-				panic(err)
+				return "", err
 			}
-			password = string(passwordBytes)
-			fmt.Printf("\n")
 		}
-
-		// fmt.Printf("userAuth='%s'; password='%s'\n", userAuth, password)
-
-		loginArgs := &sdk.AuthLoginWithPasswordArgs{
+		loginResult, err := api.AuthLoginWithPasswordSyncWithContext(ctx, &sdk.AuthLoginWithPasswordArgs{
 			UserAuth: userAuth,
 			Password: password,
-		}
-		loginResult, err := api.AuthLoginWithPasswordSyncWithContext(ctx, loginArgs)
+		})
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 		if loginResult.Error != nil {
-			panic(fmt.Errorf("%s", loginResult.Error.Message))
+			return "", fmt.Errorf("%s", loginResult.Error.Message)
 		}
 		if loginResult.VerificationRequired != nil {
-			panic(fmt.Errorf("Verification required for %s. Use the app or web to complete account setup.", loginResult.VerificationRequired.UserAuth))
+			return "", fmt.Errorf("Verification required for %s. Use the app or web to complete account setup.", loginResult.VerificationRequired.UserAuth)
 		}
+		if loginResult.Network == nil {
+			return "", errors.New("login returned no network")
+		}
+		return loginResult.Network.ByJwt, nil
+	}
 
-		byJwt = loginResult.Network.ByJwt
-	} else {
-		// auth_code
-		authCode, _ := opts.String("<auth_code>")
-		if authCode == "" {
-			stdin := int(syscall.Stdin)
-			var err error
-			authCode, err = readAuthCode(os.Stdin, os.Stdout, term.IsTerminal(stdin), func() ([]byte, error) {
-				return term.ReadPassword(stdin)
-			})
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		authCodeLogin := &sdk.AuthCodeLoginArgs{
-			AuthCode: authCode,
-		}
-		authCodeLoginResult, err := api.AuthCodeLoginSyncWithContext(ctx, authCodeLogin)
+	authCode, _ := opts.String("<auth_code>")
+	if authCode == "" {
+		var err error
+		authCode, err = prompts.authCode()
 		if err != nil {
-			panic(err)
+			return "", err
 		}
-		if authCodeLoginResult.Error != nil {
-			panic(fmt.Errorf("%s", authCodeLoginResult.Error.Message))
-		}
-
-		byJwt = authCodeLoginResult.Jwt
 	}
-
-	if byJwt != "" {
-		if err := clientauth.WriteToken(jwtPath, byJwt); err != nil {
-			panic(err)
-		}
-		fmt.Printf("Jwt written to %s\n", jwtPath)
+	authCodeLoginResult, err := api.AuthCodeLoginSyncWithContext(ctx, &sdk.AuthCodeLoginArgs{
+		AuthCode: authCode,
+	})
+	if err != nil {
+		return "", err
 	}
+	if authCodeLoginResult.Error != nil {
+		return "", fmt.Errorf("%s", authCodeLoginResult.Error.Message)
+	}
+	return authCodeLoginResult.Jwt, nil
 }
 
 // testEgressDialContext returns the narrow source-bind seam used by

@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Public preparation and the default monitor opener share the original physical
 // profile. Larger borrowed reads cannot enroll or replace that owner.

@@ -62,10 +62,12 @@ func networkHead(ctx context.Context, config Config, input Input, network Networ
 	return head, candidate, nil
 }
 
-// Empty network input preserves v1 request and authority bytes. Otherwise each
-// provider's outcome is derived without weakening any unavailable-own gate.
+// Empty network and hotkey input preserves v1 request and authority bytes, and
+// network input alone preserves the v2 bytes. Otherwise each provider's
+// outcome is derived without weakening any unavailable-own or
+// unavailable-network gate.
 func prepareNetworkWallets(ctx context.Context, config Config, input Input, authority *payoutartifact.WholeWorkAuthority) ([]WalletSelection, error) {
-	if len(input.NetworkWallets) == 0 {
+	if len(input.NetworkWallets) == 0 && len(input.HotkeyDelegations) == 0 {
 		return nil, nil
 	}
 	if len(input.NetworkWallets) > payoutartifact.MaxWholeWorkOwners {
@@ -73,7 +75,7 @@ func prepareNetworkWallets(ctx context.Context, config Config, input Input, auth
 	}
 	for _, provider := range input.Providers {
 		if provider.WalletConsents == nil {
-			return nil, errors.Join(protocol.ErrWalletMappingUnavailable, errors.New("network fallback requires an explicit provider consent array; [] asserts reviewed absence"))
+			return nil, errors.Join(protocol.ErrWalletMappingUnavailable, errors.New("network or hotkey fallback requires an explicit provider consent array; [] asserts reviewed absence"))
 		}
 	}
 	providerHeadKVs := make(map[[16]byte]payoutartifact.WholeWorkExpectedProvider, len(authority.ExpectedProviders))
@@ -100,7 +102,13 @@ func prepareNetworkWallets(ctx context.Context, config Config, input Input, auth
 	sort.Slice(authority.NetworkWallets, func(i, j int) bool {
 		return bytes.Compare(authority.NetworkWallets[i].NetworkId[:], authority.NetworkWallets[j].NetworkId[:]) < 0
 	})
-	authority.Schema = payoutartifact.WholeWorkAuthorityNetworkWalletSchema
+	if 0 < len(authority.NetworkWallets) {
+		authority.Schema = payoutartifact.WholeWorkAuthorityNetworkWalletSchema
+	}
+	hotkeyCandidateNetworkIds, err := prepareHotkeyDelegations(ctx, config, input, authority, providerNetworkIds)
+	if err != nil {
+		return nil, err
+	}
 	selections := make([]WalletSelection, 0, len(input.Providers))
 	for _, provider := range input.Providers {
 		if err := ctx.Err(); err != nil {
@@ -123,7 +131,14 @@ func prepareNetworkWallets(ctx context.Context, config Config, input Input, auth
 				}
 			}
 		}
-		wallet, err := protocol.SelectEarningWallet(own, ownErr, func() (*protocol.EarningWallet, error) {
+		// without hotkey input the selection is exactly SelectEarningWallet's
+		var hotkey func() (*protocol.EarningWallet, error)
+		if hotkeyCandidateNetworkIds != nil {
+			hotkey = func() (*protocol.EarningWallet, error) {
+				return hotkeyEarningWallet(ctx, config, input, hotkeyCandidateNetworkIds, provider.ClientId, provider.NetworkId)
+			}
+		}
+		wallet, err := protocol.SelectEarningWalletWithHotkey(own, ownErr, func() (*protocol.EarningWallet, error) {
 			network, exists := networkKVs[provider.NetworkId]
 			if !exists {
 				return nil, protocol.WalletMappingAbsentError()
@@ -132,7 +147,7 @@ func prepareNetworkWallets(ctx context.Context, config Config, input Input, auth
 				return nil, network.err
 			}
 			return protocol.NetworkEarningWallet(provider.ClientId, network.mapping), nil
-		})
+		}, hotkey)
 		selection := WalletSelection{ClientId: provider.ClientId, NetworkId: provider.NetworkId, Wallet: wallet}
 		if err != nil {
 			if !errors.Is(err, protocol.ErrWalletMappingUnavailable) {

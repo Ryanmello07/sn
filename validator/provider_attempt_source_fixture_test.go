@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // The complete fixture executes actual M8 request custody, failed/idle cuts,
 // dual public replay and canonical Server originals under synthetic keys only.

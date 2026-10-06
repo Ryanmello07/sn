@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Copied namespaces retain original cold evidence through the actual restore
 // reader without borrowing live snapshot custody or repeating owner admission.

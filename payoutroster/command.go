@@ -5,6 +5,8 @@
 package payoutroster
 
 import (
+	"github.com/urnetwork/connect/durablesys"
+
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -382,7 +384,7 @@ func archiveApprovedRequest(ctx context.Context, directory *os.File, name string
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := unix.Renameat2(int(directory.Fd()), name, fd, archivedName, unix.RENAME_NOREPLACE); err != nil {
+	if err := durablesys.RenameNoReplace(int(directory.Fd()), name, fd, archivedName); err != nil {
 		return errors.New("capture acknowledged payout roster request failed")
 	}
 	validCapture := func() bool {
@@ -400,7 +402,7 @@ func archiveApprovedRequest(ctx context.Context, directory *os.File, name string
 		return err == nil && bytes.Equal(raw, expected)
 	}()
 	if !validCapture {
-		restoreErr := unix.Renameat2(fd, archivedName, int(directory.Fd()), name, unix.RENAME_NOREPLACE)
+		restoreErr := durablesys.RenameNoReplace(fd, archivedName, int(directory.Fd()), name)
 		syncErr := errors.Join(completed.Sync(), directory.Sync())
 		if restoreErr != nil {
 			return errors.New("payout roster queue changed during retirement; captured replacement preserved in completed because queue restoration was unavailable")

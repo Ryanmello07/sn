@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Original mixed native/fee Wasm runs in distinct owned capture and historical
 // proof executables. The public combined owner consumes every body entry and
