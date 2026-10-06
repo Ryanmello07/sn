@@ -64,7 +64,12 @@ Owner, in order:
      automatically. The cold wallet signs once; the hot key does the per-operator work.
    - Precedence is per-provider consent, then network consent, then hotkey delegation.
 6. **Root validator.**
-   - Our hotkey runs on root (netuid 0) and validates SN25. Others may child-hotkey to it on SN25.
+   - A dedicated validator hotkey runs on root (netuid 0) and validates SN25. It has its own coldkey, kept off snow;
+     the SN25 owner hotkey and the owner Ledger are not used (owner decision). Others may child-hotkey to it on SN25,
+     and we keep 18% of what their stake earns through it.
+   - Auto parent delegation is disabled before root registration. Otherwise `root_register` would make the hotkey the
+     full-weight parent of every subnet owner hotkey, moving its SN25 weight to the SN25 owner hotkey, which doesn't run
+     the validator.
    - The delegate take and the SN25 childkey take are both 18% (11,796/65,535, the chain maximum for childkey take).
    - It runs on snow as a systemd service installed by `xops/main/ansible/run-validator.sh`, which builds the validator
      binary locally the way `run-edges.sh` builds `warpctl`.
