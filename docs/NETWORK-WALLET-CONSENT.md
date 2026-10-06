@@ -20,7 +20,9 @@ do the public provider counts (`UpdateClientLocations`, ~4069), the URL-probe an
 offered it, so it earns nothing. Consent works for child clients (both modes accept any active client of the network).
 Options: (a) keep provider installs top-level (current contract) and resolve the 100-client cap separately, or
 (b) a separate server change that admits child clients holding a public provide key into those pools, reviewed query by query.
-Until decided, PROVIDER_CONTRACT.md keeps top-level provisioning; this design is independent of that choice.
+Decided (owner, 2026-10-06): option (a). Provider installs stay top-level clients. `POST /network/auth-client` gets a
+provider-intent flag that exempts the client from the 100 top-level client cap, and provider-intent clients are kept out of the
+peer list (server, connect and sdk branches `feat/provider-intent`). This design is independent of that choice.
 
 ## 1. Decisions
 
