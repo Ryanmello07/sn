@@ -153,7 +153,7 @@ func (self *ReleaseSteerer) productionRetainedReadFailure(ctx context.Context, p
 }
 
 // Read-only callers close their real file/HTTP ownership before retry. The
-// shared deadline is finite even without an enclosing service deadline.
+// finite shared deadline enforces expiry before cancellation is published.
 func (self *ReleaseSteerer) productionRead(ctx context.Context, phase productionSteeringReadPhase, intent *SteeringIntent, read func(context.Context) error) error {
 	if !isOwnerRecycleProductionConfig(self.cfg) {
 		return read(ctx)
@@ -168,38 +168,41 @@ func (self *ReleaseSteerer) productionRead(ctx context.Context, phase production
 	if wait == nil {
 		wait = waitReleaseSnapshotRetry
 	}
-	operation, cancel := withTimeout(ctx, productionSteeringReadTimeout)
-	defer cancel()
+	operation := ctx
+	if evidenceReadContextError(ctx) == nil {
+		var cancel context.CancelFunc
+		operation, cancel = withTimeout(ctx, productionSteeringReadTimeout)
+		defer cancel()
+	}
 	operation = withRuntimeFinalityOwner(operation)
 	var lastErr error
 	for {
-		if err := ctx.Err(); err != nil {
-			if errors.Is(err, context.Canceled) {
-				return errors.Join(lastErr, err)
-			}
-			lastErr = errors.Join(lastErr, err)
-			break
-		}
-		if err := operation.Err(); err != nil {
+		if err := errors.Join(evidenceReadContextError(ctx), evidenceReadContextError(operation)); err != nil {
 			lastErr = errors.Join(lastErr, err)
 			break
 		}
 		attempt, attemptCancel := withTimeout(operation, productionSteeringReadAttemptTimeout)
-		lastErr = observeReleaseError(errors.Join(read(attempt), attempt.Err()))
-		attemptCancel()
-		if lastErr == nil {
-			return ctx.Err()
+		if err := errors.Join(evidenceReadContextError(ctx), evidenceReadContextError(operation), evidenceReadContextError(attempt)); err != nil {
+			lastErr = errors.Join(lastErr, err)
+		} else {
+			lastErr = observeReleaseError(errors.Join(read(attempt), evidenceReadContextError(attempt)))
 		}
-		if !retryableProductionSteeringRead(lastErr) || errors.Is(ctx.Err(), context.Canceled) {
-			return errors.Join(lastErr, ctx.Err())
+		attemptCancel()
+		ownerErr := errors.Join(evidenceReadContextError(ctx), evidenceReadContextError(operation))
+		lastErr = errors.Join(lastErr, ownerErr)
+		if lastErr == nil {
+			return nil
+		}
+		if !retryableProductionSteeringRead(lastErr) || ownerErr != nil {
+			break
 		}
 		if err := wait(operation, releaseSnapshotStartupRetryDelay); err != nil {
-			lastErr = errors.Join(lastErr, err, ctx.Err())
+			lastErr = errors.Join(lastErr, err, evidenceReadContextError(ctx), evidenceReadContextError(operation))
 			break
 		}
 	}
 	if !retryableProductionSteeringRead(lastErr) || errors.Is(ctx.Err(), context.Canceled) {
-		return lastErr
+		return errors.Join(lastErr, evidenceReadContextError(ctx))
 	}
 	result := &productionSteeringReadWait{phase: phase, cause: lastErr}
 	if intent != nil {
