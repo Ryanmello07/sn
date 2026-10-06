@@ -4,9 +4,11 @@ package miner
 // hotkeywallet's test operator: it verifies and stores each hotkey's chain,
 // issues network consent and delegation challenges with a boundary its
 // synthetic key signs, accepts a delegation only with the hotkey's signature
-// over a challenge it issued, and lists the network's hotkey entry. Requests
-// decode with unknown fields refused. Keys, identities and domains are
-// visibly synthetic.
+// over a challenge it issued, and lists the network's hotkey entry. Its
+// GET /sn/epoch states the chain id and netuid, and the genesis hash only when
+// configured to, so by default it is an operator that predates the genesis
+// hash there. Requests decode with unknown fields refused. Keys, identities
+// and domains are visibly synthetic.
 
 import (
 	"crypto/ecdsa"
@@ -67,6 +69,8 @@ type testHotkeyWalletOperator struct {
 	signer    *ecdsa.PrivateKey
 	// a network consent the network already holds, from this epoch
 	networkConsentFrom uint64
+	// in GET /sn/epoch, as an operator since it was added does
+	statesGenesisHash bool
 
 	stateLock   sync.Mutex
 	unavailable bool
@@ -75,6 +79,8 @@ type testHotkeyWalletOperator struct {
 	issued      map[string]bool
 	submissions int
 	accepts     int
+	// network consent challenges requested
+	networkChallenges int
 }
 
 // Each operator has its own network, user and operator domain number.
@@ -130,6 +136,12 @@ func (self *testHotkeyWalletOperator) counts() (submissions int, accepts int) {
 	return self.submissions, self.accepts
 }
 
+func (self *testHotkeyWalletOperator) networkChallengeCount() int {
+	self.stateLock.Lock()
+	defer self.stateLock.Unlock()
+	return self.networkChallenges
+}
+
 // The network's delegation head, or nil when there is none.
 func (self *testHotkeyWalletOperator) delegationHead(t *testing.T) *protocol.HotkeyNetworkDelegationStatement {
 	t.Helper()
@@ -158,7 +170,11 @@ func (self *testHotkeyWalletOperator) ServeHTTP(writer http.ResponseWriter, requ
 	}
 	switch request.Method + " " + request.URL.Path {
 	case "GET /sn/epoch":
-		testWalletAnswer(writer, map[string]any{"epoch": testWalletEpoch, "chain_id": self.domain.ChainID})
+		answer := map[string]any{"epoch": testWalletEpoch, "chain_id": self.domain.ChainID, "netuid": self.domain.Netuid}
+		if self.statesGenesisHash {
+			answer["genesis_hash"] = "0x" + hex.EncodeToString(self.domain.GenesisHash[:])
+		}
+		testWalletAnswer(writer, answer)
 	case "POST /sn/wallet/network-consent":
 		self.networkChallenge(writer, request)
 	case "POST /sn/wallet/hotkey-consent":
@@ -196,6 +212,7 @@ func testSs58(key [32]byte) string {
 
 // Issued only to be read here: the network consent itself is never accepted.
 func (self *testHotkeyWalletOperator) networkChallenge(writer http.ResponseWriter, request *http.Request) {
+	self.networkChallenges++
 	var body struct {
 		ColdkeySs58  string `json:"coldkey_ss58"`
 		FromEpoch    uint64 `json:"from_epoch"`

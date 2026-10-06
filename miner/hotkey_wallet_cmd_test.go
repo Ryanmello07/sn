@@ -385,3 +385,105 @@ func TestHotkeyWalletChallengeRefusesOperatorsThatDisagreeOnTheSubnet(t *testing
 		t.Fatalf("a statement for a disputed subnet is pending: %v, %v", pending, err)
 	}
 }
+
+// Operators that state genesis_hash in GET /sn/epoch name the subnet there, so
+// neither challenge nor set asks them for a network consent challenge.
+func TestHotkeyWalletChallengeReadsTheSubnetFromTheEpoch(t *testing.T) {
+	setup := newTestHotkeyWalletSetup(t, 2, func(index int, operator *testHotkeyWalletOperator) {
+		operator.statesGenesisHash = true
+	})
+	pending, _ := setup.challenge()
+	if pending.Generation != 1 || pending.Subnet != testWalletDomain.HotkeySubnet() {
+		t.Fatalf("pending statement = %+v", pending)
+	}
+	if out, err := setup.setWithSeed(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	_, _, headHash := setup.chain()
+	for index, operator := range setup.operators {
+		setup.requireDelegation(operator, headHash, 1, testWalletEpoch+2)
+		if challenges := operator.networkChallengeCount(); challenges != 0 {
+			t.Fatalf("operator %s was asked for %d network consent challenges", setup.domains[index], challenges)
+		}
+	}
+}
+
+// Only the operator that predates genesis_hash in GET /sn/epoch is asked for a
+// network consent challenge; the other states the subnet without one.
+func TestHotkeyWalletChallengeFallsBackToAChallengeForAnOperatorWithoutGenesisHash(t *testing.T) {
+	setup := newTestHotkeyWalletSetup(t, 2, func(index int, operator *testHotkeyWalletOperator) {
+		operator.statesGenesisHash = index == 0
+	})
+	pending, _ := setup.challenge()
+	if pending.Generation != 1 || pending.Subnet != testWalletDomain.HotkeySubnet() {
+		t.Fatalf("pending statement = %+v", pending)
+	}
+	for index, want := range []int{0, 1} {
+		if challenges := setup.operators[index].networkChallengeCount(); challenges != want {
+			t.Fatalf("operator %s was asked for %d network consent challenges, want %d", setup.domains[index], challenges, want)
+		}
+	}
+}
+
+// An operator that states genesis_hash must agree with every other operator,
+// whether that one states the subnet in GET /sn/epoch or in a challenge.
+func TestHotkeyWalletChallengeRefusesOperatorsThatDisagreeOnTheEpochSubnet(t *testing.T) {
+	cases := []struct {
+		secondStatesGenesisHash bool
+		move                    func(domain *protocol.ClientKeyHistoryDomain)
+	}{
+		{secondStatesGenesisHash: true, move: func(domain *protocol.ClientKeyHistoryDomain) { domain.GenesisHash = [32]byte{9} }},
+		{secondStatesGenesisHash: true, move: func(domain *protocol.ClientKeyHistoryDomain) { domain.ChainID = 8 }},
+		{secondStatesGenesisHash: true, move: func(domain *protocol.ClientKeyHistoryDomain) { domain.Netuid = 26 }},
+		{secondStatesGenesisHash: false, move: func(domain *protocol.ClientKeyHistoryDomain) { domain.GenesisHash = [32]byte{9} }},
+	}
+	for _, c := range cases {
+		moved := testWalletDomain
+		c.move(&moved)
+		want := fmt.Sprintf("operators disagree on the subnet: one.example states chain 7 genesis 0x%x netuid 25, two.example states chain %d genesis 0x%x netuid %d", testWalletDomain.GenesisHash, moved.ChainID, moved.GenesisHash, moved.Netuid)
+		setup := newTestHotkeyWalletSetup(t, 2, func(index int, operator *testHotkeyWalletOperator) {
+			operator.statesGenesisHash = index == 0 || c.secondStatesGenesisHash
+			if index == 1 {
+				c.move(&operator.domain)
+			}
+		})
+		var out bytes.Buffer
+		err := hotkeyWalletChallenge(t.Context(), setup.opts("wallet", "hotkey", "challenge", setup.coldkeySs58(), "--hotkey_seed_file="+setup.hotkeySeedPath), &out)
+		if err == nil || err.Error() != want {
+			t.Errorf("disagreeing operators: %v; want %s", err, want)
+		}
+		if pending, err := hotkeyWalletStore(setup.base).Pending(); err != nil || pending != nil {
+			t.Errorf("a statement for a disputed subnet is pending: %v, %v", pending, err)
+		}
+		wantChallenges := []int{0, 0}
+		if !c.secondStatesGenesisHash {
+			wantChallenges[1] = 1
+		}
+		for index, operator := range setup.operators {
+			if challenges := operator.networkChallengeCount(); challenges != wantChallenges[index] {
+				t.Errorf("operator %s was asked for %d network consent challenges, want %d", setup.domains[index], challenges, wantChallenges[index])
+			}
+		}
+	}
+}
+
+// A genesis_hash beside a chain id of 0, as an operator answers from its epoch
+// row before the chain id is mirrored, is reported rather than read through a
+// challenge.
+func TestHotkeyWalletChallengeReportsAnIncompleteEpochSubnetWithoutAChallenge(t *testing.T) {
+	setup := newTestHotkeyWalletSetup(t, 1, func(index int, operator *testHotkeyWalletOperator) {
+		operator.statesGenesisHash = true
+		operator.domain.ChainID = 0
+	})
+	var out bytes.Buffer
+	err := hotkeyWalletChallenge(t.Context(), setup.opts("wallet", "hotkey", "challenge", setup.coldkeySs58(), "--hotkey_seed_file="+setup.hotkeySeedPath), &out)
+	if err == nil || !strings.Contains(err.Error(), "no authenticated listed operator stated its subnet") {
+		t.Fatalf("incomplete subnet: %v", err)
+	}
+	if want := "operator one.example: its subnet is unavailable: GET /sn/epoch states chain 0 genesis 0x03"; !strings.Contains(out.String(), want) {
+		t.Fatalf("challenge output lacks %q:\n%s", want, out.String())
+	}
+	if challenges := setup.operators[0].networkChallengeCount(); challenges != 0 {
+		t.Fatalf("the operator was asked for %d network consent challenges", challenges)
+	}
+}

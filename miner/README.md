@@ -123,7 +123,10 @@ others. Setting the same `--message` and `--signature` again resends the chain,
 and `provide --all-operators --hotkey_seed_file=<path>` keeps every
 authenticated operator delegated at start and every hour. A later generation
 changes the coldkey or the epochs. The first generation names the subnet that
-the authenticated operators state, and they must agree.
+the authenticated operators state, and they must agree. Each states its chain
+id, genesis hash and netuid in `GET /sn/epoch`, which changes nothing at the
+operator. Only an operator that predates the genesis hash there is asked for a
+network consent challenge instead, which is read and never signed.
 
 Epochs, unless `--wallet-from-epoch` and `--wallet-through-epoch` choose them:
 generation 1 earns from epoch 0, and a later generation from the operators'

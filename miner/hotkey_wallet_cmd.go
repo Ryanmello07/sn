@@ -13,9 +13,10 @@ package miner
 //   - "wallet hotkey status" prints the chain and what each operator adopts.
 //
 // A generation 1 statement names the subnet that every reachable
-// authenticated operator states in its own network consent challenge, which
-// is never signed and expires at the operator. A later generation keeps its
-// chain's subnet.
+// authenticated operator states in GET /sn/epoch: its chain_id, genesis_hash
+// and netuid. An operator that predates genesis_hash there states the subnet
+// in its own network consent challenge instead, which is never signed and
+// expires at the operator. A later generation keeps its chain's subnet.
 //
 // Epochs when the flags are absent: generation 1 earns from epoch 0 and a
 // later generation from the operators' current epoch plus 1, or just after
@@ -135,17 +136,25 @@ func hotkeyWalletCall(ctx context.Context, target hotkeyWalletTarget, method str
 	return nil
 }
 
-func hotkeyWalletEpoch(ctx context.Context, target hotkeyWalletTarget) (uint64, error) {
-	var result struct {
-		Epoch uint64 `json:"epoch"`
-	}
+// An operator's GET /sn/epoch: its current epoch and the subnet it states. An
+// operator that predates genesis_hash there omits it.
+type hotkeyWalletEpochResult struct {
+	Epoch       uint64 `json:"epoch"`
+	ChainId     uint64 `json:"chain_id"`
+	GenesisHash string `json:"genesis_hash"`
+	Netuid      uint64 `json:"netuid"`
+}
+
+// The operator's answer, refused when its current epoch is implausible.
+func hotkeyWalletEpoch(ctx context.Context, target hotkeyWalletTarget) (*hotkeyWalletEpochResult, error) {
+	var result hotkeyWalletEpochResult
 	if err := hotkeyWalletCall(ctx, target, http.MethodGet, "/sn/epoch", nil, &result); err != nil {
-		return 0, err
+		return nil, err
 	}
 	if result.Epoch > hotkeyWalletMaximumEpoch {
-		return 0, fmt.Errorf("the operator's current epoch %d is implausible", result.Epoch)
+		return nil, fmt.Errorf("the operator's current epoch %d is implausible", result.Epoch)
 	}
-	return result.Epoch, nil
+	return &result, nil
 }
 
 // A network-level entry of GET /sn/wallet.
@@ -202,19 +211,37 @@ func (self *hotkeyWalletEntry) adopts(hotkey [32]byte, headHash [32]byte, genera
 	return err == nil && bytes.Equal(head, headHash[:])
 }
 
-// The subnet one operator states in a network consent challenge for the
-// coldkey. The challenge is only read, never signed.
+// The subnet one operator states in GET /sn/epoch, which has no side effect at
+// the operator. Only an operator that omits genesis_hash there is asked for a
+// network consent challenge for the coldkey, read and never signed; a
+// genesis_hash that does not make a complete subnet is an error, not a reason
+// to ask.
 func hotkeyWalletOperatorSubnet(ctx context.Context, target hotkeyWalletTarget, coldkeySs58 string) (protocol.HotkeyWalletMappingSubnet, error) {
-	epoch, err := hotkeyWalletEpoch(ctx, target)
+	epochResult, err := hotkeyWalletEpoch(ctx, target)
 	if err != nil {
 		return protocol.HotkeyWalletMappingSubnet{}, err
+	}
+	if epochResult.GenesisHash != "" {
+		genesisHashHex, prefixed := strings.CutPrefix(epochResult.GenesisHash, "0x")
+		genesisHash, err := hex.DecodeString(genesisHashHex)
+		if !prefixed || err != nil || len(genesisHash) != 32 {
+			return protocol.HotkeyWalletMappingSubnet{}, errors.New("GET /sn/epoch states a genesis_hash that is not 0x and 64 hex digits")
+		}
+		if epochResult.Netuid > math.MaxUint16 {
+			return protocol.HotkeyWalletMappingSubnet{}, fmt.Errorf("GET /sn/epoch states netuid %d, beyond any subnet", epochResult.Netuid)
+		}
+		subnet := protocol.HotkeyWalletMappingSubnet{ChainID: epochResult.ChainId, GenesisHash: [32]byte(genesisHash), Netuid: uint16(epochResult.Netuid)}
+		if err := subnet.Validate(); err != nil {
+			return protocol.HotkeyWalletMappingSubnet{}, fmt.Errorf("GET /sn/epoch states chain %d genesis 0x%x netuid %d: %w", subnet.ChainID, subnet.GenesisHash, subnet.Netuid, err)
+		}
+		return subnet, nil
 	}
 	network, _, err := hotkeyWalletEntries(ctx, target)
 	if err != nil {
 		return protocol.HotkeyWalletMappingSubnet{}, err
 	}
 	// past the operator's boundary and any network consent it already holds
-	from := epoch + 2
+	from := epochResult.Epoch + 2
 	if network != nil && from <= network.FromEpoch {
 		from = network.FromEpoch + 1
 	}
@@ -260,12 +287,12 @@ func hotkeyWalletSubnet(ctx context.Context, targets []hotkeyWalletTarget, coldk
 func hotkeyWalletCurrentEpoch(ctx context.Context, targets []hotkeyWalletTarget, out io.Writer) (uint64, error) {
 	current, known := uint64(0), false
 	for _, target := range targets {
-		epoch, err := hotkeyWalletEpoch(ctx, target)
+		epochResult, err := hotkeyWalletEpoch(ctx, target)
 		if err != nil {
 			fmt.Fprintf(out, "operator %s: its current epoch is unavailable: %v\n", target.domain, err)
 			continue
 		}
-		current, known = max(current, epoch), true
+		current, known = max(current, epochResult.Epoch), true
 	}
 	if !known {
 		return 0, errors.New("no authenticated listed operator stated its current epoch; give --wallet-from-epoch and --wallet-through-epoch")
@@ -364,12 +391,12 @@ func ensureOperatorHotkeyWallet(ctx context.Context, target hotkeyWalletTarget, 
 	if entry.adopts(hotkey.PublicKey(), headHash, generation) {
 		return outcome, nil
 	}
-	epoch, err := hotkeyWalletEpoch(ctx, target)
+	epochResult, err := hotkeyWalletEpoch(ctx, target)
 	if err != nil {
 		return outcome, err
 	}
 	outcome.delegated = true
-	outcome.fromEpoch = epoch + 2
+	outcome.fromEpoch = epochResult.Epoch + 2
 	// the operator's chain of delegations starts strictly later each time
 	if entry != nil && outcome.fromEpoch <= entry.FromEpoch {
 		outcome.fromEpoch = entry.FromEpoch + 1
