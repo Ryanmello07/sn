@@ -419,6 +419,10 @@ func (self economicConservationState) entitlementCensusFacts() uint64 {
 				for _, wallet := range originals.Wallets {
 					count += uint64(len(wallet.Originals))
 				}
+				count += uint64(len(originals.NetworkWallets))
+				for _, wallet := range originals.NetworkWallets {
+					count += uint64(len(wallet.Originals))
+				}
 				if originals.Work != nil {
 					count += uint64(len(originals.Work.Owners))
 				}

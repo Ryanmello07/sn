@@ -379,6 +379,17 @@ file to that strict descriptor reader. Policy-plan output is unsigned and
 `approved: false`; independent economic approval is still needed. See
 [TREASURY-EMISSIONS.md](TREASURY-EMISSIONS.md).
 
+Provision the separate epoch roster authority and producer described in
+[PAYOUT-ROSTER.md](PAYOUT-ROSTER.md). The SN `cli/payoutroster` service signs the
+explicitly complete roster, including v2 network-wallet heads when present,
+and publishes its retained original to the operator's provider-work API. Its
+key custody is separate from the payout artifact worker; match its public
+signer/domain/request-key pins to Server's `provider_work.yml`. Supplying a
+payout artifact signer or installing contracts does not supply this service.
+Verify reviewed epoch input delivery, durable request/signature/receipt storage
+and publication adoption as part of operator readiness. Keep unmapped providers
+explicit; never infer a complete roster from observed usage.
+
 Verify actual operator registration, distinct deposit/root signers, funds,
 validator roles and native treasury routing; dependencies, durable archives,
 Postgres/Redis and schema/earnings-boundary preparation; and recovery/status

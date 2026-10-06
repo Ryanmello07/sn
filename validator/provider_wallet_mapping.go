@@ -19,8 +19,10 @@ import (
 // Fixed response and request lifetimes are independent of remote metadata.
 type HttpWalletMappingReader struct {
 	endpoint string
-	client   *http.Client
-	wait     func(context.Context, time.Duration) error
+	// the network consent history endpoint
+	networkEndpoint string
+	client          *http.Client
+	wait            func(context.Context, time.Duration) error
 }
 
 // Redirects cannot change the selected original evidence endpoint.
@@ -32,7 +34,12 @@ func NewHttpWalletMappingReader(apiUrl string) (*HttpWalletMappingReader, error)
 	if err != nil {
 		return nil, err
 	}
-	return &HttpWalletMappingReader{endpoint: base.ResolveReference(&url.URL{Path: "/sn/wallet/consent/history"}).String(), client: &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}, wait: waitReleaseSnapshotRetry}, nil
+	return &HttpWalletMappingReader{
+		endpoint:        base.ResolveReference(&url.URL{Path: "/sn/wallet/consent/history"}).String(),
+		networkEndpoint: base.ResolveReference(&url.URL{Path: "/sn/wallet/network-consent/history"}).String(),
+		client:          &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }},
+		wait:            waitReleaseSnapshotRetry,
+	}, nil
 }
 
 // Only a selected complete original head can authorize acquisition. A missing
@@ -43,6 +50,9 @@ func (self *HttpWalletMappingReader) Read(ctx context.Context, expected protocol
 
 // A containing multi-provider owner reserves its remaining original-byte
 // allowance before the request; remote length cannot multiply that allowance.
+// A complete chain with no consent effective at the epoch returns its
+// originals with protocol.ErrWalletMappingNotEffective, so the caller can
+// retain them as the evidence for a fallback to the network consent.
 func (self *HttpWalletMappingReader) ReadBounded(ctx context.Context, expected protocol.WalletMappingHistoryExpectation, maximumBytes uint64) ([]protocol.WalletMappingConsent, *protocol.VerifiedWalletMapping, error) {
 	if ctx == nil || self == nil || self.client == nil || self.wait == nil || expected.Generation == 0 || expected.Generation > protocol.MaxWalletMappingHistory || expected.HeadHash == ([32]byte{}) || expected.ClientId == ([16]byte{}) {
 		return nil, nil, protocol.ErrWalletMappingUnavailable
@@ -73,10 +83,72 @@ func (self *HttpWalletMappingReader) ReadBounded(ctx context.Context, expected p
 		if err := evidenceReadContextError(owner); err != nil {
 			return nil, nil, errors.Join(lastErr, err)
 		}
-		originals, err := self.read(owner, requestBody, maximum)
+		originals, err := self.read(owner, self.endpoint, requestBody, maximum)
 		if err == nil {
 			verified, err := protocol.VerifyWalletMappingHistory(owner, originals, expected)
-			if err = errors.Join(err, evidenceReadContextError(owner)); err != nil {
+			if contextErr := evidenceReadContextError(owner); contextErr != nil {
+				return nil, nil, errors.Join(err, contextErr)
+			}
+			if errors.Is(err, protocol.ErrWalletMappingNotEffective) {
+				return originals, nil, err
+			}
+			if err != nil {
+				return nil, nil, err
+			}
+			return originals, verified, nil
+		}
+		lastErr = err
+		if ownerErr := evidenceReadContextError(owner); ownerErr != nil || !retryableClientKeyObservationHttpError(err) {
+			return nil, nil, errors.Join(err, ownerErr)
+		}
+		if waitErr := self.wait(owner, 5*time.Second); waitErr != nil {
+			return nil, nil, errors.Join(err, waitErr, evidenceReadContextError(owner))
+		}
+	}
+}
+
+// The network consent history through the independently pinned network head,
+// with the same bounds, retries and not-effective outcome as ReadBounded.
+func (self *HttpWalletMappingReader) ReadNetworkBounded(ctx context.Context, expected protocol.NetworkWalletMappingHistoryExpectation, maximumBytes uint64) ([]protocol.WalletMappingConsent, *protocol.VerifiedNetworkWalletMapping, error) {
+	if ctx == nil || self == nil || self.client == nil || self.wait == nil || expected.Generation == 0 || expected.Generation > protocol.MaxWalletMappingHistory || expected.HeadHash == ([32]byte{}) || expected.NetworkId == ([16]byte{}) {
+		return nil, nil, protocol.ErrWalletMappingUnavailable
+	}
+	if err := errors.Join(evidenceReadContextError(ctx), expected.Domain.Validate()); err != nil {
+		return nil, nil, err
+	}
+	owner, cancel := context.WithTimeout(ctx, 300*time.Second)
+	defer cancel()
+	requestBody, err := json.Marshal(struct {
+		Domain     protocol.ClientKeyHistoryDomain `json:"domain"`
+		NetworkId  string                          `json:"network_id"`
+		HeadHash   [32]byte                        `json:"head_hash"`
+		Generation uint64                          `json:"generation"`
+	}{Domain: expected.Domain, NetworkId: connect.Id(expected.NetworkId).String(), HeadHash: expected.HeadHash, Generation: expected.Generation})
+	if err != nil {
+		return nil, nil, err
+	}
+	maximum := int64(expected.Generation)*protocol.MaxWalletMappingConsentBytes + 1024
+	if maximumBytes == 0 {
+		return nil, nil, protocol.ErrWalletMappingCapacity
+	}
+	if maximumBytes < uint64(maximum) {
+		maximum = int64(maximumBytes)
+	}
+	var lastErr error
+	for {
+		if err := evidenceReadContextError(owner); err != nil {
+			return nil, nil, errors.Join(lastErr, err)
+		}
+		originals, err := self.read(owner, self.networkEndpoint, requestBody, maximum)
+		if err == nil {
+			verified, err := protocol.VerifyNetworkWalletMappingHistory(owner, originals, expected)
+			if contextErr := evidenceReadContextError(owner); contextErr != nil {
+				return nil, nil, errors.Join(err, contextErr)
+			}
+			if errors.Is(err, protocol.ErrWalletMappingNotEffective) {
+				return originals, nil, err
+			}
+			if err != nil {
 				return nil, nil, err
 			}
 			return originals, verified, nil
@@ -93,8 +165,8 @@ func (self *HttpWalletMappingReader) ReadBounded(ctx context.Context, expected p
 
 // A refused or partial response cannot escape before the actual descriptor
 // close and owner cancellation check; retries always reuse identical input.
-func (self *HttpWalletMappingReader) read(ctx context.Context, body []byte, maximum int64) (originals []protocol.WalletMappingConsent, resultErr error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, self.endpoint, bytes.NewReader(body))
+func (self *HttpWalletMappingReader) read(ctx context.Context, endpoint string, body []byte, maximum int64) (originals []protocol.WalletMappingConsent, resultErr error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,27 @@
 # Mainnet prelaunch fixes
 
+## Own the epoch roster producer — October 6
+
+A signing library and ingestion API do not establish a production producer.
+Provision and supervise the separate SN `cli/payoutroster` service described in
+[PAYOUT-ROSTER.md](PAYOUT-ROSTER.md), including its independent roster key,
+complete reviewed epoch inputs and matching Server public authority pins.
+Network-only provider payments require the v2 roster's original network-wallet
+heads; do not treat missing heads as a complete successful payout or omit the
+provider. Preserve the shared install-consent-first precedence.
+
+Retain the exact request and signed roster before publication, then the verified
+acknowledgement before retiring queue work. Lost responses retry the same bytes.
+Missing reconstructible local data can be restored from the exact approved
+request and fixed signer, checking any retained receipt before sending; actual
+contradictions remain blocking. Require physical pre-provisioned private storage
+instead of following ancestor symlinks or creating unsynced custody ancestors.
+Bound each inbox scan while preserving forward progress; historical completed
+requests and invalid entries must not starve future epochs. Qualify interrupted
+publication, recovery, retirement, changed consent generations and network-only
+providers with deterministic tests before deployment. This service is a new
+completion increment; the older delivery receipt below does not qualify it.
+
 ## Code and focused-test checkpoint — October 6
 
 The requested code changes, website guides and focused tests are complete. The [delivery checkpoint](evidence/code-delivery-checkpoint-20261006.json) records the final paired builds, Server operator 51 normal /27 race results, and website build/link/SEO/date checks. These results retain their exact source and selection; mainnet activation remains outside this scope.
