@@ -18,10 +18,18 @@ type OwnerInput struct {
 	Registration protocol.ClientKeyRegistration `json:"registration"`
 }
 
-// The complete history pins its final head, including future rotations. A
-// missing history leaves this provider explicitly unmapped in the roster.
+// The full history pins its final head, including future rotations. Legacy v1
+// permits nil unknown history; network-enabled input requires an explicit []
+// to assert reviewed absence before network fallback can be selected.
 type ProviderInput struct {
 	ClientId       [16]byte                        `json:"client_id"`
+	NetworkId      [16]byte                        `json:"network_id"`
+	WalletConsents []protocol.WalletMappingConsent `json:"wallet_consents"`
+}
+
+// One full network history pins a head shared by its expected providers.
+// Its consent message has the independent network signing scope.
+type NetworkWalletInput struct {
 	NetworkId      [16]byte                        `json:"network_id"`
 	WalletConsents []protocol.WalletMappingConsent `json:"wallet_consents"`
 }
@@ -35,6 +43,7 @@ type Input struct {
 	Clock          *payoutartifact.ClosedWorkWindowClock   `json:"clock"`
 	Owners         []OwnerInput                            `json:"owners"`
 	Providers      []ProviderInput                         `json:"providers"`
+	NetworkWallets []NetworkWalletInput                    `json:"network_wallets,omitempty"`
 	PriorContracts []payoutartifact.WholeWorkPriorContract `json:"prior_contracts"`
 	WorkSources    []protocol.ProviderWorkSourceAuthority  `json:"work_sources"`
 }
@@ -42,9 +51,19 @@ type Input struct {
 // Preparation retains originals alongside the exact unsigned derived roster.
 // Signing rederives it before loading a key; a digest pins the complete request.
 type Request struct {
-	Schema    string                            `json:"schema"`
-	Input     Input                             `json:"input"`
-	Authority payoutartifact.WholeWorkAuthority `json:"authority"`
+	Schema           string                            `json:"schema"`
+	Input            Input                             `json:"input"`
+	Authority        payoutartifact.WholeWorkAuthority `json:"authority"`
+	WalletSelections []WalletSelection                 `json:"wallet_selections,omitempty"`
+}
+
+// Review metadata displays the shared settlement selector's exact outcome.
+// Consumers independently verify the roster and originals, never this preview.
+type WalletSelection struct {
+	ClientId    [16]byte                `json:"client_id"`
+	NetworkId   [16]byte                `json:"network_id"`
+	Wallet      *protocol.EarningWallet `json:"wallet,omitempty"`
+	Unavailable bool                    `json:"unavailable,omitempty"`
 }
 
 // Outputs contain public identifiers only. A retained acknowledgement means

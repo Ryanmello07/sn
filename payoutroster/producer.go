@@ -142,9 +142,6 @@ func assemble(ctx context.Context, config Config, input Input) (payoutartifact.W
 	sort.Slice(authority.WorkSources, func(i, j int) bool {
 		return authority.WorkSources[i].SourceId+"/"+authority.WorkSources[i].Generation < authority.WorkSources[j].SourceId+"/"+authority.WorkSources[j].Generation
 	})
-	if _, err := authority.SigningDigest(ctx); err != nil {
-		return authority, fmt.Errorf("roster derived authority: %w", err)
-	}
 	return authority, nil
 }
 
@@ -159,7 +156,14 @@ func Prepare(ctx context.Context, config Config, raw []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	request, err := json.Marshal(Request{Schema: RequestSchema, Input: input, Authority: authority})
+	selections, err := prepareNetworkWallets(ctx, config, input, &authority)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := authority.SigningDigest(ctx); err != nil {
+		return nil, fmt.Errorf("roster derived authority: %w", err)
+	}
+	request, err := json.Marshal(Request{Schema: RequestSchema, Input: input, Authority: authority, WalletSelections: selections})
 	if err != nil || len(request) > MaxRequestBytes {
 		return nil, errors.Join(payoutartifact.ErrClosedWorkCapacity, err)
 	}

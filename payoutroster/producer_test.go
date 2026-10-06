@@ -60,7 +60,7 @@ func newRosterProducerTestFixture(t *testing.T) *rosterProducerTestFixture {
 	fixture.config = Config{
 		Schema: ConfigSchema,
 		Domain: protocol.ClientKeyHistoryDomain{
-			ChainID: 964, GenesisHash: [32]byte{1}, Netuid: 25,
+			ChainID: 1401, GenesisHash: [32]byte{1}, Netuid: 701,
 			Coordinator: common.Address{2}, SettlementVault: common.Address{3},
 			DeploymentIDHash: [32]byte{4}, PolicyHash: [32]byte{5}, NoID: 6,
 		},

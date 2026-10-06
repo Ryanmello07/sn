@@ -106,6 +106,7 @@ Collect originals for the already selected identities:
 | SDK enrollment | `GET /provider-work/v1/owners?domain=<lowerhex32>&client=<lowerhex16>&key=<lowerhex32>&generation=<lowerhex16>` returns the exact canonical signed enrollment. Omit only `generation` to retrieve the bounded historical index for that explicitly selected client/key. The index's `owners` are base64 original byte strings. Select every required generation explicitly. |
 | Client-key registration | The admission record retained with the SDK enrollment, or `GET /key/<client-UUID>/history`. The latter returns `history`, an array of base64 signed registration bytes. Decode a selected original into a `protocol.ClientKeyRegistration` object; retain its signature and all fields. `prepare` verifies the configured root signer, exact domain, client, key and present registration. |
 | Provider wallet consent | `POST /sn/wallet/consent/history` with `domain`, `client_id`, `head_hash` and `generation` returns `originals`. The domain is the protocol JSON object, `client_id` is the Server UUID string, `head_hash` is a 32-element numeric byte array, and `generation` is the independently selected full history head. Retain every original from generation one through that head. |
+| Network wallet consent | `POST /sn/wallet/network-consent/history` with `domain`, `network_id`, `head_hash` and `generation` returns `originals`. Use the protocol domain, the Server network UUID string and the independently selected 32-byte numeric-array head and generation from the network acceptance record. Retain the complete network chain. |
 | Epoch clock | Independently selected start/end boundaries and their exact committed RLP headers, supplied as `payoutartifact.ClosedWorkWindowClock`. The production `header_profile` is `frontier-legacy-rlp15-milliseconds`. |
 | Prior contracts | The explicit reconciled `WholeWorkPriorContract` list from verified original predecessor artifacts and whole-work witnesses. Use `[]` for a reviewed first prospective window. |
 | Work sources | The explicitly approved `protocol.ProviderWorkSourceAuthority` list of source identities, public keys, time bounds and capacities for the window, if used. The roster signature binds these declarations. |
@@ -173,15 +174,36 @@ curl --proto '=https' --fail --silent --show-error --max-time 300 \
   --output provider-1-wallet-history.json
 ```
 
-For each provider, supply its complete own-consent history, including retained
-rotations that become effective after this epoch. The producer derives the head
-from those originals and verifies chain continuity, domain, identities and
-signatures. An empty history leaves the provider explicitly unmapped. An expired
-earning interval or a mapping that only becomes effective after this epoch also
-leaves attribution unavailable for the epoch; its retained head remains in the
-roster. The challenge's five-minute acceptance expiry does not shorten an
-accepted consent's `from_epoch`/`through_epoch` interval. Do not remove such
-providers or replace a missing original with an unsigned wallet database row.
+For a selected network head, use the analogous network request body and route:
+
+```sh
+curl --proto '=https' --fail --silent --show-error --max-time 300 \
+  --header 'Content-Type: application/json' \
+  --data-binary @network-1-history-request.json \
+  "$roster_api/sn/wallet/network-consent/history" \
+  --output network-1-wallet-history.json
+```
+
+The head selectors come from the reviewed `mapping_hash` and
+`mapping_generation` returned by consent acceptance. The history routes return
+originals for that selection; they do not choose a latest head. Supply each full
+chain, including retained rotations that become effective after this epoch.
+The producer derives the head from the originals and checks continuity, domain,
+identities and signatures. Network and provider originals share the
+`WalletMappingConsent` JSON container, but their signed `message` prefixes,
+schemas and scopes differ. Copy them unchanged into their corresponding input
+arrays; they are not interchangeable. Before approval, compare every derived
+`wallet_head_hash` and `wallet_generation` with the independently recorded
+acceptance selection.
+
+An empty provider `wallet_consents` array asserts independently reviewed absence
+of an own-consent chain. A failed history fetch or a missing known original must
+remain pending; it cannot be converted into an empty array to enable network
+fallback. Retain unmapped providers in the population, and resolve missing
+originals without substituting unsigned wallet database rows. With any network
+head present, every provider must supply either its full array or explicit `[]`;
+an omitted or `null` `wallet_consents` field is unknown and is refused. Existing
+v1 input handling is unchanged when no network heads are supplied.
 
 The clock object has `start` and `end` objects containing `number` and `hash`,
 RFC3339 `start_time` and `end_time`, and base64 `start_header` and `end_header`
@@ -194,7 +216,10 @@ The program accepts the strict JSON
 `prior_contracts` must be explicit arrays, including `[]` for a reviewed empty
 set. Each owner contains base64 `enrollment` bytes and a `registration` object;
 each provider contains numeric-array `client_id` and `network_id` fields and a
-`wallet_consents` array. Input and prepared requests are bounded to 64 MiB.
+`wallet_consents` array. Optional `network_wallets` entries each contain a
+numeric-array `network_id` and a complete `wallet_consents` array. Each network
+must be referenced by an expected provider and occur once. Input and prepared
+requests are bounded to 64 MiB.
 Duplicate or unknown JSON members are rejected. A capacity refusal requires
 resolving the bound; truncating a population or consent chain would change the
 independently approved input.
@@ -203,7 +228,11 @@ For an offline assembly workflow, put the selected originals in a private review
 directory and create `selection.json` there. This is a local assembly manifest,
 not an additional API or approval format. The example paths name files already
 collected from the sources above; replace the example identities and epoch with
-the reviewed inventory. A `null` wallet history is an explicit unmapped provider.
+the reviewed inventory. To assert reviewed absence of a provider's own chain,
+set both `"wallet_history": null` and `"own_history_absent": true` on that
+provider. The helper then emits explicit `wallet_consents: []`, permitting its
+network to supply the effective consent. A missing marker or a null/empty
+`originals` response is refused.
 
 ```json
 {
@@ -223,6 +252,12 @@ the reviewed inventory. A `null` wallet history is an explicit unmapped provider
       "wallet_history": "provider-1-wallet-history.json"
     }
   ],
+  "network_wallets": [
+    {
+      "network_id": "22222222222222222222222222222222",
+      "wallet_history": "network-1-wallet-history.json"
+    }
+  ],
   "prior_contracts": "prior-contracts.json",
   "work_sources": "work-sources.json"
 }
@@ -230,8 +265,11 @@ the reviewed inventory. A `null` wallet history is an explicit unmapped provider
 
 `registration-1.json` is the decoded signed registration object, not the history
 response wrapper. `provider-1-wallet-history.json` is the consent-history response
-with its `originals` array. `prior-contracts.json` and `work-sources.json` are JSON
-arrays, with `[]` only when the independently reviewed list is empty.
+with its `originals` array; `network-1-wallet-history.json` is the corresponding
+network-history response. Omit the manifest's `network_wallets` field, or use
+`[]`, when no network heads are approved. `prior-contracts.json` and
+`work-sources.json` are JSON arrays, with `[]` only when the independently reviewed
+list is empty.
 
 Run this helper from that directory to produce a new `input.json`. It embeds
 exact enrollment bytes, converts the explicitly selected hexadecimal identities
@@ -256,6 +294,12 @@ def byte_array(value, size):
         raise ValueError("incorrect selected identity length")
     return list(raw)
 
+def consent_history(name):
+    originals = read_json(name)["originals"]
+    if not isinstance(originals, list) or not originals:
+        raise ValueError("selected history must contain a nonempty originals array")
+    return originals
+
 selection = read_json("selection.json")
 if selection["complete"] is not True:
     raise ValueError("the operator must review the complete inventory first")
@@ -271,11 +315,28 @@ for owner in selection["owners"]:
 providers = []
 for provider in selection["providers"]:
     history_file = provider["wallet_history"]
+    own_absent = provider.get("own_history_absent", False)
+    if type(own_absent) is not bool:
+        raise ValueError("own_history_absent must be an explicit boolean")
+    if history_file is None:
+        if not own_absent:
+            raise ValueError("absent own history requires explicit reviewed approval")
+        originals = []
+    else:
+        if own_absent:
+            raise ValueError("a supplied own history contradicts reviewed absence")
+        originals = consent_history(history_file)
     providers.append({
         "client_id": byte_array(provider["client_id"], 16),
         "network_id": byte_array(provider["network_id"], 16),
-        "wallet_consents": (
-            [] if history_file is None else read_json(history_file)["originals"]),
+        "wallet_consents": originals,
+    })
+
+network_wallets = []
+for network in selection.get("network_wallets", []):
+    network_wallets.append({
+        "network_id": byte_array(network["network_id"], 16),
+        "wallet_consents": consent_history(network["wallet_history"]),
     })
 
 value = {
@@ -288,11 +349,59 @@ value = {
     "prior_contracts": read_json(selection["prior_contracts"]),
     "work_sources": read_json(selection["work_sources"]),
 }
+if network_wallets:
+    value["network_wallets"] = network_wallets
 with open("input.json", "x") as output:
     json.dump(value, output, separators=(",", ":"))
     output.write("\n")
 PY
 ```
+
+## Network heads and earning-wallet precedence
+
+A nonempty network input produces
+`urnetwork-whole-work-authority-v2`, with sorted `network_wallets` entries
+containing `network_id`, `wallet_head_hash` and `wallet_generation`. The head pins
+the full retained chain, including future rotations; the consent selected for
+this epoch can be an earlier generation. Without network inputs, the producer
+keeps the v1 authority schema and canonical bytes. Use API, payout worker and
+verifier releases that support network consent for v2; older verifiers refuse
+that schema.
+
+The producer uses the shared `protocol.SelectEarningWallet` rules also used by
+Server settlement and the independent verifier:
+
+| Provider's own-consent result for the epoch | Resolution |
+| --- | --- |
+| Effective consent that passes its prospective gate | The provider's own coldkey wins, including when a network head is present. |
+| Reviewed absent chain (`ErrWalletMappingAbsent`), or a fully verified chain with no effective consent (`ErrWalletMappingNotEffective`) | Try the network's effective consent and prospective gate. |
+| Missing originals, broken lineage, invalid signatures, selected legacy consent, or a failed prospective gate | No network fallback. A generic `ErrWalletMappingUnavailable` is insufficient to permit fallback. |
+| Neither eligible chain supplies an effective consent | The provider remains explicitly unmapped; it is retained in the roster. |
+
+Earning intervals are inclusive `from_epoch` through `through_epoch`. The
+five-minute challenge expiry governs acceptance; it does not shorten that
+earning interval. Both modes also require the issuance boundary before the
+epoch's start and the acceptance expiry no later than that start. An expired
+own earning interval can permit network fallback; failed prospective evidence
+cannot. The assembly helper only copies originals. It does not implement a
+second wallet selector or choose a coldkey from the current wallet projection.
+See [the network-consent design](../docs/NETWORK-WALLET-CONSENT.md) for the signed
+statement format and consent issuance workflow.
+
+For a request with network input, `prepare` also adds derived `wallet_selections`
+review metadata. Each entry identifies `client_id` and `network_id`, then has
+either `wallet` or `unavailable: true`. The wallet uses the shared protocol
+object's field names: `Mode`, `ClientId`, `NetworkId`, `Coldkey`, `OriginalHash`,
+`Generation`, `HeadHash` and `HeadGeneration`. `Mode` is `provider` or `network`;
+the selected original and generation can precede the pinned chain head. A
+selected legacy own consent remains unavailable even when a valid network
+consent exists.
+
+Review this preview with the originals; let `prepare` generate it. Signing
+rederives it and refuses changed request bytes. Settlement and verification
+resolve wallets from the signed roster and original histories, so this preview
+is not an additional authority. Requests without network inputs omit both
+`network_wallets` and `wallet_selections` and preserve their v1 encoding.
 
 ## Prepare, review and pin
 
@@ -311,9 +420,10 @@ sha256sum /srv/urnetwork/payout-roster/review/request.json
 
 Independently review both `input` originals and the derived `authority` in that
 request, including the complete population, domain, epoch, clock, consent heads
-and prior-contract checkpoint. Record the exact lowercase 64-character SHA-256
-of the approved file. The digest printed by `prepare` identifies the bytes; it
-does not supply the independent approval. Preserve the canonical file unchanged:
+and prior-contract checkpoint, plus `wallet_selections` when present. Record the
+exact lowercase 64-character SHA-256 of the approved file. The digest printed by
+`prepare` identifies the bytes; it does not supply the independent approval.
+Preserve the canonical file unchanged:
 pretty-printing, adding a newline or editing any field changes its identity.
 
 `sign` durably retains the approved request and signed authority locally.
@@ -403,6 +513,14 @@ review digest, or restart `run` with the same configuration, state and inbox.
 An existing authority is loaded and verified without reopening the signing key.
 If the durable acknowledgment is absent, it is safe to POST that same authority
 again. If the matching acknowledgment is present, no POST is needed.
+
+If only the retained request is missing, the command verifies that the supplied
+approved request derives the surviving signed authority before restoring the
+request; it does not need the signing key. If an acknowledged authority file is
+missing, the original approved request and fixed signing key can reconstruct the
+same authority deterministically. Its SHA-256 must match the surviving durable
+acknowledgment before either missing request or authority is retained; no POST
+occurs. A conflicting reviewed proposal cannot fill those missing slots.
 
 Preserve state across host recovery, including requests that were retained before
 signing failed and authorities whose publication outcome is uncertain. A
