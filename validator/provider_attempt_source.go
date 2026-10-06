@@ -186,6 +186,17 @@ func providerAttemptHttp(ctx context.Context, endpoint, method string, request [
 	return providerAttemptHttpWithClient(ctx, endpoint, method, request, limit, client)
 }
 
+// A deadline is authoritative even before its timer publishes cancellation.
+func providerAttemptContextError(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if deadline, bounded := ctx.Deadline(); bounded && !time.Now().Before(deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
 // The client belongs to this invocation. Real request deadlines and body closes
 // finish before classification; a transient sibling never hides a hard cause.
 func providerAttemptHttpWithClient(ctx context.Context, endpoint, method string, request []byte, limit uint64, client *http.Client) ([]byte, error) {
@@ -203,7 +214,7 @@ func providerAttemptHttpWithClient(ctx context.Context, endpoint, method string,
 	defer cancel()
 	var lastErr error
 	for {
-		if err := owner.Err(); err != nil {
+		if err := providerAttemptContextError(owner); err != nil {
 			return nil, errors.Join(lastErr, err)
 		}
 		attempt, stop := context.WithTimeout(owner, 60*time.Second)
@@ -213,6 +224,10 @@ func providerAttemptHttpWithClient(ctx context.Context, endpoint, method string,
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
+		if err := providerAttemptContextError(attempt); err != nil {
+			stop()
+			return nil, errors.Join(lastErr, err)
+		}
 		response, readErr := client.Do(req)
 		var raw []byte
 		status := 0
@@ -228,26 +243,26 @@ func providerAttemptHttpWithClient(ctx context.Context, endpoint, method string,
 			}
 			readErr = errors.Join(readErr, err, closeErr)
 		}
-		attemptErr := attempt.Err()
+		attemptErr := providerAttemptContextError(attempt)
 		stop()
 		if uint64(len(raw)) > limit {
-			return nil, errors.Join(protocol.ErrProviderAttemptsCapacity, readErr, attemptErr, owner.Err())
+			return nil, errors.Join(protocol.ErrProviderAttemptsCapacity, readErr, attemptErr, providerAttemptContextError(owner))
 		}
 		if readErr == nil && attemptErr == nil && status == http.StatusOK {
-			if err := owner.Err(); err != nil {
+			if err := providerAttemptContextError(owner); err != nil {
 				return nil, err
 			}
 			return raw, nil
 		}
 		if readErr == nil && status == http.StatusNotFound {
-			return nil, errors.Join(protocol.ErrProviderAttemptsUnavailable, attemptErr, owner.Err())
+			return nil, errors.Join(protocol.ErrProviderAttemptsUnavailable, attemptErr, providerAttemptContextError(owner))
 		}
 		var statusErr error
 		if status != 0 && status != http.StatusOK {
 			statusErr = &releaseHttpGetStatusError{endpoint: parsed.String(), status: status}
 		}
 		lastErr = errors.Join(readErr, statusErr, attemptErr)
-		if ownerErr := owner.Err(); ownerErr != nil {
+		if ownerErr := providerAttemptContextError(owner); ownerErr != nil {
 			// Cancellation can accompany completed transport work, but cannot
 			// erase a returned conflict or independent body/close failure.
 			allowed, _ := classifyReleaseSnapshotRetryMode(lastErr, true, false, false)
@@ -257,11 +272,11 @@ func providerAttemptHttpWithClient(ctx context.Context, endpoint, method string,
 			return nil, errors.Join(lastErr, ownerErr)
 		}
 		if !RetryableEvidenceTransportError(lastErr) {
-			return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, lastErr, owner.Err())
+			return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, lastErr, providerAttemptContextError(owner))
 		}
 		select {
 		case <-owner.Done():
-			return nil, errors.Join(lastErr, owner.Err())
+			return nil, errors.Join(lastErr, providerAttemptContextError(owner))
 		case <-time.After(time.Second):
 		}
 	}

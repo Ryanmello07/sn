@@ -88,6 +88,32 @@ func TestProviderAttemptHttpRetriesForCompleteBudget(t *testing.T) {
 	})
 }
 
+// An earlier caller deadline remains the original operation boundary even if
+// its timer and the retry timer become runnable at the same instant.
+func TestProviderAttemptHttpKeepsEarlierParentDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		started := time.Now()
+		ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+		defer cancel()
+		calls, closed := 0, 0
+		client := &http.Client{Transport: attemptStreamV2HTTPTestTransport(func(request *http.Request) (*http.Response, error) {
+			deadline, bounded := request.Context().Deadline()
+			if !bounded || deadline != started.Add(60*time.Second) || !time.Now().Before(deadline) || calls != closed || request.Context().Err() != nil {
+				t.Fatal("request escaped its original earlier parent deadline")
+			}
+			calls++
+			return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: &attemptStreamV2HTTPTestBody{
+				read: bytes.NewReader(nil).Read, close: func() error { closed++; return nil },
+			}}, nil
+		})}
+		raw, err := providerAttemptHttpWithClient(ctx, "https://provider-parent-deadline.example/window", http.MethodGet, nil, 1024, client)
+		var status *releaseHttpGetStatusError
+		if raw != nil || time.Since(started) != 60*time.Second || calls != 60 || closed != calls || !errors.Is(err, context.DeadlineExceeded) || !errors.As(err, &status) || status.status != http.StatusServiceUnavailable || !RetryableEvidenceTransportError(err) || errors.Is(err, protocol.ErrProviderAttemptsIntegrity) {
+			t.Fatalf("read changed its original parent budget or final cause: calls=%d closed=%d elapsed=%s error=%v", calls, closed, time.Since(started), err)
+		}
+	})
+}
+
 // A complete conflict, permanent network failure or independent read/close
 // defect cannot borrow retry authority from another transient cause or status.
 func TestProviderAttemptHttpRejectsHardAndMixedFailures(t *testing.T) {

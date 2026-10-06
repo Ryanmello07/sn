@@ -122,8 +122,8 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 		firstBlock = 2
 	}
 	window := protocol.ValidatorEvidenceWindow{Epoch: 42, StartBlock: firstBlock, EndBlock: firstBlock + 100, FinalizedBlock: firstBlock + 100}
-	start := &types.Header{Number: new(big.Int).SetUint64(window.StartBlock), Time: 1700000000, GasLimit: 30000000, Extra: []byte("synthetic-provider-start")}
-	end := &types.Header{Number: new(big.Int).SetUint64(window.EndBlock), Time: 1700001000, GasLimit: 30000000, Extra: []byte("synthetic-provider-end")}
+	start := &types.Header{Number: new(big.Int).SetUint64(window.StartBlock), Difficulty: new(big.Int), Time: 1700000000, GasLimit: 30000000, Extra: []byte("synthetic-provider-start")}
+	end := &types.Header{Number: new(big.Int).SetUint64(window.EndBlock), Difficulty: new(big.Int), Time: 1700001000, GasLimit: 30000000, Extra: []byte("synthetic-provider-end")}
 	startRaw, err := json.Marshal(start)
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +147,7 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 			if err != nil || head.LastSequence != 0 {
 				t.Fatal("prospective fixture cannot relabel existing original records", err)
 			}
-			terminal := &types.Header{Number: new(big.Int).SetUint64(window.EndBlock - 1), Time: 1700000999, GasLimit: 30000000, Extra: []byte("synthetic-provider-terminal")}
+			terminal := &types.Header{Number: new(big.Int).SetUint64(window.EndBlock - 1), Difficulty: new(big.Int), Time: 1700000999, GasLimit: 30000000, Extra: []byte("synthetic-provider-terminal")}
 			boundary := AttemptBoundary{SettlementEpoch: window.Epoch, EVMBlock: window.EndBlock - 1, EVMBlockHash: terminal.Hash().Hex()}
 			seal.expected.Boundary = boundary
 			seal.engine.cfg.AttemptBoundaryResolver = func(ctx context.Context, pinned *AttemptBoundary, clients []connect.Id) (AttemptBoundary, []AttemptBinding, error) {
