@@ -144,6 +144,15 @@ validator run --all-operators [--operators-url=<url>] [--operators-refresh=<dura
   validator logs `operator <domain> is awaiting auth: validator auth --operator=<domain>` and checks again at least every
   5 minutes. One unauthenticated or failing operator never stops the others.
 - A runner that fails restarts with exponential backoff (30s doubling to a 10m cap). It does not exit the process.
+- **Measurement identity.** `--auto-register` is the separately approved provisioning workflow that
+  `validator/MEASUREMENT-CLIENT-AUTH.md` anticipates.
+  - For a pristine operator directory, one with no `.validator*` entry at all,
+    `clientauth.ProvisionValidatorMeasurementClientKey` creates the measurement key, its identity marker and a
+    provisioning marker, then the one direct measurement registration. Creation resumes after a crash until a
+    registration record exists; replay and refresh rules apply from then on.
+  - It never recovers, adopts or replaces an existing identity. Every other remnant combination keeps today's refusals.
+  - Without `--auto-register`, a pristine directory waits, with backoff, for provisioning.
+  - The plain run path still can't create a client.
 
 ### 4.2 Production mode (weights only from the signed config)
 
@@ -216,6 +225,10 @@ provider operators [--operators-url=<url>] [-v...]
     directory is kept.
   - A changed URL restarts that child.
   - The supervisor forwards SIGINT/SIGTERM to every child and waits for them.
+- **Auto mode.** With `--auto-register`, every child also gets `--allow-client-registration`, so a new operator directory
+  can create its first provider client. The flag never replaces a retained identity. Without `--auto-register`, a child
+  gets it only when the user passed it. The one-line auto mode is
+  `provider provide --all-operators --auto-register --hotkey_seed_file=<path>`.
 - **Missing JWT** for an operator:
   - with `--auto-register`, `hotkeyauth.SignIn` runs and writes it;
   - otherwise the supervisor logs `operator <domain> is awaiting auth: provider auth --operator=<domain>`, checks again at
@@ -432,8 +445,17 @@ func SelectEarningWalletWithHotkey(provider *EarningWallet, providerErr error, n
 
 - **Field.** New optional top-level list
   `hotkey_delegations: [{network_id, delegation_head_hash, delegation_generation}]`, mirroring `network_wallets`:
+  - type `WholeWorkHotkeyDelegation{NetworkId [16]byte, DelegationHeadHash string, DelegationGeneration uint64}`;
+  - `DelegationHeadHash` is 64 lowercase hex characters with no prefix, like `wallet_head_hash`;
+  - accessor `WholeWorkAuthority.HotkeyDelegation(networkId)`;
   - strictly sorted by `network_id`;
-  - each network referenced by an expected provider.
+  - each network referenced by an expected provider;
+  - a v3 roster's `network_wallets` are optional.
+- **History bodies.** Exactly the shapes the readers send:
+  - delegation history: `{domain, network_id, head_hash, generation}`, with `network_id` as a server id string;
+  - consent history: `{hotkey_ss58, head_hash, generation}`.
+
+  Each original is bounded at `MaxWalletMappingConsentBytes`.
 - **Schema.** A roster with any hotkey delegation has schema `urnetwork-whole-work-authority-v3`. Without one, v2 and v1
   keep their exact canonical bytes. Old verifiers refuse v3 (fail closed).
 - **Per-provider wallet head.** An expected provider's `wallet_head_hash` may be empty when its network has a network
@@ -446,6 +468,11 @@ func SelectEarningWalletWithHotkey(provider *EarningWallet, providerErr error, n
 - **Producer.** `payoutroster` emits v3 when delegation heads are present, and v2 or v1 otherwise.
 
 ### 6.5 Operator API (server, migrations numbered 789 or later)
+
+Server migration versions are positional. The hotkey migration is appended after the pending provider-intent migrations
+(787 and 788) and labeled 789 in the code, `SIGNALS.md` and the monitor contracts. It widens the
+`st_payout_wallet_resolution.mode` check to `provider`, `network` and `hotkey`. The server branch merges to main only after
+787 and 788 are there, and the head migration is rechecked right before the merge.
 
 Wire encodings:
 - In the new routes' own bodies, hashes are `[32]byte`, written as 32-integer JSON arrays, as in the existing history
