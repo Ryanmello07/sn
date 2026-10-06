@@ -13,8 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -179,8 +179,21 @@ func (self *providerAttemptObjectStore) read(ctx context.Context, reader *HTTPAt
 // one original 300-second owner. The only POSTs are exact original lookups or
 // idempotent signed request-local close receipts; settlement sends are absent.
 func providerAttemptHttp(ctx context.Context, endpoint, method string, request []byte, limit uint64) ([]byte, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return providerAttemptHttpWithClient(ctx, endpoint, method, request, limit, client)
+}
+
+// The client belongs to this invocation. Real request deadlines and body closes
+// finish before classification; a transient sibling never hides a hard cause.
+func providerAttemptHttpWithClient(ctx context.Context, endpoint, method string, request []byte, limit uint64, client *http.Client) ([]byte, error) {
 	if ctx == nil || limit == 0 || limit > 1024*1024*1024 {
 		return nil, protocol.ErrProviderAttemptsCapacity
+	}
+	if client == nil {
+		return nil, protocol.ErrProviderAttemptsIntegrity
 	}
 	parsed, err := providerAttemptEndpoint(endpoint)
 	if err != nil {
@@ -188,11 +201,11 @@ func providerAttemptHttp(ctx context.Context, endpoint, method string, request [
 	}
 	owner, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	var lastErr error
 	for {
+		if err := owner.Err(); err != nil {
+			return nil, errors.Join(lastErr, err)
+		}
 		attempt, stop := context.WithTimeout(owner, 60*time.Second)
 		req, err := http.NewRequestWithContext(attempt, method, parsed.String(), bytes.NewReader(request))
 		if err != nil {
@@ -206,32 +219,49 @@ func providerAttemptHttp(ctx context.Context, endpoint, method string, request [
 		if response != nil {
 			status = response.StatusCode
 			raw, err = io.ReadAll(io.LimitReader(response.Body, int64(limit)+1))
-			readErr = errors.Join(readErr, err, response.Body.Close())
+			if err != nil {
+				err = &url.Error{Op: "Read", URL: parsed.String(), Err: err}
+			}
+			closeErr := response.Body.Close()
+			if closeErr != nil {
+				closeErr = &url.Error{Op: "Close", URL: parsed.String(), Err: closeErr}
+			}
+			readErr = errors.Join(readErr, err, closeErr)
 		}
+		attemptErr := attempt.Err()
 		stop()
-		if owner.Err() != nil {
-			return nil, errors.Join(readErr, owner.Err())
-		}
 		if uint64(len(raw)) > limit {
-			return nil, protocol.ErrProviderAttemptsCapacity
+			return nil, errors.Join(protocol.ErrProviderAttemptsCapacity, readErr, attemptErr, owner.Err())
 		}
-		if readErr == nil && status == http.StatusOK {
+		if readErr == nil && attemptErr == nil && status == http.StatusOK {
+			if err := owner.Err(); err != nil {
+				return nil, err
+			}
 			return raw, nil
 		}
 		if readErr == nil && status == http.StatusNotFound {
-			return nil, protocol.ErrProviderAttemptsUnavailable
+			return nil, errors.Join(protocol.ErrProviderAttemptsUnavailable, attemptErr, owner.Err())
 		}
-		if status != 0 && status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadGateway && status != http.StatusGatewayTimeout && status != http.StatusTooManyRequests {
-			return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, readErr, fmt.Errorf("provider original read HTTP status %d", status))
+		var statusErr error
+		if status != 0 && status != http.StatusOK {
+			statusErr = &releaseHttpGetStatusError{endpoint: parsed.String(), status: status}
 		}
-		var network net.Error
-		transient := errors.As(readErr, &network) || errors.Is(readErr, io.EOF) || errors.Is(readErr, io.ErrUnexpectedEOF) || status == http.StatusServiceUnavailable || status == http.StatusBadGateway || status == http.StatusGatewayTimeout || status == http.StatusTooManyRequests
-		if !transient {
-			return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, readErr, fmt.Errorf("provider original read HTTP status %d", status))
+		lastErr = errors.Join(readErr, statusErr, attemptErr)
+		if ownerErr := owner.Err(); ownerErr != nil {
+			// Cancellation can accompany completed transport work, but cannot
+			// erase a returned conflict or independent body/close failure.
+			allowed, _ := classifyReleaseSnapshotRetryMode(lastErr, true, false, false)
+			if !allowed {
+				return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, lastErr, ownerErr)
+			}
+			return nil, errors.Join(lastErr, ownerErr)
+		}
+		if !RetryableEvidenceTransportError(lastErr) {
+			return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, lastErr, owner.Err())
 		}
 		select {
 		case <-owner.Done():
-			return nil, errors.Join(readErr, owner.Err())
+			return nil, errors.Join(lastErr, owner.Err())
 		case <-time.After(time.Second):
 		}
 	}
