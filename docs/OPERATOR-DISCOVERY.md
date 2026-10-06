@@ -64,7 +64,12 @@ Owner, in order:
      automatically. The cold wallet signs once; the hot key does the per-operator work.
    - Precedence is per-provider consent, then network consent, then hotkey delegation.
 6. **Root validator.**
-   - Our hotkey runs on root (netuid 0) and validates SN25. Others may child-hotkey to it on SN25.
+   - A dedicated validator hotkey runs on root (netuid 0) and validates SN25. It has its own coldkey, kept off snow;
+     the SN25 owner hotkey and the owner Ledger are not used (owner decision). Others may child-hotkey to it on SN25,
+     and we keep 18% of what their stake earns through it.
+   - Auto parent delegation is disabled before root registration. Otherwise `root_register` would make the hotkey the
+     full-weight parent of every subnet owner hotkey, moving its SN25 weight to the SN25 owner hotkey, which doesn't run
+     the validator.
    - The delegate take and the SN25 childkey take are both 18% (11,796/65,535, the chain maximum for childkey take).
    - It runs on snow as a systemd service installed by `xops/main/ansible/run-validator.sh`, which builds the validator
      binary locally the way `run-edges.sh` builds `warpctl`.
@@ -144,6 +149,15 @@ validator run --all-operators [--operators-url=<url>] [--operators-refresh=<dura
   validator logs `operator <domain> is awaiting auth: validator auth --operator=<domain>` and checks again at least every
   5 minutes. One unauthenticated or failing operator never stops the others.
 - A runner that fails restarts with exponential backoff (30s doubling to a 10m cap). It does not exit the process.
+- **Measurement identity.** `--auto-register` is the separately approved provisioning workflow that
+  `validator/MEASUREMENT-CLIENT-AUTH.md` anticipates.
+  - For a pristine operator directory, one with no `.validator*` entry at all,
+    `clientauth.ProvisionValidatorMeasurementClientKey` creates the measurement key, its identity marker and a
+    provisioning marker, then the one direct measurement registration. Creation resumes after a crash until a
+    registration record exists; replay and refresh rules apply from then on.
+  - It never recovers, adopts or replaces an existing identity. Every other remnant combination keeps today's refusals.
+  - Without `--auto-register`, a pristine directory waits, with backoff, for provisioning.
+  - The plain run path still can't create a client.
 
 ### 4.2 Production mode (weights only from the signed config)
 
@@ -154,7 +168,11 @@ validator run --config=<path> [--progress-file=<path>] [--durable-volumes=<path>
 
 - **No effect on what is signed or weighted.** `--operators-refresh` never changes the signed config's operators,
   weights, evidence or any protocol state.
-- **Drift report.** At each list change, and in the bounded progress JSON (section `operator_list`), it reports:
+- **Drift report.** At startup and at each list change, the validator logs a report and writes it to its own bounded
+  file, `operators-report.json` beside the list cache (schema `urnetwork-validator-operator-list-report-v1`, atomic,
+  0600, at most 16 pinned and 16 unpinned entries plus omitted counts). The progress wire type
+  (`protocol.ValidatorProgress`) is unchanged, because the mainnet monitor and older validators decode it strictly. The
+  report covers:
   - each pinned operator, matched to the list by normalized `api_url`, with listed or delisted status and any
     `connect_url` mismatch;
   - each listed operator that the config does not pin.
@@ -212,6 +230,10 @@ provider operators [--operators-url=<url>] [-v...]
     directory is kept.
   - A changed URL restarts that child.
   - The supervisor forwards SIGINT/SIGTERM to every child and waits for them.
+- **Auto mode.** With `--auto-register`, every child also gets `--allow-client-registration`, so a new operator directory
+  can create its first provider client. The flag never replaces a retained identity. Without `--auto-register`, a child
+  gets it only when the user passed it. The one-line auto mode is
+  `provider provide --all-operators --auto-register --hotkey_seed_file=<path>`.
 - **Missing JWT** for an operator:
   - with `--auto-register`, `hotkeyauth.SignIn` runs and writes it;
   - otherwise the supervisor logs `operator <domain> is awaiting auth: provider auth --operator=<domain>`, checks again at
@@ -428,8 +450,17 @@ func SelectEarningWalletWithHotkey(provider *EarningWallet, providerErr error, n
 
 - **Field.** New optional top-level list
   `hotkey_delegations: [{network_id, delegation_head_hash, delegation_generation}]`, mirroring `network_wallets`:
+  - type `WholeWorkHotkeyDelegation{NetworkId [16]byte, DelegationHeadHash string, DelegationGeneration uint64}`;
+  - `DelegationHeadHash` is 64 lowercase hex characters with no prefix, like `wallet_head_hash`;
+  - accessor `WholeWorkAuthority.HotkeyDelegation(networkId)`;
   - strictly sorted by `network_id`;
-  - each network referenced by an expected provider.
+  - each network referenced by an expected provider;
+  - a v3 roster's `network_wallets` are optional.
+- **History bodies.** Exactly the shapes the readers send:
+  - delegation history: `{domain, network_id, head_hash, generation}`, with `network_id` as a server id string;
+  - consent history: `{hotkey_ss58, head_hash, generation}`.
+
+  Each original is bounded at `MaxWalletMappingConsentBytes`.
 - **Schema.** A roster with any hotkey delegation has schema `urnetwork-whole-work-authority-v3`. Without one, v2 and v1
   keep their exact canonical bytes. Old verifiers refuse v3 (fail closed).
 - **Per-provider wallet head.** An expected provider's `wallet_head_hash` may be empty when its network has a network
@@ -443,9 +474,30 @@ func SelectEarningWalletWithHotkey(provider *EarningWallet, providerErr error, n
 
 ### 6.5 Operator API (server, migrations numbered 789 or later)
 
-Originals in requests and responses use the protocol JSON encoding: byte arrays are JSON number arrays, exactly as the
-existing history endpoints return them. The delegation accept reuses the existing accept route; the server tells the
-kinds apart by message prefix.
+Server migration versions are positional. The hotkey migration is appended after the pending provider-intent migrations
+(787 and 788) and labeled 789 in the code, `SIGNALS.md` and the monitor contracts. It widens the
+`st_payout_wallet_resolution.mode` check to `provider`, `network` and `hotkey`. The server branch merges to main only after
+787 and 788 are there, and the head migration is rechecked right before the merge.
+
+Wire encodings:
+- In the new routes' own bodies, hashes are `[32]byte`, written as 32-integer JSON arrays, as in the existing history
+  `head_hash`.
+- Originals use the protocol JSON encoding, so signatures are 64-integer arrays.
+- The delegation challenge result reuses `SnWalletMappingChallengeResult` (`{message}`), and the delegation history result
+  reuses `SnWalletMappingHistoryResult` (`{originals}`).
+- The delegation accept reuses the existing accept route and `SnSetWalletArgs` without `client_id`:
+  - `message` is the delegation;
+  - `signature` is the hotkey's sr25519 signature in hex;
+  - `coldkey_ss58` carries the signing hotkey's ss58 (the signer address) and must equal the statement's hotkey.
+
+  The server tells the kinds apart by message prefix. The result's `mapping_hash` stays unprefixed hex, as for the
+  existing kinds.
+- The `GET /sn/wallet` entry's hashes are strings: `"0x"` plus 64 lowercase hex characters.
+- Spec operation IDs:
+  - "Sn Hotkey Wallet Mapping Consent";
+  - "Sn Hotkey Wallet Mapping History";
+  - "Sn Hotkey Network Delegation Challenge";
+  - "Sn Hotkey Network Delegation History".
 
 | Route | Auth | Request | Response |
 | --- | --- | --- | --- |
@@ -463,13 +515,27 @@ kinds apart by message prefix.
   - requires that the chain through that head is stored, that its hotkey equals `hotkey_ss58`, and that the session user
     still administers the network;
   - issues a prospective challenge exactly like the network consent challenge.
-- **`GET /sn/wallet`:** entries may have `consent_scope: "hotkey"`, which carries the delegation's hotkey and the coldkey
-  of the global consent effective now. For a network session the effective wallet is, in order:
-  1. network consent;
-  2. hotkey delegation;
-  3. legacy side copy.
+- **`GET /sn/wallet`:** a network with an accepted delegation lists one network-level hotkey entry. It has no
+  `client_id`, like the network consent entry:
 
-  A client session puts its own provider consent first, ahead of all three.
+  ```json
+  {"coldkey_ss58": "<coldkey>", "set_at_millis": 0, "consent_scope": "hotkey", "hotkey_ss58": "<hotkey>",
+   "from_epoch": 0, "through_epoch": 0, "consent_head_hash": "0x<64 hex>", "consent_generation": 1,
+   "mapping_hash": "0x<64 hex>", "mapping_generation": 1}
+  ```
+
+  - `coldkey_ss58` is the coldkey of the global consent generation effective at the current epoch. When no generation is
+    effective yet, it is the head generation's coldkey.
+  - `from_epoch` and `through_epoch` are the delegation's earning epochs.
+  - `mapping_hash` and `mapping_generation` identify the delegation chain head.
+  - The new fields are omitted for the other scopes.
+  - The entry is listed after the network consent and before the legacy side copy. An old client that takes the first
+    network-level entry therefore follows settlement's order.
+  - The effective `wallet`:
+    - for a client session: its own provider consent, then the network consent, then the hotkey entry, then the client's
+      own non-consent wallet, then the side copy;
+    - for a network session: the network consent, then the hotkey entry, then the side copy.
+  - The SDK's wallet pick follows the same order.
 - **Settlement.** `GetStProviderWalletsForEpoch` applies 6.3 with roster v3.
 - **Audit.** `st_payout_wallet_resolution` records mode `hotkey` with the delegation and the selected global consent
   (hash and generation).
@@ -534,8 +600,13 @@ netuid 0 if necessary.
 ## 8. ur.xyz
 
 - **Publication:**
-  - `web/ur.xyz/scripts/sync-operators.mjs`, modeled on `sync-price.mjs`, copies `sn/operators.yml` into the public
-    directories the site serves (`react/public` and `astro/public`);
+  - follows the `price.yml` model:
+    - a tracked canonical copy in the site, `ur.xyz/operators/operators.yml`, lets a build without the sn checkout still
+      publish the list;
+    - `web/ur.xyz/scripts/sync-operators.mjs`, modeled on `sync-price.mjs` and run by hand like it, refreshes that copy
+      from `sn/operators.yml`;
+  - the site serves the tracked copy at `/operators.yml`, from `react/public`, which `sync-public` mirrors into
+    `astro/public`;
   - the nginx ur.xyz server block serves `/operators.yml` as `application/yaml`;
   - `nginx-smoke-test.sh` checks it.
 - **Docs:** `web/ur.xyz/docs/miner/README.md` and `docs/validator/README.md` document `--all-operators`,
