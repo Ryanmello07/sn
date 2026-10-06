@@ -31,6 +31,7 @@ import (
 	"github.com/urnetwork/sdk"
 
 	"github.com/urfoundation/sn/clientauth"
+	"github.com/urfoundation/sn/operatorlist"
 )
 
 const DefaultApiUrl = "https://api.bringyour.com"
@@ -67,12 +68,22 @@ The default URLs are:
 
 A network saved with "provider choose_network" replaces these defaults;
 "provider choose_network --show" prints the network actually in effect.
+"provide --all-operators" ignores both and mines every operator in the
+operator list, by default %[3]s.
 
 Usage:
     provider auth ([<auth_code>] | --user_auth=<user_auth> [--password=<password>]) [-f]
     	[--api_url=<api_url>]
     	[--max-memory=<mem>]
     	[-v...]
+    provider auth --operator=<domain> ([<auth_code>] | --user_auth=<user_auth> [--password=<password>] | --hotkey_seed_file=<path>) [-f]
+        [--operators-url=<url>]
+        [-v...]
+    provider provide --all-operators [--operators-url=<url>] [--operators-refresh=<duration>]
+        [--auto-register --hotkey_seed_file=<path> | --hotkey_seed_file=<path>]
+        [--port=<port>] [--max-memory=<mem>] [--allow-client-registration]
+        [-v...]
+    provider operators [--operators-url=<url>] [-v...]
     provider provide [--port=<port>]
 		[--close-report-domain=<path>]
 		[--whole-work-capture=<path> --whole-work-capture-sha256=<hash>]
@@ -219,7 +230,23 @@ Options:
 	--manifest=<path>                  Canonical urnetwork-fleet-manifest-v1 JSON file.
 	--client_id=<hex>                  Stable 16-byte UR client identity from the fleet manifest.
 	--client_seed_file=<path>          Raw or hex 32-byte Ed25519 client key seed.
-	--hotkey_seed_file=<path>          Hex/raw 32-byte sr25519 fleet hotkey seed.
+	--hotkey_seed_file=<path>          Hex/raw 32-byte sr25519 hotkey seed in a private file that is never created
+	                                   here: the fleet hotkey, or the miner hotkey that signs in to operators
+	                                   as a TAO wallet (--auto-register, auth --operator).
+	--all-operators                    provide: run one provider per operator in the operator list, each in its
+	                                   own state directory operators/<domain> below the provider state directory.
+	                                   Excludes --api_url, --connect_url, --provider-jwt, the wallet, capture,
+	                                   close-report and test egress flags, and --adopt-legacy-provider-key.
+	--operators-url=<url>              The operator list (https, or http only for loopback); default %[3]s.
+	                                   The last good copy is kept as operators.yml in the provider state directory.
+	--operators-refresh=<duration>     How often --all-operators refetches the operator list, as a Go duration
+	                                   of at least 1m; default 1h. Providers follow the list as it changes.
+	--auto-register                    With --all-operators: sign in with the hotkey of --hotkey_seed_file to each
+	                                   operator that has no jwt, creating the hotkey's network there at the first
+	                                   sign-in; no chain transaction. New operator directories need a new provider
+	                                   client, so every provider also gets --allow-client-registration.
+	--operator=<domain>                auth: authenticate to this operator from the operator list and write its
+	                                   jwt in operators/<domain> below the provider state directory.
 	--valid_from_epoch=<e>             First settlement epoch in which a binding is active.
 	--valid_to_epoch=<e>               Last settlement epoch in which a binding is active.
 	--effective_epoch=<e>              Future epoch at which a fleet revocation takes effect.
@@ -237,6 +264,7 @@ Options:
     --proxy_file=<proxy_file>        A path to a file where each line contains on entry as host:port, host:port:user:pass, host:port::, or key@host:port`,
 		DefaultApiUrl,
 		DefaultConnectUrl,
+		operatorlist.DefaultUrl,
 	)
 }
 
@@ -245,6 +273,11 @@ Options:
 // the subnet's provider: it runs the provide/proxy/auth flows plus the on-chain
 // wallet / claim / fleet actions (formerly connect/provider).
 func Run(args []string) {
+	// docopt alone would answer these with the whole usage text
+	if err := operatorArgsError(args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	opts, err := docopt.ParseArgs(mainUsage(), args, RequireVersion())
 
 	if err != nil {
@@ -303,9 +336,17 @@ func Run(args []string) {
 			panic(err)
 		}
 	} else if auth_, _ := opts.Bool("auth"); auth_ {
-		auth(opts)
+		if _, err := opts.String("--operator"); err == nil {
+			operatorAuthCmd(opts)
+		} else {
+			auth(opts)
+		}
 	} else if provide_, _ := opts.Bool("provide"); provide_ {
-		provide(opts)
+		if allOperators, _ := opts.Bool("--all-operators"); allOperators {
+			provideAllOperatorsCmd(opts)
+		} else {
+			provide(opts)
+		}
 	} else if authProvide, _ := opts.Bool("auth-provide"); authProvide {
 		auth(opts)
 		provide(opts)
@@ -314,6 +355,8 @@ func Run(args []string) {
 			fmt.Printf("%s\n", err)
 			os.Exit(1)
 		}
+	} else if operators, _ := opts.Bool("operators"); operators {
+		operatorsCmd(opts)
 	}
 }
 
@@ -323,19 +366,8 @@ func auth(opts docopt.Opts) {
 	if err != nil {
 		panic(err)
 	}
-
-	if _, err := os.Stat(jwtPath); !errors.Is(err, os.ErrNotExist) {
-		// jwt exists
-		if force, _ := opts.Bool("-f"); !force {
-			fmt.Printf("%s exists. Overwrite? [yN]\n", jwtPath)
-
-			reader := bufio.NewReader(os.Stdin)
-			confirm, _ := reader.ReadString('\n')
-			if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
-				return
-			}
-
-		}
+	if !confirmJwtOverwrite(opts, jwtPath) {
+		return
 	}
 
 	apiUrl, err := resolveApiUrl(opts)
@@ -353,6 +385,61 @@ func auth(opts docopt.Opts) {
 	ctx, cancel := context.WithCancel(event.Ctx())
 	defer cancel()
 
+	byJwt, err := networkLogin(ctx, opts, apiUrl, terminalLoginPrompts())
+	if err != nil {
+		panic(err)
+	}
+	if byJwt != "" {
+		if err := clientauth.WriteToken(jwtPath, byJwt); err != nil {
+			panic(err)
+		}
+		fmt.Printf("Jwt written to %s\n", jwtPath)
+	}
+}
+
+// Without -f, an existing jwt is replaced only when the user answers y.
+func confirmJwtOverwrite(opts docopt.Opts, jwtPath string) bool {
+	if _, err := os.Stat(jwtPath); errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	if force, _ := opts.Bool("-f"); force {
+		return true
+	}
+	fmt.Printf("%s exists. Overwrite? [yN]\n", jwtPath)
+	reader := bufio.NewReader(os.Stdin)
+	confirm, _ := reader.ReadString('\n')
+	return strings.ToLower(strings.TrimSpace(confirm)) == "y"
+}
+
+// Reads what the command line left out of a login. Tests replace the terminal.
+type loginPrompts struct {
+	password func() (string, error)
+	authCode func() (string, error)
+}
+
+func terminalLoginPrompts() loginPrompts {
+	stdin := int(syscall.Stdin)
+	return loginPrompts{
+		password: func() (string, error) {
+			fmt.Print("Enter password: ")
+			passwordBytes, err := term.ReadPassword(stdin)
+			if err != nil {
+				return "", err
+			}
+			fmt.Printf("\n")
+			return string(passwordBytes), nil
+		},
+		authCode: func() (string, error) {
+			return readAuthCode(os.Stdin, os.Stdout, term.IsTerminal(stdin), func() ([]byte, error) {
+				return term.ReadPassword(stdin)
+			})
+		},
+	}
+}
+
+// The network jwt from a user and password, or else from an auth code,
+// prompting for the password or code when the command line has none.
+func networkLogin(ctx context.Context, opts docopt.Opts, apiUrl string, prompts loginPrompts) (string, error) {
 	clientStrategy := connect.NewClientStrategyWithDefaults(ctx)
 	defer clientStrategy.Close()
 	api := sdk.NewApi(ctx, clientStrategy, apiUrl)
@@ -360,73 +447,52 @@ func auth(opts docopt.Opts) {
 		_ = api.CloseAndWait(context.Background())
 	}()
 
-	var byJwt string
 	if userAuth, err := opts.String("--user_auth"); err == nil {
-		// user_auth and password
-
-		var password string
-		if password, err = opts.String("--password"); err == nil && password == "" {
-			fmt.Print("Enter password: ")
-			passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+		// an absent --password is not a string, so it prompts too
+		password, err := opts.String("--password")
+		if err != nil || password == "" {
+			password, err = prompts.password()
 			if err != nil {
-				panic(err)
+				return "", err
 			}
-			password = string(passwordBytes)
-			fmt.Printf("\n")
 		}
-
-		// fmt.Printf("userAuth='%s'; password='%s'\n", userAuth, password)
-
-		loginArgs := &sdk.AuthLoginWithPasswordArgs{
+		loginResult, err := api.AuthLoginWithPasswordSyncWithContext(ctx, &sdk.AuthLoginWithPasswordArgs{
 			UserAuth: userAuth,
 			Password: password,
-		}
-		loginResult, err := api.AuthLoginWithPasswordSyncWithContext(ctx, loginArgs)
+		})
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 		if loginResult.Error != nil {
-			panic(fmt.Errorf("%s", loginResult.Error.Message))
+			return "", fmt.Errorf("%s", loginResult.Error.Message)
 		}
 		if loginResult.VerificationRequired != nil {
-			panic(fmt.Errorf("Verification required for %s. Use the app or web to complete account setup.", loginResult.VerificationRequired.UserAuth))
+			return "", fmt.Errorf("Verification required for %s. Use the app or web to complete account setup.", loginResult.VerificationRequired.UserAuth)
 		}
+		if loginResult.Network == nil {
+			return "", errors.New("login returned no network")
+		}
+		return loginResult.Network.ByJwt, nil
+	}
 
-		byJwt = loginResult.Network.ByJwt
-	} else {
-		// auth_code
-		authCode, _ := opts.String("<auth_code>")
-		if authCode == "" {
-			stdin := int(syscall.Stdin)
-			var err error
-			authCode, err = readAuthCode(os.Stdin, os.Stdout, term.IsTerminal(stdin), func() ([]byte, error) {
-				return term.ReadPassword(stdin)
-			})
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		authCodeLogin := &sdk.AuthCodeLoginArgs{
-			AuthCode: authCode,
-		}
-		authCodeLoginResult, err := api.AuthCodeLoginSyncWithContext(ctx, authCodeLogin)
+	authCode, _ := opts.String("<auth_code>")
+	if authCode == "" {
+		var err error
+		authCode, err = prompts.authCode()
 		if err != nil {
-			panic(err)
+			return "", err
 		}
-		if authCodeLoginResult.Error != nil {
-			panic(fmt.Errorf("%s", authCodeLoginResult.Error.Message))
-		}
-
-		byJwt = authCodeLoginResult.Jwt
 	}
-
-	if byJwt != "" {
-		if err := clientauth.WriteToken(jwtPath, byJwt); err != nil {
-			panic(err)
-		}
-		fmt.Printf("Jwt written to %s\n", jwtPath)
+	authCodeLoginResult, err := api.AuthCodeLoginSyncWithContext(ctx, &sdk.AuthCodeLoginArgs{
+		AuthCode: authCode,
+	})
+	if err != nil {
+		return "", err
 	}
+	if authCodeLoginResult.Error != nil {
+		return "", fmt.Errorf("%s", authCodeLoginResult.Error.Message)
+	}
+	return authCodeLoginResult.Jwt, nil
 }
 
 // testEgressDialContext returns the narrow source-bind seam used by

@@ -122,6 +122,9 @@ func TestMainUsageRejectsConflictingAuthorityOptions(t *testing.T) {
 func TestMainUsageSiblingCommandsAndVerbosity(t *testing.T) {
 	for _, arguments := range [][]string{
 		{"auth", "--user_auth=synthetic-user", "--password=synthetic-password"},
+		{"auth", "--operator=alpha.example", "synthetic-code"},
+		{"provide", "--all-operators"},
+		{"operators"},
 		{"claim-daemon", "--config=/synthetic/daemon.yml"},
 		{"fleet", "manifest", "--manifest=/synthetic/fleet.json"},
 	} {
