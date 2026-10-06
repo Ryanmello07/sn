@@ -2,7 +2,7 @@
 
 ## Code and focused-test checkpoint — October 6
 
-The selected code corrections are implemented and their focused follow-ups pass. The [final evidence index](evidence/code-focused-qualification-20261006.json) records exact source/dependency tuples, original failures and successor coverage. This checkpoint supersedes older current-state and unexecuted-test statements below; it does not combine separate runs into a full-suite pass.
+The selected code corrections are implemented and their focused follow-ups pass. The [initial evidence index](evidence/code-focused-qualification-20261006.json) and [additive qualification](evidence/code-focused-followup-20261006.json) record exact source/dependency tuples, original failures and successor coverage. This checkpoint supersedes older current-state and unexecuted-test statements below; it does not combine separate runs into a full-suite pass.
 
 | Qualified scope | Retained result |
 | --- | --- |
@@ -10,10 +10,13 @@ The selected code corrections are implemented and their focused follow-ups pass.
 | Native proof RPC retry and refusal evidence | Original 16-root run: 11 PASS / 5 FAIL. The seven-root successor passes all five failures plus two additional checks; the four SN feed tests also pass. |
 | Selected payout schedule preflight before migration writes | 6/6 focused tests pass. |
 | Provider and client-key reads | Original validator12: 10 PASS / 2 FAIL. Provider4: 3 PASS / 1 FAIL, resolving both original failures. Final validator3: 3/3 PASS, including the repaired control and both shared GET/wallet deadline cases. |
+| Chain, bootstrap-prefix and steering read deadlines | 22/22 selected tests pass: nine chain, seven bootstrap and six steering roots on SN `bc3c20d0`. |
+| Server retry taxonomy and owned fixture permissions | Taxonomy14 passes under `UMask0077`; the fixture repair then passes four selected tests under the ordinary mask. The original setup refusal remains retained. |
 | Published Connect owner-ledger API | Core8 and Server interop2 pass on their retained source tuples. The original test-image staging failure remains separate. |
-| Current SN and Server all-package builds | SN and Server `go build ./...` both pass on the current source tuple below. |
+| Durable-volume write health | 15/15 selected normal tests and 2/2 selected race tests pass on Connect `501c172d`. |
+| Current SN and Server all-package builds | SN and Server `go build ./...` both pass on the final source tuple below. |
 
-The final SN source is `88de7fc2`, with Connect `a5dfb3c7`; the latest Server source is `948f12a7`. Server interop2 and the final direct tests used Server `362fe373`. The later upstream Server batch has only its explicitly recorded build scope, with no blanket test qualification. Earlier retention20 and raw-version scope3 passes remain retained alongside the original Rust11 10 PASS / 1 FAIL record.
+The final package builds, fixture4 and storage tests use SN `bc3c20d0`, Server `a4da14a5` and Connect `501c172d`. Deadline22 retains Server `948f12a7` / Connect `a5dfb3c7`; taxonomy14 retains its separate earlier tuple and umask. Earlier builds, interop2 and direct tests remain pinned in the initial index. Each result retains its source and selection, with no blanket test qualification for later upstream changes. Earlier retention20 and raw-version scope3 passes remain retained alongside the original Rust11 10 PASS / 1 FAIL record.
 
 The selected economics remain **10% for providers and 90% received by `ur-reserve`**, which sends no funds. Earlier recycle routing and mandatory reserve-signing statements retain historical scope only. Live mainnet capture, database migration, deployment and activation were outside this code/test task. The original capture-v2 failure and its unretained raw RPC reply remain in the [operational evidence](/home/by/sn-testnet-root-fallback-20261005/original-epoch9218962-v2/run/evidence/closed-owner-readback-v1.json); they are not reclassified by these code results. `activation: blocked` is unchanged.
 
