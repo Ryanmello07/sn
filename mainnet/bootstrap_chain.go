@@ -24,6 +24,7 @@ type bootstrapChainResult struct {
 	RootValidatorStatus         string              `json:"root_validator_status,omitempty"`
 	RootValidatorConfigVerified bool                `json:"root_validator_config_verified,omitempty"`
 	PendingChainPhases          []string            `json:"pending_chain_phases"`
+	CurrentEconomicAcceptance   string              `json:"current_economic_acceptance,omitempty"`
 	Contracts                   evmCreateResult     `json:"contract_custody"`
 	Root                        bootstrapRootResult `json:"root_custody"`
 }
@@ -122,6 +123,11 @@ func advanceBootstrapChain(ctx context.Context, store *bootstrapChainStore, boun
 	result = bootstrapChainResult{Schema: bootstrapChainResultSchema, PlanHash: preparation.Plan.ContentHash, LocalPreparationComplete: true,
 		OwnerTrimStatus: "retained-review-execution-blocked", UrValidatorsStatus: "two-protected-role-inputs-pinned-production-admission-pending",
 		PendingChainPhases: bootstrapChainPendingPhases(), Contracts: contracts, Root: root}
+	// The original sealed phase names stay byte-compatible. This unsealed
+	// report clarifies the outcome selected by both verified producer approvals.
+	if len(preparation.Plan.ValidatorInspections) == 2 && preparation.Plan.ValidatorInspections[0].Approval.Proposal.Treasury != nil {
+		result.CurrentEconomicAcceptance = "native-10-percent-provider-allocation-and-90-percent-native-treasury-acceptance"
+	}
 	if preparation.Plan.Config.Schema != bootstrapChainConfigSchemaV1 {
 		result.UrValidatorsStatus = "two-signed-production-configs-verified-live-admission-pending"
 		result.UrValidatorConfigsVerified = true
