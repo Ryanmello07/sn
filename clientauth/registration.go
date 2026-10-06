@@ -117,6 +117,9 @@ func loadOrRegisterClientJwtWithCustody(ctx context.Context, api *sdk.Api, netwo
 	if scope.Endpoint != endpoint {
 		return "", connect.Id{}, errors.New("registration scope differs from its configured API or deployment")
 	}
+	// Measurement creation is only a provisioned owner's call, in a directory
+	// whose provisioning marker names this exact client key.
+	measurementCreate := allowCreate && scope.ClientRole == "validator-measurement-v1" && measurementProvisioningAuthorized(directory, scope)
 	values := []string{scope.ClientKey}
 	if scope.ClientRole == "" {
 		if scope.ClientSlot != "" || scope.DeploymentId == "" || scope.ChainId == 0 || scope.Netuid == 0 || scope.OperatorNoId == 0 || scope.ValidatorId == 0 {
@@ -128,7 +131,7 @@ func loadOrRegisterClientJwtWithCustody(ctx context.Context, api *sdk.Api, netwo
 			scope.DeploymentId != "" || scope.ChainId != 0 || scope.GenesisHash != "" || scope.Netuid != 0 || scope.ValidatorId != 0 || scope.OperatorNoId != 0 {
 			return "", connect.Id{}, errors.New("registration service role is unsupported or mixed with chain authority")
 		}
-		if scope.ClientRole == "validator-measurement-v1" && (scope.ClientSlot != "direct" || allowCreate) {
+		if scope.ClientRole == "validator-measurement-v1" && (scope.ClientSlot != "direct" || allowCreate && !measurementCreate) {
 			return "", connect.Id{}, errors.New("measurement registration requires its retained direct operation")
 		}
 		if scope.ClientSlot != "direct" {
@@ -144,7 +147,7 @@ func loadOrRegisterClientJwtWithCustody(ctx context.Context, api *sdk.Api, netwo
 			return "", connect.Id{}, errors.New("registration scope has an invalid genesis or client key")
 		}
 	}
-	if bootstrapOwner != nil && (directory == nil || scope.ClientRole != "validator-measurement-v1" || allowCreate) {
+	if bootstrapOwner != nil && (directory == nil || scope.ClientRole != "validator-measurement-v1" || allowCreate && !measurementCreate) {
 		return "", connect.Id{}, errors.New("separate bootstrap custody is restricted to retained measurement work")
 	}
 	var owner *registrationStore
