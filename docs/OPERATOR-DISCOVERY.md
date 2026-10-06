@@ -64,9 +64,12 @@ Owner, in order:
      automatically. The cold wallet signs once; the hot key does the per-operator work.
    - Precedence is per-provider consent, then network consent, then hotkey delegation.
 6. **Root validator.**
-   - A dedicated validator hotkey runs on root (netuid 0) and validates SN25. It has its own coldkey, kept off snow;
-     the SN25 owner hotkey and the owner Ledger are not used (owner decision). Others may child-hotkey to it on SN25,
-     and we keep 18% of what their stake earns through it.
+   - A dedicated validator hotkey, `ur-mainnet`, runs on root (netuid 0) and validates SN25. The SN25 owner hotkey and
+     the owner Ledger are not used (owner decision). Others may child-hotkey to it on SN25, and we keep 18% of what
+     their stake earns through it.
+   - Its coldkey is the `ur-mainnet` 2-of-3 native multisig `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`, with
+     signatories `brien-ur-mainnet` (Brien's Ledger, `m/44'/354'/10'/0'/0'`), `jack-ur` and `keith-ur`. Every coldkey
+     step is a btcli multisig call, and no coldkey material reaches snow.
    - Auto parent delegation is disabled before root registration. Otherwise `root_register` would make the hotkey the
      full-weight parent of every subnet owner hotkey, moving its SN25 weight to the SN25 owner hotkey, which doesn't run
      the validator.
