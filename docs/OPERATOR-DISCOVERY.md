@@ -154,7 +154,11 @@ validator run --config=<path> [--progress-file=<path>] [--durable-volumes=<path>
 
 - **No effect on what is signed or weighted.** `--operators-refresh` never changes the signed config's operators,
   weights, evidence or any protocol state.
-- **Drift report.** At each list change, and in the bounded progress JSON (section `operator_list`), it reports:
+- **Drift report.** At startup and at each list change, the validator logs a report and writes it to its own bounded
+  file, `operators-report.json` beside the list cache (schema `urnetwork-validator-operator-list-report-v1`, atomic,
+  0600, at most 16 pinned and 16 unpinned entries plus omitted counts). The progress wire type
+  (`protocol.ValidatorProgress`) is unchanged, because the mainnet monitor and older validators decode it strictly. The
+  report covers:
   - each pinned operator, matched to the list by normalized `api_url`, with listed or delisted status and any
     `connect_url` mismatch;
   - each listed operator that the config does not pin.
