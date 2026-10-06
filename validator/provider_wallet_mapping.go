@@ -47,7 +47,7 @@ func (self *HttpWalletMappingReader) ReadBounded(ctx context.Context, expected p
 	if ctx == nil || self == nil || self.client == nil || self.wait == nil || expected.Generation == 0 || expected.Generation > protocol.MaxWalletMappingHistory || expected.HeadHash == ([32]byte{}) || expected.ClientId == ([16]byte{}) {
 		return nil, nil, protocol.ErrWalletMappingUnavailable
 	}
-	if err := errors.Join(ctx.Err(), expected.Domain.Validate()); err != nil {
+	if err := errors.Join(evidenceReadContextError(ctx), expected.Domain.Validate()); err != nil {
 		return nil, nil, err
 	}
 	owner, cancel := context.WithTimeout(ctx, 300*time.Second)
@@ -68,20 +68,25 @@ func (self *HttpWalletMappingReader) ReadBounded(ctx context.Context, expected p
 	if maximumBytes < uint64(maximum) {
 		maximum = int64(maximumBytes)
 	}
+	var lastErr error
 	for {
+		if err := evidenceReadContextError(owner); err != nil {
+			return nil, nil, errors.Join(lastErr, err)
+		}
 		originals, err := self.read(owner, requestBody, maximum)
 		if err == nil {
 			verified, err := protocol.VerifyWalletMappingHistory(owner, originals, expected)
-			if err != nil {
+			if err = errors.Join(err, evidenceReadContextError(owner)); err != nil {
 				return nil, nil, err
 			}
 			return originals, verified, nil
 		}
-		if owner.Err() != nil || !retryableClientKeyObservationHttpError(err) {
-			return nil, nil, errors.Join(err, owner.Err())
+		lastErr = err
+		if ownerErr := evidenceReadContextError(owner); ownerErr != nil || !retryableClientKeyObservationHttpError(err) {
+			return nil, nil, errors.Join(err, ownerErr)
 		}
 		if waitErr := self.wait(owner, 5*time.Second); waitErr != nil {
-			return nil, nil, errors.Join(err, waitErr, owner.Err())
+			return nil, nil, errors.Join(err, waitErr, evidenceReadContextError(owner))
 		}
 	}
 }
@@ -94,12 +99,15 @@ func (self *HttpWalletMappingReader) read(ctx context.Context, body []byte, maxi
 		return nil, err
 	}
 	request.Header.Set("Content-Type", "application/json")
+	if err := evidenceReadContextError(ctx); err != nil {
+		return nil, err
+	}
 	response, err := self.client.Do(request)
 	if err != nil {
-		return nil, errors.Join(err, ctx.Err())
+		return nil, errors.Join(err, evidenceReadContextError(ctx))
 	}
 	defer func() {
-		resultErr = errors.Join(resultErr, response.Body.Close(), ctx.Err())
+		resultErr = errors.Join(resultErr, response.Body.Close(), evidenceReadContextError(ctx))
 		if resultErr != nil {
 			originals = nil
 		}
