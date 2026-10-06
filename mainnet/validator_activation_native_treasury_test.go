@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/validator"
 )
@@ -23,23 +23,33 @@ import (
 func newValidatorActivationTreasuryFixture(t *testing.T, mutate func(*types.Metadata)) *validatorActivationFixture {
 	t.Helper()
 	destination := [32]byte(bytes.Repeat([]byte{0x77}, 32))
-	return newValidatorActivationFixtureWithNativeCensus(t, mutate, func(fixture *bootstrapChainValidatorFixture) {
+	chain := newBootstrapRootPassiveFixtureWithCensus(t, func(census *rootRpcFixture, policy *subnetCensusPolicy) {
+		metadata, encoded, hash := economicEmissionTestMetadata(t, mutate)
+		census.metadata, census.metadataHex, census.policy.RuntimeMetadataHash = metadata, encoded, hash
+		policy.RuntimeMetadataHash = hash
+		arg := []byte{25, 0}
+		census.set(t, "MechanismCountCurrent", []byte{1}, arg)
+		census.set(t, "SubnetEpochIndex", binary.LittleEndian.AppendUint64(nil, 20), arg)
+		census.set(t, "PendingServerEmission", make([]byte, 8), arg)
+		census.set(t, "LastUpdate", subnetTestVector(make([]byte, 6*8), 8), arg)
+		census.set(t, "RecycleOrBurn", []byte{1}, arg)
+		for index := range policy.Remove {
+			policy.Remove[index].Coldkey = fmt.Sprintf("0x%x", destination)
+			census.set(t, "Owner", destination[:], bytes.Repeat([]byte{byte(0x45 + index)}, 32))
+		}
+	}, func(fixture *bootstrapChainValidatorFixture) {
 		fixture.config.TreasuryApproval, fixture.config.OwnerRecycleApproval = fixture.config.OwnerRecycleApproval, nil
 		approval := &fixture.approval
 		approval.Schema, approval.Proposal.Schema, approval.Production.Schema = validator.TreasuryApprovalSchema, validator.TreasuryProposalSchema, validator.TreasuryProductionScope
 		approval.Proposal.Remainder, approval.Proposal.OwnerAllocation = "ordinary_treasury_credit", "equal_exact_registered"
-		approval.Proposal.Runtime.SourceCommit = crv4.NativeOwnerSource470
 		approval.Proposal.Treasury = &validator.TreasuryPolicy{Schema: validator.TreasuryReceivePolicySchema, MultisigAccount: destination,
 			Recipients: []validator.TreasuryRecipient{
 				{Uid: 4, Hotkey: [32]byte(bytes.Repeat([]byte{0x45}, 32)), RegistrationBlock: 44},
 				{Uid: 5, Hotkey: [32]byte(bytes.Repeat([]byte{0x46}, 32)), RegistrationBlock: 45},
 			}, ProviderShare: protocol.Rational{Numerator: 1, Denominator: 10}, TreasuryShare: protocol.Rational{Numerator: 9, Denominator: 10}, MaxWeightLimitU16: 32768}
-	}, func(census *rootRpcFixture, policy *subnetCensusPolicy) {
-		for index := range policy.Remove {
-			policy.Remove[index].Coldkey = fmt.Sprintf("0x%x", destination)
-			census.set(t, "Owner", destination[:], bytes.Repeat([]byte{byte(0x45 + index)}, 32))
-		}
 	})
+	chain.result(t, "apply")
+	return newValidatorActivationFixtureForChain(t, chain)
 }
 
 // The pre-fix public command refuses both Burn and authenticated absence even

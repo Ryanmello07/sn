@@ -87,6 +87,13 @@ func newValidatorActivationFixtureWithNativeCensus(t *testing.T, mutate func(*ty
 			configureCensus(census, policy)
 		}
 	}, configureApproval)
+	return newValidatorActivationFixtureForChain(t, chain)
+}
+
+// Host approval binds the already prepared chain regardless of its independently
+// selected legacy or passive root policy.
+func newValidatorActivationFixtureForChain(t *testing.T, chain *bootstrapChainFixture) *validatorActivationFixture {
+	t.Helper()
 	directory := filepath.Dir(chain.path)
 	hostRoot := filepath.Dir(directory)
 	if err := os.Chmod(hostRoot, 0755); err != nil {
