@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline restoration keeps original snapshot and auxiliary bytes unchanged.
 // Only a fixed application profile may rebind their physical checkpoint; the

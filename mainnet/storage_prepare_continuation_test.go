@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // The public dispatcher resumes exact plan-owned ledger bytes after an actual
 // interrupted apply; synthetic Host facts cannot approve changed descriptors.

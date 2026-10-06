@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Snapshots publish through the retained directory, with an exact pending head
 // before data writes. An exchanged predecessor remains present until both
@@ -23,6 +23,8 @@ import (
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
+
+	"github.com/urnetwork/connect/durablesys"
 )
 
 // Methods serialize their state. The caller owns the borrowed directory and
@@ -245,9 +247,9 @@ func (self *Owner) readCheckpoint() ([]byte, error) {
 		return nil, observation(err, false)
 	}
 	raw := make([]byte, 4096)
-	n, err := unix.Fgetxattr(int(self.attributeFile().Fd()), Attribute(self.spec.Kind, self.spec.Name), raw)
+	n, err := durablesys.GetAttribute(int(self.attributeFile().Fd()), Attribute(self.spec.Kind, self.spec.Name), raw)
 	if err != nil {
-		if errors.Is(err, unix.ENODATA) || errors.Is(err, unix.ERANGE) {
+		if errors.Is(err, durablesys.ErrNoAttribute) || errors.Is(err, unix.ERANGE) {
 			return nil, self.retain(identity(errors.New("snapshot checkpoint is absent or oversized"), err))
 		}
 		return nil, observation(err, false)
@@ -591,7 +593,7 @@ func (self *Owner) writeCheckpoint(next Checkpoint, boundary string) error {
 	if err != nil || len(raw) > 4096 {
 		return errors.Join(errors.New("snapshot checkpoint exceeds capacity"), err)
 	}
-	if err := unix.Fsetxattr(int(self.attributeFile().Fd()), Attribute(self.spec.Kind, self.spec.Name), raw, unix.XATTR_REPLACE); err != nil {
+	if err := durablesys.SetAttribute(int(self.attributeFile().Fd()), Attribute(self.spec.Kind, self.spec.Name), raw, durablesys.AttributeReplace); err != nil {
 		return errors.Join(ErrUncertain, observation(err, false))
 	}
 	if self.spec.LockName != "" {
@@ -813,11 +815,11 @@ func (self *Owner) finishPending(hooks PublicationHooks) error {
 		if err := self.admit(true); err != nil {
 			return err
 		}
-		flags := uint(unix.RENAME_NOREPLACE)
+		rename := durablesys.RenameNoReplace
 		if self.checkpoint.Committed.Present {
-			flags = unix.RENAME_EXCHANGE
+			rename = durablesys.RenameExchange
 		}
-		if err := unix.Renameat2(int(self.directory.File().Fd()), pending.Temporary, int(self.directory.File().Fd()), self.spec.Name, flags); err != nil {
+		if err := rename(int(self.directory.File().Fd()), pending.Temporary, int(self.directory.File().Fd()), self.spec.Name); err != nil {
 			return observation(err, true)
 		}
 		if err := self.boundary("snapshot-renamed"); err != nil {

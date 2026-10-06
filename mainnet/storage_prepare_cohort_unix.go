@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline cohort commands acquire every accepted root before applying any of
 // them. Failed delivery retains the same review hash and original journals.
@@ -10,9 +10,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
-	"io"
 )
 
 // Only explicit daemon cohorts are currently exposed; request contents cannot

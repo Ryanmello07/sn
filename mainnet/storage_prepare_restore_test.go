@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Actual public plan/apply restore must retain historical native custody while
 // rebinding only the new target's physical metadata. Every payload is synthetic.

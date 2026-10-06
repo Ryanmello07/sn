@@ -25,7 +25,6 @@ import (
 	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/validator"
 	"github.com/urnetwork/connect/durablevolume"
-	"golang.org/x/sys/unix"
 )
 
 type validatorActivationFixture struct {
@@ -168,7 +167,7 @@ func newValidatorActivationFixtureForChain(t *testing.T, chain *bootstrapChainFi
 	}
 	prepareMainnetSnapshotTest(t, p.StatePath, "mainnet-validator-activation", 128*1024)
 	f.approval = validatorActivationApproval{Schema: validatorActivationSchema, Plan: p}
-	h := &repairValidatorHost{rootUid: uint32(os.Geteuid()), trustRoot: hostRoot, machinePath: filepath.Join(directory, "machine-id"), bootPath: filepath.Join(directory, "boot-id"), cgroupRoot: filepath.Join(directory, "cgroup"), execute: f.execute, monotonic: func() (uint64, error) { return 150, nil }, cgroupType: func(string) (int64, error) { return unix.CGROUP2_SUPER_MAGIC, nil }}
+	h := &repairValidatorHost{rootUid: uint32(os.Geteuid()), trustRoot: hostRoot, machinePath: filepath.Join(directory, "machine-id"), bootPath: filepath.Join(directory, "boot-id"), cgroupRoot: filepath.Join(directory, "cgroup"), execute: f.execute, monotonic: func() (uint64, error) { return 150, nil }, cgroupType: func(string) (int64, error) { return repairValidatorCgroup2Magic, nil }}
 	f.host = &validatorActivationHost{host: h, unitDirectory: unitDirectory}
 	h.storageCommand = serviceStorageTestTransport(t)
 	repairValidatorTestWrite(t, h.machinePath, []byte(p.MachineId+"\n"), 0644)

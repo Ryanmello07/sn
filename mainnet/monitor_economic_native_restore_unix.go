@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Restore request construction authenticates the whole retained native history
 // before deriving its fixed snapshot owner census. Publication still requires

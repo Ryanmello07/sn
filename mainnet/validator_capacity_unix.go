@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Public resource planning emits an unsigned successor from retained local
 // custody. It neither loads a private key nor activates a producer.

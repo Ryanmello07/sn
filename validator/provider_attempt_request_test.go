@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Actual signed M8 trails and protected files expose the pre-send boundary.
 // Fault hooks force interrupted publication without sleeps or scheduler races.

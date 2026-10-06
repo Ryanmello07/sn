@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // These two fixed offline adapters preserve the existing fleet/claim formats.
 // They accept only public capacities; no signer, runtime owner or RPC is used.

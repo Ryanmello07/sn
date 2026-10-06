@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Restore selects exact original snapshot owners after checking the complete
 // retained EVM history. Target publication remains a separate reviewed action.

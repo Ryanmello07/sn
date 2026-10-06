@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline native restore preserves original JSONL/SCALE bytes and rebinds only
 // physical checkpoint coordinates. No signer, RPC or mutable journal is opened.

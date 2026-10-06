@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -17,6 +17,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/urnetwork/connect/durablesys"
 
 	"github.com/urfoundation/sn/validator"
 	"github.com/urnetwork/connect/durablevolume"
@@ -310,7 +312,7 @@ func inspectStorageProviderPublicationRestore(ctx context.Context, root *os.File
 		return nil, err
 	}
 	// Only original physical coordinates change; original approved birth remains.
-	checkpoint.DirectoryDevice, checkpoint.DirectoryInode = parent.Dev, parent.Ino
+	checkpoint.DirectoryDevice, checkpoint.DirectoryInode = durablesys.StatDevice(&parent), parent.Ino
 	raw, err := json.Marshal(checkpoint)
 	if err != nil {
 		return nil, err

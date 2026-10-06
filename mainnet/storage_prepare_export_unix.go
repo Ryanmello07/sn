@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Retained export is a read-only prerequisite to reviewed semantic restoration.
 // It includes original leaf identities while preserving all owner bytes/anchors.

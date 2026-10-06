@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Every restore kind comes from the existing fixed runtime registry. A
 // snapshot's physical head cannot stand in for an immutable member registry or

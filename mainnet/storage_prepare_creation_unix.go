@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/urnetwork/connect/durablesys"
 
 	"github.com/urfoundation/sn/miner"
 	"github.com/urnetwork/connect"
@@ -234,14 +236,14 @@ func inspectStorageOriginalContractRestore(ctx context.Context, root *os.File, o
 	if err != nil {
 		return nil, err
 	}
-	targets := []connect.OriginalContractStoreFile{{Name: "", Device: parent.Dev, Inode: parent.Ino, Mode: 0700}}
+	targets := []connect.OriginalContractStoreFile{{Name: "", Device: durablesys.StatDevice(&parent), Inode: parent.Ino, Mode: 0700}}
 	fileKVs := map[string]durablevolume.PreparationFile{}
 	for _, file := range owner.Files {
 		_, observed, err := readStorageOriginalFile(ctx, root, parent, file, coreprotocol.MaximumOriginalContractAdmissionBytes)
 		if err != nil {
 			return nil, err
 		}
-		targets = append(targets, connect.OriginalContractStoreFile{Name: file.Path, Device: observed.Dev, Inode: observed.Ino, Mode: file.Mode, Bytes: file.Bytes, Sha256: file.Sha256})
+		targets = append(targets, connect.OriginalContractStoreFile{Name: file.Path, Device: durablesys.StatDevice(&observed), Inode: observed.Ino, Mode: file.Mode, Bytes: file.Bytes, Sha256: file.Sha256})
 		fileKVs[file.Path] = file
 	}
 	read := func(ctx context.Context, name string) ([]byte, error) {

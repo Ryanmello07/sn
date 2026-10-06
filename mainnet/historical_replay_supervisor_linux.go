@@ -1,3 +1,5 @@
+//go:build linux
+
 // A dedicated reexecuted process owns orphan reaping for one replay. Changing
 // subreaper state in the main observer would capture unrelated service children.
 package main

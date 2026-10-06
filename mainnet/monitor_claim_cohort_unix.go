@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Claim history may occupy several original roots. Planning authenticates its
 // complete signed-path lineage, stages fixed owners and retains one reviewable

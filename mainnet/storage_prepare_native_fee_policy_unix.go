@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Complete fee rosters occur in original signed approval files. Restore inputs
 // retain an exact policy hash so multiple owners can share one prepared root

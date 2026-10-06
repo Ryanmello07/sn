@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Member restoration derives only unsigned physical coordinates. The original
 // census remains in the reviewed plan; signed member and pending payload bytes
@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/urnetwork/connect/durablesys"
 
 	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urnetwork/connect/durablevolume"
@@ -415,7 +417,7 @@ func inspectStoragePreparationMembersRestore(ctx context.Context, root *os.File,
 		}
 		inodes[stat.Ino] = true
 		entry := originalEntries[member.Path]
-		entry.Physical = &durablevolume.PhysicalRoot{Device: durablevolume.Device{Major: unix.Major(stat.Dev), Minor: unix.Minor(stat.Dev)}, Inode: stat.Ino}
+		entry.Physical = &durablevolume.PhysicalRoot{Device: durablevolume.Device{Major: unix.Major(durablesys.StatDevice(&stat)), Minor: unix.Minor(durablesys.StatDevice(&stat))}, Inode: stat.Ino}
 		entry.Size, entry.Sha256 = member.Bytes, member.Sha256
 		entries[member.Path] = entry
 		if storagePreparationMemberMetadataOwns(expected.PhysicalMetadata, member.Path) {

@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Local successor history shares a bootstrap root with separately retained
 // role snapshots. Its restore view uses the actual runtime namespace; the core

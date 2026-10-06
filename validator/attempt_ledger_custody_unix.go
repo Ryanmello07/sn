@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package validator
 
@@ -6,14 +6,15 @@ import (
 	"errors"
 	"os"
 
+	"github.com/urnetwork/connect/durablesys"
 	"golang.org/x/sys/unix"
 )
 
 func readAttemptLedgerCustodyAttribute(file *os.File) ([]byte, error) {
 	raw := make([]byte, 4096)
-	n, err := unix.Fgetxattr(int(file.Fd()), attemptLedgerCustodyAttribute, raw)
+	n, err := durablesys.GetAttribute(int(file.Fd()), attemptLedgerCustodyAttribute, raw)
 	if err != nil {
-		if errors.Is(err, unix.ENODATA) || errors.Is(err, unix.ERANGE) {
+		if errors.Is(err, durablesys.ErrNoAttribute) || errors.Is(err, unix.ERANGE) {
 			return nil, attemptLedgerCustodyLoss("preprovisioned attempt ledger custody anchor is absent or invalid", err)
 		}
 		return nil, attemptLedgerCustodyObservation("cannot observe attempt ledger custody anchor", err)
@@ -21,7 +22,8 @@ func readAttemptLedgerCustodyAttribute(file *os.File) ([]byte, error) {
 	return raw[:n], nil
 }
 
-// XATTR_REPLACE is essential: deletion cannot silently enroll a fresh owner.
+// Replace-only is essential: deletion cannot silently enroll a fresh owner.
+// durablesys keeps the condition on Darwin, where x/sys's Fsetxattr drops it.
 func replaceAttemptLedgerCustodyAttribute(file *os.File, raw []byte) error {
-	return unix.Fsetxattr(int(file.Fd()), attemptLedgerCustodyAttribute, raw, unix.XATTR_REPLACE)
+	return durablesys.SetAttribute(int(file.Fd()), attemptLedgerCustodyAttribute, raw, durablesys.AttributeReplace)
 }

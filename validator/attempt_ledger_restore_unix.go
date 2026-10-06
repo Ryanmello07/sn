@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline ledger restore authenticates the complete original signed history
 // and migration receipts. It changes only physical custody coordinates; the

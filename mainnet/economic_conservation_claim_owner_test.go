@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Exact copied bytes do not move independently signed Claim authority to a
 // different prepared owner. Ordinary compaction and physical restore preserve

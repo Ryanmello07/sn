@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // The request journal is an explicit companion of the original assignment
 // ledger. Its birth, limits and acknowledged head never come from the copy.

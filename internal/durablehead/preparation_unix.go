@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline directory-head adapters build only fresh public staging members.
 // A fixed application registry selects each Spec; this API never enrolls the

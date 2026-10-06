@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Package durableinspect supplies a read-only operational preflight. It returns
 // no guard, writer, descriptor or activation capability to its caller.

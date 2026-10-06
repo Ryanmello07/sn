@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // A mandatory preprovisioned checkpoint distinguishes pristine and retained
 // custody. It detects local loss, not replay of every valid predecessor byte.
@@ -22,6 +22,8 @@ import (
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
+
+	"github.com/urnetwork/connect/durablesys"
 )
 
 // Enrollment is an external, joined provisioning operation, never an opener.
@@ -106,9 +108,9 @@ func (self *guardedNativeJournal) readCustody() ([]byte, error) {
 		return nil, self.retain(nativeObservation(err, false))
 	}
 	raw := make([]byte, 4096)
-	n, err := unix.Fgetxattr(int(self.directory.File().Fd()), NativeJournalCustodyAttribute, raw)
+	n, err := durablesys.GetAttribute(int(self.directory.File().Fd()), NativeJournalCustodyAttribute, raw)
 	if err != nil {
-		if errors.Is(err, unix.ENODATA) || errors.Is(err, unix.ERANGE) {
+		if errors.Is(err, durablesys.ErrNoAttribute) || errors.Is(err, unix.ERANGE) {
 			return nil, self.retain(errors.Join(durablevolume.ErrIdentity, errors.New("native journal custody anchor is absent or invalid"), err))
 		}
 		return nil, nativeObservation(err, false)
@@ -150,7 +152,7 @@ func (self *guardedNativeJournal) writeCustody(next nativeJournalCustody, stage 
 	if err != nil || len(raw) > 4096 {
 		return errors.Join(err, errors.New("invalid native custody checkpoint size"))
 	}
-	if err := unix.Fsetxattr(int(self.directory.File().Fd()), NativeJournalCustodyAttribute, raw, unix.XATTR_REPLACE); err != nil {
+	if err := durablesys.SetAttribute(int(self.directory.File().Fd()), NativeJournalCustodyAttribute, raw, durablesys.AttributeReplace); err != nil {
 		return self.uncertain(nativeObservation(err, false))
 	}
 	self.custody, self.custodyBytes = next, raw
@@ -401,7 +403,7 @@ func (self *guardedNativeJournal) finishPendingRaw() error {
 		return errors.Join(err, file.Close())
 	}
 	fd := int(self.rawDirectory.File().Fd())
-	if err := unix.Renameat2(fd, name, fd, finalName, unix.RENAME_NOREPLACE); err != nil {
+	if err := durablesys.RenameNoReplace(fd, name, fd, finalName); err != nil {
 		return self.uncertain(errors.Join(err, file.Close()))
 	}
 	delete(self.leaves, self.rawDirectory.File().Name()+"/"+name)

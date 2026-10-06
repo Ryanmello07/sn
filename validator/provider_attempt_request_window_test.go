@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Real trail transport barriers and original physical checkpoint replay prove
 // the window fence independently of its producer's returned projection.

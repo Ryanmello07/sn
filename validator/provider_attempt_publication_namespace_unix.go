@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // A prepared directory is retained through the caller's real read/write owner.
 // The namespace guard creates no directory, file, attribute or restart grant.
@@ -13,9 +13,10 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/urnetwork/connect/durablesys"
+
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
-	"golang.org/x/sys/unix"
 )
 
 // The explicit fresh-empty preparation fence belongs to the offline caller.
@@ -29,10 +30,11 @@ func FreshProviderAttemptPublicationNamespaceAttribute(preparation ProviderAttem
 		return nil, errors.New("provider publication fresh directory observation is absent")
 	}
 	stat, ok := directory.Sys().(*syscall.Stat_t)
-	if !ok || !directory.IsDir() || directory.Mode().Perm() != 0700 || directory.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || stat.Uid != uint32(os.Geteuid()) || stat.Ino == 0 {
+	device, known := durablesys.FileInfoDevice(directory)
+	if !ok || !known || !directory.IsDir() || directory.Mode().Perm() != 0700 || directory.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || stat.Uid != uint32(os.Geteuid()) || stat.Ino == 0 {
 		return nil, errors.Join(durablevolume.ErrIdentity, errors.New("provider publication namespace is not private physical custody"))
 	}
-	return json.Marshal(ProviderAttemptPublicationNamespaceCheckpoint{Schema: ProviderAttemptPublicationNamespaceSchema, ProfileSha256: digest, DirectoryDevice: uint64(stat.Dev), DirectoryInode: uint64(stat.Ino)})
+	return json.Marshal(ProviderAttemptPublicationNamespaceCheckpoint{Schema: ProviderAttemptPublicationNamespaceSchema, ProfileSha256: digest, DirectoryDevice: device, DirectoryInode: uint64(stat.Ino)})
 }
 
 // Callers keep this guard until their actual publication owner has joined.
@@ -115,9 +117,9 @@ func (self *ProviderAttemptPublicationNamespace) Check(ctx context.Context, borr
 		return errors.Join(durablevolume.ErrIdentity, errors.New("provider publication owner changed its prepared directory"))
 	}
 	raw := make([]byte, 4097)
-	n, err := unix.Fgetxattr(int(borrowed.Fd()), ProviderAttemptPublicationNamespaceAttribute, raw)
+	n, err := durablesys.GetAttribute(int(borrowed.Fd()), ProviderAttemptPublicationNamespaceAttribute, raw)
 	if err != nil {
-		if errors.Is(err, unix.ENODATA) {
+		if errors.Is(err, durablesys.ErrNoAttribute) {
 			return errors.Join(durablevolume.ErrIdentity, errors.New("provider publication original birth is absent"), err)
 		}
 		return errors.Join(&durablevolume.UnavailableError{Reason: "cannot read provider publication original birth"}, err)

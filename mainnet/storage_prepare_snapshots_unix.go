@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Fresh snapshot preparation installs only an empty original marker and the
 // explicit absent head. Runtime approval and marker claims remain separate.

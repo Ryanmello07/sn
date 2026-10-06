@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Public proposals and archive adoption retain the original combined policy.
 // Grammar controls use signed input files; the separate producer control runs

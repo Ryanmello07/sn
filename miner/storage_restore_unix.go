@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline miner restoration selects its existing fleet or claim profile before
 // physical checkpoint rebinding. Original JSON and marker bytes are unchanged;

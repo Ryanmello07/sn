@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // A complete economic restore derives native artifact ownership from the exact
 // admitted checkpoint and signed policy. A caller cannot replace the cursor by

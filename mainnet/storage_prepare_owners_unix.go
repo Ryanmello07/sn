@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Fixed fresh adapters create public staging bytes. Only the shared accepted
 // plan publishes target members and their inode-bound checkpoints.

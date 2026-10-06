@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Exact original request bytes survive the same physical export and public
 // plan/apply used for the containing assignment ledger, including a lost ack.

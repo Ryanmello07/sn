@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // A monitor tree is a fixed collection of snapshot owners selected by exact
 // original paths. It preserves directory structure without granting a generic

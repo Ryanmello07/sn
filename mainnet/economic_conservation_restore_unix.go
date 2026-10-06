@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Complete combined-owner restore keeps original logical paths and financial
 // evidence. Physical source review selects every checkpoint/archive owner;

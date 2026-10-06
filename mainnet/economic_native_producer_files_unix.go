@@ -1,3 +1,5 @@
+//go:build linux || darwin
+
 // Derived jobs are immutable, bounded evidence under an explicitly declared
 // private root. Their existence grants no cursor or signing authority. The
 // existing native checkpoint names completed evidence and owns accounting.
@@ -12,6 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/urnetwork/connect/durablesys"
 
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
@@ -440,7 +444,7 @@ func (self *nativeProducerFiles) publish(relative string, raw []byte, maximum in
 	if err := checkPending(pending); err != nil {
 		return planFileReference{}, err
 	}
-	if err := unix.Renameat2(int(directory.Fd()), pending, int(directory.Fd()), name, unix.RENAME_NOREPLACE); err != nil {
+	if err := durablesys.RenameNoReplace(int(directory.Fd()), pending, int(directory.Fd()), name); err != nil {
 		return planFileReference{}, err
 	}
 	// Rename changes ctime on some filesystems. The final name must still

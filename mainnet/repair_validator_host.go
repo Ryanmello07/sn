@@ -100,16 +100,6 @@ func newRepairValidatorHost() *repairValidatorHost {
 	}}
 }
 
-// A missing path in v1, a hybrid layout or an unmounted filesystem proves
-// nothing about a descendant process. Public selection requires genuine v2.
-func repairValidatorCgroupType(path string) (int64, error) {
-	var state unix.Statfs_t
-	if err := unix.Statfs(path, &state); err != nil {
-		return 0, err
-	}
-	return int64(state.Type), nil
-}
-
 // Every ancestor inside the trusted root must be a protected physical directory.
 // A producer may own its output directory, never a release or custody directory.
 func (self *repairValidatorHost) parents(path string, owner uint32) error {
@@ -431,7 +421,7 @@ func (self *repairValidatorHost) stopped(ctx context.Context, plan repairValidat
 	if err != nil {
 		return repairValidatorObservationError("cannot read validator repair cgroup filesystem", err, false)
 	}
-	if filesystem != unix.CGROUP2_SUPER_MAGIC {
+	if filesystem != repairValidatorCgroup2Magic {
 		return errors.New("validator repair requires a genuine unified cgroup filesystem")
 	}
 	prior := plan.Previous

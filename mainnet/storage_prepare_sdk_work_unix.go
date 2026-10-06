@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/urnetwork/connect/durablesys"
 
 	"github.com/urfoundation/sn/miner"
 	"github.com/urnetwork/connect"
@@ -309,7 +311,7 @@ func rebindStorageSdkWorkRestore(ctx context.Context, owner durablevolume.Prepar
 		if err != nil {
 			return nil, err
 		}
-		if observed.Dev != target.Identity.Device || observed.Ino != target.Identity.Inode || observed.Uid != target.Identity.Uid || observed.Gid != target.Identity.Gid {
+		if durablesys.StatDevice(&observed) != target.Identity.Device || observed.Ino != target.Identity.Inode || observed.Uid != target.Identity.Uid || observed.Gid != target.Identity.Gid {
 			return nil, errors.Join(durablevolume.ErrIdentity, errors.New("SDK restore staged member lost its reviewed generation"))
 		}
 		return raw, nil
@@ -354,7 +356,7 @@ func inspectStorageSdkWorkRestore(ctx context.Context, root *os.File, owner dura
 	if err != nil {
 		return nil, err
 	}
-	translated := []connect.OriginalWorkOutboxFile{{Name: "", Device: parent.Dev, Inode: parent.Ino, Mode: 0700}}
+	translated := []connect.OriginalWorkOutboxFile{{Name: "", Device: durablesys.StatDevice(&parent), Inode: parent.Ino, Mode: 0700}}
 	fileKVs := map[string]durablevolume.PreparationFile{}
 	var indexRaw []byte
 	for _, file := range owner.Files {
@@ -362,7 +364,7 @@ func inspectStorageSdkWorkRestore(ctx context.Context, root *os.File, owner dura
 		if err != nil {
 			return nil, err
 		}
-		translated = append(translated, connect.OriginalWorkOutboxFile{Name: file.Path, Device: observed.Dev, Inode: observed.Ino, Mode: file.Mode, Bytes: file.Bytes, Sha256: file.Sha256})
+		translated = append(translated, connect.OriginalWorkOutboxFile{Name: file.Path, Device: durablesys.StatDevice(&observed), Inode: observed.Ino, Mode: file.Mode, Bytes: file.Bytes, Sha256: file.Sha256})
 		fileKVs[file.Path] = file
 		if file.Path == connect.OriginalWorkOutboxIndexName {
 			indexRaw = raw

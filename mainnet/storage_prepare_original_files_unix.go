@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -58,7 +58,7 @@ func readStorageOriginalFile(ctx context.Context, root *os.File, parent unix.Sta
 	if err := unix.Fstat(fd, &observed); err != nil {
 		return nil, observed, mainnetDurableUnavailable("cannot observe original custody descriptor", err)
 	}
-	if observed.Dev != parent.Dev || observed.Mode&unix.S_IFMT != unix.S_IFREG || observed.Mode&07777 != member.Mode || observed.Uid != parent.Uid || observed.Nlink != 1 || observed.Size < 0 || uint64(observed.Size) != member.Bytes {
+	if observed.Dev != parent.Dev || observed.Mode&unix.S_IFMT != unix.S_IFREG || uint32(observed.Mode)&07777 != member.Mode || observed.Uid != parent.Uid || observed.Nlink != 1 || observed.Size < 0 || uint64(observed.Size) != member.Bytes {
 		return nil, observed, errors.Join(durablevolume.ErrIdentity, errors.New("original custody original has changed physical custody"))
 	}
 	raw = make([]byte, int(member.Bytes))

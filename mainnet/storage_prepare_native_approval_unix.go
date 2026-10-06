@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Signed producer approvals have their own fixed restore owner. Exact original
 // references select the files; no arbitrary configuration-file copying occurs.

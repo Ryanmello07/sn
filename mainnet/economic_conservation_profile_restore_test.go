@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // The combined adapter restores a real large original witness and the exact
 // producer namespace that made it. Independent fixed owners retain their own

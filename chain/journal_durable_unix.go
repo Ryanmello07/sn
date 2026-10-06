@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Native custody retains context, physical leaves and explicit storage policy.
 // Actual write uncertainty pauses the owner; it never rewrites a partial log.
@@ -23,6 +23,8 @@ import (
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
 	"golang.org/x/sys/unix"
+
+	"github.com/urnetwork/connect/durablesys"
 )
 
 // A leaf generation survives descriptor close between serial operations.
@@ -493,7 +495,7 @@ func (self *guardedNativeJournal) saveRaw(hash types.Hash, raw []byte) error {
 		return self.uncertain(errors.Join(err, file.Close()))
 	}
 	fd := int(self.rawDirectory.File().Fd())
-	if err := unix.Renameat2(fd, temporary, fd, name, unix.RENAME_NOREPLACE); err != nil {
+	if err := durablesys.RenameNoReplace(fd, temporary, fd, name); err != nil {
 		return self.uncertain(errors.Join(err, file.Close()))
 	}
 	self.rawCount++

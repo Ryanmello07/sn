@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Fixed snapshot owners are selected by exact original history references.
 // This shared source review never infers ownership from a filename pattern.

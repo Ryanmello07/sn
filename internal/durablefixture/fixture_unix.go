@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Test-only consumers provision explicit synthetic declarations around their
 // owned fixture roots. Host injection changes kernel facts, never real I/O.
@@ -16,11 +16,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 
 	"github.com/urfoundation/sn/internal/durablepath"
 	"github.com/urnetwork/connect/durablevolume"
+
+	"github.com/urnetwork/connect/durablesys"
+
+	"golang.org/x/sys/unix"
 )
 
 // Each fixture owns immutable declarations and its own mutable kernel facts.
@@ -155,16 +158,16 @@ func newFixture(t testing.TB, ctx context.Context, schema string, roots ...strin
 	if err := os.WriteFile(marker, markerBytes, 0600); err != nil {
 		t.Fatal(err)
 	}
-	var stat syscall.Stat_t
-	if err := syscall.Stat(mount, &stat); err != nil {
+	var stat unix.Stat_t
+	if err := unix.Stat(mount, &stat); err != nil {
 		t.Fatal(err)
 	}
-	device := durablevolume.Device{Major: uint32((stat.Dev>>8)&0xfff | (stat.Dev>>32)&0xfffff000), Minor: uint32(stat.Dev&0xff | (stat.Dev>>12)&0xffffff00)}
-	host := &Host{device: device, filesystem: durablevolume.Filesystem{Id: [2]int32{37, 41}, Type: 0xef53, AvailableBytes: 1024 * 1024 * 1024, AvailableInodes: 1024 * 1024}, mounts: []durablevolume.Mount{
-		{Id: 1, ParentId: 1, Root: "/", Path: "/", Device: durablevolume.Device{Major: device.Major ^ 1, Minor: device.Minor}, FilesystemType: "ext4"},
-		{Id: 7, ParentId: 1, Root: "/", Path: mount, Device: device, FilesystemType: "ext4"},
+	device := durablevolume.Device{Major: unix.Major(rawDevice(&stat)), Minor: unix.Minor(rawDevice(&stat))}
+	host := &Host{device: device, filesystem: durablevolume.Filesystem{Id: [2]int32{37, 41}, Type: filesystemMagic, AvailableBytes: 1024 * 1024 * 1024, AvailableInodes: 1024 * 1024}, mounts: []durablevolume.Mount{
+		{Id: 1, ParentId: 1, Root: "/", Path: "/", Device: durablevolume.Device{Major: device.Major ^ 1, Minor: device.Minor}, FilesystemType: filesystemType},
+		{Id: 7, ParentId: 1, Root: "/", Path: mount, Device: device, FilesystemType: filesystemType},
 	}}
-	spec := durablevolume.VolumeSpec{MountPath: mount, FilesystemUuid: "1234-abcd", FilesystemType: "ext4", MarkerPath: marker, MarkerSha256: Digest(markerBytes), MinAvailableBytes: 1024, MinAvailableInodes: 8}
+	spec := durablevolume.VolumeSpec{MountPath: mount, FilesystemUuid: "1234-abcd", FilesystemType: filesystemType, MarkerPath: marker, MarkerSha256: Digest(markerBytes), MinAvailableBytes: 1024, MinAvailableInodes: 8}
 	for index, root := range selected {
 		lease := filepath.Join(metadata, fmt.Sprintf("root-%d-lease", index))
 		raw := []byte("synthetic-root-lease:" + root + "\n")
@@ -173,19 +176,19 @@ func newFixture(t testing.TB, ctx context.Context, schema string, roots ...strin
 		}
 		// Fixture-only enrollment never overwrites a prior root generation.
 		nonce := make([]byte, durablevolume.RootGenerationBytes)
-		count, err := syscall.Getxattr(root, durablevolume.RootGenerationAttribute, nonce)
-		if errors.Is(err, syscall.ENODATA) {
+		count, err := unix.Getxattr(root, durablevolume.RootGenerationAttribute, nonce)
+		if errors.Is(err, durablesys.ErrNoAttribute) {
 			if _, err := rand.Read(nonce); err != nil {
 				t.Fatal(err)
 			}
-			if err := syscall.Setxattr(root, durablevolume.RootGenerationAttribute, nonce, 1); err != nil {
+			if err := unix.Setxattr(root, durablevolume.RootGenerationAttribute, nonce, unix.XATTR_CREATE); err != nil {
 				t.Fatal(err)
 			}
 		} else if err != nil || count != len(nonce) {
 			t.Fatalf("synthetic root generation: size=%d err=%v", count, err)
 		}
-		var rootStat syscall.Stat_t
-		if err := syscall.Stat(root, &rootStat); err != nil {
+		var rootStat unix.Stat_t
+		if err := unix.Stat(root, &rootStat); err != nil {
 			t.Fatal(err)
 		}
 		spec.StateRoots = append(spec.StateRoots, durablevolume.StateRootSpec{Path: root, LeasePath: lease, LeaseSha256: Digest(raw), RootInode: rootStat.Ino, GenerationSha256: Digest(nonce)})

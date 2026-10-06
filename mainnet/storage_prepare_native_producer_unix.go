@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Native producer restore is a fixed complete-union owner. Original jobs,
 // attempts and trie nodes remain byte-identical; no VM, RPC or signer runs.
@@ -329,7 +329,7 @@ func readStorageNativeProducerMember(ctx context.Context, root *os.File, member 
 	if err := unix.Fstat(fd, &before); err != nil {
 		return nil, err
 	}
-	if before.Mode&unix.S_IFMT != unix.S_IFREG || before.Mode&07777 != member.Mode || before.Nlink != 1 || before.Uid != uint32(os.Geteuid()) || before.Dev != parent.stats[0].Dev || before.Size < 0 || uint64(before.Size) != member.Bytes {
+	if before.Mode&unix.S_IFMT != unix.S_IFREG || uint32(before.Mode)&07777 != member.Mode || before.Nlink != 1 || before.Uid != uint32(os.Geteuid()) || before.Dev != parent.stats[0].Dev || before.Size < 0 || uint64(before.Size) != member.Bytes {
 		return nil, errors.Join(durablevolume.ErrIdentity, errors.New("native copied artifact custody differs"))
 	}
 	raw := make([]byte, member.Bytes)

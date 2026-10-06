@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Original signed close fences remain authority after complete physical
 // request-owner restoration, including the next original request window.

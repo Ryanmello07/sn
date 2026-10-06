@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // The actual offline dispatcher must create only the fixed fresh formats that
 // their unchanged runtime owners can admit. No fixture enrolls the target.

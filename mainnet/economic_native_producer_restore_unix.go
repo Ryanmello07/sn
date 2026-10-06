@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline semantic restore checks the retained job graph without executing it.
 // Original checkpoint custody grants no new amounts, approval or signing right.

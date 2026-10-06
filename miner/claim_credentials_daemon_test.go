@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Real daemon startup reconciles retained original transaction bytes even when
 // provider credentials are absent. Fresh proof/signing work remains held.

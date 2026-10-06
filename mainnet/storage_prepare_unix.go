@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline preparation accepts public owner schemas and exact reviewed plans.
 // No RPC, signing key, runtime constructor or service manager is reachable.

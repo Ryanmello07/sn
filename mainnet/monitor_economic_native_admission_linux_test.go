@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // The largest accepted history must be read before the first public sample.
 // Real access events expose progress without skipping hash or custody checks;

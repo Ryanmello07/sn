@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Every preparation read stays relative to the borrowed original directory.
 // The read-only backend never repairs names or creates its lock file.
@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/urnetwork/connect/durablesys"
 
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/urnetwork/connect/durablevolume"
@@ -59,7 +61,7 @@ func attemptPreparationPrivate(file *os.File, directory bool) error {
 	if directory {
 		want = unix.S_IFDIR
 	}
-	if stat.Mode&unix.S_IFMT != want || stat.Mode&0077 != 0 || stat.Uid != uint32(os.Geteuid()) || !directory && stat.Nlink != 1 {
+	if uint32(stat.Mode)&unix.S_IFMT != want || uint32(stat.Mode)&0077 != 0 || stat.Uid != uint32(os.Geteuid()) || !directory && stat.Nlink != 1 {
 		return attemptLedgerCustodyLoss("preparation member is not private original custody", nil)
 	}
 	return nil
@@ -156,7 +158,7 @@ func openAttemptPreparationView(ctx context.Context, root *os.File, limits Attem
 		return nil, attemptLedgerCustodyObservation("cannot inspect preparation backend", err)
 	}
 	self.anchor, resultErr = readAttemptLedgerCustodyAttribute(root)
-	self.anchorAbsent = errors.Is(resultErr, unix.ENODATA)
+	self.anchorAbsent = errors.Is(resultErr, durablesys.ErrNoAttribute)
 	if self.anchorAbsent {
 		resultErr = nil
 	}
@@ -252,7 +254,7 @@ func (self *attemptPreparationView) observe(parent *os.File, name, relative stri
 	if !attemptPreparationSameStat(before, after) || !attemptPreparationSameStat(after, named) {
 		return attemptPreparationObservation{}, attemptLedgerCustodyLoss("preparation file changed during read", nil)
 	}
-	return attemptPreparationObservation{stat: after, file: AttemptLedgerPreparationFile{Path: relative, Kind: "file", Mode: after.Mode & 0777, Bytes: uint64(after.Size), Sha256: "sha256:" + hex.EncodeToString(digest.Sum(nil))}}, nil
+	return attemptPreparationObservation{stat: after, file: AttemptLedgerPreparationFile{Path: relative, Kind: "file", Mode: uint32(after.Mode) & 0777, Bytes: uint64(after.Size), Sha256: "sha256:" + hex.EncodeToString(digest.Sum(nil))}}, nil
 }
 
 // Every allowed backend and migration member is included; unknown names refuse.
@@ -304,7 +306,7 @@ func (self *attemptPreparationView) censusMembers(scope AttemptLedgerPreparation
 			return nil, attemptLedgerCustodyLoss("preparation retains unknown or pending ledger custody", nil)
 		}
 	}
-	files := []AttemptLedgerPreparationFile{{Path: attemptLedgerStoreName, Kind: "directory", Mode: self.backendStat.Mode & 0777}}
+	files := []AttemptLedgerPreparationFile{{Path: attemptLedgerStoreName, Kind: "directory", Mode: uint32(self.backendStat.Mode) & 0777}}
 	for _, name := range []string{attemptLedgerImportName, attemptLedgerReadyName, attemptLedgerLegacyName, attemptLedgerPendingName, ProviderAttemptRequestJournalName, ProviderAttemptRequestPendingName} {
 		if !allowed[name] {
 			continue
@@ -423,10 +425,10 @@ func (self *attemptPreparationView) checkCensus() error {
 		return attemptLedgerCustodyLoss("preparation backend member census changed", nil)
 	}
 	anchor, err := readAttemptLedgerCustodyAttribute(self.root)
-	if err != nil && !(self.anchorAbsent && errors.Is(err, unix.ENODATA)) {
+	if err != nil && !(self.anchorAbsent && errors.Is(err, durablesys.ErrNoAttribute)) {
 		return err
 	}
-	if self.anchorAbsent != errors.Is(err, unix.ENODATA) || !self.anchorAbsent && !bytes.Equal(anchor, self.anchor) {
+	if self.anchorAbsent != errors.Is(err, durablesys.ErrNoAttribute) || !self.anchorAbsent && !bytes.Equal(anchor, self.anchor) {
 		return attemptLedgerCustodyLoss("preparation custody checkpoint changed during inspection", nil)
 	}
 	requestAnchor, absent, err := readProviderAttemptRequestAttribute(self.root)

@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Offline resource planning holds every selected physical root under a joined
 // writer fence, authenticates original signed ledgers, and emits unsigned input.

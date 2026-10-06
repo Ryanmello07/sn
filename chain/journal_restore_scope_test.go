@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Optional restore proof inputs cannot silently revise already reviewed scope
 // bytes. This test grants no journal opening, signing or execution authority.

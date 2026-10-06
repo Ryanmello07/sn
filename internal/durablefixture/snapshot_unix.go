@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Explicit test enrollment is separate from every runtime storage constructor.
 package durablefixture
@@ -10,8 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"syscall"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 // Only an explicitly fresh absent snapshot is provisioned here. Each named
@@ -31,8 +32,8 @@ func ProvisionSnapshot(t testing.TB, path, kind, name string, maximum int64, loc
 		Size    int64  `json:"size"`
 		Sha256  string `json:"sha256"`
 	}
-	var stat syscall.Stat_t
-	if err := syscall.Stat(path, &stat); err != nil {
+	var stat unix.Stat_t
+	if err := unix.Stat(path, &stat); err != nil {
 		t.Fatal(err)
 	}
 	checkpoint := struct {
@@ -63,7 +64,7 @@ func ProvisionSnapshot(t testing.TB, path, kind, name string, maximum int64, loc
 			file.Close()
 			t.Fatal(err)
 		}
-		if err := syscall.Fstat(int(file.Fd()), &stat); err != nil {
+		if err := unix.Fstat(int(file.Fd()), &stat); err != nil {
 			file.Close()
 			t.Fatal(err)
 		}
@@ -82,7 +83,7 @@ func ProvisionSnapshot(t testing.TB, path, kind, name string, maximum int64, loc
 	if lockName != "" {
 		attributePath = filepath.Join(path, lockName)
 	}
-	if err := syscall.Setxattr(attributePath, attribute, raw, 1); err != nil {
+	if err := unix.Setxattr(attributePath, attribute, raw, unix.XATTR_CREATE); err != nil {
 		t.Fatal(err)
 	}
 	attributeFile, err := os.Open(attributePath)

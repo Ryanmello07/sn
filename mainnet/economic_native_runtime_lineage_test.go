@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // These public consumers execute two original programs through both real
 // engines. RPC fixtures expose their independently exported roots and code;

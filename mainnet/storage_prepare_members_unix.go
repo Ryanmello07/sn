@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Successor history uses its existing independent local and nonce-registry
 // heads. This fresh adapter cannot synthesize historical members or approval.

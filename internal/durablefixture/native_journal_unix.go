@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package durablefixture
 
@@ -8,8 +8,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 // ProvisionNativeJournal is test-fixture enrollment, separate from application
@@ -34,9 +35,9 @@ func ProvisionNativeJournal(t testing.TB, path string) {
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	var root, directory, journal syscall.Stat_t
-	for target, stat := range map[string]*syscall.Stat_t{path: &root, rawPath: &directory, filepath.Join(path, "native-transactions.jsonl"): &journal} {
-		if err := syscall.Stat(target, stat); err != nil {
+	var root, directory, journal unix.Stat_t
+	for target, stat := range map[string]*unix.Stat_t{path: &root, rawPath: &directory, filepath.Join(path, "native-transactions.jsonl"): &journal} {
+		if err := unix.Stat(target, stat); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -48,7 +49,7 @@ func ProvisionNativeJournal(t testing.TB, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := syscall.Setxattr(path, "user.urnetwork.native-journal-custody", raw, 1); err != nil {
+	if err := unix.Setxattr(path, "user.urnetwork.native-journal-custody", raw, unix.XATTR_CREATE); err != nil {
 		t.Fatal(err)
 	}
 	for _, target := range []string{rawPath, path, filepath.Dir(path)} {

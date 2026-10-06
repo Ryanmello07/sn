@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // A shared restore view selects only this fixed file-lock owner's namespace.
 // It is not an exported inventory or authority: the preparation core must

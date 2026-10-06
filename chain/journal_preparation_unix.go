@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Native preparation describes public empty custody. It never opens a writer,
 // rewrites a retained journal, initializes an xattr, or authorizes an extrinsic.
@@ -62,7 +62,7 @@ func nativePreparationStat(file *os.File, directory bool) (unix.Stat_t, error) {
 	if directory {
 		kind, mode = unix.S_IFDIR, 0700
 	}
-	if stat.Mode&unix.S_IFMT != kind || stat.Mode&07777 != mode || stat.Uid != uint32(os.Geteuid()) || !directory && (stat.Size != 0 || stat.Nlink != 1) {
+	if uint32(stat.Mode)&unix.S_IFMT != kind || uint32(stat.Mode)&07777 != mode || stat.Uid != uint32(os.Geteuid()) || !directory && (stat.Size != 0 || stat.Nlink != 1) {
 		return stat, errors.Join(durablevolume.ErrIdentity, errors.New("fresh native member is not an original private empty member"))
 	}
 	return stat, nil

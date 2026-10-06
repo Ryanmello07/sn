@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 // Real public preparation/export/restore surrounds the existing synthetic
 // native replay, vault RPC and Claim HTTP sources. Copied files retain exact
