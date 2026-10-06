@@ -1,16 +1,21 @@
 # Mainnet launch and operations plan
 
-## Current qualification checkpoint — October 6
+## Code and focused-test checkpoint — October 6
 
-All **20 principal-retention and restore roots pass** across the closed 11-root ordinary and nine-root capture/replay consumer runs. The original Rust root-version run retains **10 PASS / 1 FAIL**; the actual 15-extrinsic comparison and all 14 regenerated fixture exports passed. The explicit raw-version guard `8e0744ae`, merged as `d0ef0290`, now passes its separate **three-root follow-up**, with rebuilt capture/proof tools and every worker joined. The [retained qualification checkpoint](evidence/original-capture-refill-and-retention-20261005.json) pins these distinct results; current statuses below supersede earlier pending statements without rewriting historical counts.
+The selected code corrections are implemented and their focused follow-ups pass. The [final evidence index](evidence/code-focused-qualification-20261006.json) records exact source/dependency tuples, original failures and successor coverage. This checkpoint supersedes older current-state and unexecuted-test statements below; it does not combine separate runs into a full-suite pass.
 
-Root-seat registration is now implemented in `e8b5f294`, merged as `5534c8ec`, with [independent source acknowledgement](/home/by/urnetwork-worktrees/root-seat-registration/NATIVE-WITNESS-SOURCE-REVIEW-e8b5f294.json). The separate coldkey signing and exposure-policy path has **54 selected roots still unexecuted**, as recorded in its [final source handoff](/home/by/urnetwork-worktrees/root-seat-registration/handoff/FINAL-HANDOFF.json). Source completion supplies no executed registration or launch authority.
+| Qualified scope | Retained result |
+| --- | --- |
+| Root-seat registration, separate coldkey signing and exposure policy | 54/54 focused tests pass. |
+| Native proof RPC retry and refusal evidence | Original 16-root run: 11 PASS / 5 FAIL. The seven-root successor passes all five failures plus two additional checks; the four SN feed tests also pass. |
+| Selected payout schedule preflight before migration writes | 6/6 focused tests pass. |
+| Provider and client-key reads | Original validator12: 10 PASS / 2 FAIL. Provider4: 3 PASS / 1 FAIL, resolving both original failures. Final validator3: 3/3 PASS, including the repaired control and both shared GET/wallet deadline cases. |
+| Published Connect owner-ledger API | Core8 and Server interop2 pass on their retained source tuples. The original test-image staging failure remains separate. |
+| Current SN and Server all-package builds | SN and Server `go build ./...` both pass on the current source tuple below. |
 
-The RPC corrections are merged: SN `6d8421dc` through `1d0a42ed`, and Server `6d8ac54f` through `be1eea87`. The [closed original run](/home/by/sn-testnet-root-fallback-20261005/mainnet-archive-rpcfix-v1/run/evidence/closed-user-readback-v1.json) records a passing mainnet binary build and **four passing mainnet tests**. The **16 Server tests** were refused before child creation because the physical working directory was inadmissible; their narrow recovery is prepared and unexecuted. The combined 20-test scope is incomplete, and the corrected real capture has not run.
+The final SN source is `88de7fc2`, with Connect `a5dfb3c7`; the latest Server source is `948f12a7`. Server interop2 and the final direct tests used Server `362fe373`. The later upstream Server batch has only its explicitly recorded build scope, with no blanket test qualification. Earlier retention20 and raw-version scope3 passes remain retained alongside the original Rust11 10 PASS / 1 FAIL record.
 
-The [second real capture](/home/by/sn-testnet-root-fallback-20261005/original-epoch9218962-v2/run/evidence/closed-owner-readback-v1.json) of SN25 epoch block **9,218,962** remains a closed failure after body authentication, during parent-proof refill. No capture report, independent replay or Principal result was produced. The failing raw RPC reply was not retained, so its exact node-side cause and any chain mismatch remain unproven. These current statuses supersede earlier implementation-gap and pending statements below without changing their retained evidence.
-
-Mainnet is **not ready**. The October 6 inclusive earnings boundary has passed without activation; it supplies no launch authority. `activation: blocked` remains unchanged, with `deployment_id`, `coordinator`, `settlement_vault`, `policy_hash` and `readiness_sha256` empty.
+The selected economics remain **10% for providers and 90% received by `ur-reserve`**, which sends no funds. Earlier recycle routing and mandatory reserve-signing statements retain historical scope only. Live mainnet capture, database migration, deployment and activation were outside this code/test task. The original capture-v2 failure and its unretained raw RPC reply remain in the [operational evidence](/home/by/sn-testnet-root-fallback-20261005/original-epoch9218962-v2/run/evidence/closed-owner-readback-v1.json); they are not reclassified by these code results. `activation: blocked` is unchanged.
 
 ## Current reserve and economic decision — October 5
 
