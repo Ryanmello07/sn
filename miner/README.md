@@ -97,6 +97,41 @@ checks again every five minutes.
 - SIGINT and SIGTERM stop every provider.
 - `--port` serves the status of every operator. The providers themselves run
   without a status port.
+- With `--all-operators`, the first provider process to take TCP 443 serves the
+  extender for the host.
+
+
+## Hotkey payout across operators
+
+One coldkey signature pays the miner on every operator. The coldkey and the
+hotkey both sign one global consent that maps the hotkey to the coldkey. It is
+kept as a chain under `hotkey-wallet/` in the provider state directory. Each
+authenticated operator then stores the chain, and the hotkey alone signs a
+delegation of the miner's network there to the chain's head. The coldkey never
+signs per operator.
+
+```
+provider wallet hotkey challenge <coldkey_ss58> --hotkey_seed_file=<path>    # prints the statement to sign
+provider wallet hotkey set <coldkey_ss58> --hotkey_seed_file=<path> --message='<printed statement>' --signature=0x<128 hex chars>
+provider wallet hotkey set <coldkey_ss58> --hotkey_seed_file=<path> --coldkey_seed_file=<path>    # or sign here
+provider wallet hotkey status
+```
+
+`set` appends the generation, then stores the chain and the delegation at every
+authenticated operator and reports each one. A failing operator never stops the
+others. Setting the same `--message` and `--signature` again resends the chain,
+and `provide --all-operators --hotkey_seed_file=<path>` keeps every
+authenticated operator delegated at start and every hour. A later generation
+changes the coldkey or the epochs. The first generation names the subnet that
+the authenticated operators state, and they must agree.
+
+Epochs, unless `--wallet-from-epoch` and `--wallet-through-epoch` choose them:
+generation 1 earns from epoch 0, and a later generation from the operators'
+current epoch plus 1. Each delegation starts at the operator's current epoch
+plus 2, past its prospective boundary. Every interval covers 65,536 epochs.
+
+An operator pays a provider by precedence: the provider's own wallet consent
+(`provider wallet set`), then a network consent, then the hotkey delegation.
 
 
 ## Subnet payout wallet (Bittensor coldkey)

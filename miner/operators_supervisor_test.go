@@ -25,8 +25,10 @@ import (
 	"github.com/urnetwork/connect"
 
 	"github.com/urfoundation/sn/clientauth"
+	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/hotkeyauth"
 	"github.com/urfoundation/sn/operatorlist"
+	"github.com/urfoundation/sn/protocol"
 )
 
 // Bounds a wait that only a broken supervisor would reach.
@@ -76,6 +78,16 @@ func (self *testOperatorJournal) idle(next time.Time) {
 // index after it.
 func (self *testOperatorJournal) wait(t *testing.T, from int, want string) int {
 	t.Helper()
+	return self.waitMatch(t, from, want, func(entry string) bool { return entry == want })
+}
+
+func (self *testOperatorJournal) waitPrefix(t *testing.T, from int, prefix string) int {
+	t.Helper()
+	return self.waitMatch(t, from, prefix+"...", func(entry string) bool { return strings.HasPrefix(entry, prefix) })
+}
+
+func (self *testOperatorJournal) waitMatch(t *testing.T, from int, what string, match func(string) bool) int {
+	t.Helper()
 	timeout := time.After(testOperatorWait)
 	for {
 		var update chan struct{}
@@ -84,7 +96,7 @@ func (self *testOperatorJournal) wait(t *testing.T, from int, want string) int {
 		func() {
 			self.stateLock.Lock()
 			defer self.stateLock.Unlock()
-			if index := slices.Index(self.entries[from:], want); 0 <= index {
+			if index := slices.IndexFunc(self.entries[from:], match); 0 <= index {
 				found = from + index
 			}
 			update = self.update
@@ -96,7 +108,7 @@ func (self *testOperatorJournal) wait(t *testing.T, from int, want string) int {
 		select {
 		case <-update:
 		case <-timeout:
-			t.Fatalf("no %q after entry %d; journal:\n%s", want, from, strings.Join(entries, "\n"))
+			t.Fatalf("no %q after entry %d; journal:\n%s", what, from, strings.Join(entries, "\n"))
 		}
 	}
 }
@@ -208,17 +220,18 @@ func (self *testOperatorChild) option(name string) string {
 }
 
 type testOperatorFixture struct {
-	t          *testing.T
-	base       string
-	settings   operatorSupervisorSettings
-	signIn     func(context.Context, hotkeyauth.Settings) (*hotkeyauth.Network, error)
-	clock      *testOperatorClock
-	journal    *testOperatorJournal
-	list       *connect.MonitorValue[*operatorlist.Snapshot]
-	signals    chan os.Signal
-	starts     chan *testOperatorChild
-	supervisor *operatorSupervisor
-	done       chan struct{}
+	t            *testing.T
+	base         string
+	settings     operatorSupervisorSettings
+	signIn       func(context.Context, hotkeyauth.Settings) (*hotkeyauth.Network, error)
+	hotkeyWallet func(context.Context, hotkeyWalletTarget, *crv4.Keypair, []protocol.HotkeyWalletMappingConsent) (hotkeyWalletOutcome, error)
+	clock        *testOperatorClock
+	journal      *testOperatorJournal
+	list         *connect.MonitorValue[*operatorlist.Snapshot]
+	signals      chan os.Signal
+	starts       chan *testOperatorChild
+	supervisor   *operatorSupervisor
+	done         chan struct{}
 
 	stateLock sync.Mutex
 	children  []*testOperatorChild
@@ -234,11 +247,12 @@ func newTestOperatorFixture(t *testing.T) *testOperatorFixture {
 			t.Error("signed in without --auto-register")
 			return nil, errors.New("unexpected sign-in")
 		},
-		clock:   &testOperatorClock{now: testOperatorEpoch},
-		journal: &testOperatorJournal{update: make(chan struct{})},
-		list:    connect.NewMonitorValue[*operatorlist.Snapshot](nil),
-		signals: make(chan os.Signal, 4),
-		starts:  make(chan *testOperatorChild, 64),
+		hotkeyWallet: ensureOperatorHotkeyWallet,
+		clock:        &testOperatorClock{now: testOperatorEpoch},
+		journal:      &testOperatorJournal{update: make(chan struct{})},
+		list:         connect.NewMonitorValue[*operatorlist.Snapshot](nil),
+		signals:      make(chan os.Signal, 4),
+		starts:       make(chan *testOperatorChild, 64),
 	}
 	return self
 }
@@ -279,11 +293,12 @@ func (self *testOperatorFixture) start(command operatorChildCommand) (operatorCh
 
 func (self *testOperatorFixture) run() {
 	hooks := operatorSupervisorHooks{
-		start:  self.start,
-		now:    self.clock.Now,
-		after:  self.clock.After,
-		signIn: self.signIn,
-		idle:   self.journal.idle,
+		start:        self.start,
+		now:          self.clock.Now,
+		after:        self.clock.After,
+		signIn:       self.signIn,
+		hotkeyWallet: self.hotkeyWallet,
+		idle:         self.journal.idle,
 	}
 	self.supervisor = newOperatorSupervisor(self.settings, hooks, self.journal)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -713,4 +728,42 @@ func TestOperatorSupervisorStatusShowsEachOperator(t *testing.T) {
 		t.Fatalf("status = %s", recorder.Body.String())
 	}
 	fixture.stop(syscall.SIGTERM, alpha)
+}
+
+// The upkeep stores the chain and delegates at start and then hourly. A
+// failing operator never holds back the others, and recovers at a later run.
+func TestOperatorSupervisorKeepsTheHotkeyWalletDelegated(t *testing.T) {
+	coldkey, hotkey := testHotkey(t, 0x41), testHotkey(t, 0x31)
+	healthy := newTestHotkeyWalletOperator(t, 1, nil)
+	failing := newTestHotkeyWalletOperator(t, 2, func(operator *testHotkeyWalletOperator) {
+		operator.unavailable = true
+	})
+	fixture := newTestOperatorFixture(t)
+	fixture.settings.hotkey = hotkey
+	healthy.authenticate(t, fixture.base, "healthy.example")
+	failing.authenticate(t, fixture.base, "failing.example")
+	chain := testHotkeyWalletChain(t, fixture.base, coldkey, hotkey)
+	_, headHash, err := protocol.VerifyHotkeyWalletMappingLineage(t.Context(), chain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.publish(healthy.listed("healthy.example"), failing.listed("failing.example"))
+	fixture.run()
+	first, second := fixture.nextStart(), fixture.nextStart()
+	at := fixture.journal.wait(t, 0, "log operator healthy.example: hotkey wallet chain stored; delegated to generation 1 from epoch 53 through 65588")
+	fixture.journal.waitPrefix(t, 0, "log operator failing.example: hotkey wallet not delegated: storing the chain: ")
+	at = fixture.journal.wait(t, at, "log hotkey wallet generation 1 is delegated at 1 of 2 authenticated operators")
+	at = fixture.journal.wait(t, at, "idle 1h0m0s")
+	if delegation := healthy.delegationHead(t); delegation == nil || delegation.ConsentHeadHash != headHash || delegation.Hotkey != hotkey.PublicKey() {
+		t.Fatalf("healthy operator delegation = %+v", delegation)
+	}
+
+	failing.setUnavailable(false)
+	fixture.clock.set(operatorWalletUpkeepInterval)
+	at = fixture.journal.wait(t, at, "log operator failing.example: hotkey wallet chain stored; delegated to generation 1 from epoch 53 through 65588")
+	fixture.journal.wait(t, at, "log hotkey wallet generation 1 is delegated at 2 of 2 authenticated operators")
+	if _, accepts := healthy.counts(); accepts != 1 {
+		t.Fatalf("the adopted delegation was signed again: %d accepts", accepts)
+	}
+	fixture.stop(syscall.SIGTERM, first, second)
 }

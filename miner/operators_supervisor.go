@@ -13,9 +13,13 @@ package miner
 //     changed, gets SIGTERM and SIGKILL 60s later. The state directory stays.
 //   - SIGINT, SIGTERM and SIGQUIT are forwarded to every child, and the
 //     supervisor returns once all of them have exited.
+//   - with --hotkey_seed_file and a hotkey wallet chain (section 5.2), every
+//     listed operator with a jwt stores the chain and delegates the network
+//     to its head, at start and then hourly (hotkey_wallet_cmd.go).
 //
-// Only the Run loop touches operator state. Child exits and sign-ins reach it
-// over channels; the status page reads a published snapshot.
+// Only the Run loop touches operator state. Child exits, sign-ins and wallet
+// upkeep results reach it over channels; the status page reads a published
+// snapshot.
 
 import (
 	"context"
@@ -41,19 +45,22 @@ import (
 	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/hotkeyauth"
 	"github.com/urfoundation/sn/operatorlist"
+	"github.com/urfoundation/sn/protocol"
 )
 
 const operatorRestartMinimumDelay = 30 * time.Second
 const operatorRestartMaximumDelay = 10 * time.Minute
 const operatorStopGrace = 60 * time.Second
 const operatorAuthRecheckInterval = 5 * time.Minute
+const operatorWalletUpkeepInterval = time.Hour
 
 // The supervisor's command line, read by newOperatorSupervisorSettings.
 type operatorSupervisorSettings struct {
 	// today's provider state directory; each operator's lies below it
 	baseStateDir string
 	executable   string
-	// loaded from --hotkey_seed_file; signs in only with autoRegister
+	// loaded from --hotkey_seed_file: keeps the hotkey wallet delegated, and
+	// signs in only with autoRegister
 	hotkey       *crv4.Keypair
 	autoRegister bool
 	// divided evenly over the children; nonpositive passes none
@@ -84,16 +91,19 @@ type operatorSupervisorHooks struct {
 	now    func() time.Time
 	after  func(time.Duration) <-chan time.Time
 	signIn func(context.Context, hotkeyauth.Settings) (*hotkeyauth.Network, error)
+	// stores the hotkey wallet chain at one operator and delegates there
+	hotkeyWallet func(context.Context, hotkeyWalletTarget, *crv4.Keypair, []protocol.HotkeyWalletMappingConsent) (hotkeyWalletOutcome, error)
 	// sees each next deadline (zero for none) just before the loop waits
 	idle func(time.Time)
 }
 
 func defaultOperatorSupervisorHooks() operatorSupervisorHooks {
 	return operatorSupervisorHooks{
-		start:  startOperatorChild,
-		now:    time.Now,
-		after:  time.After,
-		signIn: hotkeyauth.SignIn,
+		start:        startOperatorChild,
+		now:          time.Now,
+		after:        time.After,
+		signIn:       hotkeyauth.SignIn,
+		hotkeyWallet: ensureOperatorHotkeyWallet,
 	}
 }
 
@@ -146,6 +156,20 @@ type operatorSignIn struct {
 	err     error
 }
 
+// From a finished hotkey wallet upkeep.
+type operatorWalletUpkeep struct {
+	// zero when no chain is stored yet
+	generation int
+	results    []operatorWalletResult
+	err        error
+}
+
+type operatorWalletResult struct {
+	domain  string
+	outcome hotkeyWalletOutcome
+	err     error
+}
+
 type operatorSupervisor struct {
 	settings     operatorSupervisorSettings
 	hooks        operatorSupervisorHooks
@@ -157,16 +181,21 @@ type operatorSupervisor struct {
 	signInCount  int
 	shuttingDown bool
 	status       atomic.Pointer[operatorSupervisorStatus]
+	// the next hotkey wallet upkeep; one runs at a time
+	walletUpkeepAt  time.Time
+	walletUpkeeping bool
+	walletUpkeeps   chan operatorWalletUpkeep
 }
 
 func newOperatorSupervisor(settings operatorSupervisorSettings, hooks operatorSupervisorHooks, log io.Writer) *operatorSupervisor {
 	self := &operatorSupervisor{
-		settings:  settings,
-		hooks:     hooks,
-		log:       log,
-		operators: map[string]*operatorState{},
-		exits:     make(chan operatorChildExit),
-		signIns:   make(chan operatorSignIn),
+		settings:      settings,
+		hooks:         hooks,
+		log:           log,
+		operators:     map[string]*operatorState{},
+		exits:         make(chan operatorChildExit),
+		signIns:       make(chan operatorSignIn),
+		walletUpkeeps: make(chan operatorWalletUpkeep),
 	}
 	self.status.Store(&operatorSupervisorStatus{Operators: []operatorStatus{}})
 	return self
@@ -174,16 +203,20 @@ func newOperatorSupervisor(settings operatorSupervisorSettings, hooks operatorSu
 
 // Supervises until a signal or ctx stops it and every child has exited.
 func (self *operatorSupervisor) Run(ctx context.Context, list operatorListSource, signals <-chan os.Signal) {
-	signInCtx, cancelSignIns := context.WithCancel(ctx)
-	defer cancelSignIns()
+	// sign-ins and wallet upkeep end with the supervisor
+	requestCtx, cancelRequests := context.WithCancel(ctx)
+	defer cancelRequests()
 	snapshot, update := list.Snapshot()
 	self.applyList(snapshot)
 	done := ctx.Done()
 	for {
 		now := self.hooks.now()
-		next := self.reconcile(signInCtx, now)
+		next := self.reconcile(requestCtx, now)
+		if upkeepAt := self.upkeepHotkeyWallet(requestCtx, now); !upkeepAt.IsZero() && (next.IsZero() || upkeepAt.Before(next)) {
+			next = upkeepAt
+		}
 		self.publishStatus()
-		if self.shuttingDown && self.signInCount == 0 && !self.anyChild() {
+		if self.shuttingDown && self.signInCount == 0 && !self.walletUpkeeping && !self.anyChild() {
 			return
 		}
 		var timeout <-chan time.Time
@@ -201,16 +234,87 @@ func (self *operatorSupervisor) Run(ctx context.Context, list operatorListSource
 			self.childExited(exit)
 		case result := <-self.signIns:
 			self.signedIn(result)
+		case upkeep := <-self.walletUpkeeps:
+			self.walletUpkept(upkeep)
 		case received := <-signals:
-			cancelSignIns()
+			cancelRequests()
 			self.shutdown(received)
 		case <-done:
 			done = nil
-			cancelSignIns()
+			cancelRequests()
 			self.shutdown(syscall.SIGTERM)
 		case <-timeout:
 		}
 	}
+}
+
+// Starts the hotkey wallet upkeep when it is due, and returns when the next
+// one is due (zero while one runs or without a hotkey). The upkeep reads the
+// chain and each operator's jwt itself, so the loop does no file or network
+// work for it.
+func (self *operatorSupervisor) upkeepHotkeyWallet(requestCtx context.Context, now time.Time) time.Time {
+	if self.settings.hotkey == nil || self.shuttingDown || self.walletUpkeeping {
+		return time.Time{}
+	}
+	// the first upkeep waits for a list
+	if self.listSha256 == "" || now.Before(self.walletUpkeepAt) {
+		return self.walletUpkeepAt
+	}
+	var listed []operatorlist.Operator
+	for _, domain := range self.domains() {
+		if state := self.operators[domain]; state.listed {
+			listed = append(listed, state.operator)
+		}
+	}
+	self.walletUpkeeping = true
+	self.walletUpkeepAt = now.Add(operatorWalletUpkeepInterval)
+	base, hotkey := self.settings.baseStateDir, self.settings.hotkey
+	go func() {
+		chain, err := hotkeyWalletStore(base).Chain()
+		upkeep := operatorWalletUpkeep{generation: len(chain), err: err}
+		if 0 < len(chain) {
+			for _, operator := range listed {
+				byJwt, err := clientauth.ReadToken(operatorJwtPath(base, operator.Domain))
+				if err != nil {
+					// awaiting auth
+					continue
+				}
+				outcome, err := self.hooks.hotkeyWallet(requestCtx, hotkeyWalletTarget{domain: operator.Domain, apiUrl: operator.ApiUrl, byJwt: byJwt}, hotkey, chain)
+				upkeep.results = append(upkeep.results, operatorWalletResult{domain: operator.Domain, outcome: outcome, err: err})
+			}
+		}
+		self.walletUpkeeps <- upkeep
+	}()
+	return time.Time{}
+}
+
+// Logs what changed and every failure; an operator that failed is tried again
+// at the next upkeep.
+func (self *operatorSupervisor) walletUpkept(upkeep operatorWalletUpkeep) {
+	self.walletUpkeeping = false
+	if self.shuttingDown {
+		return
+	}
+	if upkeep.err != nil {
+		fmt.Fprintf(self.log, "hotkey wallet chain unavailable: %v\n", upkeep.err)
+		return
+	}
+	if upkeep.generation == 0 {
+		return
+	}
+	adopted := 0
+	for _, result := range upkeep.results {
+		switch {
+		case result.err != nil:
+			fmt.Fprintf(self.log, "operator %s: hotkey wallet not delegated: %v; trying again in %s\n", result.domain, result.err, operatorWalletUpkeepInterval)
+		case result.outcome.delegated:
+			adopted++
+			fmt.Fprintf(self.log, "operator %s: hotkey wallet %s\n", result.domain, result.outcome)
+		default:
+			adopted++
+		}
+	}
+	fmt.Fprintf(self.log, "hotkey wallet generation %d is delegated at %d of %d authenticated operators\n", upkeep.generation, adopted, len(upkeep.results))
 }
 
 // Marks which operators are listed and logs what changed.
@@ -254,7 +358,7 @@ func (self *operatorSupervisor) applyList(snapshot *operatorlist.Snapshot) {
 
 // Moves every operator toward what the list and its credentials ask for, and
 // returns the earliest deadline still ahead, or zero.
-func (self *operatorSupervisor) reconcile(signInCtx context.Context, now time.Time) time.Time {
+func (self *operatorSupervisor) reconcile(requestCtx context.Context, now time.Time) time.Time {
 	domains := self.domains()
 	if !self.shuttingDown {
 		// credentials first, so the memory share counts every operator that
@@ -262,7 +366,7 @@ func (self *operatorSupervisor) reconcile(signInCtx context.Context, now time.Ti
 		for _, domain := range domains {
 			state := self.operators[domain]
 			if state.listed && state.child == nil && !state.signingIn && !now.Before(state.restartAt) && !now.Before(state.authCheckAt) {
-				self.checkCredentials(signInCtx, domain, state, now)
+				self.checkCredentials(requestCtx, domain, state, now)
 			}
 		}
 	}
@@ -313,7 +417,7 @@ func (self *operatorSupervisor) reconcile(signInCtx context.Context, now time.Ti
 
 // Finds the operator's jwt, or signs in for it with --auto-register, or logs
 // that the operator awaits auth and schedules the next check.
-func (self *operatorSupervisor) checkCredentials(signInCtx context.Context, domain string, state *operatorState, now time.Time) {
+func (self *operatorSupervisor) checkCredentials(requestCtx context.Context, domain string, state *operatorState, now time.Time) {
 	jwtPath := operatorJwtPath(self.settings.baseStateDir, domain)
 	if _, err := clientauth.ReadToken(jwtPath); err == nil {
 		state.credentialed = true
@@ -331,7 +435,7 @@ func (self *operatorSupervisor) checkCredentials(signInCtx context.Context, doma
 	fmt.Fprintf(self.log, "operator %s: signing in with the hotkey\n", domain)
 	go func() {
 		result := operatorSignIn{domain: domain}
-		network, err := self.hooks.signIn(signInCtx, hotkeyauth.Settings{ApiUrl: apiUrl, Hotkey: self.settings.hotkey})
+		network, err := self.hooks.signIn(requestCtx, hotkeyauth.Settings{ApiUrl: apiUrl, Hotkey: self.settings.hotkey})
 		if err == nil {
 			result.created = network.Created
 			err = clientauth.WriteToken(jwtPath, network.ByJwt)

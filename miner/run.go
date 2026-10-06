@@ -117,6 +117,14 @@ Usage:
     provider wallet challenge <coldkey_ss58> [--provider-jwt=<path> | --legacy-network-wallet] [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>]
         [--api_url=<api_url>]
         [-v...]
+    provider wallet hotkey challenge <coldkey_ss58> --hotkey_seed_file=<path>
+        [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>] [--operators-url=<url>]
+        [-v...]
+    provider wallet hotkey set <coldkey_ss58> --hotkey_seed_file=<path>
+        [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]
+        [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>] [--operators-url=<url>]
+        [-v...]
+    provider wallet hotkey status [--hotkey_seed_file=<path>] [--operators-url=<url>] [-v...]
     provider claim [--provider-jwt=<path> | --legacy-coldkey=<coldkey_ss58>] [--epoch=<epoch>] [--rpc=<rpc_url>]... [--key_file=<key_file>] [--dry-run]
         [--api_url=<api_url>]
         [-v...]
@@ -190,18 +198,22 @@ Options:
     --wallet-from-epoch=<epoch>     First prospective earning epoch in the signed provider mapping.
     --wallet-through-epoch=<epoch>  Last inclusive earning epoch; at most 65536 epochs.
                                      Omit both to use the next epoch through the finite 65536-epoch window.
+                                     With wallet hotkey: the global consent's epochs. Omitted, generation 1 earns
+                                     from epoch 0 and a later one from the operators' current epoch plus 1, each
+                                     through 65535 epochs later.
     --provider-jwt=<path>           Select one retained provider JWT; default: .provider.jwt in the provider state directory.
     --legacy-network-wallet         Explicit network-wallet compatibility; never selects a provider wallet.
     --legacy-coldkey=<coldkey_ss58>   Read a legacy network-only proof for this original committed coldkey.
                                      Uses the network JWT; never substitutes the current network wallet.
     --wallet=<coldkey_ss58>          Also set the subnet claim wallet at startup, same as provider wallet set.
                                      A failure is logged and does not block providing.
-    --coldkey_seed_file=<path>       With --wallet / wallet set: the coldkey's 32-byte sr25519 seed (raw, or 64 hex
+    --coldkey_seed_file=<path>       With --wallet / wallet set / wallet hotkey set: the coldkey's 32-byte sr25519 seed (raw, or 64 hex
                                      chars with an optional 0x prefix) in a private file that is never created here.
                                      The CLI fetches the wallet challenge and signs it, proving the coldkey; refused
                                      unless the seed derives <coldkey_ss58>. The seed never leaves the host.
     --message=<text>                 With --wallet / wallet set: the challenge printed by "provider wallet challenge",
                                      signed elsewhere (a literal \n stands for a newline). Needs --signature.
+                                     With wallet hotkey set: the statement "provider wallet hotkey challenge" printed.
     --signature=<hex>                The coldkey's 64-byte sr25519 signature over --message, hex (0x optional), made
                                      in the "substrate" signing context over the exact UTF-8 text (LF line endings,
                                      no trailing newline) or over that text wrapped in <Bytes>...</Bytes> (what a
@@ -232,11 +244,14 @@ Options:
 	--client_seed_file=<path>          Raw or hex 32-byte Ed25519 client key seed.
 	--hotkey_seed_file=<path>          Hex/raw 32-byte sr25519 hotkey seed in a private file that is never created
 	                                   here: the fleet hotkey, or the miner hotkey that signs in to operators
-	                                   as a TAO wallet (--auto-register, auth --operator).
+	                                   as a TAO wallet (--auto-register, auth --operator) and signs the hotkey
+	                                   wallet consent and each operator's delegation (wallet hotkey).
 	--all-operators                    provide: run one provider per operator in the operator list, each in its
 	                                   own state directory operators/<domain> below the provider state directory.
 	                                   Excludes --api_url, --connect_url, --provider-jwt, the wallet, capture,
 	                                   close-report and test egress flags, and --adopt-legacy-provider-key.
+	                                   With --hotkey_seed_file and a hotkey wallet chain, every authenticated
+	                                   operator gets the chain and a delegation to its head at start and hourly.
 	--operators-url=<url>              The operator list (https, or http only for loopback); default %[3]s.
 	                                   The last good copy is kept as operators.yml in the provider state directory.
 	--operators-refresh=<duration>     How often --all-operators refetches the operator list, as a Go duration
@@ -320,7 +335,9 @@ func Run(args []string) {
 			proxyRemove(opts)
 		}
 	} else if wallet, _ := opts.Bool("wallet"); wallet {
-		if set, _ := opts.Bool("set"); set {
+		if hotkey, _ := opts.Bool("hotkey"); hotkey {
+			hotkeyWalletCmd(opts)
+		} else if set, _ := opts.Bool("set"); set {
 			walletSet(opts)
 		} else if challenge, _ := opts.Bool("challenge"); challenge {
 			walletChallenge(opts)
