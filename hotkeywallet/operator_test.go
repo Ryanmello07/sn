@@ -72,6 +72,8 @@ func testAddress(key [32]byte) string {
 type testOperator struct {
 	byJwt  string
 	signer *ecdsa.PrivateKey
+	// new generations one request may add; maximumNewGenerationsPerSubmission when 0
+	newGenerations int
 	// changes each challenge before the operator signs it, or replaces it
 	// with the message it returns
 	hostile func(*protocol.HotkeyNetworkDelegationStatement) string
@@ -194,6 +196,15 @@ func (self *testOperator) storeChain(writer http.ResponseWriter, request *http.R
 			http.Error(writer, "409 another original is stored at this generation", http.StatusConflict)
 			return
 		}
+	}
+	// the server's bound on what one request may add
+	bound := self.newGenerations
+	if bound <= 0 {
+		bound = maximumNewGenerationsPerSubmission
+	}
+	if len(body.Originals)-len(stored) > bound {
+		http.Error(writer, "400 a submission may add at most 64 new generations", http.StatusBadRequest)
+		return
 	}
 	if len(stored) < len(body.Originals) {
 		self.consents[head.Hotkey] = slices.Clone(body.Originals)
@@ -446,6 +457,26 @@ func TestSubmitChainStoresTheChainAtTheOperator(t *testing.T) {
 	}
 	if _, submissions, _, _ := operator.counts(); submissions != 3 {
 		t.Fatalf("expected 3 submissions, got %d", submissions)
+	}
+}
+
+func TestSubmitChainSendsALongChainInPrefixes(t *testing.T) {
+	// a bound of 2 stands in for the operator's 64, so 5 generations take 3 requests
+	operator, client := newTestOperator(t, func(operator *testOperator) { operator.newGenerations = 2 })
+	client.newGenerations = 2
+	chain := testChain(t, testKey(t, 1), testKey(t, 2), 5)
+	headHash, generation, err := client.SubmitChain(t.Context(), chain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if headHash != testHash(t, chain[len(chain)-1]) || generation != uint64(len(chain)) {
+		t.Fatalf("acknowledged head %x generation %d, want the chain's head", headHash, generation)
+	}
+	if _, submissions, _, _ := operator.counts(); submissions != 3 {
+		t.Fatalf("a %d-generation chain took %d submissions, want 3", len(chain), submissions)
+	}
+	if _, _, err := client.SubmitChain(t.Context(), chain); err != nil {
+		t.Fatalf("replaying the stored chain failed: %v", err)
 	}
 }
 

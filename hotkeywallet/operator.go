@@ -6,6 +6,7 @@ package hotkeywallet
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -43,15 +44,42 @@ type Operator struct {
 	// The network JWT.
 	ByJwt  string
 	Client *http.Client
+	// Generations sent per request; maximumNewGenerationsPerSubmission when 0.
+	newGenerations int
 }
 
+// An operator adds at most this many generations of a chain per request.
+const maximumNewGenerationsPerSubmission = 64
+
 // Stores the complete chain at the operator, which must acknowledge the
-// chain's own head. The chain is verified before it is sent.
+// chain's own head. The chain is verified before it is sent. A chain longer
+// than one request may add goes as successive prefixes, each acknowledged at
+// its own head; a prefix the operator already holds is an idempotent replay.
 func (self Operator) SubmitChain(ctx context.Context, chain []protocol.HotkeyWalletMappingConsent) (headHash [32]byte, generation uint64, returnErr error) {
-	head, hash, err := protocol.VerifyHotkeyWalletMappingLineage(ctx, chain)
+	head, _, err := protocol.VerifyHotkeyWalletMappingLineage(ctx, chain)
 	if err != nil {
 		return [32]byte{}, 0, err
 	}
+	step := self.newGenerations
+	if step <= 0 {
+		step = maximumNewGenerationsPerSubmission
+	}
+	for end := min(len(chain), step); ; end = min(len(chain), end+step) {
+		// the original hash the protocol computes, for the prefix's last generation
+		raw, err := json.Marshal(chain[end-1])
+		if err != nil {
+			return [32]byte{}, 0, err
+		}
+		headHash, generation, returnErr = self.submitPrefix(ctx, chain[:end], head.Hotkey, sha256.Sum256(raw))
+		if returnErr != nil || end == len(chain) {
+			return
+		}
+	}
+}
+
+// One request with a verified prefix of the chain, ending at the given hash.
+func (self Operator) submitPrefix(ctx context.Context, chain []protocol.HotkeyWalletMappingConsent, hotkey [32]byte, hash [32]byte) ([32]byte, uint64, error) {
+	generation := uint64(len(chain))
 	args := struct {
 		Originals []protocol.HotkeyWalletMappingConsent `json:"originals"`
 	}{Originals: chain}
@@ -63,11 +91,11 @@ func (self Operator) SubmitChain(ctx context.Context, chain []protocol.HotkeyWal
 	if err := self.call(ctx, http.MethodPost, "/sn/wallet/hotkey-consent", args, maximumAnswerBytes, &result); err != nil {
 		return [32]byte{}, 0, err
 	}
-	hotkey, err := ss58.DecodeWithPrefix(result.HotkeySs58, ss58.BittensorPrefix)
-	if err != nil || hotkey != head.Hotkey || result.HeadHash != hash || result.Generation != head.Generation {
-		return [32]byte{}, 0, fmt.Errorf("%w: the operator acknowledged head %x generation %d of %q, not head %x generation %d", protocol.ErrWalletMappingIntegrity, result.HeadHash, result.Generation, result.HotkeySs58, hash, head.Generation)
+	acknowledged, err := ss58.DecodeWithPrefix(result.HotkeySs58, ss58.BittensorPrefix)
+	if err != nil || acknowledged != hotkey || result.HeadHash != hash || result.Generation != generation {
+		return [32]byte{}, 0, fmt.Errorf("%w: the operator acknowledged head %x generation %d of %q, not head %x generation %d", protocol.ErrWalletMappingIntegrity, result.HeadHash, result.Generation, result.HotkeySs58, hash, generation)
 	}
-	return hash, head.Generation, nil
+	return hash, generation, nil
 }
 
 // Leaves a delegation that already adopts the consent head as it is.
