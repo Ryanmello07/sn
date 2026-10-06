@@ -73,7 +73,8 @@ Collect these inputs before requesting signatures:
 - Each operator's distinct EVM `depositSigner` and `rootSigner`, native validator
   identities, signed producer configurations and durable service locations.
 - Dedicated native treasury recipient hotkeys and observed UID generations.
-- Host and owner-local durable-volume declarations and their exact hashes.
+- Host and owner-local durable-volume declarations and their exact hashes
+  (ext4, xfs or btrfs on Linux; a qualified APFS volume on macOS).
 
 Private keys belong in their existing custody: owners' Ledger devices and
 operators' secrets vaults. Request packages contain public artifacts, exact
@@ -138,7 +139,9 @@ path; do not promise that this can be completed in an hour. See
 Follow [OWNER-SIGNING.md](OWNER-SIGNING.md) and
 [OWNER-CUSTODY-PREPARATION.md](OWNER-CUSTODY-PREPARATION.md) for the full commands,
 SDK/platform qualification, metadata14/15, RFC78 proof, existing account/path,
-app version and independently authenticated pins.
+app version and independently authenticated pins. An owner signing on macOS
+needs a separately built and pinned macOS `bittensor_core` extension; the
+qualified Linux ELF build does not run there (see [MACOS.md](MACOS.md)).
 
 After fresh storage preparation and offline `bootstrap-chain apply` have
 established the original custody, the host sequence is `bootstrap-chain trim-plan`,
@@ -158,10 +161,14 @@ recovery, not deleting journals or issuing another signature casually.
 
 ### Contract graph: exact action requests
 
-Build the CLI from the reviewed checkout:
+Build the CLI from the reviewed checkout with the pinned Go 1.27.1 toolchain.
+It runs on Linux (amd64/arm64) and macOS (arm64/amd64); on macOS, custody
+volumes follow [MACOS.md](MACOS.md). Retain the binary's SHA-256 and
+`go version -m` output with the other launch locks:
 
 ```bash
-go build -o /absolute/path/sn-mainnet ./mainnet
+GOTOOLCHAIN=local CGO_ENABLED=0 go build -mod=readonly -trimpath -buildvcs=true \
+  -o /absolute/path/sn-mainnet ./mainnet
 ```
 
 The examples below use Bash. Set every variable from reviewed artifacts;

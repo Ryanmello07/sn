@@ -126,7 +126,9 @@ Maturin release builds of that verified checkout. Exact source, lock, toolchain,
 artifact pins and platform/reproducibility limits are in
 [OWNER-LEDGER-SDK.md](OWNER-LEDGER-SDK.md). Its ELF requires GLIBC 2.38 and is not
 a macOS or Windows bundle. Use only the separately qualified artifact and Python
-runtime for the owner's actual platform.
+runtime for the owner's actual platform. `sn-mainnet` and the adapter run on
+macOS; a macOS owner still needs its own pinned `bittensor_core` build (see
+[MACOS.md](MACOS.md)).
 
 Transfer the reviewed native extension file and its independently authenticated
 SHA256 pin to the owner. The adapter loads that explicit file, not an arbitrary
