@@ -203,7 +203,9 @@ pays.
 Follow the provider documentation at <https://ur.xyz>. Providers work with network
 operators — the miner defaults to the reference operator, and you can point it at another
 operator with `provider choose_network <api_url> <connect_url>` (`--show` prints the network in
-effect, `--reset` returns to the default).
+effect, `--reset` returns to the default). `provider provide --all-operators` instead mines
+every operator listed at <https://ur.xyz/operators.yml>, one provider per operator (see
+[`miner/README.md`](miner/README.md#mining-every-listed-operator)).
 
 Providers register a `client_id` with the subnet, and are paid *inside* their NO's pool by
 **Merkle claim** against that NO's payout root (`provider claim`, or `snclaim submit` for an
