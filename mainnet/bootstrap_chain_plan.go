@@ -110,6 +110,8 @@ func bootstrapChainPlanSchemaForConfig(schema string) string {
 
 // Every result preserves the complete unexecuted scope, including contracts
 // whose payloads may not yet exist in the approved reserve CREATE prefix.
+// These names are part of original plan seals; current treasury outcome reports
+// must not rewrite them and invalidate retained preparation or child custody.
 func bootstrapChainPendingPhases() []string {
 	return []string{"owner-trim-execution-and-generation-reconciliation", "complete-contract-installation-and-evidence-binding", "two-ur-validator-production-admissions-and-healthy-operators", "root-current-authority-and-service-activation", "native-10-percent-allocation-and-90-percent-recycle-acceptance"}
 }
