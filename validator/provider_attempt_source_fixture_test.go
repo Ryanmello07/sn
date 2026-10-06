@@ -163,6 +163,9 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 				}
 				return boundary, bindings, nil
 			}
+			// Construction snapshots the resolver separately from config. Select
+			// the live resolver while the ledger is still empty, before any send.
+			seal.engine.resolve = seal.engine.cfg.AttemptBoundaryResolver
 		}
 		identity := ProviderAttemptRequestIdentity{Ledger: seal.ledger.identity, Coordinator: fmt.Sprintf("0x%x", seal.expected.Activation.Domain.Coordinator), ClientId: seal.engine.clientId, PolicyHash: seal.expected.Activation.Domain.PolicyHash}
 		preparation := ProviderAttemptRequestPreparation{Identity: identity, Limits: ProviderAttemptRequestLimits{MaxRecords: 1000, MaxRecordBytes: 8192, MaxJournalBytes: 8 * 1024 * 1024}, Birth: AttemptBoundary{SettlementEpoch: window.Epoch, EVMBlock: window.StartBlock, EVMBlockHash: start.Hash().Hex()}}
