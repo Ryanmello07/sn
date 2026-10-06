@@ -4,12 +4,11 @@ set -euo pipefail
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="${1:-$(dirname "$sn_repo")}"
 
-release_repos=(sn server operator-proxy connect sdk glog goidenticons proxy userwireguard warp vault xops config)
+release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config)
 live_modules=(
   connect
   glog
   goidenticons
-  operator-proxy
   proxy
   sdk
   sdk/build
@@ -32,7 +31,7 @@ non_release_modules=(server/connect/sim-latency/baseline)
 expected_upstream() {
   case "$1" in
     glog | userwireguard) printf 'origin/master\n' ;;
-    sn | server | operator-proxy | connect | sdk | goidenticons | proxy | warp | vault | xops | config) printf 'origin/main\n' ;;
+    sn | server | connect | sdk | goidenticons | proxy | warp | vault | xops | config) printf 'origin/main\n' ;;
     *) return 1 ;;
   esac
 }
@@ -41,7 +40,6 @@ expected_origin() {
   case "$1" in
     sn) printf 'github.com/urfoundation/sn\n' ;;
     server) printf 'github.com/urnetwork/server\n' ;;
-    operator-proxy) printf 'github.com/urnetwork/operator-proxy\n' ;;
     connect) printf 'github.com/urnetwork/connect\n' ;;
     sdk) printf 'github.com/urnetwork/sdk\n' ;;
     glog) printf 'github.com/urnetwork/glog\n' ;;

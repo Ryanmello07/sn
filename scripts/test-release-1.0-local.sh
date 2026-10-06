@@ -6,7 +6,7 @@ export WARP_TEST_ENV_FAIL_FAST=1
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="$(dirname "$sn_repo")"
-release_repos=(sn server operator-proxy connect sdk glog goidenticons proxy userwireguard warp vault xops config)
+release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config)
 source "$sn_repo/scripts/test-storage.sh"
 sn_test_storage_init
 source "$sn_repo/scripts/release-gate-jobs.sh"
@@ -320,24 +320,6 @@ release_phase_sdk_build() {
   go test -race ./cmd/mobileexports -count=1
 }
 release_gate_start sdk-build release_phase_sdk_build
-
-echo "[release-1.0] operator-proxy module"
-release_phase_operator_proxy() {
-  cd "$workspace/operator-proxy"
-  go mod tidy -diff
-  go build ./...
-  go vet ./...
-  unformatted="$(gofmt -l .)"
-  if [[ -n "$unformatted" ]]; then
-    echo "gofmt needed for:"
-    echo "$unformatted"
-    gofmt -d .
-    exit 1
-  fi
-  go test -count=1 -timeout 20m ./...
-  go test -race -count=1 -timeout 20m ./...
-}
-release_gate_start operator-proxy release_phase_operator_proxy
 
 echo "[release-1.0] operator Connect ingress and owned-session lifecycle regressions"
 release_phase_server_connect() {

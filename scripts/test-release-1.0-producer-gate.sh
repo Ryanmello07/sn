@@ -6,7 +6,7 @@ export WARP_TEST_ENV_FAIL_FAST=1
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="$(dirname "$sn_repo")"
-release_repos=(sn server operator-proxy connect sdk glog goidenticons proxy userwireguard warp vault xops config)
+release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config)
 source "$sn_repo/scripts/test-storage.sh"
 sn_test_storage_init
 source "$sn_repo/scripts/release-gate-jobs.sh"
@@ -498,24 +498,6 @@ release_phase_sdk() {
   go test -race . -run "$token_transport_tests" -count=1
 }
 release_gate_start sdk release_phase_sdk
-
-echo "[release-1.0 producer] operator-proxy source and behavior"
-release_phase_operator_proxy() {
-  cd "$workspace/operator-proxy"
-  go mod tidy -diff
-  go build ./...
-  go vet ./...
-  unformatted="$(gofmt -l .)"
-  if [[ -n "$unformatted" ]]; then
-    echo "gofmt needed for:"
-    echo "$unformatted"
-    gofmt -d .
-    exit 1
-  fi
-  go test -count=1 -timeout 20m ./...
-  go test -race -count=1 -timeout 20m ./...
-}
-release_gate_start operator-proxy release_phase_operator_proxy
 
 echo "[release-1.0 producer] isolated PostgreSQL/Redis evidence path"
 release_gate_open_services() {

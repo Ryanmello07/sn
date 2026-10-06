@@ -1273,15 +1273,17 @@ shortfall without persisting or broadcasting transaction bytes.
   `server/local`; they never use shared PG or Redis services. PostgreSQL data
   volumes and containers carry the same complete release/config hash, and stale
   or unlabelled volumes are rejected instead of silently reusing old init hooks.
-- The locked `sn`, `server`, `operator-proxy`, `vault`, platform `config`,
-  `connect`, `sdk`, `glog`, `goidenticons`, `proxy`, `userwireguard`, and `xops`
-  repositories checked out beneath one parent. Repository discovery uses Go
-  module identity plus required resource files; `--sn-repo`, `--server-repo`,
-  `--operator-proxy-repo`, `--vault-repo`, and `--platform-config-repo` are
-  available when the layout differs. Operator-proxy is bound by both its
-  production-source hash and exact clean Git commit; the other executable Go
-  sources and non-secret operator config tree are content-locked as documented
-  in `release.lock.yml`.
+- The locked `sn`, `server`, `vault`, platform `config`, `connect`, `sdk`,
+  `glog`, `goidenticons`, `proxy`, `userwireguard`, and `xops` repositories
+  checked out beneath one parent. Repository discovery uses Go module identity
+  plus required resource files; `--sn-repo`, `--server-repo`, `--vault-repo`,
+  and `--platform-config-repo` are available when the layout differs. The
+  executable Go sources and non-secret operator config tree are content-locked
+  as documented in `release.lock.yml`. The retired `operator-proxy` repository
+  is not required: its `--operator-proxy-repo` override is gone, and its inert
+  `operator_proxy` config key and release-lock pins remain readable only so
+  existing deployment hashes stay valid. A fresh release-lock rendering drops
+  those pins.
 - Network reachability to the selected operational Substrate/EVM pair, public
   comparison endpoints, and existing MinIO service. Private fallback additionally
   requires the overlay gateway.
