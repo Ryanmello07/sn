@@ -447,9 +447,25 @@ func SelectEarningWalletWithHotkey(provider *EarningWallet, providerErr error, n
 
 ### 6.5 Operator API (server, migrations numbered 789 or later)
 
-Originals in requests and responses use the protocol JSON encoding: byte arrays are JSON number arrays, exactly as the
-existing history endpoints return them. The delegation accept reuses the existing accept route; the server tells the
-kinds apart by message prefix.
+Wire encodings:
+- In the new routes' own bodies, hashes are `[32]byte`, written as 32-integer JSON arrays, as in the existing history
+  `head_hash`.
+- Originals use the protocol JSON encoding, so signatures are 64-integer arrays.
+- The delegation challenge result reuses `SnWalletMappingChallengeResult` (`{message}`), and the delegation history result
+  reuses `SnWalletMappingHistoryResult` (`{originals}`).
+- The delegation accept reuses the existing accept route and `SnSetWalletArgs` without `client_id`:
+  - `message` is the delegation;
+  - `signature` is the hotkey's sr25519 signature in hex;
+  - `coldkey_ss58` carries the signing hotkey's ss58 (the signer address) and must equal the statement's hotkey.
+
+  The server tells the kinds apart by message prefix. The result's `mapping_hash` stays unprefixed hex, as for the
+  existing kinds.
+- The `GET /sn/wallet` entry's hashes are strings: `"0x"` plus 64 lowercase hex characters.
+- Spec operation IDs:
+  - "Sn Hotkey Wallet Mapping Consent";
+  - "Sn Hotkey Wallet Mapping History";
+  - "Sn Hotkey Network Delegation Challenge";
+  - "Sn Hotkey Network Delegation History".
 
 | Route | Auth | Request | Response |
 | --- | --- | --- | --- |
