@@ -65,6 +65,23 @@ sudo mkdir -m 0700 /Volumes/URCustody/sn25
 sudo chown "$(id -un)" /Volumes/URCustody/sn25
 ```
 
+A disk image also qualifies and needs no `sudo`. Its sparse bundle can live in
+any ordinary directory outside a git checkout; the mounted volume is still a
+separate local APFS volume with its own device, so it never counts as the data
+volume. Attach it with ownership enforced, and again after every restart:
+
+```sh
+hdiutil create -size 4g -type SPARSEBUNDLE -fs "Case-sensitive APFS" \
+  -volname URCustody "$HOME/urnetwork/mainnet/URCustody.sparsebundle"
+hdiutil attach -owners on -nobrowse "$HOME/urnetwork/mainnet/URCustody.sparsebundle"
+mkdir -m 0700 /Volumes/URCustody/sn25
+touch /Volumes/URCustody/.metadata_never_index
+```
+
+Keep the image's cap below the host disk's free space: the reserve checks see
+only the image's own free space. Never restore the bundle from a backup during a
+launch, since an older copy rolls the journals back.
+
 Case-sensitive APFS is recommended for a new custody volume. Custody names are
 program-chosen ASCII and an exclusive create refuses a case-only collision, but
 a case-sensitive volume removes the aliasing entirely. A dedicated volume
