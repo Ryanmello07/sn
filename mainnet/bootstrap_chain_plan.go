@@ -428,7 +428,14 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 			return result, err
 		}
 		if config.Schema != bootstrapChainConfigSchemaV1 {
-			inspection, err := validator.InspectProductionBootstrapConfig(ctx, role.Config.Path, configRaw)
+			// The sole launch config is signed before its coordinator and operator
+			// exist, so only v5 admits its activation-pending evidence. Its producer
+			// runs a separately re-approved rendered successor; v2-v4 stay strict.
+			inspect := validator.InspectProductionBootstrapConfig
+			if config.Schema == bootstrapChainConfigSchemaV5 {
+				inspect = validator.InspectProductionBootstrapConfigPreActivation
+			}
+			inspection, err := inspect(ctx, role.Config.Path, configRaw)
 			if err != nil {
 				return result, fmt.Errorf("bootstrap chain validator %d production config: %w", role.ValidatorId, err)
 			}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -26,6 +27,10 @@ type ProductionBootstrapInspection struct {
 	ApprovalReference ReleaseEvidenceV2File `json:"approval_reference"`
 	Approval          OwnerRecycleApproval  `json:"approval"`
 	DeclaredPaths     []string              `json:"declared_paths"`
+	// Only the pre-activation inspection sets this: the complete evidence_v2
+	// census is pre-declared and unrendered, so the config itself can never
+	// run; a separately re-approved rendered successor must. Omitted otherwise.
+	EvidenceActivationPending bool `json:"evidence_activation_pending,omitempty"`
 }
 
 // Borrows the exact config bytes for this synchronous call. The caller pins
@@ -34,6 +39,18 @@ type ProductionBootstrapInspection struct {
 // no inherited production history and cannot use retained-state fallbacks.
 // Physical path checks inspect metadata, never credential/evidence contents.
 func InspectProductionBootstrapConfig(ctx context.Context, path string, raw []byte) (*ProductionBootstrapInspection, error) {
+	return inspectProductionBootstrapConfig(ctx, path, raw, false)
+}
+
+// Additionally admits a config whose complete evidence_v2 census is
+// activation-pending: every entry unrendered with all paths pre-declared. Such
+// a config is signed before its coordinator and operators exist; every other
+// check is the strict inspection's, and the result says the census is pending.
+func InspectProductionBootstrapConfigPreActivation(ctx context.Context, path string, raw []byte) (*ProductionBootstrapInspection, error) {
+	return inspectProductionBootstrapConfig(ctx, path, raw, true)
+}
+
+func inspectProductionBootstrapConfig(ctx context.Context, path string, raw []byte, admitPending bool) (*ProductionBootstrapInspection, error) {
 	if ctx == nil {
 		return nil, errors.New("production bootstrap context is absent")
 	}
@@ -55,6 +72,13 @@ func InspectProductionBootstrapConfig(ctx context.Context, path string, raw []by
 	if err := validateOwnerRecycleApprovalSelection(cfg); err != nil {
 		return nil, err
 	}
+	// A pending census must name every path before those paths reserve custody.
+	pending := admitPending && slices.ContainsFunc(cfg.EvidenceV2.Operators, ReleaseEvidenceV2OperatorConfig.Unrendered)
+	if pending {
+		if err := requireReleaseEvidenceV2ProductionPending(cfg.EvidenceV2.Operators); err != nil {
+			return nil, err
+		}
+	}
 	paths := productionBootstrapDeclaredPaths(cfg)
 	for _, reserved := range append([]string{path}, paths...) {
 		approvalPath := productionEconomicSelection(cfg).Approval.Path
@@ -72,7 +96,11 @@ func InspectProductionBootstrapConfig(ctx context.Context, path string, raw []by
 	if err := loadReleaseProductionRuntimeHistoryBytes(cfg, nil); err != nil {
 		return nil, err
 	}
-	if err := cfg.Validate(); err != nil {
+	if pending {
+		if err := cfg.validateProductionPreActivation(); err != nil {
+			return nil, err
+		}
+	} else if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	approved, err := ownerRecycleProductionApproval(cfg)
@@ -85,7 +113,7 @@ func InspectProductionBootstrapConfig(ctx context.Context, path string, raw []by
 	return &ProductionBootstrapInspection{DeploymentId: cfg.DeploymentID, ValidatorId: cfg.ValidatorID, EvmChainId: cfg.ChainID, Netuid: cfg.Netuid,
 		Coordinator: cfg.Coordinator, SettlementVault: cfg.SettlementVault, DeployBlock: cfg.DeployBlock, PolicyHash: cfg.PolicyHash,
 		ApprovalSigner: productionEconomicSelection(cfg).Signer, ApprovalReference: productionEconomicSelection(cfg).Approval,
-		Approval: approved.Approval, DeclaredPaths: paths}, nil
+		Approval: approved.Approval, DeclaredPaths: paths, EvidenceActivationPending: pending}, nil
 }
 
 // The normalized path inventory contains declarations only; gathering it must

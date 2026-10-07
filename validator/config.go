@@ -114,36 +114,56 @@ func LoadReleaseConfigPreActivation(path string) (*ReleaseConfig, error) {
 	return loadReleaseConfig(path, releaseConfigLoadMode{preActivation: true})
 }
 
+// LoadReleaseProductionConfigPreActivation authenticates a signed schema-3
+// configuration exactly as the producer loader does, except that its complete
+// evidence_v2 census is activation-pending: every entry is unrendered and
+// pre-declares all of its paths. Only `validator activate` uses it, to render
+// those inputs into a separate successor that the approval key re-approves;
+// RunRelease never does.
+func LoadReleaseProductionConfigPreActivation(path string) (*ReleaseConfig, error) {
+	return loadReleaseConfig(path, releaseConfigLoadMode{productionPreActivation: true})
+}
+
 // releaseConfigLoadMode selects which non-default admissions a loader grants.
 type releaseConfigLoadMode struct {
 	provisionalActivationObservation bool
 	preActivation                    bool
+	productionPreActivation          bool
 	ownerRecycleAdmission            bool
 	mainnetRuntimeObservation        bool
 }
 
 func loadReleaseConfig(path string, mode releaseConfigLoadMode) (*ReleaseConfig, error) {
-	if strings.TrimSpace(path) == "" {
-		return nil, errors.New("validator config path is empty")
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-	file, err := os.Open(abs)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() > maximumReleaseConfigBytes {
-		return nil, errors.Join(errors.New("validator config is not a bounded regular file"), err)
-	}
-	b, err := io.ReadAll(io.LimitReader(file, maximumReleaseConfigBytes+1))
+	abs, b, err := readReleaseConfigFile(path)
 	if err != nil {
 		return nil, err
 	}
 	return decodeReleaseConfigBytesMode(abs, b, mode)
+}
+
+// Reads the bounded regular file once; callers decode exactly these bytes.
+func readReleaseConfigFile(path string) (string, []byte, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", nil, errors.New("validator config path is empty")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", nil, err
+	}
+	file, err := os.Open(abs)
+	if err != nil {
+		return "", nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maximumReleaseConfigBytes {
+		return "", nil, errors.Join(errors.New("validator config is not a bounded regular file"), err)
+	}
+	b, err := io.ReadAll(io.LimitReader(file, maximumReleaseConfigBytes+1))
+	if err != nil {
+		return "", nil, err
+	}
+	return abs, b, nil
 }
 
 // The adoption caller must parse the same immutable bytes that its request
@@ -206,9 +226,19 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 		if err := loadReleaseProductionAuthorityHistory(&cfg); err != nil {
 			return nil, fmt.Errorf("validator production authority history %s: %w", abs, err)
 		}
-		if err := cfg.Validate(); err != nil {
+		if mode.productionPreActivation {
+			if err := cfg.validateProductionPreActivation(); err != nil {
+				return nil, fmt.Errorf("validator production pre-activation config %s: %w", abs, err)
+			}
+		} else if err := cfg.Validate(); errors.Is(err, ErrReleaseEvidenceV2ActivationPending) {
+			// The signed approval binds these unrendered references; the
+			// in-place completion that legacy configs allow cannot apply.
+			return nil, fmt.Errorf("validator production config %s: %w", abs, ErrReleaseProductionActivationPending)
+		} else if err != nil {
 			return nil, fmt.Errorf("validator production config %s: %w", abs, err)
 		}
+	} else if mode.productionPreActivation {
+		return nil, fmt.Errorf("validator config %s: production pre-activation requires a signed schema 3 config", abs)
 	} else if mode.mainnetRuntimeObservation {
 		if err := loadReleaseMainnetRuntimeHistory(&cfg); err != nil {
 			return nil, fmt.Errorf("validator runtime observation config %s: %w", abs, err)
@@ -389,7 +419,9 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 		return errors.New("capacity revision requires original independently approved production authority")
 	}
 	if production {
-		if provisionalActivationObservation || preActivation || mainnetRuntimeObservation {
+		// Pre-activation is admitted only for a complete activation-pending
+		// census; the evidence check below then accepts those entries alone.
+		if provisionalActivationObservation || mainnetRuntimeObservation || preActivation && requireReleaseEvidenceV2ProductionPending(c.EvidenceV2.Operators) != nil {
 			return errors.New("mainnet production authority cannot authorize another config load purpose")
 		}
 		if err := validateOwnerRecycleProductionConfig(&c); err != nil {
