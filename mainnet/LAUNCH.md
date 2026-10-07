@@ -399,12 +399,13 @@ installation readback before allowing operator or service writes.
 Use approved mainnet policy YAML with a `policy:` wrapper and schema
 `urnetwork-policy-v1`; do not copy accelerated testnet settings. Mainnet steady
 production cadence is 50,400 blocks. A steady initial policy has
-`after_accelerated_epochs: 0` and matching initial/production windows. Economic
-parameters and signer approvals still need their actual reviewed values.
+`after_accelerated_epochs: 0` and matching initial/production windows.
 
-The draft is [`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml):
-one operator and one validator, the treasury's 32768 weight cap and the
-zero-price launch. Its comments mark the reference values still to be confirmed.
+The owner approved the mainnet policy on October 7:
+[`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml), hash
+`0xca3274895fa7423e1a49d686dbaeea8f970ee1e4b28c268eb624723d4108011c`. It has one
+operator and one validator, the treasury's 32768 weight cap, the zero-price launch
+and 12-epoch fleet bindings. It is not installed yet.
 
 There is no dedicated `policy-hash` CLI. Save this helper outside repository
 package directories, for example `$REVIEW_DIR/policyhash.go`, then run it from

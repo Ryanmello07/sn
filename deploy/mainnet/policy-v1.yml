@@ -1,15 +1,12 @@
-# SN25 mainnet protocol policy, DRAFT for owner review. Not approved and not
-# installed. Comments and key order don't change the hash; any value does.
+# SN25 mainnet protocol policy. The owner approved these values on October 7;
+# the policy is not installed yet. Its hash is bound into the contracts and the
+# validator, server and treasury configs. Comments and key order don't change
+# the hash; any value does.
 #
-# Decided: mainnet profile, steady seven-day cadence from epoch 0, one operator
-# and one validator, the 32768 weight cap the treasury policy requires, and the
-# zero-price launch from price.yml (all rates 0, equal_demand). The 10%/90%
-# provider/reserve split is not a field here; it lives in the separately hashed
-# treasury policy.
-#
-# Reference values from MAINNET.md and evm/script/Deploy.s.sol, still to be
-# confirmed: the settlement windows, claim TTL and grace, and the binding horizon.
-# OPEN owner choices are marked below.
+# One operator and one validator, a steady seven-day cadence from epoch 0, the
+# 32768 weight cap the treasury policy requires, and the zero-price launch from
+# price.yml (all rates 0, equal_demand). The 10%/90% provider/reserve split is
+# not a field here; it lives in the separately hashed treasury policy.
 policy:
   schema: urnetwork-policy-v1
   network_profile: mainnet
@@ -20,12 +17,12 @@ policy:
   settlement:
     # Seven days of 12-second blocks.
     epoch_blocks: 50400
-    # Reference: roots commit within 4 hours, finalization 48 hours into the
-    # next epoch, 24 minutes of close grace.
+    # Roots commit within 4 hours of an epoch's close and the epoch finalizes
+    # 48 hours in, after the audit window; 24 minutes of close grace.
     root_commit_window_blocks: 1200
     finalize_offset_blocks: 14400
     close_grace_blocks: 120
-    # Reference: claims stay open 8 epochs (56 days) plus 1 epoch of grace.
+    # Claims stay open 8 epochs (56 days) plus 1 epoch of grace.
     claim_ttl_epochs: 8
     claim_grace_epochs: 1
     missed_root_action: carry_same_operator
@@ -45,7 +42,7 @@ policy:
     theta:
       numerator: 3
       denominator: 10
-    # OPEN: quality clamp, score smoothing and head fleets keep the testnet values.
+    # The designed quality clamp, score smoothing and head fleet count.
     quality_transform:
       kind: clamp_ppm
       minimum_ppm: 750000
@@ -61,10 +58,9 @@ policy:
     arithmetic: integer_rational_v1
   deposit:
     unit: rao_per_gib
-    # OPEN: at zero price no deposit is ever sent, so neither cap binds. Both
-    # must be nonzero, with the per-operator epoch cap at most the lifetime
-    # campaign cap. These keep the testnet values; a successor policy sets real
-    # caps when deposits start.
+    # At zero price no deposit is ever sent, so neither cap binds yet. Both must
+    # be nonzero, with the per-operator epoch cap at most the lifetime campaign
+    # cap; a successor policy sets real caps when deposits start.
     epoch_cap_rao_per_operator: 10000000000
     total_test_campaign_cap_rao: 196000000000
     tier_snapshot: conviction_before_epoch
@@ -104,9 +100,9 @@ policy:
   binding:
     schema: urnetwork-fleet-binding-v1
     changes_effective_next_epoch: true
-    # OPEN: the Deploy.s.sol default. At seven-day epochs 32 epochs is about
-    # 7 months; on testnet it was 38 hours.
-    maximum_validity_epochs: 32
+    # Fleets re-sign their bindings about every 3 months (12 seven-day epochs)
+    # instead of the 32-epoch contract default.
+    maximum_validity_epochs: 12
     commitments_required: true
     client_signature: ed25519
     hotkey_signature: sr25519
