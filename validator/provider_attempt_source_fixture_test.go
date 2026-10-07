@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"testing"
@@ -113,6 +114,13 @@ func newProviderAttemptSourceTestFixture(t *testing.T, failed bool) *providerAtt
 // Complete M8 originals and a failed lane share the same independently pinned
 // window. Existing empty/failed callers retain their original scenario.
 func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, completed bool) *providerAttemptSourceTestFixture {
+	t.Helper()
+	return newProviderAttemptSourceTestFixtureForCensus(t, failed, completed, []byte{51, 52}, []uint64{9, 11})
+}
+
+// Every registered validator owns one lane per configured operator. A single
+// validator measuring a single operator reads that lane's only public origin.
+func newProviderAttemptSourceTestFixtureForCensus(t *testing.T, failed, completed bool, seeds []byte, noIds []uint64) *providerAttemptSourceTestFixture {
 	t.Helper()
 	self := &providerAttemptSourceTestFixture{windowKey: ed25519.NewKeyFromSeed(bytes.Repeat([]byte{83}, 32))}
 	firstBlock := uint64(1)
@@ -280,7 +288,10 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 		t.Cleanup(server.Close)
 		requests[seal] = requestFixture{preparation: preparation, cut: *cut, scope: scope, endpoint: server.URL + "/verify/original"}
 	}
-	self.base = &providerAttemptWindowTestFixture{owners: []*providerAttemptWindowTestOwner{newProviderAttemptWindowTestOwnerForWindow(t, 51, 0, 0, before, &window), newProviderAttemptWindowTestOwnerForWindow(t, 52, 0, 0, before, &window)}}
+	self.base = &providerAttemptWindowTestFixture{}
+	for _, seed := range seeds {
+		self.base.owners = append(self.base.owners, newProviderAttemptWindowTestOwnerForCensus(t, seed, 0, 0, before, &window, noIds))
+	}
 	sort.Slice(self.base.owners, func(i, j int) bool {
 		a, b := self.base.owners[i].fixture.hotkey.PublicKey(), self.base.owners[j].fixture.hotkey.PublicKey()
 		return bytes.Compare(a[:], b[:]) < 0
@@ -292,7 +303,7 @@ func newProviderAttemptSourceTestFixtureWithCompleted(t *testing.T, failed, comp
 	self.response.Window.Schema = ProviderAttemptWindowSchema
 	for _, owner := range self.base.owners {
 		hotkey := owner.fixture.hotkey.PublicKey()
-		registry.Owners = append(registry.Owners, protocol.ProviderAttemptOwner{Hotkey: hotkey, NoIds: []uint64{9, 11}})
+		registry.Owners = append(registry.Owners, protocol.ProviderAttemptOwner{Hotkey: hotkey, NoIds: slices.Clone(noIds)})
 		self.response.Window.Members = append(self.response.Window.Members, ProviderAttemptWindowMember{Hotkey: hotkey, Manifest: *owner.manifest})
 	}
 	signed, err := protocol.SealProviderAttemptRegistry(t.Context(), registry, expectation, registryKey)

@@ -15,6 +15,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -185,7 +186,7 @@ func TestProviderRequestPublicationLostReplyRetainsExactOriginal(t *testing.T) {
 	if err := retainProviderAttemptPublication(t.Context(), path, raw, 1024*1024, 4*1024*1024, 32, namespace); err != nil {
 		t.Fatal(err)
 	}
-	replicas := fixture.base.owners[0].fixture.replicas
+	replicas := slices.Clone(fixture.base.owners[0].fixture.replicas)
 	owned := replicas[1].WriteMetadata
 	lost := errors.New("synthetic original upload reply lost")
 	replicas[1].WriteMetadata = func(ctx context.Context, hash string, body []byte) error {

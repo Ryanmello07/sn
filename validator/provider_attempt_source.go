@@ -445,7 +445,12 @@ func (self *ProviderAttemptAuthoritySource) verify(ctx context.Context, artifact
 			return nil, protocol.ErrProviderAttemptsIntegrity
 		}
 		option := ProviderAttemptValidatorOptions{Publication: validator.Publication, Settlement: AttemptSettlementV2Options{Operators: map[uint64]AttemptSettlementV2OperatorOptions{}, MaxParticipants: validator.MaxParticipants, MaxTransitionBytes: validator.MaxTransitionBytes, MaxClosureBytes: validator.MaxClosureBytes}}
-		var replicas [2]ValidatorEvidenceRetainedReplicaV2
+		// The signed selection names this validator's one or two replica origins;
+		// the shared publication reader still checks them against its census.
+		if err := validateReleaseEvidenceV2ReplicaCount(len(validator.Publication.Origins)); err != nil {
+			return nil, errors.Join(protocol.ErrProviderAttemptsIntegrity, err)
+		}
+		replicas := make([]ValidatorEvidenceRetainedReplicaV2, len(validator.Publication.Origins))
 		for replica, origin := range validator.Publication.Origins {
 			reader, err := newHttpAttemptStreamV2Reader(origin, validator.Publication.Bounds.Cut, validator.MaxClosureBytes)
 			if err != nil {
@@ -455,7 +460,7 @@ func (self *ProviderAttemptAuthoritySource) verify(ctx context.Context, artifact
 				return store.read(owner, reader, origin, "metadata", hash, size)
 			}}
 		}
-		option.RetainedMetadata = &replicas
+		option.RetainedMetadata = replicas
 		for position, operator := range validator.Operators {
 			noId := operator.Expected.Identity.NoID
 			if _, exists := option.Settlement.Operators[noId]; exists {

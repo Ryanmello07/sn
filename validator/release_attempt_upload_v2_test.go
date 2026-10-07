@@ -270,7 +270,7 @@ func TestReleaseEvidenceV2UploadRejectsIncompleteAdmission(t *testing.T) {
 func TestReleaseEvidenceV2UploadReplicasRequireCompleteRuntimeCensus(t *testing.T) {
 	t.Parallel()
 	cfg, runtimes, stores := newReleaseAttemptUploadV2HTTPFixture(t, 3, attemptCutV2ReplicaTestBounds())
-	origins := [2]string{cfg.Operators[2].APIURL, cfg.Operators[0].APIURL}
+	origins := []string{cfg.Operators[2].APIURL, cfg.Operators[0].APIURL}
 	if _, err := releaseAttemptUploadReplicasV2(cfg, origins, runtimes); err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestReleaseEvidenceV2UploadReplicasRequireCompleteRuntimeCensus(t *testing.
 		measurement := *runtime.measurement
 		owner := *runtime.attemptUpload
 		runtime.measurement, runtime.attemptUpload, owners[0] = &measurement, &owner, &runtime
-		selected := origins
+		selected := slices.Clone(origins)
 		switch fault {
 		case "missing-runtime":
 			owners = owners[:2]
@@ -318,7 +318,7 @@ func TestReleaseEvidenceV2UploadReplicasRequireCompleteRuntimeCensus(t *testing.
 			selected[1] = selected[0]
 		}
 		actual, err := releaseAttemptUploadReplicasV2(&config, selected, owners)
-		if err == nil || !reflect.DeepEqual(actual, [2]AttemptCutV2Replica{}) {
+		if err == nil || actual != nil {
 			t.Fatalf("%s admitted a partial or redirected replica census", fault)
 		}
 	}
@@ -337,7 +337,7 @@ func TestReleaseEvidenceV2UploadReplicasRequireCompleteRuntimeCensus(t *testing.
 func TestReleaseEvidenceV2UploadReplicasRejectConcreteWriterMisbinding(t *testing.T) {
 	t.Parallel()
 	cfg, runtimes, stores := newReleaseAttemptUploadV2HTTPFixture(t, 2, attemptCutV2ReplicaTestBounds())
-	origins := [2]string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL}
+	origins := []string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL}
 	if _, err := releaseAttemptUploadReplicasV2(cfg, origins, runtimes); err != nil {
 		t.Fatalf("actual session census prerequisite: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestReleaseEvidenceV2UploadReplicasRejectConcreteWriterMisbinding(t *testin
 			owner.cancel = nil
 		}
 		actual, err := releaseAttemptUploadReplicasV2(cfg, origins, owners)
-		if err == nil || !reflect.DeepEqual(actual, [2]AttemptCutV2Replica{}) {
+		if err == nil || actual != nil {
 			t.Fatalf("concrete writer misbinding reached replica admission: %s", fault)
 		}
 		for _, store := range stores {
@@ -401,7 +401,7 @@ func TestReleaseEvidenceV2UploadReplicasRejectConcreteWriterMisbinding(t *testin
 func TestReleaseEvidenceV2UploadReplicasOwnConfiguredRouting(t *testing.T) {
 	t.Parallel()
 	cfg, runtimes, stores := newReleaseAttemptUploadV2HTTPFixture(t, 2, attemptCutV2ReplicaTestBounds())
-	replicas, err := releaseAttemptUploadReplicasV2(cfg, [2]string{cfg.Operators[1].APIURL, cfg.Operators[0].APIURL}, runtimes)
+	replicas, err := releaseAttemptUploadReplicasV2(cfg, []string{cfg.Operators[1].APIURL, cfg.Operators[0].APIURL}, runtimes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func TestReleaseEvidenceV2UploadReplicasSealRealAttemptEvidence(t *testing.T) {
 	fixture := newAttemptCutV2SealTestFixture(t, 8, 1, 1)
 	bounds := attemptCutV2ReplicaTestBounds()
 	cfg, runtimes, stores := newReleaseAttemptUploadV2HTTPFixture(t, 2, bounds)
-	replicas, err := releaseAttemptUploadReplicasV2(cfg, [2]string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL}, runtimes)
+	replicas, err := releaseAttemptUploadReplicasV2(cfg, []string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL}, runtimes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +457,7 @@ func TestReleaseEvidenceV2UploadReplicasRequireIndependentPublicReadback(t *test
 	for _, fault := range []string{"missing", "corrupt"} {
 		cfg, runtimes, stores := newReleaseAttemptUploadV2HTTPFixture(t, 2, attemptCutV2ReplicaTestBounds())
 		stores[1].getFault = fault
-		replicas, err := releaseAttemptUploadReplicasV2(cfg, [2]string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL}, runtimes)
+		replicas, err := releaseAttemptUploadReplicasV2(cfg, []string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL}, runtimes)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -508,7 +508,7 @@ func TestReleaseEvidenceV2UploadReplicasOverlapAndJoinFailure(t *testing.T) {
 	}
 	cfg := &ReleaseConfig{Operators: operators, EvidenceV2: releaseEvidenceV2TestConfig(t.TempDir(), operators)}
 	cfg.EvidenceV2.Bounds.Cut = bounds
-	replicas, err := releaseAttemptUploadReplicasV2(cfg, [2]string{operators[0].APIURL, operators[1].APIURL}, runtimes)
+	replicas, err := releaseAttemptUploadReplicasV2(cfg, []string{operators[0].APIURL, operators[1].APIURL}, runtimes)
 	if err != nil {
 		t.Fatal(err)
 	}

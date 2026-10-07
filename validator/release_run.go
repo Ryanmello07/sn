@@ -981,10 +981,12 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 			}
 		}
 	}
-	if len(cfg.Operators) < 2 {
-		return errors.New("release V2 requires two configured public operator origins")
+	// A single configured operator's own server holds the only public evidence
+	// replica; otherwise the first two configured operators hold copies.
+	origins, err := releaseEvidenceV2ConfiguredOrigins(cfg)
+	if err != nil {
+		return err
 	}
-	origins := [2]string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL}
 	if _, err := newReleaseEvidenceV2StartupReaders(origins, cfg.EvidenceV2.Bounds.Cut); err != nil {
 		return err
 	}

@@ -22,9 +22,9 @@ import (
 
 // Replay only committed controls first, preserving the live producer's exact
 // ledger and import receipts for the separate unsealed observation.
-func productionBootstrapUnsealedTestFixture(t *testing.T) (releaseArchiveV2TestFixture, *ReleaseEvidenceV2Archive, *ProductionBootstrapCommittedObservation) {
+func productionBootstrapUnsealedTestFixture(t *testing.T, configure ...func(*ReleaseConfig)) (releaseArchiveV2TestFixture, *ReleaseEvidenceV2Archive, *ProductionBootstrapCommittedObservation) {
 	t.Helper()
-	f, observed, approved, _ := productionBootstrapCommittedTestFixture(t)
+	f, observed, approved, _ := productionBootstrapCommittedTestFixture(t, configure...)
 	history, err := readReleaseEvidenceV2HistoryFilesForUid(t.Context(), f.options.Config.StateDir, f.options.Config.EvidenceV2.Bounds, uint32(os.Geteuid()), 8192, true, releaseMeasurementInputV2ReadHooks{})
 	if err != nil {
 		t.Fatal(err)

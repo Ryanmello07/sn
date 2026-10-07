@@ -27,14 +27,14 @@ import (
 
 // Both pending and complete trails occupy two older canonical boundaries.
 // The current ceiling alone cannot authenticate either historical hash.
-func productionBootstrapUnsealedBoundaryTestFixture(t *testing.T) (releaseArchiveV2TestFixture, *ReleaseEvidenceV2Archive, *ProductionBootstrapCommittedObservation, *ProductionBootstrapUnsealedObservation, *productionBootstrapUnsealedOwner) {
+func productionBootstrapUnsealedBoundaryTestFixture(t *testing.T, configure ...func(*ReleaseConfig)) (releaseArchiveV2TestFixture, *ReleaseEvidenceV2Archive, *ProductionBootstrapCommittedObservation, *ProductionBootstrapUnsealedObservation, *productionBootstrapUnsealedOwner) {
 	t.Helper()
-	f, archive, current := productionBootstrapUnsealedTestFixture(t)
+	f, archive, current := productionBootstrapUnsealedTestFixture(t, configure...)
 	for i := range 2 {
 		f.startup.boundary.EVMBlock++
 		f.startup.boundary.EVMBlockHash = attemptHex32([32]byte{0xc1 + byte(i)})
 		f.startup.blocks[f.startup.boundary.EVMBlock] = [32]byte{0xc1 + byte(i)}
-		for index := range 2 {
+		for index := range f.startup.disk.participants {
 			if i == 0 {
 				f.startup.trail(t, index)
 			} else {

@@ -147,15 +147,16 @@ func loadProductionBootstrapPrefixConfig(ctx context.Context, path string, raw [
 	return cfg, nil
 }
 
-// Both complete operator histories and every signature are pinned before the
+// Every complete operator history and every signature is pinned before the
 // first network read. Extra, reordered, omitted or substituted domains refuse.
+// The census is the configured one or two operators, each one evidence replica.
 func readProductionBootstrapPrefixInputs(ctx context.Context, cfg *ReleaseConfig, observed ProductionBootstrapObservation) ([]releaseEvidenceV2ActivationInput, error) {
 	public, err := readProductionBootstrapPublicInputs(ctx, cfg, observed.Native.Hotkey)
 	if err != nil {
 		return nil, err
 	}
-	if len(public) != 2 || len(observed.Operators) != len(public) {
-		return nil, errors.New("bootstrap prefix requires the exact two-operator census")
+	if validateReleaseEvidenceV2ReplicaCount(len(public)) != nil || len(observed.Operators) != len(public) {
+		return nil, errors.New("bootstrap prefix requires the exact configured one- or two-operator census")
 	}
 	remaining := uint64(productionBootstrapPrefixMaximumBytes)
 	inputs := make([]releaseEvidenceV2ActivationInput, 0, len(public))
