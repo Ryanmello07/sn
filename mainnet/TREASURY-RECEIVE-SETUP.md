@@ -1,5 +1,64 @@
 # Receive-only reserve: recipient setup on runtime 473
 
+## Selected path (owner decision, October 6): `ur-reserve` registers its recipients through its multisig
+
+The owner changed the receive-only constraint. `ur-reserve`
+(`5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR`) is the btcli multisig preset `ur-reserve`, 2-of-3 over these
+signatories:
+- `brien-ur-reserve`, `5FYohgZfJQqHgPDQzF8SZ2jxn8dveW5JEXoTYugjrTuHDKGW`, on Brien's Ledger at `m/44'/354'/9'/0'/0'`;
+- `jack-ur`, `5GeoGiGEvUEQqTfTaUsvXqMQD4zVMNeYtYqMN8JLaMfiDp4J`;
+- `keith-ur`, `5DFCNQmzRedo6hbZci4PTFMRuQJQ5PX6f6WrJBxDCDU3yBzS`.
+
+It signs through that multisig and pays its own SN25 registration burns. There is no separate source account, no coldkey
+swap and no 36,000-block wait.
+
+How the registration works:
+- **The call.** Each recipient is registered by `SubtensorModule.register_limit(25, hotkey, limit_price)` dispatched
+  through `Multisig`. Threshold execution makes the multisig the signed origin, so `ur-reserve` pays the burn and becomes
+  the hotkey's `Owner` directly.
+- **Deposits and fees.**
+  - The proposing signatory reserves the multisig deposit (DepositBase 0.132 TAO + 2 × DepositFactor 0.032 TAO = 0.196
+    TAO), which is refunded when the call executes.
+  - Each signatory pays its own fee.
+- **Burn cap.** `limit_price` caps the burn; at the call below it is 0.01 TAO, against a 0.0005 TAO burn on October 6.
+- **The recipients.** Their keys live in the hotkey-only btcli wallet `root/subtensor/wallets/ur-reserve`:
+  - `recipient-1`: `5E4cTwgTGqRkEiiZZNJ6c5gKydg5oCWNQu6H3bufPCZhnvgv`
+  - `recipient-2`: `5EoH9PUVrzAQ3vXaAGQXvhxWGGd3DkTEf9mno2YnGWJ8JHPH`
+
+  Neither hotkey ever needs to sign or serve.
+
+```bash
+btcli call SubtensorModule.register_limit \
+  --args '{"netuid": 25, "hotkey": "<recipient ss58>", "limit_price": 10000000}' \
+  --multisig ur-reserve --ledger --ledger-account 9 --network finney    # Brien proposes
+btcli call SubtensorModule.register_limit \
+  --args '{"netuid":25,"hotkey":"<recipient ss58>","limit_price":10000000}' --multisig ur-reserve -w jack-ur   # second approval
+btcli multisig pending --multisig ur-reserve --network finney
+```
+
+On October 6, at finalized block 9,227,258, `ur-reserve` held 0.1 TAO and `brien-ur-reserve` held 0.5 TAO, funded for
+this. Brien's first approvals are on chain:
+- `recipient-1`: extrinsic `9227287-0026`, call hash `0x70944ff0e05ce7ab605599c88fa2a6d9a5b92d5846449a229fc8a0b1d8bc8253`;
+- `recipient-2`: extrinsic `9227291-0016`, call hash `0x1f64e8610b3d9777f8d66324a428caf314183ef684b0445a077206ddf9fa95cf`.
+
+Both await a second signatory.
+
+After both execute, authenticate everything before admitting the signed 10/90 policy:
+- the reserve `Owner` of each recipient;
+- their UIDs, reverse keys and registration generations;
+- that they are outside the subnet-owner hotkey set;
+- the auto-stake state.
+
+**Register them before the owner trim is planned.** The trim refuses on any census drift after its reviewed census, so
+that census must include them as protected. A new UID is immune for 21,600 blocks.
+
+**SN25 ownership never moves.** `SubnetOwner(25)` is the `ur-owner` multisig
+(`5HTeZ5168DjjGWZgbvzGfysEAj9fnexF24gYFKJHENU5cc8a`), and it stays there. No setup step may announce or perform a coldkey
+swap from `ur-owner`: a coldkey swap is account-wide and would move subnet ownership with it. On October 6, at block
+9,227,170, `ColdkeySwapAnnouncements` and `ColdkeySwapDisputes` held no entry for `ur-owner`.
+
+The rest of this note records the earlier separate-source-plus-coldkey-swap design. It is superseded and not selected.
+
 This is an unsigned setup note, not authority to sign, fund, register or swap any account. The selected policy remains 10% of native miner allocation for providers and 90% received by `ur-reserve`. Its public destination is `5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR`, AccountId32 `0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`. Receiving and monitoring require no reserve signatory list or device configuration. The user's receive-only instruction excludes reserve-funded setup fees as well as withdrawals: do not prepare reserve-origin registration or spending as the selected launch path.
 
 The retained observation at block 9,219,009 found no reserve-owned hotkeys. Before routing, at least two actual SN25 recipients must be registered and owned by the reserve. Their `Owner`, UID/reverse key, registration generation and owner-set exclusion must pass the existing [treasury admission](TREASURY-EMISSIONS.md). The address alone supplies none of those facts.

@@ -98,7 +98,7 @@ roots and is unrelated to the native netuid-0 root validator. The selected
 passive native root strategy does not require periodic `SetRootWeights` signing;
 its registration and readiness prerequisites still apply.
 
-The receive-only `ur-reserve` wallet signs nothing for receipt of emissions:
+The `ur-reserve` 2-of-3 multisig receives emissions; it signs only to register its own recipients ([treasury setup](TREASURY-RECEIVE-SETUP.md)):
 
 ```text
 5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR
@@ -131,9 +131,10 @@ until installation readback has completed.
 6. Assemble the final receipt, obtain review, hash it, publish matching public and
    operator identity fields, then verify actual service adoption.
 
-Treasury setup can be a long prerequisite: the retained runtime473 owner-coldkey
-transfer path has a 36,000-block delay. Observe the actual runtime and selected
-path; do not promise that this can be completed in an hour. See
+Treasury setup uses `ur-reserve`'s own multisig. Two signatories approve
+`register_limit` for each of the two recipients, so there is no coldkey swap and no
+36,000-block wait. Register the recipients before the owner trim is planned. Never
+announce a coldkey swap from `ur-owner`; SN25 ownership stays with it. See
 [TREASURY-RECEIVE-SETUP.md](TREASURY-RECEIVE-SETUP.md).
 
 ### Native owner requests: portable, owner-local
