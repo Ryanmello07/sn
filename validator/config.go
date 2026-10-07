@@ -577,6 +577,11 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 			return fmt.Errorf("controlled no_id %d is not in the operator directory", id)
 		}
 	}
+	// Controlled pools and their fleets are masked; masking every operator
+	// leaves no provider weight, so the validator could never submit a row.
+	if len(controlled) > 0 && len(controlled) == len(seenNO) {
+		return errors.New("controlled_no_ids covers every configured operator, leaving no weight to submit")
+	}
 	if c.SourceRolePredecessorV2 != nil {
 		if err := c.SourceRolePredecessorV2.Validate(ReleaseSourceRolePredecessorV2MaximumBytes); err != nil {
 			return fmt.Errorf("source role predecessor: %w", err)
