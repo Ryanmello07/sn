@@ -51,7 +51,8 @@ func TestBootstrapChainSoleOwnerValidatorPreparesOffline(t *testing.T) {
 	hotkey := bootstrapChainTestAccount(t, role.Hotkey)
 	seat := slices.IndexFunc(census.Seats, func(seat subnetSeat) bool { return seat.Hotkey == role.Hotkey })
 	if plan.Schema != bootstrapChainPlanSchemaV5 || role.Role != "sole" || role.Coldkey != census.SubnetOwnerColdkey ||
-		census.SubnetOwnerHotkey == nil || *census.SubnetOwnerHotkey != role.Hotkey || plan.Config.RootValidator.Hotkey == role.Hotkey ||
+		census.SubnetOwnerHotkey == nil || *census.SubnetOwnerHotkey != role.Hotkey ||
+		plan.Config.RootValidator.Hotkey == role.Hotkey || plan.Config.RootValidator.Coldkey == role.Coldkey ||
 		!bootstrapChainNoTrimCensusPreserves(census, role) || seat < 0 || !census.Seats[seat].OwnerRecognized ||
 		!slices.Contains(census.Seats[seat].ProtectionReasons, "owner") || !slices.Contains(census.Seats[seat].ProtectionReasons, "runtime-owner-identity") {
 		t.Fatalf("owner-validator preparation lost its identity, roles or census: %+v", plan)
