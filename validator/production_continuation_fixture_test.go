@@ -185,7 +185,7 @@ func newProductionContinuationTestFixtureWithWork(t *testing.T, through uint64, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	history.readers[0] = reader
+	history.readers = []*HTTPAttemptStreamV2Reader{reader}
 	self.runtime = &releaseRuntimeV2{receiptCache: &productionReceiptCacheState{}, ctx: t.Context(), cfg: *cfg, native: production.operator.measurement.admission.chain, chain: production.operator.chain, hotkey: production.hotkey, history: history, gate: make(chan struct{}, 1)}
 	store, err := newReleaseIntentStoreV2(self.runtime)
 	if err != nil {

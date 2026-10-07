@@ -56,12 +56,15 @@ type ProductionBootstrapUnsealedObservation struct {
 
 // Reopened custody checks the projection's scope independently of its outer
 // hash. This is shape validation; only the actual source replay creates it.
+// The committed census has one ledger per configured operator: one, or two.
 func (self ProductionBootstrapUnsealedObservation) Validate(prefixes []ProductionBootstrapOperatorPrefix) error {
-	if self.Schema != ProductionBootstrapUnsealedSchema || len(prefixes) != 2 || len(self.Ledgers) != 2 || self.SourceCount < 5 || self.SourceCount > productionBootstrapCommittedMaximumObjects || self.SourceBytes == 0 || self.SourceBytes > productionBootstrapUnsealedMaximumBytes {
+	if self.Schema != ProductionBootstrapUnsealedSchema || validateReleaseEvidenceV2ReplicaCount(len(prefixes)) != nil || len(self.Ledgers) != len(prefixes) || self.SourceCount < 5 || self.SourceCount > productionBootstrapCommittedMaximumObjects || self.SourceBytes == 0 || self.SourceBytes > productionBootstrapUnsealedMaximumBytes {
 		return errors.New("unsealed inventory lacks its bounded complete scope")
 	}
-	if (self.Ledgers[0].TailBoundaryProof == nil) != (self.Ledgers[1].TailBoundaryProof == nil) {
-		return errors.New("unsealed inventory has only partial tail boundary authority")
+	for _, ledger := range self.Ledgers[1:] {
+		if (ledger.TailBoundaryProof == nil) != (self.Ledgers[0].TailBoundaryProof == nil) {
+			return errors.New("unsealed inventory has only partial tail boundary authority")
+		}
 	}
 	if _, err := parseReleaseContentHash(self.CensusHash); err != nil {
 		return err
@@ -208,7 +211,7 @@ func readProductionBootstrapUnsealed(ctx context.Context, cfg *ReleaseConfig, ar
 			result, resultOwner = nil, nil
 		}
 	}()
-	if cfg == nil || archive == nil || archive.closed || archive.history == nil || current == nil || len(current.Prefixes) != 2 || len(cfg.Operators) != 2 {
+	if cfg == nil || archive == nil || archive.closed || archive.history == nil || current == nil || validateReleaseEvidenceV2ReplicaCount(len(cfg.Operators)) != nil || len(current.Prefixes) != len(cfg.Operators) {
 		return nil, nil, errors.New("unsealed inventory lacks its committed replay owner")
 	}
 	result = &ProductionBootstrapUnsealedObservation{Schema: ProductionBootstrapUnsealedSchema}

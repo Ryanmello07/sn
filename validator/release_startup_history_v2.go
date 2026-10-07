@@ -48,7 +48,7 @@ type releaseEvidenceV2StartupHistory struct {
 	keys               map[uint64]map[byte]ed25519.PublicKey
 	participants       []AttemptSettlementRuntimeV2Participant
 	states             map[uint64]*releaseAttemptState
-	readers            [2]*HTTPAttemptStreamV2Reader
+	readers            []*HTTPAttemptStreamV2Reader
 	files              *releaseEvidenceV2HistoryFiles
 	images             *attemptSettlementV2StartupImages
 	activationHistory  *AttemptSettlementClosure
@@ -75,21 +75,38 @@ type releaseEvidenceV2StartupHistory struct {
 	archive *releaseEvidenceV2ArchiveOwner
 }
 
+// Replica origins are configured operator API origins, in configured order.
+// A single operator's own server holds the only copy; otherwise the first two
+// configured operators hold independent copies.
+func releaseEvidenceV2ConfiguredOrigins(cfg *ReleaseConfig) ([]string, error) {
+	if cfg == nil || len(cfg.Operators) == 0 {
+		return nil, errors.New("release V2 requires a configured public operator origin")
+	}
+	origins := make([]string, releaseEvidenceV2ReplicaCensus(len(cfg.Operators)))
+	for index := range origins {
+		origins[index] = cfg.Operators[index].APIURL
+	}
+	return origins, nil
+}
+
 // Owns independent HTTP origins without installing publication callbacks in a
 // read-only workflow. This retains the replicated sealer's same-origin grammar.
-func newReleaseEvidenceV2StartupReaders(origins [2]string, bounds AttemptCutV2Bounds) ([2]*HTTPAttemptStreamV2Reader, error) {
+func newReleaseEvidenceV2StartupReaders(origins []string, bounds AttemptCutV2Bounds) ([]*HTTPAttemptStreamV2Reader, error) {
 	return newReleaseEvidenceV2ReadersWithMetadataLimit(origins, bounds, attemptStreamV2MetadataBytes(bounds))
 }
 
 // Complete typed payloads may exceed stream pages. Their caller supplies the
-// independent finite allowance while both origins retain identical admission.
-func newReleaseEvidenceV2ReadersWithMetadataLimit(origins [2]string, bounds AttemptCutV2Bounds, metadataBytes uint64) ([2]*HTTPAttemptStreamV2Reader, error) {
-	var readers [2]*HTTPAttemptStreamV2Reader
-	var canonical [2]string
+// independent finite allowance while every origin retains identical admission.
+func newReleaseEvidenceV2ReadersWithMetadataLimit(origins []string, bounds AttemptCutV2Bounds, metadataBytes uint64) ([]*HTTPAttemptStreamV2Reader, error) {
+	if err := validateReleaseEvidenceV2ReplicaCount(len(origins)); err != nil {
+		return nil, err
+	}
+	readers := make([]*HTTPAttemptStreamV2Reader, len(origins))
+	canonical := make([]string, len(origins))
 	for index, origin := range origins {
 		reader, err := newHttpAttemptStreamV2Reader(origin, bounds, metadataBytes)
 		if err != nil {
-			return [2]*HTTPAttemptStreamV2Reader{}, err
+			return nil, err
 		}
 		host := strings.ToLower(reader.endpoint.Hostname())
 		if ip := net.ParseIP(host); ip != nil {
@@ -105,10 +122,19 @@ func newReleaseEvidenceV2ReadersWithMetadataLimit(origins [2]string, bounds Atte
 		canonical[index] = reader.endpoint.Scheme + "://" + net.JoinHostPort(host, port)
 		readers[index] = reader
 	}
-	if canonical[0] == canonical[1] {
-		return [2]*HTTPAttemptStreamV2Reader{}, errors.New("startup history public origins are not distinct")
+	if len(canonical) == 2 && canonical[0] == canonical[1] {
+		return nil, errors.New("startup history public origins are not distinct")
 	}
 	return readers, nil
+}
+
+// Every configured origin is replayed independently. Runtime startup owns one
+// public reader per origin; an archive serves its retained copy of each one.
+func (self *releaseEvidenceV2StartupHistory) replicas() int {
+	if self.archive != nil {
+		return len(self.archive.origins)
+	}
+	return len(self.readers)
 }
 
 // Every operation names a fresh child, never the configured scratch root.
@@ -150,7 +176,7 @@ func (self *releaseEvidenceV2StartupHistory) scratch(ctx context.Context, noID u
 // independently observed current bindings in its separate full head workflow.
 func (self *releaseEvidenceV2StartupHistory) operator(ctx context.Context, noID uint64, cursor releaseEvidenceV2StartupCursor, boundary AttemptBoundary, replica int, purpose string) (AttemptSettlementV2OperatorOptions, error) {
 	initial, exists := self.initial[noID]
-	if !exists || replica < 0 || replica >= len(self.readers) {
+	if !exists || replica < 0 || replica >= self.replicas() {
 		return AttemptSettlementV2OperatorOptions{}, errors.New("startup replay operator or public origin is absent")
 	}
 	path, err := self.scratch(ctx, noID, purpose)
@@ -271,7 +297,7 @@ func (self *releaseEvidenceV2StartupHistory) replayOrdinary(ctx context.Context,
 	if err := matchReleaseEvidenceV2StartupPrior(input.Stats, cursor.prior); err != nil {
 		return err
 	}
-	replicas := len(self.readers)
+	replicas := self.replicas()
 	if self.retainedStartup {
 		replicas = 1
 	}
@@ -341,7 +367,7 @@ func (self *releaseEvidenceV2StartupHistory) replayTerminal(ctx context.Context,
 		}
 	}
 	var contexts map[uint64]AttemptCutV2Context
-	replicas := len(self.readers)
+	replicas := self.replicas()
 	if self.retainedStartup {
 		replicas = 1
 	}
@@ -419,7 +445,7 @@ func (self *releaseEvidenceV2StartupHistory) replayTerminal(ctx context.Context,
 // Production always supplies the configured reviewed native artifact; the
 // private explicit-artifact path lets actual SDK/RPC fixtures test this same
 // complete reader without fabricating an already-authenticated observation.
-func readReleaseEvidenceV2StartupHistory(ctx context.Context, cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chain, inputs []releaseEvidenceV2ActivationInput, serverKeys map[uint64]map[byte]ed25519.PublicKey, origins [2]string, disk *releaseEvidenceV2DiskState) (*releaseEvidenceV2StartupHistory, error) {
+func readReleaseEvidenceV2StartupHistory(ctx context.Context, cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chain, inputs []releaseEvidenceV2ActivationInput, serverKeys map[uint64]map[byte]ed25519.PublicKey, origins []string, disk *releaseEvidenceV2DiskState) (*releaseEvidenceV2StartupHistory, error) {
 	if cfg == nil {
 		return nil, errors.New("startup history configuration is absent")
 	}
@@ -430,7 +456,7 @@ func readReleaseEvidenceV2StartupHistory(ctx context.Context, cfg *ReleaseConfig
 // Complete admission owns every borrowed configuration/key/byte input before
 // the first historical RPC or public stream callback. There are no live Stats
 // writes in this reader, even when a durable transaction is partly complete.
-func readReleaseEvidenceV2StartupHistoryWithRuntime(ctx context.Context, cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chain, inputs []releaseEvidenceV2ActivationInput, serverKeys map[uint64]map[byte]ed25519.PublicKey, origins [2]string, disk *releaseEvidenceV2DiskState, runtime crv4.RuntimeArtifactIdentity) (result *releaseEvidenceV2StartupHistory, resultErr error) {
+func readReleaseEvidenceV2StartupHistoryWithRuntime(ctx context.Context, cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chain, inputs []releaseEvidenceV2ActivationInput, serverKeys map[uint64]map[byte]ed25519.PublicKey, origins []string, disk *releaseEvidenceV2DiskState, runtime crv4.RuntimeArtifactIdentity) (result *releaseEvidenceV2StartupHistory, resultErr error) {
 	if ctx == nil || cfg == nil || chain == nil || native == nil || disk == nil {
 		return nil, errors.New("startup history root, chain or configuration owner is absent")
 	}
@@ -440,8 +466,8 @@ func readReleaseEvidenceV2StartupHistoryWithRuntime(ctx context.Context, cfg *Re
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	if len(inputs) != len(cfg.Operators) || len(disk.participants) != len(inputs) || len(disk.states) != len(inputs) || len(inputs) == 0 || uint64(len(serverKeys)) > cfg.EvidenceV2.Bounds.MaxOperators {
-		return nil, errors.New("startup history configured input or disk census differs")
+	if len(inputs) != len(cfg.Operators) || len(disk.participants) != len(inputs) || len(disk.states) != len(inputs) || len(inputs) == 0 || uint64(len(serverKeys)) > cfg.EvidenceV2.Bounds.MaxOperators || len(origins) != releaseEvidenceV2ReplicaCensus(len(cfg.Operators)) {
+		return nil, errors.New("startup history configured input, origin or disk census differs")
 	}
 	owned := &releaseEvidenceV2StartupHistory{cfg: *cfg, initial: map[uint64]ReleaseEvidenceV2ActivationContext{}, keys: map[uint64]map[byte]ed25519.PublicKey{}, participants: slices.Clone(disk.participants), current: map[uint64]releaseEvidenceV2StartupCursor{}, lastOrdinary: map[uint64]*releaseMeasurementInputJournal{}, lastNative: map[uint64]*releaseMeasurementInputJournal{}, lastOrdinaryBefore: map[uint64]releaseEvidenceV2StartupCursor{}, inputByEpoch: map[uint64]map[uint64]*releaseMeasurementInputJournal{}}
 	owned.states = maps.Clone(disk.states)

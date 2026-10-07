@@ -25,8 +25,9 @@ import (
 // The enclosing campaign supplies its already approved archive limits. These
 // are not new stream, history, upload or protocol capacity defaults.
 type ReleaseEvidenceV2CaptureOptions struct {
-	Hotkey              [32]byte
-	Origins             [2]string
+	Hotkey [32]byte
+	// Every configured operator's API origin, in configured order: one, or two.
+	Origins             []string
 	MaximumBytes        uint64
 	MaximumObjects      uint64
 	MaximumDataBytes    uint64
@@ -81,8 +82,8 @@ func CaptureReleaseEvidenceV2(ctx context.Context, cfg *ReleaseConfig, chain *Ch
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	if len(cfg.Operators) != 2 || options.Origins != [2]string{cfg.Operators[0].APIURL, cfg.Operators[1].APIURL} {
-		return nil, errors.New("compact capture origins differ from the complete configured operator census")
+	if configured, err := releaseEvidenceV2ConfiguredOrigins(cfg); err != nil || len(configured) != len(cfg.Operators) || !slices.Equal(options.Origins, configured) {
+		return nil, errors.Join(errors.New("compact capture origins differ from the complete configured operator census"), err)
 	}
 	defer func() {
 		resultErr = errors.Join(resultErr, ctx.Err())
