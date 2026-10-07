@@ -57,6 +57,14 @@ func newProductionContinuationTestFixtureThrough(t *testing.T, through uint64) *
 // independent approval. The ordinary startup window remains unchanged.
 func newProductionContinuationTestFixtureWithStartupThrough(t *testing.T, through uint64, anchor func(*recycleAdmissionFixture, *attemptCutV2SealTestFixture), configure func(*ownerRecycleProductionTestFixture, *productionContinuationTestFixture)) *productionContinuationTestFixture {
 	t.Helper()
+	return newProductionContinuationTestFixtureWithWork(t, through, 15, anchor, configure)
+}
+
+// The genuine M8 work census is fixed before any proof is signed. Too little
+// completed work leaves every pool below its quality minimum; with no current
+// binding, the provider allocation is then empty.
+func newProductionContinuationTestFixtureWithWork(t *testing.T, through uint64, completed int, anchor func(*recycleAdmissionFixture, *attemptCutV2SealTestFixture), configure func(*ownerRecycleProductionTestFixture, *productionContinuationTestFixture)) *productionContinuationTestFixture {
+	t.Helper()
 	self := &productionContinuationTestFixture{inputKVs: map[uint64]*releaseStatsV2RuntimeTestFixture{}, journalKVs: map[uint64]*releaseMeasurementInputJournal{}, contextKVs: map[uint64]AttemptCutV2Context{}}
 	policy := recycleTestInput(t).ParentPolicy
 	policy.Deposit.Tiers = slices.Clone(policy.Deposit.Tiers)
@@ -69,7 +77,7 @@ func newProductionContinuationTestFixtureWithStartupThrough(t *testing.T, throug
 		t.Fatal(err)
 	}
 	self.production = newOwnerRecycleProductionTestFixtureWithInputs(t, func(t *testing.T, hotkey [32]byte) *recycleOperatorFixture {
-		return newRecycleOperatorFixtureWithActivation(t, hotkey, 15, &policy, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
+		return newRecycleOperatorFixtureWithActivation(t, hotkey, completed, &policy, func(admission *recycleAdmissionFixture, provider *releaseMeasurementV2TestFixture) {
 			artifact, cfg := provider.artifact, admission.cfg
 			for index := range artifact.Bindings {
 				binding := &artifact.Bindings[index]

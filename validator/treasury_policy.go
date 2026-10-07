@@ -109,6 +109,14 @@ func productionEconomicSelection(cfg *ReleaseConfig) *ReleaseOwnerRecycleApprova
 	return cfg.OwnerRecycleApproval
 }
 
+// Only an exclusive treasury selection on the mainnet schema-3 production path
+// may answer an empty provider allocation with its reserve-only row. Testnet,
+// the original owner-recycle successor and legacy configurations never can.
+func treasuryReserveFallbackConfig(cfg *ReleaseConfig) bool {
+	return cfg != nil && cfg.TreasuryApproval != nil && cfg.OwnerRecycleApproval == nil &&
+		cfg.SchemaVersion == ReleaseMainnetProductionSchemaVersion && cfg.Policy.NetworkProfile == "mainnet"
+}
+
 // One carrier can hold only one economic authority, including during replay.
 func productionEconomicIntent(intent *SteeringIntent) *OwnerRecycleProductionIntent {
 	if intent == nil || intent.OwnerRecycle != nil && intent.Treasury != nil {

@@ -149,7 +149,7 @@ func ObserveOwnerRecycleMeasurementOperators(ctx context.Context, authority *Own
 	if err := checkRoute(); err != nil {
 		return nil, err
 	}
-	artifact, verified, err := DecodeReleaseMeasurementArtifactV2(ctx, providerBytes, options)
+	artifact, verified, err := DecodeReleaseMeasurementArtifactV2(ctx, providerBytes, authority.providerOptions(options))
 	if err != nil {
 		return nil, err
 	}

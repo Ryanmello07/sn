@@ -472,9 +472,10 @@ func (p Policy) Validate() error {
 		return errors.New("unsafe safety policy")
 	}
 	// A testnet row can be pool-only: one UID per healthy operator. A mainnet
-	// production row puts 9/10 on the economic approval's recipients (the
-	// treasury policy requires at least two) and the planner checks every entry
-	// against the cap exactly, so one operator still leaves a row two UIDs wide.
+	// production row puts 9/10, or with no provider weight the whole row, on the
+	// economic approval's recipients (the treasury policy requires at least two)
+	// and the planner checks every entry against the cap exactly, so one operator
+	// still leaves a row two UIDs wide.
 	breadth := uint64(p.Safety.MinimumHealthyNOCount)
 	if p.NetworkProfile == "mainnet" && breadth < 2 {
 		breadth = 2

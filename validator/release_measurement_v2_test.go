@@ -230,7 +230,9 @@ func (self *releaseMeasurementV2TestFixture) rebuildLegacy(t *testing.T) {
 	}
 	legacy.HeadEMA, self.artifact.HeadEMA = head, slices.Clone(head)
 	want, err := VerifyReleaseMeasurementArtifact(legacy)
-	if err != nil {
+	// The v1 oracle has no reserve fallback. An empty provider allocation still
+	// fixes its genuine head EMA transcript above but has no oracle decision.
+	if err != nil && !errors.Is(err, errNoPositiveUnmaskedWeights) {
 		t.Fatalf("complete genuine v1 measurement oracle: %v", err)
 	}
 	self.legacy, self.want = legacy, want

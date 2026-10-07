@@ -43,7 +43,9 @@ type OwnerRecycleMeasurementAuthority struct {
 }
 
 // The exact and quantized rows are outputs reconstructed from provider proofs.
-// The signed error is a reduced RatString because it can be negative.
+// The signed error is a reduced RatString because it can be negative. Only a
+// treasury row whose replayed provider allocation is empty names the
+// reserve-only fallback; every other row omits it and keeps its original bytes.
 type OwnerRecycleMeasuredRow struct {
 	Uids               []uint16       `json:"uids"`
 	Scores             []RationalJSON `json:"scores"`
@@ -53,7 +55,12 @@ type OwnerRecycleMeasuredRow struct {
 	TreasuryUids       []uint16       `json:"treasury_uids,omitempty"`
 	WireProviderShare  RationalJSON   `json:"wire_provider_share"`
 	ProviderShareError string         `json:"provider_share_error"`
+	Fallback           string         `json:"fallback,omitempty"`
 }
+
+// The reserve-only row gives every approved treasury recipient an equal share
+// of the whole row and providers none. It exists only for an empty allocation.
+const TreasuryReserveOnlyFallback = "reserve_only_empty_provider_allocation"
 
 // Byte fields preserve their original canonical representation, including the
 // final newline. Base64 wrapping cannot reinterpret V1/V2 as successor evidence.
@@ -199,6 +206,13 @@ func ownerRecycleMeasurementLimit(ctx context.Context, authority *OwnerRecycleMe
 	return min(options.MaxArtifactBytes, options.MaxControlBytes), nil
 }
 
+// Provider replays select the reserve fallback only from the independently
+// observed treasury authority; caller options can neither add nor remove it.
+func (self *OwnerRecycleMeasurementAuthority) providerOptions(options ReleaseMeasurementV2Options) ReleaseMeasurementV2Options {
+	options.treasuryReserveFallback = treasuryReserveFallbackConfig(&self.config)
+	return options
+}
+
 // Uses only fully replayed provider scores and the real observer's registered
 // owners. No live-validator or healthy-operator claims are fabricated to satisfy
 // the preview planner's separate admission minimums.
@@ -267,7 +281,17 @@ func deriveOwnerRecycleMeasuredRow(authority *OwnerRecycleMeasurementAuthority, 
 			}
 		}
 	}
-	if err := completeOwnerRecycleRow(row, artifact.Policy, verified.UIDs, verified.Scores, owners); err != nil {
+	// An absent provider row selects the reserve-only row only for treasury
+	// authority and only after the measurement's own projections reproduce an
+	// empty allocation. Every other path keeps the original refusal below.
+	reserveOnly := false
+	if len(verified.UIDs) == 0 && len(verified.Scores) == 0 && treasuryReserveFallbackConfig(&authority.config) {
+		if err := requireEmptyProviderAllocation(verified, artifact.Policy.Steering.Theta); err != nil {
+			return empty, err
+		}
+		reserveOnly = true
+	}
+	if err := completeOwnerRecycleRow(row, artifact.Policy, verified.UIDs, verified.Scores, owners, reserveOnly); err != nil {
 		return empty, err
 	}
 	if len(row.Uids) < int(authority.observation.MinimumAllowedWeights) {
@@ -286,7 +310,36 @@ func deriveOwnerRecycleMeasuredRow(authority *OwnerRecycleMeasurementAuthority, 
 	if authority.config.TreasuryApproval != nil {
 		result.TreasuryUids, result.OwnerUids = result.OwnerUids, nil
 	}
+	if reserveOnly {
+		result.Fallback = TreasuryReserveOnlyFallback
+	}
 	return result, nil
+}
+
+// The verified measurement's own pool, selected-head and mask projections must
+// reproduce an empty allocation. A missing provider row alone is no proof: any
+// positive unmasked pool or head weight refuses the reserve-only row. Every
+// pool score counts; ineligible and controlled pools carry zero or a mask.
+func requireEmptyProviderAllocation(verified *VerifiedReleaseMeasurement, theta protocol.Rational) error {
+	if verified == nil {
+		return errors.New("treasury reserve-only row lacks its verified provider measurement")
+	}
+	pools := make([]ExactWeightInput, 0, len(verified.Pools))
+	for _, pool := range verified.Pools {
+		pools = append(pools, ExactWeightInput{UID: pool.UID, Score: pool.Score})
+	}
+	masked := make(map[uint16]bool, len(verified.MaskedUIDs))
+	for _, uid := range verified.MaskedUIDs {
+		masked[uid] = true
+	}
+	_, _, err := BuildWeightVectorExact(pools, verified.SelectedHead, theta, masked)
+	if err == nil {
+		return errors.New("treasury reserve-only row requires an empty provider allocation; a provider weight remains")
+	}
+	if !errors.Is(err, errNoPositiveUnmaskedWeights) {
+		return err
+	}
+	return nil
 }
 
 // One full original V2 proof replay derives all scores before the proposed
@@ -303,7 +356,7 @@ func buildOwnerRecycleMeasurement(ctx context.Context, authority *OwnerRecycleMe
 	if len(authority.operatorEvidence) != 0 && ReleaseMeasurementContentHash(providerBytes) != authority.operatorProviderHash {
 		return nil, errors.New("owner-recycle operator evidence belongs to different exact provider bytes")
 	}
-	artifact, verified, err := DecodeReleaseMeasurementArtifactV2(ctx, providerBytes, options)
+	artifact, verified, err := DecodeReleaseMeasurementArtifactV2(ctx, providerBytes, authority.providerOptions(options))
 	if err != nil {
 		return nil, err
 	}
@@ -344,6 +397,9 @@ func ownerRecycleDecisionIntent(authority *OwnerRecycleMeasurementAuthority, cap
 	if authority.config.TreasuryApproval != nil {
 		intent.Schema = treasuryDecisionIntentSchema
 		intent.Blockers[3] = "execution-time ordinary credit, collateral, treasury custody and the 10/90 native outcome remain unobserved"
+		if capsule.Row.Fallback == TreasuryReserveOnlyFallback {
+			intent.Blockers[3] = "execution-time ordinary credit, collateral, treasury custody and the reserve-only native outcome remain unobserved"
+		}
 	}
 	return intent
 }

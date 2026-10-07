@@ -454,6 +454,9 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	if current != nil {
 		options.Expected.PreviousArtifactHash = current.MeasurementArtifactHash
 	}
+	// Only current treasury authority answers an empty provider allocation
+	// with its reserve-only row; every other path still refuses to submit.
+	options.treasuryReserveFallback = treasuryReserveFallbackConfig(self.cfg)
 	settlement := options.Settlement
 	options.Settlement = nil
 	head, err := self.gatherHeadV2(ctx, snapshot, nativeState.SubnetEpochIndex, nativeState.CurrentBlock, nativeHash.Hex(), hotkeyUids, inputs, options)

@@ -319,16 +319,25 @@ func (self *ownerRecycleProductionTestFixture) receiptBlock(number uint64) (type
 func (self *ownerRecycleProductionTestFixture) stage(t *testing.T) (*ownerRecycleProductionStage, *VerifiedReleaseMeasurement) {
 	t.Helper()
 	measurement := self.operator.measurement
-	_, provider, err := DecodeReleaseMeasurementArtifactV2(t.Context(), measurement.encoded, measurement.provider.options(t))
+	_, provider, err := DecodeReleaseMeasurementArtifactV2(t.Context(), measurement.encoded, self.providerOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	stage, err := prepareOwnerRecycleProductionDecision(t.Context(), self.cfg, measurement.admission.chain, self.operator.chain,
-		measurement.encoded, measurement.provider.artifact, provider.Decision, measurement.provider.options(t))
+		measurement.encoded, measurement.provider.artifact, provider.Decision, self.providerOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return stage, provider.Decision
+}
+
+// Like the production submitter, only selected treasury authority admits an
+// empty provider allocation; owner-recycle fixtures keep the original refusal.
+func (self *ownerRecycleProductionTestFixture) providerOptions(t *testing.T) ReleaseMeasurementV2Options {
+	t.Helper()
+	options := self.operator.measurement.provider.options(t)
+	options.treasuryReserveFallback = treasuryReserveFallbackConfig(self.cfg)
+	return options
 }
 
 // This calls the real cryptographic preparation path and stores its exact
@@ -379,7 +388,7 @@ func (self *ownerRecycleProductionTestFixture) intentAndEnvelope(t *testing.T, s
 	if _, err := prepared.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	envelope, envelopeHash, _, err := SealReleaseMeasurementEnvelopeV2(t.Context(), measurement.encoded, measurement.provider.artifact.SelfUID, self.hotkey, prepared.ExtrinsicHash, time.Unix(2_000_000_000, 0), measurement.provider.options(t))
+	envelope, envelopeHash, _, err := SealReleaseMeasurementEnvelopeV2(t.Context(), measurement.encoded, measurement.provider.artifact.SelfUID, self.hotkey, prepared.ExtrinsicHash, time.Unix(2_000_000_000, 0), self.providerOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}

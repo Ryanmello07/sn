@@ -578,7 +578,8 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 		}
 	}
 	// Controlled pools and their fleets are masked; masking every operator
-	// leaves no provider weight, so the validator could never submit a row.
+	// leaves no provider weight in any epoch: a treasury validator could only
+	// submit its reserve-only row and any other validator no row at all.
 	if len(controlled) > 0 && len(controlled) == len(seenNO) {
 		return errors.New("controlled_no_ids covers every configured operator, leaving no weight to submit")
 	}
