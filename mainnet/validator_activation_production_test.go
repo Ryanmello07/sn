@@ -171,7 +171,7 @@ func TestValidatorActivationProductionExcludesConstructorCountersOnly(t *testing
 	f, client, plans, mapping := newValidatorActivationContractFixture(t)
 	coordinator, reserve, vault := stabi.NewSTCoordinator(), stabi.NewSTReserveSink(), stabi.NewSTSettlementVault()
 	forbidden := map[string]bool{}
-	for _, data := range [][]byte{coordinator.PackCurrentEpoch(), coordinator.PackOperatorCount(), coordinator.PackCampaignReserved(), reserve.PackPrincipal(), vault.PackTotalCaptured(), vault.PackTotalPaid(), vault.PackPendingFunding(), vault.PackOutstandingLiability(), vault.PackEscrowAccounted()} {
+	for _, data := range [][]byte{coordinator.PackCurrentEpoch(), coordinator.PackOperatorCount(), coordinator.PackPolicyCount(), coordinator.PackCampaignReserved(), reserve.PackPrincipal(), vault.PackTotalCaptured(), vault.PackTotalPaid(), vault.PackPendingFunding(), vault.PackOutstandingLiability(), vault.PackEscrowAccounted()} {
 		forbidden["0x"+hex.EncodeToString(data)] = true
 	}
 	seen := map[string]bool{}
