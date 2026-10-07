@@ -32,6 +32,9 @@ func validateBootstrapChainValidatorInspections(config bootstrapChainConfig, ins
 		if approval.Production == nil || len(inspection.DeclaredPaths) == 0 {
 			return errors.New("bootstrap chain validator lacks an initial production approval or custody namespaces")
 		}
+		if inspection.EvidenceActivationPending && config.Schema != bootstrapChainConfigSchemaV5 {
+			return errors.New("bootstrap chain admits an activation-pending validator config only under v5")
+		}
 		for _, expected := range config.Validators {
 			if !slices.ContainsFunc(approval.Production.ValidatorHotkeys, func(hotkey [32]byte) bool { return fmt.Sprintf("0x%x", hotkey) == expected.Hotkey }) {
 				return errors.New("bootstrap chain production validator census omits a protected UR role")
