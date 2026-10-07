@@ -54,6 +54,11 @@ type ownerSigningAdapterInput struct {
 	ResponsePath       string    `json:"response_path"`
 	ProofHash          string    `json:"proof_sha256"`
 	AppVersion         [3]uint16 `json:"expected_app_version"`
+	// A multisig step adds the complete public owner signer set. The adapter
+	// checks the device key is the named signatory of the derived owner.
+	MultisigAccount     string   `json:"multisig_account_id,omitempty"`
+	MultisigThreshold   uint16   `json:"multisig_threshold,omitempty"`
+	MultisigSignatories []string `json:"multisig_signatories,omitempty"`
 }
 
 // Prepared contains no device result. Signed contains the durable exact device
@@ -387,9 +392,12 @@ func signOwnerRequest(ctx context.Context, config ownerSigningDeviceConfig, requ
 		input := ownerSigningAdapterInput{Schema: ownerSigningAdapterSchema, Mode: "prepare", RequestHash: request.ContentHash,
 			BackendPath: config.BackendPath, BackendHash: config.BackendHash, MetadataHex: request.LedgerMetadata,
 			MetadataDigest: action.MetadataDigest, SpecName: action.Runtime.RuntimeVersion.SpecName, SpecVersion: action.Runtime.RuntimeVersion.SpecVersion,
-			Owner: action.Coldkey, Account: path[2] & 0x7fffffff, Index: path[4] & 0x7fffffff,
+			Owner: action.signer(), Account: path[2] & 0x7fffffff, Index: path[4] & 0x7fffffff,
 			Call: action.Call, IncludedExtrinsic: "0x" + hex.EncodeToString(payload[len(call):len(call)+extraLength]),
 			IncludedSignedData: "0x" + hex.EncodeToString(payload[len(call)+extraLength:]), ResponsePath: config.StatePath + ".ledger-response", AppVersion: config.AppVersion}
+		if multisig := action.Multisig; multisig != nil {
+			input.MultisigAccount, input.MultisigThreshold, input.MultisigSignatories = multisig.AccountId, multisig.Threshold, append([]string(nil), multisig.Signatories...)
+		}
 		if err := store.storage.checkWrite(nil); err != nil {
 			return reply, err
 		}
@@ -420,7 +428,7 @@ func signOwnerRequest(ctx context.Context, config ownerSigningDeviceConfig, requ
 		return reply, err
 	}
 	if response.Schema != ownerSigningAdapterSchema || response.Mode != "sign" || response.RequestHash != request.ContentHash || response.SourceCommit != rootActionV1Source ||
-		response.MetadataDigest != action.MetadataDigest || response.ProofHash != record.ProofHash || response.PublicKey != action.Coldkey ||
+		response.MetadataDigest != action.MetadataDigest || response.ProofHash != record.ProofHash || response.PublicKey != action.signer() ||
 		response.AppVersion != config.AppVersion {
 		return reply, errors.New("retained owner device response differs from the original request, owner, proof or supported app family")
 	}

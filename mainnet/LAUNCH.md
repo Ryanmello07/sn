@@ -84,13 +84,20 @@ messages and reviewed pins, never seed phrases or copied keys.
 
 | Authority | Request | Result |
 | --- | --- | --- |
-| Existing SN25 owner, on their own Ledger | Approved native owner trim request, using the existing derived account and reviewed Polkadot app/metadata | Public signed native reply; owner needs no Snow access |
+| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | The owner trim needs two signatories. Each signs their own approved request on their own computer and Ledger: first the opening approval, then the final approval for the read-back timepoint ([native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner)) | One public signed native reply per signatory; the final approval executes the trim from the multisig. No signatory needs Snow access |
 | Independent Ed25519 approver | Exact bytes emitted by plan previews for the specified approval domain | Approval envelope binding the exact plan, not transaction custody |
 | EVM deployer | Exact approved EIP-1559 creation/link transaction | Binary signed chain-964 transaction |
 | Coordinator governance Safe owners | Exact evidence-anchor Safe EIP-712 transaction | Accepted ordered Safe signatures |
 | Safe relayer | Exact outer EIP-1559 `execTransaction` transaction | Binary signed relayer transaction |
 | Operator signers | Their separately approved deposit and payout-root operations | Role-specific EVM signatures |
 | `ur-mainnet` 2-of-3 multisig (Brien's Ledger account 10, Jack, Keith), which owns the validator hotkey | SN25 and root registration, root stake, auto parent opt-out and the 18% takes ([root validator](#root-validator-on-netuid-0)) | Finalized native multisig calls |
+
+`ur-owner` is `5HTeZ5168DjjGWZgbvzGfysEAj9fnexF24gYFKJHENU5cc8a`, the chain's
+`SubnetOwner(25)`. brien-ur-owner is `5HnhcDkB7fQcbabDsmQXeP6N4fDKnciKjMkKCScUwkJYHH3u`
+at `m/44'/354'/1'/0'/0'` on Brien's Ledger (Polkadot generic app, Ed25519);
+jack-ur is `5GeoGiGEvUEQqTfTaUsvXqMQD4zVMNeYtYqMN8JLaMfiDp4J` and keith-ur is
+`5DFCNQmzRedo6hbZci4PTFMRuQJQ5PX6f6WrJBxDCDU3yBzS`. The tool signs only with a
+Ledger running the Polkadot generic app, so both trim signatories need one.
 
 The Ledger Polkadot owner path is not an Ethereum signing interface. Establish
 EVM signer custody separately. `STCoordinator.rootSigner` signs operator payout
@@ -108,6 +115,20 @@ AccountId32: 0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410
 Do not request reserve spending, gas payment or multisig signing. This native
 wallet is distinct from the immutable EVM `STReserveSink`.
 
+### Hard rule: SN25 ownership stays with `ur-owner`
+
+SN25 ownership stays with the `ur-owner` multisig
+(`5HTeZ5168DjjGWZgbvzGfysEAj9fnexF24gYFKJHENU5cc8a`). No launch step may
+announce or perform a coldkey swap from `ur-owner`: no `announce_coldkey_swap`,
+`swap_coldkey_announced` or `swap_coldkey` with it as the source, by any route,
+including btcli, a proxy or a multisig approval. A swap moves subnet ownership
+with the coldkey. Any tool that builds a coldkey-swap call must refuse a source
+equal to the chain's `SubnetOwner(25)`. No `sn-mainnet` command builds a
+coldkey-swap call today. `TestOwnerTrimMultisigNoToolBuildsColdkeySwap` fails
+if a tool starts building one, so that tool must add the refusal before it can
+pass. The treasury setup's coldkey swap uses a separate, dedicated source
+account ([TREASURY-RECEIVE-SETUP.md](TREASURY-RECEIVE-SETUP.md)).
+
 ## Execution order and parallel work
 
 Prepare policy, owner-local signing prerequisites, treasury registration plans,
@@ -119,7 +140,10 @@ until installation readback has completed.
    durable custody; construct and review typed plans. Complete fresh storage
    preparation, including the trim snapshot, then run the approved offline
    `bootstrap-chain apply` to establish original journals before `trim-plan`.
-2. Perform approved best-effort native owner trim and role/treasury preparation.
+2. Perform the approved best-effort native owner trim and role/treasury
+   preparation. The owner is the `ur-owner` 2-of-3 multisig, so the trim needs
+   two signatories, each signing their own request on their own computer: one
+   opens the operation and pays the deposit, another approves and executes it.
    Retain residual native registrations honestly; owner keys cannot guarantee a
    literal full native reset. Do not claim otherwise.
 3. Install the eight-action contract graph sequentially, retaining every receipt.
@@ -146,20 +170,37 @@ needs a separately built and pinned macOS `bittensor_core` extension; the
 qualified Linux ELF build does not run there (see [MACOS.md](MACOS.md)).
 
 After fresh storage preparation and offline `bootstrap-chain apply` have
-established the original custody, the host sequence is `bootstrap-chain trim-plan`,
-attach the independent exact
-execution approval, `trim-apply`, then `trim-export`. Send the owner the portable
-request and independently authenticated request content hash, genesis, existing
-owner AccountId32 and approval key. The owner runs `owner-signing inspect`,
-`owner-signing sign`, then `owner-signing verify` locally. Return the original
-public reply and its file SHA-256. The host uses `trim-import-reply`, prepares and
-approves `trim-submit-plan`, reconciles, then uses `trim-submit` under that
-separate submission policy.
+established the original custody, the host sequence for the `ur-owner`
+multisig is in [OWNER-TRIM-BEST-EFFORT.md](OWNER-TRIM-BEST-EFFORT.md#native-multisig-owner):
+
+1. `bootstrap-chain trim-plan` with the multisig template prepares the first
+   approval. Attach the independent exact execution approval, then
+   `trim-apply` and `trim-export --multisig-step 0`.
+2. Send the first signatory the portable request and, through an independently
+   authenticated channel, the request content hash, genesis, approval key, the
+   multisig owner AccountId32 and that signatory's own AccountId32. On their
+   computer they run `owner-signing inspect`, `sign` and `verify` with
+   `--owner-account-id` and `--signatory-account-id`, then return the public
+   reply and its file SHA-256.
+3. The host runs `trim-import-reply --multisig-step 0`, prepares and approves
+   `trim-submit-plan --multisig-step 0`, then runs `trim-submit --multisig-step 0`
+   under that separate policy. `trim-reconcile --multisig-step 0` must reach
+   `approval-recorded`, with the opening event and the pending entry read back.
+4. `trim-multisig-plan` builds the second signatory's final approval from the
+   read-back timepoint. Approve it, `trim-multisig-apply` it, and repeat steps 2
+   and 3 with `--multisig-step 1` for that signatory. Success needs
+   `MultisigExecuted` with an `Ok` inner result, `MaxAllowedUids(25)` read back
+   as the approved maximum and the census correspondence.
+
+The first signatory's account must hold the 196,000,000 rao deposit plus their
+fee reserve. If the first approval is stuck, only that depositor can cancel it
+with a `cancel_as_multi` step planned the same way.
 
 The request content hash and reply file hash are different pins. Fresh
 best-effort custody uses its own approved domain; never relabel an existing
-strict journal. Missing or uncertain signing outcomes require original-custody
-recovery, not deleting journals or issuing another signature casually.
+strict journal. Each signatory uses a fresh owner-local state path per request.
+Missing or uncertain signing outcomes require original-custody recovery, not
+deleting journals or issuing another signature casually.
 
 ### Contract graph: exact action requests
 
@@ -417,8 +458,8 @@ sections 1.6 and 7):
 - Our validator hotkey is the dedicated hotkey **`ur-mainnet`** (btcli wallet
   `root/subtensor/wallets/ur-mainnet`, hotkey `default`), not the SN25 owner hotkey.
   It is the `hotkey_seed_file` of the signed UR validator config, sits on root
-  (netuid 0) and validates SN25. The SN25 owner Ledger stays owner-local setup
-  custody and signs nothing here
+  (netuid 0) and validates SN25. The SN25 owner, the `ur-owner` multisig, stays
+  owner-local setup custody and signs nothing here
   ([current root participation](ROOT-CURRENT-PARTICIPANT.md)).
 - Its coldkey is the **`ur-mainnet` 2-of-3 native multisig**
   `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are:
