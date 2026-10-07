@@ -1,5 +1,29 @@
 # Mainnet launch and operations plan
 
+## Owner trim decision — October 7
+
+The owner decided that the SN25 launch performs **no owner trim**.
+
+Old miner registrations remain, and ordinary registration pruning removes them:
+- **No payouts today.** At finalized block 9,228,211, read from Snow's Finney archive, 1 of SN25's 256 UIDs received
+  miner incentive, and all 14 permitted validators weighted only that UID.
+- **Payouts stay at zero.** Zero weight is enough to keep old miners at zero payout while UR's validators hold the
+  consensus stake.
+- **Pruning takes them out first.** A new registration on the full subnet replaces the lowest-ranked registration past
+  its immunity, which is a zero-emission old miner.
+
+A trim would have added immediate slot reclamation and a hedge against other validators re-weighting old miners. It
+would have cost four independent approvals, two multisig Ledger signatures, a best-effort risk policy, a
+protected-identity timing window, and permanently lower capacity.
+
+The bootstrap preparation still carries its census and protection set. Its trim-execution phase stays unexecuted and is
+recorded in the readiness receipt. Our zero-emission keys are registered close to launch, inside their 21,600-block
+immunity, so UR's weights reach them before ordinary pruning could:
+- the two `ur-reserve` recipients;
+- the `ur-mainnet` validator hotkey.
+
+The multisig owner-trim tooling (`OWNER-SIGNING.md`) remains available if a trim is ever selected.
+
 ## Root validator decision and take checkpoint — October 6
 
 The owner set the root validator's terms ([operator discovery design](../docs/OPERATOR-DISCOVERY.md), sections 1.6 and 7). For our own hotkey this supersedes the passive, observation-only root strategy in [Root validator on netuid 0](#root-validator-on-netuid-0); the reviewed `root-register` workflow and its custody rules keep their scope.

@@ -158,12 +158,18 @@ until installation readback has completed.
    durable custody; construct and review typed plans. Complete fresh storage
    preparation, including the trim snapshot, then run the approved offline
    `bootstrap-chain apply` to establish original journals before `trim-plan`.
-2. Perform the approved best-effort native owner trim and role/treasury
-   preparation. The owner is the `ur-owner` 2-of-3 multisig, so the trim needs
-   two signatories, each signing their own request on their own computer: one
-   opens the operation and pays the deposit, another approves and executes it.
-   Retain residual native registrations honestly; owner keys cannot guarantee a
-   literal full native reset. Do not claim otherwise.
+2. Role and treasury preparation. **No owner trim** (owner decision, October 7):
+   old miner registrations stay and are left to ordinary registration pruning.
+   They already earn nothing. At finalized block 9,228,211, 1 of SN25's 256 UIDs
+   received miner incentive, and all 14 permitted validators weighted only that
+   UID. The bootstrap preparation still carries its census and protection set,
+   recording our protected identities. Its
+   `owner-trim-execution-and-generation-reconciliation` phase stays unexecuted,
+   and the readiness receipt records it as the owner's decision. The multisig
+   owner-trim tooling remains available if the owner ever selects it.
+   Register our zero-emission keys close to launch, within their 21,600-block
+   immunity, so UR's weights reach them before ordinary pruning could: the two
+   reserve recipients and the `ur-mainnet` validator hotkey.
 3. Install the eight-action contract graph sequentially, retaining every receipt.
 4. Perform the separately approved Safe evidence-anchor successor and complete
    pristine installation readback **before operator/service population**.
@@ -175,11 +181,15 @@ until installation readback has completed.
 
 Treasury setup uses `ur-reserve`'s own multisig. Two signatories approve
 `register_limit` for each of the two recipients, so there is no coldkey swap and no
-36,000-block wait. Register the recipients before the owner trim is planned. Never
-announce a coldkey swap from `ur-owner`; SN25 ownership stays with it. See
+36,000-block wait. Register the recipients close to launch, within their immunity
+(step 2). Never announce a coldkey swap from `ur-owner`; SN25 ownership stays with it. See
 [TREASURY-RECEIVE-SETUP.md](TREASURY-RECEIVE-SETUP.md).
 
-### Native owner requests: portable, owner-local
+### Native owner requests: portable, owner-local (not used for this launch)
+
+The owner decided on October 7 that this launch performs no owner trim; see
+[Execution order](#execution-order-and-parallel-work), step 2. This section and
+the multisig sequence below remain the reviewed path if a trim is ever selected.
 
 Follow [OWNER-SIGNING.md](OWNER-SIGNING.md) and
 [OWNER-CUSTODY-PREPARATION.md](OWNER-CUSTODY-PREPARATION.md) for the full commands,
