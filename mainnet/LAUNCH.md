@@ -402,6 +402,10 @@ production cadence is 50,400 blocks. A steady initial policy has
 `after_accelerated_epochs: 0` and matching initial/production windows. Economic
 parameters and signer approvals still need their actual reviewed values.
 
+The draft is [`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml):
+one operator and one validator, the treasury's 32768 weight cap and the
+zero-price launch. Its comments mark the reference values still to be confirmed.
+
 There is no dedicated `policy-hash` CLI. Save this helper outside repository
 package directories, for example `$REVIEW_DIR/policyhash.go`, then run it from
 the reviewed SN module:
@@ -460,8 +464,10 @@ UID/hotkey/coldkey/registration generations; initially split the reserve row
 approximately 45% each because of the native per-weight cap. An empty recipient
 list identifies a destination but cannot establish routing readiness.
 
-Keep the reserve public configuration and operator secrets in their selected
-`vault/main/sn.yml` layout. Extract a **separate public-only**
+Keep the reserve public configuration in its selected `vault/main/sn.yml`
+layout. The operator's EVM signer keys are not there: Server reads only
+`vault/main/st.yml`, whose mainnet profile needs three distinct secp256k1 keys,
+`deposit_key`, `root_key` and `artifact_key`, each 64 hex characters. Extract a **separate public-only**
 `urnetwork-native-treasury-destination-v1` descriptor for `treasury describe`,
 `treasury observe` and `treasury policy-plan`. Never pass the combined secrets
 file to that strict descriptor reader. Policy-plan output is unsigned and
