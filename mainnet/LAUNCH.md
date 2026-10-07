@@ -538,15 +538,6 @@ sections 1.6 and 7):
   It is the `hotkey_seed_file` of the signed UR validator config, sits on root
   (netuid 0) and validates SN25
   ([current root participation](ROOT-CURRENT-PARTICIPANT.md)).
-- It is the launch's only UR validator, and UR is the only operator (owner
-  decision, October 7). The approved policy's minimums are one live validator
-  and one healthy operator. The config has `controlled_no_ids: []`, so the
-  validator scores UR's own pool; nothing independent cross-checks it.
-- It steers SN25 only while it holds more than kappa (50%) of validator stake.
-  The SN25 owner, the `ur-owner` multisig, signs one call for this: a
-  `set_children` on SN25 naming `ur-mainnet` as the SN25 owner hotkey's child at
-  100%, so the owner hotkey's stake weight counts for our validator. No ownership
-  or alpha moves, and there is no coldkey swap.
 - Its coldkey is the **`ur-mainnet` 2-of-3 native multisig**
   `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are:
   - `brien-ur-mainnet`, `5Fy6EbewyBPJi565JP1P5zgFsiGXfwSs8ZYpMWNJA8gpfNit`, on
@@ -583,6 +574,18 @@ signatory pays the fee for their own approval.
 authenticated finalized block without any key; use it before and after each
 step. `validator take set` and `take childkey` sign with a coldkey seed file,
 so they are not used for this multisig-owned hotkey.
+
+On October 7 the owner decided that the launch has one operator and one validator:
+
+- `ur-mainnet` is the launch's only UR validator, and UR is the only operator.
+  The approved policy's minimums are one live validator and one healthy
+  operator. The config has `controlled_no_ids: []`, so the validator scores UR's
+  own pool; nothing independent cross-checks it.
+- It steers SN25 only while it holds more than kappa (50%) of validator stake.
+  The SN25 owner, the `ur-owner` multisig, signs one call for this, separate from
+  the `ur-mainnet` steps: a `set_children` on SN25 naming `ur-mainnet` as the
+  SN25 owner hotkey's child at 100%, so the owner hotkey's stake weight counts
+  for our validator. No ownership or alpha moves, and there is no coldkey swap.
 
 ### Register the hotkey on root
 

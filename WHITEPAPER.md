@@ -1199,6 +1199,9 @@ for validator v:
     commit / reveal w_v   (Neuron 0x804, drand timelock — §2.4)
 ```
 
+The self-mask covers the NOs a validator declares it controls. The SN25 launch's one UR validator declares none and
+scores UR's own pool (owner decision, October 7).
+
 Yuma combines the validators' vectors with their stake:
 
 - **Consensus & clipping.** Per pool the chain takes the κ‑stake‑weighted **median** of the scores and

@@ -3,8 +3,8 @@
 ## One operator and one validator — October 7
 
 The owner decided that SN25 launches with **one network operator (UR) and one validator (`ur-mainnet`)**, and that the
-coordinator's governance Safe starts with one owner. Two-operator, two-validator and 2-of-3 deployments keep their
-original behavior and bytes in the code; the launch uses the one-operator, one-validator, 1-of-1 forms:
+coordinator's governance Safe starts with one owner. The code still supports the two-operator, two-validator and 2-of-3
+forms with unchanged behavior and bytes; the launch uses the new one-operator, one-validator and 1-of-1 forms:
 - **Policy.** The approved [`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml), hash
   `0xca3274895fa7423e1a49d686dbaeea8f970ee1e4b28c268eb624723d4108011c`, sets `minimum_healthy_no_count` and
   `minimum_live_validator_count` to 1 and binds fleets for 12 epochs. On mainnet the weight-cap feasibility check counts
