@@ -73,7 +73,8 @@ with deregistration churn running that tournament. Both tiers share **one** mech
 (§8.4–8.5).
 
 The subnet **launches centralized‑but‑bounded** — an upgradeable policy coordinator owned by a dedicated
-testnet key and, on mainnet, a 2-of-3 multisig — while the reserve and settlement vault are
+testnet key and, on mainnet, a Safe multisig (1-of-1 at the SN25 launch; a Safe transaction can add owners and
+raise the threshold) — while the reserve and settlement vault are
 **non-upgradeable from day one**. Finalized claims are therefore un-clawbackable even by a hostile
 coordinator upgrade. Governance later adds a timelock around coordinator changes. v1 rewards independently *measured liveness*;
 closing the gap to honest‑relay, payout‑grade verification is the `VALIDATOR.md` §10 roadmap.
@@ -666,7 +667,8 @@ upgradeable proxy. The reserve is publicly auditable every finalized block:
 
 #### 6.4.1 Phase 0 — Launch (central control, fast bug‑fixes)
 
-- **Testnet owner = one dedicated, generated, value-capped EOA; mainnet owner = a distinct 2-of-3 Safe.**
+- **Testnet owner = one dedicated, generated, value-capped EOA; mainnet owner = a distinct Safe**, 1-of-1 at
+  the SN25 launch by owner decision (October 7); a Safe transaction can add owners and raise the threshold.
   Neither key is used by an operator, validator, depositor, root task, keeper or server process.
 - **Upgradeable UUPS coordinator only.** The owner can patch open/future coordination logic. It cannot
   replace the reserve sink or vault bytecode and cannot modify finalized entitlement state.

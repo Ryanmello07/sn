@@ -43,5 +43,7 @@ boundary while the live happy path settles claims.
 Residual release-1.0 risks are validator collusion/Sybil stake, routing proofs
 that do not cryptographically prove honest transit, shared-hash key enumeration
 or leakage, runtime governance changes, and economic parameters validated only
-at testnet scale. Value caps, independent monitoring, key rotation, and a
-mainnet 2-of-3 Safe bound these risks; they do not eliminate them.
+at testnet scale. Value caps, independent monitoring, key rotation, and the
+mainnet governance Safe bound these risks; they do not eliminate them. At the
+SN25 launch that Safe is 1-of-1 (owner decision, October 7), so one owner key
+governs the coordinator until owners are added and the threshold raised.

@@ -1733,7 +1733,7 @@ The word “root” identifies three different things here: the Substrate `Root`
 | Observe the root dividend basket | Read-only access plus independently approved existing identity, runtime and finite observation policy | The selected passive service has no transaction authority; current seat, ownership, stake, delegation and runtime must match. |
 | Trade a root dividend basket | Its coldkey or explicitly authorized current `BasketTrading` proxy | Current price/budget/liquidity/concentration checks apply; no basket-trading adapter is admitted by this passive strategy. [Current source][root-basket-470] |
 | Deploy EVM contracts | Dedicated EVM deployment signer | Exact nonce, creation bytecode, constructor data, gas and value envelopes. |
-| Govern the coordinator | Approved EVM 2-of-3 Safe | Safe authorization does not authorize native subnet-owner calls. |
+| Govern the coordinator | Approved EVM Safe: 1-of-1 at the SN25 launch, or the 2-of-3 profile | Safe authorization does not authorize native subnet-owner calls. |
 | Pause permitted coordinator actions | Configured guardian under contract rules | Cannot claw back reserve principal, rewrite earned claims or pause valid vault claims. |
 | Withdraw immutable reserve or upgrade the settlement vault | No such release-1.0 authority | Reject any proposed action requiring this capability. |
 
@@ -2087,10 +2087,10 @@ receipts as explicitly retained observations, not fresh chain audits; these
 | Identity | Custody/authority |
 | --- | --- |
 | Subnet owner coldkey | Owners report that the existing account is Ledger-derived. They keep the key on their own Ledger with the Polkadot generic app, have no Snow access, and run the [qualified offline owner-side signing handoff](OWNER-SIGNING.md) on their own device. Snow receives only an exact signed reply for verification, retention and submission. A [pinned Linux SDK artifact](evidence/owner-ledger-native-sdk-qualification-20260930.md) has synthetic-device qualification; the owners' actual platform, physical device, on-chain account, metadata digest and live call still need verification. |
-| EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. |
-| Coordinator owner | Actual 2-of-3 Safe with three distinct approved owners. |
-| Guardian | Separate limited operational authority. |
-| Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. |
+| EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. `0xA9D4A6a331F59942BD7389a5402120D69047C090` on Brien's Ledger (Ethereum app). |
+| Coordinator owner | Actual Safe with its approved owners and threshold. The launch Safe is SafeL2 1.4.1 `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` on Brien's Ledger (owner decision, October 7); owners can be added and the threshold raised later by a Safe transaction. The tooling also keeps the 2-of-3, three-owner profile. |
+| Guardian | Separate limited operational authority. `0x450C14EA62F76F11630780e194E01F9f524BAbFd` on Brien's Ledger (Ethereum app). |
+| Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. Its key `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a service key in `vault/main/sn.yml`; no mainnet oracle service exists yet. |
 | Root validator coldkey/hotkey | Existing root hotkey hardware custody and the actual root-owning/staker coldkeys or allowed proxies must be identified independently. The passive observer uses public identity and independent config/host approvals, without a native signer. Reviewed v470 accumulation needs no periodic hotkey signature; registration, claims, stake and basket actions use their specific coldkey/proxy authority. Neither root key role inherits the subnet owners' Ledger or approval. Actual device/API and live participation remain unverified. |
 | UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. |
 | Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. The [qualified worker custody check](evidence/operator-deposit-custody-qualification-20260930.md) still needs real wallet and coordinator verification. |
