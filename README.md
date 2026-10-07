@@ -162,7 +162,8 @@ leave 188 head slots.
 - **The buyback reserve is one‑way** — no contract function ever sources a transfer out of it.
 - **Split governance.** `STReserveSink` and `STSettlementVault` are non‑upgradeable from
   launch. Only `STCoordinator` is UUPS‑upgradeable: testnet uses a dedicated value‑capped
-  owner, and mainnet requires a distinct 2‑of‑3 Safe. A ≥1‑epoch upgrade timelock is planned
+  owner, and mainnet uses a distinct Safe, 1‑of‑1 at the SN25 launch (a Safe transaction can
+  add owners and raise the threshold later). A ≥1‑epoch upgrade timelock is planned
   for Phase 1 (§6.4.2, §16.3 M5); the current coordinator has none.
 
 ---

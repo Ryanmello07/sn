@@ -73,7 +73,8 @@ with deregistration churn running that tournament. Both tiers share **one** mech
 (§8.4–8.5).
 
 The subnet **launches centralized‑but‑bounded** — an upgradeable policy coordinator owned by a dedicated
-testnet key and, on mainnet, a 2-of-3 multisig — while the reserve and settlement vault are
+testnet key and, on mainnet, a Safe multisig (1-of-1 at the SN25 launch; a Safe transaction can add owners and
+raise the threshold) — while the reserve and settlement vault are
 **non-upgradeable from day one**. Finalized claims are therefore un-clawbackable even by a hostile
 coordinator upgrade. Governance later adds a timelock around coordinator changes. v1 rewards independently *measured liveness*;
 closing the gap to honest‑relay, payout‑grade verification is the `VALIDATOR.md` §10 roadmap.
@@ -666,7 +667,8 @@ upgradeable proxy. The reserve is publicly auditable every finalized block:
 
 #### 6.4.1 Phase 0 — Launch (central control, fast bug‑fixes)
 
-- **Testnet owner = one dedicated, generated, value-capped EOA; mainnet owner = a distinct 2-of-3 Safe.**
+- **Testnet owner = one dedicated, generated, value-capped EOA; mainnet owner = a distinct Safe**, 1-of-1 at
+  the SN25 launch by owner decision (October 7); a Safe transaction can add owners and raise the threshold.
   Neither key is used by an operator, validator, depositor, root task, keeper or server process.
 - **Upgradeable UUPS coordinator only.** The owner can patch open/future coordination logic. It cannot
   replace the reserve sink or vault bytecode and cannot modify finalized entitlement state.
@@ -1197,6 +1199,9 @@ for validator v:
     commit / reveal w_v   (Neuron 0x804, drand timelock — §2.4)
 ```
 
+The self-mask covers the NOs a validator declares it controls. The SN25 launch's one UR validator declares none and
+scores UR's own pool (owner decision, October 7).
+
 Yuma combines the validators' vectors with their stake:
 
 - **Consensus & clipping.** Per pool the chain takes the κ‑stake‑weighted **median** of the scores and
@@ -1670,9 +1675,10 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
    limit-registers its claims-escrow hotkey under its own mapped coldkey, and coordinator initialization
    fails unless that live registration exists. As each NO onboards, the immutable vault calls
    `registerLimit` for its **miner‑pool UID** with the reviewed rao ceiling; stand up an initial set of
-   **independent validators** (owner-run at first) so consensus has measurement from day one. The release
-   remains one mechanism. **Top-level miners self-`register_limit`** their own (provider-owned, not
-   contract-owned) UIDs with a locally approved ceiling and publish the §11.4 binding.
+   **validators** (owner-run at first) so consensus has measurement from day one. At the SN25 mainnet launch
+   that set is one UR validator scoring UR's own pool, with no independent cross-check (owner decision,
+   October 7). The release remains one mechanism. **Top-level miners self-`register_limit`** their own
+   (provider-owned, not contract-owned) UIDs with a locally approved ceiling and publish the §11.4 binding.
 3. **Validator software (independent).** Stake α; run `VALIDATOR.md` trails; each tempo score **both tiers** (pools `implied_usage × quality` —
    implied usage = deposit ÷ conviction‑tier rate, computed off the published deposit events; head on its **routable‑IP breadth score**), read the `client_id ⇄ hotkey` binding (§11.4), split by θ, and submit
    commit-reveal weights (standard Bittensor validator loop → native dividends) — **no central
@@ -1771,7 +1777,9 @@ faulted.
    rehearse the separate 50,400-block/seven-day mainnet policy with reviewed
    +4h/+48h windows. After the three clean testnet UR blocks and MR closure,
    **promote to mainnet**: re‑run the M0 probes + M1 genesis against **finney** (chain 964), now under the hard‑gate
-   posture (real TAO; genesis is one irreversible window). The M4+ production phases run on mainnet.
+   posture (real TAO; genesis is one irreversible window). By owner decision (October 7) the SN25 mainnet genesis has
+   one operator and one validator, so it has no separately keyed independent validator position. The M4+ production
+   phases run on mainnet.
 5. **M4 — Production rollout (one mechanism; Phase 0 governance, §6.4.1).** Full parameters, **quality‑factor swing
    capped until the independent‑validator stake share is healthy** and `VALIDATOR.md` §10 advances
    (§12.3).

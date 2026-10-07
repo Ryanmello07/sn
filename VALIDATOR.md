@@ -89,7 +89,10 @@ A completed trail does **not** prove:
    *approximate*, not a precondition we can assume. v1 relies on an honest validator
    *majority* providing a clean baseline against which self-dealing and adversarial
    abandonment show up statistically (§7.5, §7.7); the structural defenses that make
-   it hold under adversarial validators are the §10 roadmap.
+   it hold under adversarial validators are the §10 roadmap. The SN25 mainnet launch
+   does not meet this assumption: by owner decision (October 7) UR runs the only
+   operator and the only UR validator, which scores UR's own pool, so no independent
+   validator cross-checks UR's scoring.
 3. Source IP cannot be spoofed (TCP return path) — so a request's source IP is
    evidence the packet truly egressed from that provider.
 4. Each eligible provider maps to exactly one egress IP, and that IP resolves to
@@ -837,7 +840,7 @@ for each NO-pool UID n:
     audit  deposit_n == floor(bytes_n × rate_gib(tier_n) / GiB + users_n × rate_user(tier_n)), capped   # signed payout artifact; else pool[n] = 0
     implied_demand_n = (bytes_n × rate_gib(0) / GiB + users_n × rate_user(0)) × min(1, cap / owed_n)  # audited usage at the conviction-zero tier
     implied_demand_n = 1                                                                         # while the signed policy's price is zero
-    pool[n] = implied_demand_n × Q_n       # §11.1; = 0 if this validator operates NO n (self-mask)
+    pool[n] = implied_demand_n × Q_n       # §11.1; = 0 if n is in this validator's controlled_no_ids (self-mask)
 normalize pool so Σ pool = 1 − θ
 
 w = head ⊕ pool                            # ONE vector over all miner UIDs
@@ -850,8 +853,10 @@ hard-coded to `65535`, so changing that storage does not impose a native cap.
 Release 1.0 validators therefore load the cap from the exact signed policy,
 apply it before serialization, persist it with the intent, and audit the
 finalized applied vector using `max(value)/sum(values) ≤ cap/65535`. The testnet
-bootstrap uses `32768`, the smallest feasible cap with two positive recipients;
-production lowers it only as recipient breadth makes the requested cap feasible.
+bootstrap uses `32768`, the smallest feasible cap with two positive recipients; its
+feasibility check counts one pool per healthy operator. The approved mainnet policy
+also uses `32768`, which the treasury policy requires. On mainnet the check counts
+the treasury's two reserve recipients, so the cap holds with one operator.
 After half-up `u16` conversion, validators deterministically add the minimum
 rounding units to lower, positive entries in UID order until the same exact
 integer inequality holds; they never sign a rounded vector which exceeds it.
@@ -901,8 +906,11 @@ routable egress-IP-hashes (§11.1). Four rules keep the count honest:
   pool) **cannot** multiply credit — breadth of distinct routable score units is the
   only thing that moves the score.
 - **Self-weight mask + independent baseline, provisional until §10.** A validator's
-  head/tail vector zeroes its own UID and its own NO (§11.3); with an independent
-  validator majority (§1, §7.7) the κ-median tracks ground truth. Head rewards remain
+  head/tail vector zeroes its own UID and the NOs it lists in `controlled_no_ids`
+  (§11.3); a config may not list every configured NO, which would leave no weight.
+  With an independent validator majority (§1, §7.7) the κ-median tracks ground truth.
+  The SN25 launch has neither safeguard: its one UR validator is run by UR, lists no
+  NO and scores UR's own pool (owner decision, October 7). Head rewards remain
   **provisional** until the §10 structural defenses land; the `WHITEPAPER.md` §8.4
   score-dip protections (high `immunity_period`, the `score` EMA of §11.1, θ headroom)
   keep native deregistration churn from evicting a good top miner on one thin stretch.

@@ -81,13 +81,24 @@ Collect these inputs before requesting signatures:
 
 - Reviewed source/build locks, exact binary and contract artifact hashes.
 - Selected deployment label, validated mainnet protocol policy and all typed
-  chain/contract configurations. Fresh passive-root composition uses
-  `urnetwork-mainnet-bootstrap-chain-config-v4`.
+  chain/contract configurations. Fresh composition for this launch uses
+  `urnetwork-mainnet-bootstrap-chain-config-v5`: passive root and one `sole` UR
+  role, whose hotkey may also hold the root seat under the same coldkey
+  ([BOOTSTRAP-CHAIN.md](BOOTSTRAP-CHAIN.md)). The two-role passive form is v4.
 - The operator-held Ed25519 approval public key (see [Who signs what](#who-signs-what))
   and separately approved runtime, metadata, network, submission route, attempt
   and value budgets.
 - EVM deployer, governance Safe, guardian and commitment oracle; these roles
-  are distinct. Actual sender nonces, bounded fees and validity windows.
+  are distinct. Actual sender nonces, bounded fees and validity windows. Selected
+  for this launch:
+  - deployer `0xA9D4A6a331F59942BD7389a5402120D69047C090`, guardian
+    `0x450C14EA62F76F11630780e194E01F9f524BAbFd` and Safe relayer
+    `0x81E925DAEC15cb334d4b9FD90e9c4f10025eB666`, on Brien's Ledger (Ethereum app);
+  - governance Safe: SafeL2 1.4.1 `0x56F4Dad575576CC0B679FEf52899630f9F605418`,
+    1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` on the same Ledger
+    (owner decision, October 7);
+  - commitment oracle `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03`, a service key
+    in `vault/main/sn.yml`. No mainnet oracle service exists yet.
 - Each operator's distinct EVM `depositSigner` and `rootSigner`, native validator
   identities, signed producer configurations and durable service locations.
 - Dedicated native treasury recipient hotkeys and observed UID generations.
@@ -103,11 +114,11 @@ messages and reviewed pins, never seed phrases or copied keys.
 
 | Authority | Request | Result |
 | --- | --- | --- |
-| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | Nothing for this launch: there is no owner trim (step 2 of the [execution order](#execution-order-and-parallel-work)) and no coldkey swap ([hard rule](#hard-rule-sn25-ownership-stays-with-ur-owner)). If a trim is ever selected, two signatories sign it through the [native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner) path | None |
+| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | One call: a `set_children` on SN25 naming `ur-mainnet` as the SN25 owner hotkey's child at 100% ([root validator](#root-validator-on-netuid-0)). No ownership or alpha moves. There is no owner trim (step 2 of the [execution order](#execution-order-and-parallel-work)) and no coldkey swap ([hard rule](#hard-rule-sn25-ownership-stays-with-ur-owner)). If a trim is ever selected, two signatories sign it through the [native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner) path | Finalized native multisig call |
 | Ed25519 approval key: one operator-held key in `root/subtensor/approval/` (owner decision, October 7: approvals of plans that don't touch the chain need no multiparty sign-off) | Exact bytes emitted by plan previews for the specified approval domain | Approval envelope binding the exact plan, not transaction custody |
-| EVM deployer | Exact approved EIP-1559 creation/link transaction | Binary signed chain-964 transaction |
-| Coordinator governance Safe owners | Exact evidence-anchor Safe EIP-712 transaction | Accepted ordered Safe signatures |
-| Safe relayer | Exact outer EIP-1559 `execTransaction` transaction | Binary signed relayer transaction |
+| EVM deployer `0xA9D4A6a331F59942BD7389a5402120D69047C090` (Brien's Ledger, Ethereum app) | Exact approved EIP-1559 creation/link transaction | Binary signed chain-964 transaction |
+| Coordinator governance Safe owner: `0x16C372dbBb24cd8473345ab13971E40814C8658F` (Brien's Ledger, Ethereum app), the only owner of the 1-of-1 Safe | Exact evidence-anchor Safe EIP-712 transaction | One accepted 65-byte Safe signature |
+| Safe relayer `0x81E925DAEC15cb334d4b9FD90e9c4f10025eB666` (Brien's Ledger, Ethereum app) | Exact outer EIP-1559 `execTransaction` transaction | Binary signed relayer transaction |
 | Operator signers | Their separately approved deposit and payout-root operations | Role-specific EVM signatures |
 | `ur-mainnet` 2-of-3 multisig (Brien's Ledger account 10, Jack, Keith), which owns the validator hotkey | SN25 and root registration, root stake, auto parent opt-out and the 18% takes ([root validator](#root-validator-on-netuid-0)) | Finalized native multisig calls |
 
@@ -366,17 +377,26 @@ review, Safe-owner signatures, relayer signing, execution preview, execution
 approval, claim, canonical authorization, reconcile, scoped submit and
 installation readback.
 
-The current profile requires an independently verified 2-of-3 Safe with three
-sorted distinct owners, no modules, guard or fallback handler. Two actual owners
-sign the emitted EIP-712 transaction; the accepted concatenation is 130 binary
-bytes. The relayer then signs its exact outer transaction. Native review expiry
+This launch uses the single-owner profile (owner decision, October 7), which
+only the execution request schema
+`urnetwork-mainnet-successor-execution-single-owner-request-v1` selects. It
+requires an independently verified 1-of-1 Safe with no modules, guard or
+fallback handler. The live governance Safe is SafeL2 1.4.1
+`0x56F4Dad575576CC0B679FEf52899630f9F605418`, owner
+`0x16C372dbBb24cd8473345ab13971E40814C8658F`, created by the relayer in block
+9,229,341. The owner signs the emitted EIP-712 transaction; the accepted
+signature is 65 binary bytes. The original request schema keeps the 2-of-3
+profile: three sorted distinct owners, two signatures and a 130-byte
+concatenation. The relayer then signs its exact outer transaction. Owners can be
+added and the threshold raised later by a Safe transaction. Native review expiry
 does not revoke Safe signatures. Some planning/review commands intentionally
 return exit 3 with unresolved-authority reports; inspect the report rather than
 interpreting that exit as blanket success.
 
 Complete-history Safe authentication is not implemented. The supported bounded
-alternative requires a separately signed current-only proposal v1 nested in a
-separately signed acceptance revision v2, canonical authorization and the exact
+alternative requires a separately signed current-only proposal v1, naming the
+policy text of the selected owner profile, nested in a separately signed
+acceptance revision v2, canonical authorization and the exact
 retained acceptance object hash via
 `--accept-safe-current-policy` for the selected submission. Importing
 `--safe-current-revision` alone does not enable sending. Record this narrower
@@ -449,9 +469,10 @@ go run "$REVIEW_DIR/policyhash.go" "$POLICY_FILE"
 ```
 
 Retain the policy YAML and canonical bytes from `Policy.CanonicalBytes()`.
-Compare the digest with approved proxy initialization, on-chain policy and both
-signed producer configurations. Pretty-printing canonical JSON changes file
-bytes; the protocol hash uses the original compact bytes.
+Compare the digest with approved proxy initialization, on-chain policy and every
+signed producer configuration; this launch has one, for its single validator.
+Pretty-printing canonical JSON changes file bytes; the protocol hash uses the
+original compact bytes.
 
 ## Native reserve and service prerequisites
 
@@ -462,7 +483,11 @@ traffic. This supersedes the earlier owner-recycling proposal.
 At least two ordinary registered recipient hotkeys must be owned by the reserve
 coldkey, outside the subnet-owner hotkey set and provider roles. Retain observed
 UID/hotkey/coldkey/registration generations; initially split the reserve row
-approximately 45% each because of the native per-weight cap. An empty recipient
+approximately 45% each because of the native per-weight cap. In an epoch with no
+provider weight, the validator submits the treasury's reserve-only row instead:
+half to each recipient and nothing to providers, marked
+`reserve_only_empty_provider_allocation`, which every verifier rederives
+([treasury production](../validator/TREASURY-PRODUCTION.md)). An empty recipient
 list identifies a destination but cannot establish routing readiness.
 
 Keep the reserve public configuration in its selected `vault/main/sn.yml`
@@ -511,8 +536,7 @@ sections 1.6 and 7):
 - Our validator hotkey is the dedicated hotkey **`ur-mainnet`** (btcli wallet
   `root/subtensor/wallets/ur-mainnet`, hotkey `default`), not the SN25 owner hotkey.
   It is the `hotkey_seed_file` of the signed UR validator config, sits on root
-  (netuid 0) and validates SN25. The SN25 owner, the `ur-owner` multisig, stays
-  owner-local setup custody and signs nothing here
+  (netuid 0) and validates SN25
   ([current root participation](ROOT-CURRENT-PARTICIPANT.md)).
 - Its coldkey is the **`ur-mainnet` 2-of-3 native multisig**
   `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are:
@@ -550,6 +574,18 @@ signatory pays the fee for their own approval.
 authenticated finalized block without any key; use it before and after each
 step. `validator take set` and `take childkey` sign with a coldkey seed file,
 so they are not used for this multisig-owned hotkey.
+
+On October 7 the owner decided that the launch has one operator and one validator:
+
+- `ur-mainnet` is the launch's only UR validator, and UR is the only operator.
+  The approved policy's minimums are one live validator and one healthy
+  operator. The config has `controlled_no_ids: []`, so the validator scores UR's
+  own pool; nothing independent cross-checks it.
+- It steers SN25 only while it holds more than kappa (50%) of validator stake.
+  The SN25 owner, the `ur-owner` multisig, signs one call for this, separate from
+  the `ur-mainnet` steps: a `set_children` on SN25 naming `ur-mainnet` as the
+  SN25 owner hotkey's child at 100%, so the owner hotkey's stake weight counts
+  for our validator. No ownership or alpha moves, and there is no coldkey swap.
 
 ### Register the hotkey on root
 
@@ -626,7 +662,8 @@ Then `take status` must show:
 - `auto parent delegation: false (stored)`;
 - `childkey take (netuid 25): 11796/65535 (18.00%) stored`;
 - `children (netuid 25): none`, unless the owner chose children;
-- `parents (netuid 25)`: the hotkeys that name ours as their child.
+- `parents (netuid 25)`: the hotkeys that name ours as their child, including the
+  SN25 owner hotkey once `ur-owner`'s `set_children` applies.
 
 ### As submitted for this launch
 

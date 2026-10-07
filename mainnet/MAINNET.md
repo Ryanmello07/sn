@@ -1,5 +1,43 @@
 # Mainnet launch and operations plan
 
+## One operator and one validator — October 7
+
+The owner decided that SN25 launches with **one network operator (UR) and one validator (`ur-mainnet`)**, and that the
+coordinator's governance Safe starts with one owner. The code still supports the two-operator, two-validator and 2-of-3
+forms with unchanged behavior and bytes; the launch uses the new one-operator, one-validator and 1-of-1 forms:
+- **Policy.** The approved [`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml), hash
+  `0xca3274895fa7423e1a49d686dbaeea8f970ee1e4b28c268eb624723d4108011c`, sets `minimum_healthy_no_count` and
+  `minimum_live_validator_count` to 1 and binds fleets for 12 epochs. On mainnet the weight-cap feasibility check counts
+  the treasury's reserve recipients, so the 32768 cap holds with one operator. Testnet keeps the pool-only rule.
+- **No independent cross-check.** The validator runs with `controlled_no_ids: []` and scores UR's own pool. A config may
+  not list every configured operator there, because that would leave no weight to submit. Nothing independent checks
+  UR's scoring at launch.
+- **Stake.** A validator steers SN25 only while it holds more than kappa (50%) of validator stake. `ur-owner` signs one
+  launch call: a `set_children` on SN25 that names `ur-mainnet` as the SN25 owner hotkey's child at 100%, so the owner
+  hotkey's stake weight counts for `ur-mainnet`. No ownership or alpha moves, and there is still no coldkey swap.
+  `bootstrap-chain readiness` keeps `EFFECTIVE_STAKE_MAJORITY_UNVERIFIED` on the sole validator.
+- **Evidence.** With one configured operator, that operator's own server holds the only release V2 evidence replica.
+- **Reserve-only row.** On the mainnet schema-3 treasury path, an epoch whose provider allocation is genuinely empty
+  submits a row that gives each approved reserve recipient 1/n (1/2 each with two) and providers nothing, marked
+  `reserve_only_empty_provider_allocation`. Every verifier rederives it, and mainnet conformance accounts for those
+  tranches. The owner-recycle preview planner still refuses an empty allocation.
+- **Bootstrap.** A fresh preparation uses `urnetwork-mainnet-bootstrap-chain-config-v5` with one UR role, `sole`
+  ([BOOTSTRAP-CHAIN.md](BOOTSTRAP-CHAIN.md)). The passive root seat may share the sole hotkey only under the same
+  coldkey. The two-unit `activate-validators` tooling refuses v5 and is not the launch path: the validator runs as
+  `validator run` through xops on snow ([LAUNCH.md](LAUNCH.md#run-it-on-snow)).
+- **Governance Safe.** SafeL2 1.4.1 `0x56F4Dad575576CC0B679FEf52899630f9F605418`, owner
+  `0x16C372dbBb24cd8473345ab13971E40814C8658F`, threshold 1, created by the relayer in block 9,229,341. Only the
+  execution request schema `urnetwork-mainnet-successor-execution-single-owner-request-v1` selects this profile, with one
+  65-byte EIP-712 signature ([successor execution](BOOTSTRAP-SUCCESSOR-EXECUTION.md)). Owners can be added and the
+  threshold raised later by a Safe transaction.
+- **EVM roles.** Brien's Ledger (Ethereum app) holds the deployer `0xA9D4A6a331F59942BD7389a5402120D69047C090`, the Safe
+  owner, the guardian `0x450C14EA62F76F11630780e194E01F9f524BAbFd` and the Safe relayer
+  `0x81E925DAEC15cb334d4b9FD90e9c4f10025eB666`. The commitment oracle `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a
+  service key in `vault/main/sn.yml`; no mainnet oracle service exists yet.
+
+Older passages below that require two UR validators, two healthy operators or a 2-of-3 Safe keep their dated scope; for
+the launch, this decision supersedes them.
+
 ## Owner trim decision — October 7
 
 The owner decided that the SN25 launch performs **no owner trim**.
@@ -7,7 +45,7 @@ The owner decided that the SN25 launch performs **no owner trim**.
 Old miner registrations remain, and ordinary registration pruning removes them:
 - **No payouts today.** At finalized block 9,228,211, read from Snow's Finney archive, 1 of SN25's 256 UIDs received
   miner incentive, and all 14 permitted validators weighted only that UID.
-- **Payouts stay at zero.** Zero weight is enough to keep old miners at zero payout while UR's validators hold the
+- **Payouts stay at zero.** Zero weight is enough to keep old miners at zero payout while UR's validator holds the
   consensus stake.
 - **Pruning takes them out first.** A new registration on the full subnet replaces the lowest-ranked registration past
   its immunity, which is a zero-emission old miner.
@@ -241,9 +279,9 @@ The documentation base is SN `3b75fd9a`. The sealed source checkpoints used by t
 
 Astra owns implementation and source review; Sol owns admitted compiler/test execution and independent result readback; Root owns final integration and publication. Preserve healthy work, exact successful receipts and original failures. All Git commits inherit the global Bitprecipice author configuration; never add repository/worktree identity overrides.
 
-The settled economics remain **10% of native miner allocation for providers and 90% owner recycle**, with equal weight for paid/free completed traffic. Recycling does not fund the reserve. **2026-10-06 00:00:00 UTC is the inclusive new-earnings boundary**; obligations earned before it may finish paying in USDC later, including backlog and processor retries. Do not convert their unpaid value to alpha or pay the same usage twice. The [published policy readback](evidence/current-cutoff-readiness-config-20261003.json) records `activation: blocked`; the [fresh October 4 config/planner handoff](/mnt/data/sn-testnet/mainnet-parallel-20261004/oct6-planner-ownership/HANDOFF.json) retains the same `main/sn.yml` blob `05b56036` at config main `9c4a3435`. Loaded worker policy, deployment and actual boundary enforcement remain unverified. The new planner lock is effective only after every old planner binary has been replaced; old writers do not honor it.
+The settled economics remain **10% of native miner allocation for providers and 90% owner recycle** (superseded on October 5 by 90% received by `ur-reserve`; see [Current reserve and economic decision](#current-reserve-and-economic-decision--october-5)), with equal weight for paid/free completed traffic. Recycling does not fund the reserve. **2026-10-06 00:00:00 UTC is the inclusive new-earnings boundary**; obligations earned before it may finish paying in USDC later, including backlog and processor retries. Do not convert their unpaid value to alpha or pay the same usage twice. The [published policy readback](evidence/current-cutoff-readiness-config-20261003.json) records `activation: blocked`; the [fresh October 4 config/planner handoff](/mnt/data/sn-testnet/mainnet-parallel-20261004/oct6-planner-ownership/HANDOFF.json) retains the same `main/sn.yml` blob `05b56036` at config main `9c4a3435`. Loaded worker policy, deployment and actual boundary enforcement remain unverified. The new planner lock is effective only after every old planner binary has been replaced; old writers do not honor it.
 
-The owners retain their Ledger and sign on their own device; they have **no Snow access**. Snow may verify, retain and submit only the exact returned signed action. Root hardware custody is separate and still needs its actual device/API and key roles identified; current root lifecycle actions may require the owning or staker coldkey rather than the hotkey. Both the owned netuid-0 root role and UR-subnet validator role remain required, including the two initial UR instances in the bootstrap plan. The reviewed v470 accumulation strategy needs no periodic hotkey signature or retired root-weight call, but a passive monitor alone does not establish that the actual root participant is admitted, active and earning.
+The owners retain their Ledger and sign on their own device; they have **no Snow access**. Snow may verify, retain and submit only the exact returned signed action. Root hardware custody is separate and still needs its actual device/API and key roles identified; current root lifecycle actions may require the owning or staker coldkey rather than the hotkey. Both the owned netuid-0 root role and UR-subnet validator role remain required, including the two initial UR instances in the bootstrap plan (one since the [October 7 decision](#one-operator-and-one-validator--october-7)). The reviewed v470 accumulation strategy needs no periodic hotkey signature or retired root-weight call, but a passive monitor alone does not establish that the actual root participant is admitted, active and earning.
 
 A later [whole-work intake](/mnt/data/sn-testnet/mainnet-whole-work-inventory-20261004/evidence/sn-v11/intake.json), SN `864f3680`, adds immutable signed Open observations and public raw clocks: 164 roots per mode, 70 controls and three vets are authored and unexecuted. Reported Current `b037` / Server `d014` composition remains separate source work outside the sealed `1fa` / `6c25` graph below; canceled historical work remains unknown.
 
@@ -261,7 +299,7 @@ Declared test scopes below overlap; do not add them into a final unique-root tot
 | Gas, native fees and conservation | [Gas `a1c9ca00`](/mnt/data/sn-testnet/mainnet-parallel-20261004/operator-gas-policy/INTAKE.json) implements independently pinned approval and conservative nonce/lifetime ceilings: 30 declared roots per mode, 19 controls, unexecuted. [Native readiness](/mnt/data/sn-testnet/mainnet-parallel-20261004/native-witness-review/sn/mainnet/evidence/native-qualification-readiness-20261004/readiness.json) names 22 Rust roots, 86 Go roots per mode and 23 controls on its own pinned graph. | Execute matching current capture/replay engines and native fee/finality/conservation consumers. Retain full gas ceilings; actual native-fee proof, denomination admission and idempotent liability release remain an explicit gate. Prove original 10/90 allocation; receipt status, inferred refunds and policy renewal release no reserved ceiling. | Native, WholeFee, DepositWallet, Sol / PH-04, 11, 12, 19; MG-04, 06 |
 | Runtime, HTTP and recovery | Finality `74bcb574` preserves first/highest witnesses and implicit selection through the outer owner; its joined affected partition has 33 roots per mode. HTTP `3d7734ab` adds ten roots, 46 affected roots per mode and 19 controls. All remain source-only. | Execute affected normal/race/vet and operative controls on the joined graph; preserve deadlines, hard causes, original signed history, bounded parallel repair and actual child joins. | Budget, HTTP, Recovery, Sol / PH-03, 07, 18, 19, 21, 22, 25 |
 | Monitoring and dashboard | [xops `86f5eedf`](evidence/mainnet-release-checkpoint-20261004.json) executed 311 roots with real pinned Prometheus/promtool: **309 PASS / 2 FAIL / 0 SKIP**, 47.962 seconds, exit one, joined. Failures affect the producer-census parser and deep-JSON refusal expectation. The exact SN `09f8f989` pin, 104 panels/177 queries and 14 chain/36 conservation/six controller gauges remain bound. | Qualify source correction `55f1acf0`, its adjacent cases/controls and unchanged 311-root combined scope. Reliability/provider-window gauges remain unknown. Heartbeat cannot refresh outcome freshness; actual Grafana/Mimir ingestion, alert delivery and on-call/repair drills remain open. | Sol, Monitoring, Ops / PH-15, 28; MG-07 |
-| Custody and both validator roles | Owner-local Ledger workflow `fc55c559` adds three roots; 59 selected roots/seven controls remain unexecuted. Current two-UR start code exists. Current v470 root participation uses registration/stake/basket state; no periodic SetRootWeights is required. | Supply actual owner/device approvals and signed originals, identify separate root hotkey/coldkey custody, verify admitted active/earning root and two UR roles, installed contracts and approved host inputs. Software fixtures do not supply those facts. | Owner, Bootstrap, Root / PH-14; MG-01, 08 |
+| Custody and both validator roles | Owner-local Ledger workflow `fc55c559` adds three roots; 59 selected roots/seven controls remain unexecuted. Current two-UR start code exists. Current v470 root participation uses registration/stake/basket state; no periodic SetRootWeights is required. | Supply actual owner/device approvals and signed originals, identify separate root hotkey/coldkey custody, verify admitted active/earning root and two UR roles (one since October 7), installed contracts and approved host inputs. Software fixtures do not supply those facts. | Owner, Bootstrap, Root / PH-14; MG-01, 08 |
 | Rollout and acceptance | October 6 new-earnings policy remains published with activation blocked. No loaded-worker adoption, deployment, real economic outcomes or final mainnet acceptance is established. | Replace every old payout planner before relying on the shared lock; preserve all pre-cutoff USDC debt/retries. Complete rollout/rollback/outage/restore rehearsal and, after authorized activation, observe three native emission intervals plus a complete 50,400-block UR settlement/claim cycle. | Root, operators / all 38 outcomes; MG-10 |
 
 The final testnet remains closed. Its accepted operating exceptions and later repairs do not rewrite [R48's terminal result](../sim-testnet/FINAL-4.md): zero complete acceptance epochs and `final_acceptance=false`. Preserve missed native history, low-usage/provisional readiness and uncredited historical debt as explicit exceptions; mainnet qualification must address their production causes without restarting the closed testnet campaign.
@@ -423,7 +461,7 @@ The [joined admission source review](evidence/joined-admissionab0-scoped-source-
 
 The [independent counter correction review](evidence/conservation-counterab0-independent-source-review-20261004.json) verifies the test-only `ab0` successor before compilation: compare the actual unsigned observation counter with an unsigned count and retain the original source finding. The corrected joined archive batch still requires its41-root normal/race qualification. The [independent normal full128 recovery readback](evidence/claim-full128-normal-recovery-independent-readback-20261004.json) verifies one actual public Claim-window root, exact RUN/PASS census and joined process exit; race and remaining recovery bodies are separate. Preserve successful original work while qualifying the successor.
 
-Mainnet readiness remains unproven. The economic decisions are settled: providers receive 10% of the native miner allocation, 90% is recycled through the owner path, and paid/free completed traffic has equal weight. The October 6 `00:00 UTC` cutoff changes new-earnings attribution; pre-cutoff USDC obligations may finish paying later. Published configuration remains blocked from mainnet activation until the exact deployment package is ready.
+Mainnet readiness remains unproven. The economic decisions are settled: providers receive 10% of the native miner allocation, 90% is recycled through the owner path (superseded on October 5: the 90% goes to `ur-reserve`), and paid/free completed traffic has equal weight. The October 6 `00:00 UTC` cutoff changes new-earnings attribution; pre-cutoff USDC obligations may finish paying later. Published configuration remains blocked from mainnet activation until the exact deployment package is ready.
 
 The [requirement mapping correction](evidence/readiness-requirement-outcome-mapping-correction-20261004.json) restores every original outcome in the current checkpoint. PH-19 concerns historical runtime authority; economic funding and settlement belong to PH-11/PH-12 and MG-06. MG-03 retains complete durable recovery, and MG-10 retains release rehearsals plus the original post-activation observation intervals. Regenerate the readable checkpoint table from its JSON rows so dated component progress cannot silently replace the complete requirement. All38 requirements remain open; this tracking correction grants no implementation or acceptance credit.
 
@@ -1076,8 +1114,8 @@ passes the selected 749-to-750 readiness, default-off, seed-picker, normal/race
 and vet scopes. It also proves a mixed-writer v2 activation blocker: an old
 UPSERT can retain a prior positive quality attestation after changing a row.
 Keep the launch `provider.yml` subscriber policy absent/`0` and the v2 candidate
-classifier/MMDB out of active inputs unless both operators' actual miner cohorts
-prove fresh trails through the SN Quality/force-minimum seed picker. Under v2,
+classifier/MMDB out of active inputs unless every operator's actual miner cohort
+proves fresh trails through the SN Quality/force-minimum seed picker. Under v2,
 unknown or legacy connection facts are excluded even from fallback and named
 selection; service health alone cannot prove trail progress. The existing
 contract/operator/activation qualifications remain scoped to server `0b8e758d`
@@ -1092,7 +1130,7 @@ trigger fails both causal model controls. Independent normal/race/vet and
 trigger-omission controls also passed. The correction is merged into server
 `main` at `94229abb` but absent from the pinned server-720 release. Keep v2 off while successor
 source/image qualification, schema-751 lock-duration checks, complete writer/API
-rollout, lookup coverage and both operators' actual miner-trail/load canaries
+rollout, lookup coverage and every operator's actual miner-trail/load canaries
 remain open. Readiness permits an older binary on the newer schema and does not
 establish that policy readiness.
 
@@ -1673,7 +1711,7 @@ Current source changes matter to this design:
 | Subject | Source-backed observation | Bootstrap consequence |
 | --- | --- | --- |
 | Subnet emission allocation | The inspected `get_shares` uses price EMA, a `1 - MinerBurned` adjustment, then an emission gate. A flow-based helper also exists but is not the selected `get_shares` path. [Source][subtensor-shares] | Do not assume an older Taoflow formula or a root-validator vote controls our subnet's allocation. Attest the actual runtime path. |
-| Current root strategy | Runtime470 has removed `set_root_weights`. Dividends accumulate where earned; optional coldkey/proxy basket trades change holdings. [Current guide][root-reborn-470], [removal migration][root-removal-470] | Select the separately approved [passive root service](ROOT-PASSIVE-SERVICE.md) in a fresh v4 plan alongside both UR validators. Retain legacy signed actions and their recovery history. |
+| Current root strategy | Runtime470 has removed `set_root_weights`. Dividends accumulate where earned; optional coldkey/proxy basket trades change holdings. [Current guide][root-reborn-470], [removal migration][root-removal-470] | Select the separately approved [passive root service](ROOT-PASSIVE-SERVICE.md) in a fresh v4 plan alongside both UR validators, or a v5 plan alongside the sole one (the SN25 launch). Retain legacy signed actions and their recovery history. |
 | Miner collateral | Registration collateral can survive deregistration; later earnings can affect release and capture. [Official collateral guide, pinned source][collateral-guide] | A UID reset is not a balance, lock, or stake reset. Pool capture must distinguish emission, locked collateral, and principal. |
 | Native versus signed limits | The local whitepaper records runtime-dependent weight-limit behavior and requires a signed policy cap. [Local specification](../WHITEPAPER.md#15-concrete-parameters) | Observe runtime getters and enforce the signed cap independently. Do not assume a successful setter changed native enforcement. |
 
@@ -1695,7 +1733,7 @@ The word “root” identifies three different things here: the Substrate `Root`
 | Observe the root dividend basket | Read-only access plus independently approved existing identity, runtime and finite observation policy | The selected passive service has no transaction authority; current seat, ownership, stake, delegation and runtime must match. |
 | Trade a root dividend basket | Its coldkey or explicitly authorized current `BasketTrading` proxy | Current price/budget/liquidity/concentration checks apply; no basket-trading adapter is admitted by this passive strategy. [Current source][root-basket-470] |
 | Deploy EVM contracts | Dedicated EVM deployment signer | Exact nonce, creation bytecode, constructor data, gas and value envelopes. |
-| Govern the coordinator | Approved EVM 2-of-3 Safe | Safe authorization does not authorize native subnet-owner calls. |
+| Govern the coordinator | Approved EVM Safe: 1-of-1 at the SN25 launch, or the 2-of-3 profile | Safe authorization does not authorize native subnet-owner calls. |
 | Pause permitted coordinator actions | Configured guardian under contract rules | Cannot claw back reserve principal, rewrite earned claims or pause valid vault claims. |
 | Withdraw immutable reserve or upgrade the settlement vault | No such release-1.0 authority | Reject any proposed action requiring this capability. |
 
@@ -1967,7 +2005,7 @@ at that canonical hash and verifies both finalized boundaries. Fresh payout
 issuance refuses a configuration that does not match the requested epoch.
 Local two-operator migration, processed registration, fresh proof and deposit
 tests do not establish live readiness. Preserve exact old signature bytes and
-complete both operators' future-boundary cutover before activation.
+complete every operator's future-boundary cutover before activation.
 
 Settlement admission also requires the compatible server custody reader and
 migrations through 728. The [retained timestamp correction](PRELAUNCH-FIXES.md)
@@ -2049,10 +2087,10 @@ receipts as explicitly retained observations, not fresh chain audits; these
 | Identity | Custody/authority |
 | --- | --- |
 | Subnet owner coldkey | Owners report that the existing account is Ledger-derived. They keep the key on their own Ledger with the Polkadot generic app, have no Snow access, and run the [qualified offline owner-side signing handoff](OWNER-SIGNING.md) on their own device. Snow receives only an exact signed reply for verification, retention and submission. A [pinned Linux SDK artifact](evidence/owner-ledger-native-sdk-qualification-20260930.md) has synthetic-device qualification; the owners' actual platform, physical device, on-chain account, metadata digest and live call still need verification. |
-| EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. |
-| Coordinator owner | Actual 2-of-3 Safe with three distinct approved owners. |
-| Guardian | Separate limited operational authority. |
-| Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. |
+| EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. `0xA9D4A6a331F59942BD7389a5402120D69047C090` on Brien's Ledger (Ethereum app). |
+| Coordinator owner | Actual Safe with its approved owners and threshold. The launch Safe is SafeL2 1.4.1 `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` on Brien's Ledger (owner decision, October 7); owners can be added and the threshold raised later by a Safe transaction. The tooling also keeps the 2-of-3, three-owner profile. |
+| Guardian | Separate limited operational authority. `0x450C14EA62F76F11630780e194E01F9f524BAbFd` on Brien's Ledger (Ethereum app). |
+| Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. Its key `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a service key in `vault/main/sn.yml`; no mainnet oracle service exists yet. |
 | Root validator coldkey/hotkey | Existing root hotkey hardware custody and the actual root-owning/staker coldkeys or allowed proxies must be identified independently. The passive observer uses public identity and independent config/host approvals, without a native signer. Reviewed v470 accumulation needs no periodic hotkey signature; registration, claims, stake and basket actions use their specific coldkey/proxy authority. Neither root key role inherits the subnet owners' Ledger or approval. Actual device/API and live participation remain unverified. |
 | UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. |
 | Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. The [qualified worker custody check](evidence/operator-deposit-custody-qualification-20260930.md) still needs real wallet and coordinator verification. |
@@ -2108,7 +2146,12 @@ checks alone do not establish composed launch acceptance.
 
 Preserve the current guarantees: the coordinator owns neither custody position, the sink has no outbound path, and valid earned vault claims survive coordinator pause or upgrade. Pausing new application activity is not a native emission kill switch. Initial contracts establish their epoch clock at deployment, so the plan must include sufficient time to finish setup and a future activation boundary; it cannot assume a dormant deployment has no running clock.
 
-## Running both validators
+## Running the validators
+
+**October 7 decision:** SN25 launches with one UR validator, `ur-mainnet`, whose hotkey also holds the root seat
+([decision](#one-operator-and-one-validator--october-7)). Its preparation is a one-role bootstrap v5, and it runs as
+`validator run` through xops on snow ([LAUNCH.md](LAUNCH.md#run-it-on-snow)). The two-unit `activate-validators`
+component below refuses v5 and is not the launch path; it remains for two-validator deployments.
 
 The [initial two-UR installation component](VALIDATOR-ACTIVATION.md) now provides
 a concrete `activate-validators` command for exact static-unit installation,
@@ -2182,10 +2225,10 @@ remain open.
 
 The [runtime470 source/artifact review](../docs/spec/runtime-470-audit.md) and
 [passive root service](ROOT-PASSIVE-SERVICE.md) define an implemented observation
-path: fresh bootstrap schema v4, two independently approved UR production
-configs, and a separately approved existing netuid-0 role using
-`passive_accumulate_in_place`. This observer does not complete the requested
-actual root participation/earnings or authority for necessary coldkey lifecycle actions. At reviewed source
+path: fresh bootstrap schema v4 with two independently approved UR production
+configs, or v5 with one (the SN25 launch), and a separately approved existing
+netuid-0 role using `passive_accumulate_in_place`. This observer does not
+complete the requested actual root participation/earnings or authority for necessary coldkey lifecycle actions. At reviewed source
 `b4662ed8`, [root_service_command.go](root_service_command.go) returns
 `activation-blocked` from `activate`; [root_service_runtime.go](root_service_runtime.go)
 constructs observation/reconciliation and offline custody ports, leaving native
@@ -2206,7 +2249,7 @@ Its `ready` result is observation readiness and `activation_ready` stays false.
 The separately signed [`activate-root-passive` host owner](ROOT-PASSIVE-SERVICE.md#independently-approved-static-host-owner)
 now provides exact sandboxed static installation and one durable process start,
 with invocation recovery and a dedicated writable checkpoint directory. It keeps
-the original v4 private approvals unchanged and consumes no UR start allowance.
+the original v4 or v5 private approvals unchanged and consumes no UR start allowance.
 Historical status and manager liveness do not prove continuing observer health.
 Its [qualification](evidence/passive-root-host-20261001.md) supplies no live host
 approval or deployment; actual current seat/stake, independent runtime authority,
@@ -2255,7 +2298,7 @@ Registration accepts only the explicit `operator_balance_exposure: "whole-reduci
 
 The sequence is `observe`, `plan`, independent consent, `reserve`, `export`, owner-local `inspect-request`/`ledger-plan`/`sign`, `import-reply` (or pinned `import`), `submit-plan`, independent submission consent, then `submit`/`reconcile`. The daemon state uses the new `mainnet-root-register` physical owner kind and `root-register-action.json`; operator-device custody is independently provisioned. One original nonce, era, signature and finite cumulative post allowance survive restart. Every post first reconciles exact canonical bodies; uncertain signing is not repeated, an existing seat is not re-registered, and expiry never silently changes the approved action. A new unsigned plan requires fresh observation and approval.
 
-`bootstrap-handoff` requires the original finalized `NeuronRegistered(0, uid, hotkey)` event and agreeing inclusion-block ownership/registration generation. It emits a proposed passive root role and original receipt pins; the passive configuration and service approval must still be completed independently before existing bootstrap-chain v4 orchestration. Its eight contract actions are unchanged. A successful receipt retains the exact transaction fee but leaves actual burn unknown; parent-block Burn or end-block balance differences do not identify that debit. These new source paths and deterministic regressions require focused execution qualification; source review grants no spending or activation authority.
+`bootstrap-handoff` requires the original finalized `NeuronRegistered(0, uid, hotkey)` event and agreeing inclusion-block ownership/registration generation. It emits a proposed passive root role and original receipt pins; the passive configuration and service approval must still be completed independently before existing bootstrap-chain v4 or v5 orchestration. Its eight contract actions are unchanged. A successful receipt retains the exact transaction fee but leaves actual burn unknown; parent-block Burn or end-block balance differences do not identify that debit. These new source paths and deterministic regressions require focused execution qualification; source review grants no spending or activation authority.
 
 The root-seat admission choice must be explicit:
 
@@ -2277,7 +2320,7 @@ Run the production [validator entry point](../cli/validator/main.go), using comp
 
 Observe effective alpha/root-stake contribution, child attribution, `TaoWeight`, stake threshold, permits, activity, CRv4 version, reveal schedule and mechanism state. Do not transplant the testnet stake target or an old 0.18/0.018 TAO multiplier. The inspected production epoch path gives the owner UID special eligibility treatment; another owned hotkey still needs its own proper eligibility. A configured process being alive does not prove it has a permit or that its weight row was revealed and applied. [Permit calculation][subtensor-epoch]
 
-Both requested validators do **not** count as two UR validators: a seat on netuid 0 alone does not validate the UR subnet. The current UR safety policy requires at least two live validators and two healthy operators. Include a separately admitted second UR validator before production readiness. Do not generate synthetic peers to satisfy the count.
+The root seat does **not** count as a UR validator: a seat on netuid 0 alone does not validate the UR subnet, even when the same hotkey holds both, as at the SN25 launch. The approved mainnet policy requires at least one live validator and one healthy operator. By owner decision (October 7) the launch has exactly one of each, and its validator scores UR's own pool with no independent cross-check ([decision](#one-operator-and-one-validator--october-7)). Do not generate synthetic peers to satisfy the count.
 
 Capacity is computed from the union of actual UR hotkeys: head miners, one pool per operator, distinct UR validator identities, escrow and owner/other protected identities. Root-only membership consumes no UR slot. A validator-permit limit is not a reserved partition of UID space. Keep the release's one-mechanism requirement and approximately 200-head target only if the live capacity and all additional identities fit. Do not assume “200 miners + 56 validators” leaves space for pools and escrow.
 
@@ -2376,7 +2419,8 @@ This is one implemented phase, not full bootstrap or root service activation.
 
 The [offline chain composition](BOOTSTRAP-CHAIN.md) now joins that root owner,
 reserve CREATE custody, a retained trim review and two distinct protected UR
-role inputs under one durable local preparation. Its [component qualification](evidence/bootstrap-chain-qualification-20260928.md)
+role inputs (one `sole` role under the later v5 schema) under one durable local
+preparation. Its [component qualification](evidence/bootstrap-chain-qualification-20260928.md)
 passed 369 full normal roots, all 87 selected race roots in six disjoint shards,
 and four causal families. The original aggregate race timeout remains retained.
 Tests used physical Connect `358cefae`, server `0633780c` and SDK `42241118`;
@@ -2386,8 +2430,9 @@ root authority, all live services and native economic acceptance remain open.
 
 The v2 offline admission addition now reuses the standard validator's strict
 schema-3 config and production approval verification for the intended majority
-and secondary UR roles. It binds exact public identities, independent signer
-pins and runtime/source/deployment to the retained protected generations.
+and secondary UR roles; v5 applies the same verification to its one sole role.
+It binds exact public identities, independent signer pins and
+runtime/source/deployment to the retained protected generations.
 Current stake/permit, key possession, operator evidence and healthy services,
 deployed contracts and runtime authenticity remain unproven. V1 journals retain
 their original limited status and cannot be silently upgraded. This addition
@@ -2500,7 +2545,7 @@ combined release, provision production authority or prove a deployment.
 | `subnet-discover` | Signer-free runtime 470 membership/owner/generation discovery from a retained unapproved runtime or combined finalized snapshot; leaves every seat unclassified and supplies no trim policy or apply authority. |
 | `root-preview` / `root-monitor` | Existing signer-free finalized root seat and strategy census; an offline [existing-seat action core](ROOT-ACTION.md) exists, but production signing and activation remain separate work. |
 | `check-recycle-mode` | Existing signer-free finalized storage-mode precondition; extend with an approved mainnet artifact and operational readback at activation/recovery. |
-| `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; actual chain reconciliation remains a separate gate. |
+| `economic-reference` | Existing signer-free cumulative integer 10%/90% reference from caller-supplied native intervals; a treasury reference may mark reserve-only intervals, whose whole tranche goes to the treasury. Actual chain reconciliation remains a separate gate. |
 | `source-lock` | Existing offline lock of clean SN and every local Go replacement Git commit, module checksums, Go version and tool hash. It binds source inputs only; artifacts, rollout approval and qualification remain separate. |
 | `release-inventory` | Existing local candidate inventory of exact executable/contract/config/policy/migration/image/dependency/toolchain files, bound to the rechecked source lock; missing categories remain explicit, and release completeness/provenance/deployment approval stay false. |
 | `plan` | Existing pure blocked-review graph via `--outline` or strict JSON `--config FILE`; hashes exact finalized-snapshot/source-lock/release inputs. Every action remains non-executable. Full semantic admission, payloads and executable authorization remain future work. |
@@ -3208,7 +3253,7 @@ The complete schema also requires action-level value/gas/fee bounds, collateral 
 | 1. Mainnet inspect and review | Verify node/runtime, complete census, owner authority, capabilities, keys, artifacts, reset method, selected owner-recycle mechanism and budgets. | Canonical feasible plan and exact operator authorization; any expected retained old miners have an explicit launch disposition. |
 | 2. Cutover/reset | Execute the strongest safely admitted owner-key trim and configuration changes within their native windows. | Complete before/after census, preserved identities, actual removals, retained old miners and accounted locks; never label a partial trim a full reset. |
 | 3. Contracts and registration | Deploy exact custody graph, anchor evidence, register approved pool/escrow/head/validator identities. | Canonical finalized receipts, code/getter proofs and registration ownership. |
-| 4. Stake and service readiness | Apply bounded stake/deposit plans; admit both services, the second UR validator/operator safety set, independent monitor and on-call. | Current root membership, UR eligibility, authenticated runtime configs, single service ownership, delivered test alerts and qualified repair/rollout policy. |
+| 4. Stake and service readiness | Apply bounded stake/deposit plans; admit both services, the policy's UR validator/operator safety set (one of each at the SN25 launch), independent monitor and on-call. | Current root membership, UR eligibility, authenticated runtime configs, single service ownership, delivered test alerts and qualified repair/rollout policy. |
 | 5. Emission activation | At the approved native boundary, activate the qualified 10% mechanism and corresponding signed UR policy. | Native incentive outcome, remainder destination, weights, stake/collateral deltas and policy epoch agree. |
 | 6. Acceptance and operations | Observe the specified production interval, settle/claim genuine accrued emission and reconcile all funds. | Self-contained final report; all four requested outcomes satisfied with no open cap/custody exceptions. |
 
@@ -3408,7 +3453,7 @@ Every dashboard distinguishes unavailable, pending, healthy and failed facts:
 | Domain | Evidence and progress to observe |
 | --- | --- |
 | Chain and authority | Genesis/EVM domain, approved runtime capabilities and code/metadata, finalized age/height, native/EVM mapping, node agreement, endpoint/config/release drift and archive availability. |
-| Validators | Both UR validators' hotkey ownership, permits, non-self eligibility, fresh proof domains through each operator, native source/EMA continuity, durable intents and finalized revealed/applied weight rows. Root seat, stake/retention margin, child delegation and basket are a separate role. |
+| Validators | Every UR validator's hotkey ownership, permits, non-self eligibility, fresh proof domains through each operator, native source/EMA continuity, durable intents and finalized revealed/applied weight rows; the SN25 launch has one UR validator. Root seat, stake/retention margin, child delegation and basket are a separate role. |
 | Operators and providers | Current policy and evidence activations, migration version, processed client-key registrations and peer pins, ready provider count, fresh signed usage and bounded queues. HTTP 200 and process liveness do not establish registration or proof success. |
 | Settlement and treasury | Exact source epoch/root/artifact, immutable usage snapshots and uncredited debt; required/observed deposits under the selected policy; pool capture, carry, commitments, finalization, claims and outstanding liabilities. Reconcile native units, collateral/principal and fee/lifetime allowances. Measure the 10% native target and approved tolerance independently of claimed payouts. |
 | Transactions and deadlines | Every signed attempt, nonce owner, uncertain send, replacement/cancellation, canonical receipt and postcondition; blocks remaining to policy, commit, reveal, renewal, claim and evidence-retention deadlines. |
@@ -3427,7 +3472,7 @@ health loop while expensive replay proceeds under a separate finite budget.
 | Integrity, authority or accounting conflict | Emit immediately on an authenticated wrong-chain/domain, finalized-hash conflict, invalid signature, custody/conservation mismatch or unauthorized spend. No averaging or transient-error allowance. | Critical page; suspend dependent new signing through its owner and preserve evidence. Continue independent observation and valid claim service where safe. Primary acknowledges within 5 minutes; backup escalation after 5 minutes without acknowledgement. |
 | Monitor or alert path absent | Target a health/progress event at least every 30 seconds; warn after 90 seconds, page after 2 minutes without one. Test alert delivery before activation and after routing changes. | Independent dead-man page; restore observation first. Missing monitor samples remain a gap, not a healthy interval. |
 | RPC/read availability or stalled finality | Record every error as unavailable; warn after 2 minutes of persistent read failure, page after 5. Warn at 3 minutes without finalized advance and page at 5, after calibrating to admitted chain cadence. | Bounded retries/reconnect on approved routes, inspect chain-wide versus node-local failure, and block new actions lacking required fresh evidence. Never compare an unread default value with an approved one. |
-| Deadline or readiness risk | Recompute at least every 30 seconds and on each new finalized block. Warn when remaining blocks fall below the greater of 20% of the window and twice measured p95 completion/finality cost. Page when the admitted completion margin is no longer available, or a required role remains unavailable for 2 minutes. | Resume the exact pending action if authorized; otherwise escalate a concrete forward plan. Record a missed boundary as missed. Both UR validators and every required operator/domain must remain independently visible. |
+| Deadline or readiness risk | Recompute at least every 30 seconds and on each new finalized block. Warn when remaining blocks fall below the greater of 20% of the window and twice measured p95 completion/finality cost. Page when the admitted completion margin is no longer available, or a required role remains unavailable for 2 minutes. | Resume the exact pending action if authorized; otherwise escalate a concrete forward plan. Record a missed boundary as missed. Every UR validator and every required operator/domain must remain independently visible. |
 | Settlement and reward deviation | Evaluate every due finalized event/epoch and native emission interval; immediate critical alert for conservation or authority failure, deadline alert for missing work, explicit alert for a 10% result outside approved `Q(k)`. | Trace source usage through liabilities and receipts. Do not fabricate usage, increase a governed deposit to a native minimum, or count a late root as timely. |
 | Resource exhaustion or replay backlog | Warn below 20% free bytes/inodes or when forecast capacity is under 24 hours; page below 10% or a shorter time than safe intervention. Alert if log/queue lag exceeds its approved window or foreground work loses its completion margin. | Reduce bounded background admission or restore capacity within policy; never delete signed evidence or increase spend/capacity authority silently. |
 | Storage read/media error or failed copy verification | Page on a kernel/device unrecovered read, failed backup verification or incomplete evidence migration even if free bytes and service health look normal. The [qualification-host incident](evidence/qualification-host-media-error-20261001.md) is a design lesson, not evidence about Snow. | Preserve the original source and failed-copy record; stop relying on the destination, assess device health, restore from verified independent backup and prove exact evidence/release bytes before resuming affected work. |
@@ -3667,7 +3712,9 @@ rehearse this runbook:
 
 Roll out immutable images with the qualified source/dependency/config manifest.
 Run read-only shadow checks, then a canary with no duplicate signer and enough
-capacity to preserve the required validator/operator quorum. Stage additive
+capacity to preserve the required validator/operator quorum. At the SN25 launch
+that quorum is one validator and one operator with no spare, so replacing either
+cannot preserve it. Stage additive
 database migrations before compatible consumers; specifically rehearse populated
 client-key policy rollover and immutable usage writer/reader compatibility.
 Advance only after current-domain readiness, resource bounds, fresh proofs and
@@ -3762,9 +3809,9 @@ The future mainnet acceptance bundle contains:
 | --- | --- |
 | Reset | Signed target/preserve census, exact finalized removal mechanism, before/after hotkey generations and UID mapping, unchanged required custody/validator ownership, residual stake/lock report. |
 | Contracts | Source/toolchain/artifact hashes, predicted/actual addresses and nonces, creation receipts, runtime bytecode and immutable getters, Safe authority, one-shot links and evidence anchor, preserved custody invariants. |
-| 10% miner rewards | Explicit denominator and activation boundary; exact native interval accounting; finalized incentive outcomes including collateral; direct-head and tail entitlement reconciliation; verified 90% owner-recycle outcome and mode, with no reserve credit; runtime-derived quantization tolerance and actual target result; proof of a stronger hard cap only if that assurance was selected. |
+| 10% miner rewards | Explicit denominator and activation boundary; exact native interval accounting; finalized incentive outcomes including collateral; direct-head and tail entitlement reconciliation; verified 90% ordinary native treasury credit to the `ur-reserve` recipients (the whole tranche in a reserve-only epoch), with no deliberate owner recycle; runtime-derived quantization tolerance and actual target result; proof of a stronger hard cap only if that assurance was selected. |
 | Root validator | Real netuid-0 membership and owner mapping, bounded admission receipt, stake/retention observation, child policy, actual basket strategy, live owned service and runtime identity. |
-| UR validator | Real UR eligibility and live applied/revealed CRv4 rows, authenticated evidence/usage, service signer, second UR validator and operator safety minima. |
+| UR validator | Real UR eligibility and live applied/revealed CRv4 rows, authenticated evidence/usage, service signer, the policy's validator and operator safety minima (one each at the SN25 launch) and more than kappa (50%) of validator stake. |
 | Financial/finality closure | Actual spend including failures, remaining allowance, all transaction owners joined, native/EVM finality mapping, open liabilities and future operations clearly reported. |
 
 Measure activation across at least three complete native emission intervals, and observe a full mainnet UR settlement/claim cycle before declaring settlement acceptance. The 50,400-block cycle cannot be replaced by accelerated testnet timing. Bootstrap may report `DEPLOYED_AWAITING_SETTLEMENT` while that observation is pending; it must not call the whole requested program accepted early.
