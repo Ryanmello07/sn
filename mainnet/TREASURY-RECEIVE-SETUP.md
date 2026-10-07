@@ -49,8 +49,9 @@ After both execute, authenticate everything before admitting the signed 10/90 po
 - that they are outside the subnet-owner hotkey set;
 - the auto-stake state.
 
-**Register them before the owner trim is planned.** The trim refuses on any census drift after its reviewed census, so
-that census must include them as protected. A new UID is immune for 21,600 blocks.
+**Register them close to launch.** The launch performs no owner trim. The recipients have zero emission until UR's
+validators weight them, and only the 21,600-block immunity protects a new UID from ordinary pruning on the full subnet.
+So hold the second approvals until the validators will weight the recipients within that window.
 
 **SN25 ownership never moves.** `SubnetOwner(25)` is the `ur-owner` multisig
 (`5HTeZ5168DjjGWZgbvzGfysEAj9fnexF24gYFKJHENU5cc8a`), and it stays there. No setup step may announce or perform a coldkey
