@@ -190,7 +190,22 @@ func decodeOwnerRecycleApproval(cfg *ReleaseConfig, encoded []byte) (*OwnerRecyc
 	if err != nil || !bytes.Equal(encoded, append(canonical, '\n')) {
 		return nil, errors.Join(errors.New("owner-recycle approval must use canonical envelope bytes and one final newline"), err)
 	}
-	approval := &envelope.Approval
+	message, err := admitOwnerRecycleApproval(cfg, &envelope.Approval)
+	if err != nil {
+		return nil, err
+	}
+	key, _ := canonicalAttemptHex32("owner-recycle signer", productionEconomicSelection(cfg).Signer, false)
+	signature, err := hex.DecodeString(envelope.Signature)
+	if err != nil || len(signature) != ed25519.SignatureSize || envelope.Signature != hex.EncodeToString(signature) || !ed25519.Verify(key[:], message, signature) {
+		return nil, errors.New("owner-recycle successor approval signature differs from the independently pinned signer")
+	}
+	return &envelope, nil
+}
+
+// Every config-bound check precedes the signature, so an unsigned draft is
+// refused by the same rules before an external signer is asked to approve it.
+// Returns the exact message that signer must sign.
+func admitOwnerRecycleApproval(cfg *ReleaseConfig, approval *OwnerRecycleApproval) ([]byte, error) {
 	if err := validateOwnerRecycleProductionApproval(cfg, approval); err != nil {
 		return nil, err
 	}
@@ -237,16 +252,7 @@ func decodeOwnerRecycleApproval(cfg *ReleaseConfig, encoded []byte) (*OwnerRecyc
 			return nil, errors.New("owner-recycle approved owner identities must be ordered, unique, nonzero and exclude validator self")
 		}
 	}
-	message, err := approval.SigningMessage()
-	if err != nil {
-		return nil, err
-	}
-	key, _ := canonicalAttemptHex32("owner-recycle signer", productionEconomicSelection(cfg).Signer, false)
-	signature, err := hex.DecodeString(envelope.Signature)
-	if err != nil || len(signature) != ed25519.SignatureSize || envelope.Signature != hex.EncodeToString(signature) || !ed25519.Verify(key[:], message, signature) {
-		return nil, errors.New("owner-recycle successor approval signature differs from the independently pinned signer")
-	}
-	return &envelope, nil
+	return approval.SigningMessage()
 }
 
 // Restarts consume the original immutable retained bytes, not a changed source
