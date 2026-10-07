@@ -532,3 +532,52 @@ func TestTreasuryApprovalPlanRefusesInadmissibleDrafts(t *testing.T) {
 		}
 	}
 }
+
+// The owner-validator form: the validator runs on the subnet owner hotkey, so
+// the signed owner census holds the validator itself. The public path drafts,
+// assembles and loads it; another approved validator still cannot be an owner.
+func TestTreasuryApprovalPlanAdmitsOwnerValidator(t *testing.T) {
+	f := newTreasuryApprovalTestFixture(t)
+	hex32 := func(value byte) string { return "0x" + strings.Repeat(fmt.Sprintf("%02x", value), 32) }
+	owner := hex32(0x48)
+	f.input.ValidatorHotkey, f.input.OwnerHotkeys, f.input.Production.ValidatorHotkeys = owner, []string{owner}, []string{owner}
+	approvalPath := filepath.Join(f.directory, "owner-validator-approval.json")
+	code, plan, diagnostic := f.plan(t, approvalPath)
+	if code != 0 {
+		t.Fatal("approval plan refused the owner-validator", code, diagnostic)
+	}
+	digest, signature := f.sign(t, approvalPath)
+	if plan.SigningDigest != "0x"+hex.EncodeToString(digest[:]) {
+		t.Fatal("printed digest differs from the one recomputed from the approval file")
+	}
+	code, result, diagnostic := treasuryApprovalTestEnvelope(t, approvalPath, signature, f.key, f.config.TreasuryApproval.Approval.Path)
+	if code != 0 {
+		t.Fatal("approval envelope refused the owner-validator", code, diagnostic)
+	}
+	f.config.TreasuryApproval = &result.TreasuryApproval
+	f.writeConfig(t)
+	loaded, err := validator.LoadReleaseConfig(f.configPath)
+	if err != nil {
+		t.Fatal("validator loader refused the owner-validator approval", err)
+	}
+	envelope, err := os.ReadFile(result.TreasuryApproval.Approval.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admitted, err := validator.DecodeTreasuryApproval(loaded, envelope)
+	key := [][32]byte{treasuryApprovalKey(owner)}
+	if err != nil || admitted.Approval.ValidatorHotkey != key[0] || !reflect.DeepEqual(admitted.Approval.OwnerHotkeys, key) ||
+		!reflect.DeepEqual(admitted.Approval.Production.ValidatorHotkeys, key) || admitted.Approval.Proposal.Treasury == nil {
+		t.Fatal("loaded owner-validator approval differs from its draft", err)
+	}
+
+	other := newTreasuryApprovalTestFixture(t)
+	other.input.OwnerHotkeys, other.input.Production.ValidatorHotkeys = []string{owner}, []string{owner, hex32(0x5a)}
+	out := filepath.Join(other.directory, "refused-owner-census-validator.json")
+	if code, _, diagnostic := other.plan(t, out); code == 0 || !strings.Contains(diagnostic, "cannot be an owner recipient") {
+		t.Fatal("approval plan admitted another approved validator as an owner", code, diagnostic)
+	}
+	if _, err := os.Lstat(out); !os.IsNotExist(err) {
+		t.Fatal("refused approval plan created its output", err)
+	}
+}
