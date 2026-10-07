@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/urfoundation/sn/crv4"
@@ -120,6 +121,14 @@ func observeOwnerRecycleProductionEligibilityAttempt(ctx context.Context, cfg *R
 			authority.expected.NativeSnapshotBlock-fresh > production.MaximumLastUpdateAge ||
 			approval.Proposal.Treasury != nil && stake.Identity.Coldkey == approval.Proposal.Treasury.MultisigAccount {
 			return nil, errors.New("owner-recycle production validators lack distinct ownership, stake/permit or bounded native activity")
+		}
+		// The runtime lets the subnet owner hotkey submit without a permit or
+		// threshold stake. An approved owner-validator gets no such exception:
+		// it is the registered owner hotkey under the subnet owner coldkey and
+		// still holds a real validator permit and threshold stake.
+		if slices.Contains(approval.OwnerHotkeys, hotkey) && (stake.Identity.Coldkey != approval.SubnetOwner || !stake.SubnetOwnerRegistered ||
+			stake.SubnetOwnerUID != registration.Uid || !stake.Identity.ValidatorPermit || stake.TotalStakeRao < stake.StakeThresholdRao) {
+			return nil, errors.New("owner-validator lacks the subnet owner identity, a validator permit or threshold stake")
 		}
 		coldkeysKVs[stake.Identity.Coldkey] = true
 		// The advancing finality witness is deliberately not a decision fact;

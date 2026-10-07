@@ -247,9 +247,13 @@ func admitOwnerRecycleApproval(cfg *ReleaseConfig, approval *OwnerRecycleApprova
 			}
 		}
 	}
+	// Owner-recycle weights its owner census, so its validator is never in it.
+	// A treasury row never weights an owner: its census may hold the validator
+	// itself, which the census reader admits only as the explicit subnet owner
+	// hotkey under the subnet owner coldkey.
 	for index, hotkey := range approval.OwnerHotkeys {
-		if hotkey == ([32]byte{}) || hotkey == approval.ValidatorHotkey || index > 0 && bytes.Compare(approval.OwnerHotkeys[index-1][:], hotkey[:]) >= 0 {
-			return nil, errors.New("owner-recycle approved owner identities must be ordered, unique, nonzero and exclude validator self")
+		if hotkey == ([32]byte{}) || hotkey == approval.ValidatorHotkey && approval.Proposal.Treasury == nil || index > 0 && bytes.Compare(approval.OwnerHotkeys[index-1][:], hotkey[:]) >= 0 {
+			return nil, errors.New("owner-recycle approved owner identities must be ordered, unique, nonzero and exclude validator self unless treasury-approved")
 		}
 	}
 	return approval.SigningMessage()

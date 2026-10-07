@@ -130,8 +130,9 @@ func validateOwnerRecycleProductionApproval(cfg *ReleaseConfig, approval *OwnerR
 		if treasuryRecipientHotkey(approval.Proposal.Treasury, hotkey) {
 			return errors.New("treasury recipient cannot also be an approved validator")
 		}
+		// Only a treasury approval's own validator may also be an owner.
 		for _, owner := range approval.OwnerHotkeys {
-			if owner == hotkey {
+			if owner == hotkey && (hotkey != approval.ValidatorHotkey || approval.Proposal.Treasury == nil) {
 				return errors.New("owner-recycle production validator cannot be an owner recipient")
 			}
 		}

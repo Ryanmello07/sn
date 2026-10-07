@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
@@ -289,6 +290,21 @@ func observeOwnerRecycleAdmissionAt(ctx context.Context, cfg *ReleaseConfig, nat
 		for index := range actualOwners {
 			if actualOwners[index] != approval.OwnerHotkeys[index] {
 				return nil, errors.New("owner-recycle recognized owner identities changed")
+			}
+		}
+		// A recognized-owner validator is admitted only under treasury authority
+		// and only as the explicit subnet owner hotkey held by the subnet owner
+		// coldkey. No other owned or foreign hotkey can validate as an owner.
+		if slices.Contains(actualOwners, approval.ValidatorHotkey) {
+			if approval.Proposal.Treasury == nil || snapshot.SubnetOwnerHotkey == nil || *snapshot.SubnetOwnerHotkey != approval.ValidatorHotkey {
+				return nil, errors.New("owner-recycle validator is a recognized owner but not the explicit subnet owner hotkey")
+			}
+			coldkey, err := readFixed("Owner", 32, false, approval.ValidatorHotkey[:])
+			if err != nil {
+				return nil, err
+			}
+			if !bytes.Equal(coldkey, owner) {
+				return nil, errors.New("owner-validator hotkey is not held by the subnet owner coldkey")
 			}
 		}
 		var treasuryRecipients []TreasuryRecipient
