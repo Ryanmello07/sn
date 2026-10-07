@@ -138,7 +138,8 @@ func validateBootstrapContractReadinessPaths(preparation bootstrapChainPreparati
 		seen[path], seen[path+".lock"] = true, true
 	}
 	c := preparation.Plan.Config
-	for _, path := range []string{preparation.Plan.ConfigPath, c.OwnerTrimPolicy.Path, c.OwnerTrimPlan.Path, c.Contracts.Path, c.Root.Path, c.Validators[0].Config.Path, c.Validators[1].Config.Path, preparation.Contracts.Config.Plan.Artifacts.Path, preparation.Root.ServiceInput.Path, c.RootValidator.Approval.Path} {
+	inputs := append([]string{preparation.Plan.ConfigPath, c.OwnerTrimPolicy.Path, c.OwnerTrimPlan.Path, c.Contracts.Path, c.Root.Path}, c.validatorConfigPaths()...)
+	for _, path := range append(inputs, preparation.Contracts.Config.Plan.Artifacts.Path, preparation.Root.ServiceInput.Path, c.RootValidator.Approval.Path) {
 		if seen[path] {
 			return errors.New("contract readiness journal aliases an approved input")
 		}
@@ -207,7 +208,7 @@ func runBootstrapChainContractCommand(ctx context.Context, args []string, stdout
 		fmt.Fprintln(stderr, "contract readiness approved action projections:", err)
 		return 2
 	}
-	result.PlanHash = preparation.Plan.ContentHash
+	result.PlanHash, result.PendingChainPhases = preparation.Plan.ContentHash, bootstrapChainPendingPhasesForSchema(preparation.Plan.Config.Schema)
 	if command == "contract-readiness" {
 		result.Scope, result.Status = "retained-custody", "unresolved"
 		retained, openErr := openBootstrapChainReadinessState(ctx, preparation)

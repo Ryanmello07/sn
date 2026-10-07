@@ -200,7 +200,7 @@ func (self *bootstrapContractReceiptScope) inspectCurrent(ctx context.Context) (
 	result = bootstrapContractCurrentAdmission{Schema: bootstrapContractCurrentSchema, Profile: "original-five-account-bootstrap-fields-v1",
 		StateAuthority: "owned-rpc-assertion", HistoricalPrefix: history, Snapshot: snapshot, Fields: fields,
 		CheckedThroughNativeHash: latest.FinalizedHash, CheckedThroughNativeBlock: latest.FinalizedNumber,
-		CurrentBootstrapStateMatches: true, PendingChainPhases: bootstrapChainPendingPhases()}
+		CurrentBootstrapStateMatches: true, PendingChainPhases: bootstrapChainPendingPhasesForSchema(self.preparation.Plan.Config.Schema)}
 	result.ContentHash = rootObjectHash(result)
 	return result, nil
 }

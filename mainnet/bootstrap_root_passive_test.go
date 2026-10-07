@@ -30,6 +30,14 @@ func newBootstrapRootPassiveFixture(t *testing.T) *bootstrapChainFixture {
 func newBootstrapRootPassiveFixtureWithCensus(t *testing.T, configure func(*rootRpcFixture, *subnetCensusPolicy), configureApproval func(*bootstrapChainValidatorFixture)) *bootstrapChainFixture {
 	t.Helper()
 	f := newBootstrapChainFixture(t)
+	bootstrapRootPassiveConvert(t, f, configure, configureApproval)
+	return f
+}
+
+// Any complete v3 fixture, including one with the full evidence graph, can be
+// reapproved for passive v4 observation before its first custody claim.
+func bootstrapRootPassiveConvert(t *testing.T, f *bootstrapChainFixture, configure func(*rootRpcFixture, *subnetCensusPolicy), configureApproval func(*bootstrapChainValidatorFixture)) {
+	t.Helper()
 	var policy subnetCensusPolicy
 	raw, err := readBootstrapChainInput(t.Context(), f.config.OwnerTrimPolicy, maxRpcReplyBytes)
 	if err != nil || decodePlanJson(raw, &policy) != nil {
@@ -94,7 +102,6 @@ func newBootstrapRootPassiveFixtureWithCensus(t *testing.T, configure func(*root
 	if err != nil {
 		t.Fatal(err)
 	}
-	return f
 }
 
 // Three real preparation journals retain contracts and passive config. No

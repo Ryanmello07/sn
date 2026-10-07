@@ -122,10 +122,10 @@ func advanceBootstrapChain(ctx context.Context, store *bootstrapChainStore, boun
 	}
 	result = bootstrapChainResult{Schema: bootstrapChainResultSchema, PlanHash: preparation.Plan.ContentHash, LocalPreparationComplete: true,
 		OwnerTrimStatus: "retained-review-execution-blocked", UrValidatorsStatus: "two-protected-role-inputs-pinned-production-admission-pending",
-		PendingChainPhases: bootstrapChainPendingPhases(), Contracts: contracts, Root: root}
+		PendingChainPhases: bootstrapChainPendingPhasesForSchema(preparation.Plan.Config.Schema), Contracts: contracts, Root: root}
 	// The original sealed phase names stay byte-compatible. This unsealed
-	// report clarifies the outcome selected by both verified producer approvals.
-	if len(preparation.Plan.ValidatorInspections) == 2 && preparation.Plan.ValidatorInspections[0].Approval.Proposal.Treasury != nil {
+	// report clarifies the outcome selected by every verified producer approval.
+	if len(preparation.Plan.ValidatorInspections) != 0 && preparation.Plan.ValidatorInspections[0].Approval.Proposal.Treasury != nil {
 		result.CurrentEconomicAcceptance = "native-10-percent-provider-allocation-and-90-percent-native-treasury-acceptance"
 	}
 	if preparation.Plan.Config.Schema != bootstrapChainConfigSchemaV1 {
@@ -137,6 +137,10 @@ func advanceBootstrapChain(ctx context.Context, store *bootstrapChainStore, boun
 			if preparation.Root.PassiveService != nil {
 				result.Schema = "urnetwork-mainnet-bootstrap-chain-result-v4"
 				result.RootValidatorStatus = "signed-passive-root-service-config-verified-observation-pending"
+			}
+			if preparation.Plan.Config.Schema == bootstrapChainConfigSchemaV5 {
+				result.Schema = "urnetwork-mainnet-bootstrap-chain-result-v5"
+				result.UrValidatorsStatus = "one-signed-production-config-verified-live-admission-pending"
 			}
 		} else {
 			result.Schema = "urnetwork-mainnet-bootstrap-chain-result-v2"
