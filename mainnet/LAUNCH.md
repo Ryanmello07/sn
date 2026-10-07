@@ -53,9 +53,26 @@ and native genesis:
 ```
 
 Independently authenticate this identity against the approved mainnet route
-before preparing signatures. Use the authorized Rao public mainnet RPC while
-Snow synchronizes, then adopt Snow only after verifying its network and route.
-Obtain the actual approved URL locally; this document does not invent one.
+before preparing signatures.
+
+The owner selected **Snow's own Finney archive as the mainnet RPC for all launch
+work**: `ws://172.28.208.185:9944`, or `http://` for EVM JSON-RPC, reachable from
+the restricted management and LAN networks.
+- **Published** on October 7 by `xops/main/ansible/run-subtensor.sh
+  --publish-mainnet`.
+- **Gated** on:
+  - the Finney genesis;
+  - EVM chain ID 964;
+  - runtime 473;
+  - sync and peers;
+  - advancing finality;
+  - being within 10 blocks of an independent Finney head at the same block hash.
+
+  At publication it was at zero lag.
+- **Marker:** the verified values are retained in `/etc/subtensor/mainnet-published`
+  on Snow.
+
+Use the official Finney endpoint only as the independent reference.
 The previous LAN testnet endpoint is not a mainnet fallback. A fresh runtime
 number or an RPC response alone does not approve runtime signing authority. The
 v470 artifact exception was planning-only.
