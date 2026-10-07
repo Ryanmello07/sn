@@ -103,7 +103,7 @@ messages and reviewed pins, never seed phrases or copied keys.
 
 | Authority | Request | Result |
 | --- | --- | --- |
-| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | Nothing for this launch: there is no owner trim (step 2 of the [execution order](#execution-order-and-parallel-work)) and no coldkey swap ([hard rule](#hard-rule-sn25-ownership-stays-with-ur-owner)). If a trim is ever selected, two signatories sign it through the [native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner) path | None |
+| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | One call: a `set_children` on SN25 naming `ur-mainnet` as the SN25 owner hotkey's child at 100% ([root validator](#root-validator-on-netuid-0)). No ownership or alpha moves. There is no owner trim (step 2 of the [execution order](#execution-order-and-parallel-work)) and no coldkey swap ([hard rule](#hard-rule-sn25-ownership-stays-with-ur-owner)). If a trim is ever selected, two signatories sign it through the [native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner) path | Finalized native multisig call |
 | Ed25519 approval key: one operator-held key in `root/subtensor/approval/` (owner decision, October 7: approvals of plans that don't touch the chain need no multiparty sign-off) | Exact bytes emitted by plan previews for the specified approval domain | Approval envelope binding the exact plan, not transaction custody |
 | EVM deployer | Exact approved EIP-1559 creation/link transaction | Binary signed chain-964 transaction |
 | Coordinator governance Safe owners | Exact evidence-anchor Safe EIP-712 transaction | Accepted ordered Safe signatures |
@@ -449,9 +449,10 @@ go run "$REVIEW_DIR/policyhash.go" "$POLICY_FILE"
 ```
 
 Retain the policy YAML and canonical bytes from `Policy.CanonicalBytes()`.
-Compare the digest with approved proxy initialization, on-chain policy and both
-signed producer configurations. Pretty-printing canonical JSON changes file
-bytes; the protocol hash uses the original compact bytes.
+Compare the digest with approved proxy initialization, on-chain policy and every
+signed producer configuration; this launch has one, for its single validator.
+Pretty-printing canonical JSON changes file bytes; the protocol hash uses the
+original compact bytes.
 
 ## Native reserve and service prerequisites
 
@@ -511,9 +512,17 @@ sections 1.6 and 7):
 - Our validator hotkey is the dedicated hotkey **`ur-mainnet`** (btcli wallet
   `root/subtensor/wallets/ur-mainnet`, hotkey `default`), not the SN25 owner hotkey.
   It is the `hotkey_seed_file` of the signed UR validator config, sits on root
-  (netuid 0) and validates SN25. The SN25 owner, the `ur-owner` multisig, stays
-  owner-local setup custody and signs nothing here
+  (netuid 0) and validates SN25
   ([current root participation](ROOT-CURRENT-PARTICIPANT.md)).
+- It is the launch's only UR validator, and UR is the only operator (owner
+  decision, October 7). The approved policy's minimums are one live validator
+  and one healthy operator. The config has `controlled_no_ids: []`, so the
+  validator scores UR's own pool; nothing independent cross-checks it.
+- It steers SN25 only while it holds more than kappa (50%) of validator stake.
+  The SN25 owner, the `ur-owner` multisig, signs one call for this: a
+  `set_children` on SN25 naming `ur-mainnet` as the SN25 owner hotkey's child at
+  100%, so the owner hotkey's stake weight counts for our validator. No ownership
+  or alpha moves, and there is no coldkey swap.
 - Its coldkey is the **`ur-mainnet` 2-of-3 native multisig**
   `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are:
   - `brien-ur-mainnet`, `5Fy6EbewyBPJi565JP1P5zgFsiGXfwSs8ZYpMWNJA8gpfNit`, on
@@ -626,7 +635,8 @@ Then `take status` must show:
 - `auto parent delegation: false (stored)`;
 - `childkey take (netuid 25): 11796/65535 (18.00%) stored`;
 - `children (netuid 25): none`, unless the owner chose children;
-- `parents (netuid 25)`: the hotkeys that name ours as their child.
+- `parents (netuid 25)`: the hotkeys that name ours as their child, including the
+  SN25 owner hotkey once `ur-owner`'s `set_children` applies.
 
 ### As submitted for this launch
 

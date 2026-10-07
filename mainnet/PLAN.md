@@ -129,8 +129,11 @@ reset, custody contract deployment, subnet registration, separate root and UR
 validator services, monitoring, emission activation and acceptance. Root service
 and operations preparation can proceed alongside subnet reset/deployment once
 their shared authority prerequisites are satisfied. Activation depends on all
-three branches. The root role never counts toward the required **two distinct
-UR validators and two healthy operators**.
+three branches. The root role never counts toward the UR validator and
+healthy-operator minimums. The graph's requirement text still names **two
+distinct UR validators and two healthy operators**; the approved SN25 policy sets
+both minimums to one (owner decision, October 7), and the launch has one UR
+validator and one operator.
 
 Schemas v2 and v3 separate preconditions from action `postconditions`. A requirement's
 `produced_by` names its sole producer, which must precede every consumer in the

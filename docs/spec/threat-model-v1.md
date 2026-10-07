@@ -3,9 +3,11 @@
 The release-1.0 design of the UR subnet (Bittensor SN25, netuid 25) assumes Subtensor finalized state and runtime-454 precompiles are
 correct, at least two independently operated validators measure each NO, server
 Ed25519 and hotkey sr25519 secrets remain uncompromised, and the shared egress
-hash key is distributed only to authorized NOs/validators. Public artifacts are
-untrusted until their content hash, signature, finalized boundaries, and Merkle
-root reconstruct successfully.
+hash key is distributed only to authorized NOs/validators. The SN25 mainnet
+launch does not meet the two-validator assumption: by owner decision (October 7)
+it has one NO, UR, measured by one validator, UR's own, with no independent
+cross-check. Public artifacts are untrusted until their content hash,
+signature, finalized boundaries, and Merkle root reconstruct successfully.
 
 The system defends against cross-NO deposit credit, replayed/expired bindings,
 coordinator upgrades attempting custody theft, operator root omission, partial
