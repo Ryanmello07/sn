@@ -124,7 +124,9 @@ func TestFreshActivationAdmitsItsStoragePreparedEmptyLedger(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(path, filepath.Base(f.cfg.Operators[0].ClientKeySeedFile)), bytes.Repeat([]byte{1}, 32), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	admitted, err := requireFreshReleaseOperatorState(t.Context(), f.cfg, members)
+	// Activation runs with the declared durable root, as on the host.
+	storage := durablefixture.New(t, t.Context(), path)
+	admitted, err := requireFreshReleaseOperatorState(storage.Context, f.cfg, members)
 	if err != nil || !reflect.DeepEqual(admitted, []uint64{1}) {
 		t.Fatal("the member's own storage-prepared empty ledger was refused", admitted, err)
 	}
@@ -137,7 +139,6 @@ func TestFreshActivationAdmitsItsStoragePreparedEmptyLedger(t *testing.T) {
 	if err := json.Unmarshal(inputs[entry.Context.Path], &renderedContext); err != nil || renderedContext.InitialCut.Identity != identity {
 		t.Fatal("the rendered context opens another ledger identity than activation admitted", renderedContext.InitialCut.Identity, err)
 	}
-	storage := durablefixture.New(t, t.Context(), path)
 	ledger, err := NewDiskAttemptLedger(storage.Context, path, renderedContext.InitialCut.Identity, strings.ToLower(f.cfg.Coordinator), f.clientKey, f.cfg.EvidenceV2.Bounds.Disk)
 	if err != nil {
 		t.Fatal("the runtime refused the admitted prepared ledger", err)
@@ -175,6 +176,28 @@ func TestFreshActivationRefusesForeignOrRetainedLedger(t *testing.T) {
 			diagnostic: "not this activation's storage-prepared empty ledger"},
 		"another coordinator":    {coordinator: "0x" + strings.Repeat("12", 20), publish: true, diagnostic: "not this activation's storage-prepared empty ledger"},
 		"unpublished checkpoint": {diagnostic: "no published custody checkpoint"},
+		"replaced checkpoint": {publish: true, mutate: func(t *testing.T, path string, _ *ReleaseConfig) {
+			file, err := os.Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			raw, err := readAttemptLedgerCustodyAttribute(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var checkpoint attemptLedgerCustodyCheckpoint
+			if err := json.Unmarshal(raw, &checkpoint); err != nil {
+				t.Fatal(err)
+			}
+			checkpoint.DatabaseInode++
+			if raw, err = json.Marshal(checkpoint); err == nil {
+				err = durablesys.SetAttribute(int(file.Fd()), attemptLedgerCustodyAttribute, raw, unix.XATTR_REPLACE)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		}, diagnostic: "not this activation's storage-prepared empty ledger"},
 		"retained settlement state": {publish: true, mutate: func(t *testing.T, path string, _ *ReleaseConfig) {
 			if err := os.WriteFile(filepath.Join(path, "stats.json"), []byte("{}\n"), 0o600); err != nil {
 				t.Fatal(err)

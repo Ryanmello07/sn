@@ -357,8 +357,8 @@ func requireFreshReleaseOperatorState(ctx context.Context, cfg *ReleaseConfig, m
 
 // Read-only: the offline inspector checks the import and ready receipts, the
 // empty signed backend and its member census against the member's identity,
-// coordinator and disk limits, and that any custody checkpoint is the one
-// storage-prepare publishes for them. That checkpoint must be present.
+// coordinator and disk limits. The published custody checkpoint must be
+// present and byte-equal to the one storage-prepare derives for that census.
 func requirePreparedEmptyReleaseLedger(ctx context.Context, cfg *ReleaseConfig, operator OperatorConfig, member ReleaseActivationMemberV2) (resultErr error) {
 	if operator.RequestPreparation != nil {
 		return errors.New("a fresh activation admits no prepared provider request journal")
@@ -377,8 +377,16 @@ func requirePreparedEmptyReleaseLedger(ctx context.Context, cfg *ReleaseConfig, 
 	if census.Head != scope.ExpectedHead || census.RestartAuthorized {
 		return errors.New("prepared ledger is not empty")
 	}
-	if _, err := readAttemptLedgerCustodyAttribute(directory); err != nil {
+	expected, err := BuildAttemptLedgerPreparationCheckpoint(ctx, directory, scope, census)
+	if err != nil {
+		return err
+	}
+	retained, err := readAttemptLedgerCustodyAttribute(directory)
+	if err != nil {
 		return errors.Join(errors.New("prepared ledger has no published custody checkpoint"), err)
+	}
+	if !bytes.Equal(retained, expected) {
+		return errors.New("prepared ledger custody checkpoint differs from its preparation")
 	}
 	return ctx.Err()
 }
