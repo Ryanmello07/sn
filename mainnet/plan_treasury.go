@@ -44,7 +44,7 @@ func bootstrapTreasuryRequirements() []planRequirement {
 		requirement := &requirements[index]
 		switch requirement.Id {
 		case "roles":
-			requirement.Description = "Public owner/deployer/Safe/guardian/oracle/pool/escrow/provider identities, receive-only reserve account and recipient hotkeys, two distinct UR validators, and separate netuid-0 role"
+			requirement.Description = "Public owner/deployer/Safe/guardian/oracle/pool/escrow/provider identities, receive-only reserve account and recipient hotkeys, the policy's UR validators (one sole validator for the SN25 launch), and the netuid-0 role, which never counts as a UR validator"
 		case "custody":
 			requirement.Description = "Bounded transaction signer/coldkey/Safe adapters, permissions, single-writer leases and durable nonce/receipt ownership; the receive-only reserve requires no signing or spending configuration"
 		case "registration-plan":

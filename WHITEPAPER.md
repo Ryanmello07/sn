@@ -1804,8 +1804,9 @@ against finney at the Phase‑E mainnet promotion.)*
   `register_limit` and EVM `registerLimit`, including funded-mirror/zero-precompile-value semantics.
 - Confirm `transferStake`/`moveStake` within‑netuid are slippage‑free on the live runtime; confirm the
   staking precompile's "contract address = coldkey" custody semantics.
-- Confirm an **independent validator** earns a permit at expected stake and that its **native
-  dividends** accrue to its own hotkey (no contract capture); confirm delegated stake on the reserve
+- Confirm a validator earns a permit at expected stake and that its **native dividends** accrue to
+  its own hotkey (no contract capture). Use an **independent validator** where one exists; at the
+  SN25 launch the only validator is UR's `ur-mainnet`. Confirm delegated stake on the reserve
   hotkey **auto‑compounds** to the contract coldkey's stake and that hotkey `take` behaves as expected
   (target take = 0, §7.4).
 - Confirm **`max_allowed_uids` = 256 is a hard ceiling** and `mechanism_count = 1` (a 2nd mechanism halves

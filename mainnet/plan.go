@@ -147,7 +147,7 @@ func bootstrapRequirements() []planRequirement {
 		{Id: "deployed-contract-state", ProducedBy: "install-contracts", Description: "Finalized deployment receipts, exact runtime code and actual custody/immutable getters, including the validator-evidence journal and coordinator binding"},
 		{Id: "binary-artifacts", Description: "Exact miner, validator, operator, root-service and monitor executable/config/image identities"},
 		{Id: "migration-cutover", Description: "Qualified server migration order, schema/writer compatibility and revision-fenced writer cutover"},
-		{Id: "roles", Description: "Public owner/deployer/Safe/guardian/oracle/pool/escrow/provider identities, two distinct UR validators, and separate netuid-0 role"},
+		{Id: "roles", Description: "Public owner/deployer/Safe/guardian/oracle/pool/escrow/provider identities, the policy's UR validators (one sole validator for the SN25 launch), and the netuid-0 role, which never counts as a UR validator"},
 		{Id: "custody", Description: "Bounded signer/coldkey/Safe custody adapters, permissions, single-writer leases and durable nonce/receipt ownership"},
 		{Id: "limits", Description: "Integer fee/value/stake/registration/lifetime ceilings, collateral exposure and validity windows; no inherited testnet budgets"},
 		{Id: "subnet-census", Description: "Exact SN25 generation and both mapping directions; removal/preservation hotkey generations, residual stake and capacity"},
@@ -155,10 +155,10 @@ func bootstrapRequirements() []planRequirement {
 		{Id: "registration-plan", Description: "Approved bounded pool/escrow/head/validator identities, exact registration payloads, cost ceilings and expected postconditions"},
 		{Id: "registered-subnet-roles", ProducedBy: "register-subnet-roles", Description: "Finalized exact registration generations, ownership, mappings and bounded registration cost receipts"},
 		{Id: "root-seat", Description: "Existing netuid-0 hotkey/coldkey seat generation, eligibility, stake/retention, delegation and basket policy; no assumed seat or unbounded registration"},
-		{Id: "ur-validators", Description: "Two independent UR identities, approved standard-validator configs, current permits/effective stake and evidence-based CRv4 policy; no prior revealed row is required to start"},
-		{Id: "ur-validator-services", ProducedBy: "start-ur-validators", Description: "Both admitted standard validator services own their approved config and durable state; first revealed/applied rows remain later output"},
-		{Id: "ur-validator-rows", ProducedBy: "activate-native-miner-emissions", Description: "Actual independently observed committed/revealed/applied evidence-based rows from both UR validators"},
-		{Id: "operator-quorum", Description: "Two healthy operators and authenticated domains; root-only membership cannot count toward UR quorum"},
+		{Id: "ur-validators", Description: "The policy's minimum of UR validator identities (one for the SN25 launch), approved standard-validator configs, current permits/effective stake and evidence-based CRv4 policy; no prior revealed row is required to start"},
+		{Id: "ur-validator-services", ProducedBy: "start-ur-validators", Description: "Every admitted standard validator service owns its approved config and durable state; first revealed/applied rows remain later output"},
+		{Id: "ur-validator-rows", ProducedBy: "activate-native-miner-emissions", Description: "Actual independently observed committed/revealed/applied evidence-based rows from every admitted UR validator"},
+		{Id: "operator-quorum", Description: "The policy's minimum of healthy operators (one for the SN25 launch) and authenticated domains; root-only membership cannot count toward UR quorum"},
 		{Id: "services", Description: "Independent root/UR services with complete child joining, durable state, config hashes and bounded restart/rollout"},
 		{Id: "monitor-oncall", Description: "Independent reconciliation, delivered alert tests, primary/backup on-call and bounded repair/rollback policy"},
 		{Id: "emission-mechanism", Description: "Approved runtime-qualified 10/90 producer policy, exact native calls, allocation denominator and accepted quantization/outcome tolerance; actual Yuma results are later postconditions"},
@@ -172,7 +172,7 @@ func bootstrapRequirements() []planRequirement {
 }
 
 // Root service readiness is independent of UR reset/deployment work, while
-// activation waits for both roles and the separate UR/operator safety quorum.
+// activation waits for the UR and root roles and the UR/operator safety quorum.
 func bootstrapActions() []planAction {
 	return []planAction{
 		{Id: "qualify-release", Phase: 0, Description: "Review exact source, artifacts and production qualification", DependsOn: []string{}, Requirements: []string{"runtime-authority", "testnet-closure", "testnet-exceptions", "production-qualification", "contract-artifacts", "binary-artifacts", "migration-cutover"}},
@@ -181,7 +181,7 @@ func bootstrapActions() []planAction {
 		{Id: "install-contracts", Phase: 3, Description: "Deploy exact custody graph, validator-evidence journal and coordinator binding; then prove code, ownership and constructor state", DependsOn: []string{"reset-miner-uids"}, Requirements: []string{"contract-artifacts", "custody", "limits"}, Postconditions: []string{"deployed-contract-state"}},
 		{Id: "register-subnet-roles", Phase: 3, Description: "Register approved pool, escrow, miner and UR-validator generations", DependsOn: []string{"install-contracts"}, Requirements: []string{"registration-plan", "subnet-census", "roles", "limits", "deployed-contract-state"}, Postconditions: []string{"registered-subnet-roles"}},
 		{Id: "start-root-validator", Phase: 4, Description: "Run the separate netuid-0 role only for an approved existing seat and strategy", DependsOn: []string{"review-authority"}, Requirements: []string{"root-seat", "services", "custody", "limits"}},
-		{Id: "start-ur-validators", Phase: 4, Description: "Start both independent standard UR validators with the two-operator safety quorum before requiring their first production rows", DependsOn: []string{"register-subnet-roles"}, Requirements: []string{"ur-validators", "operator-quorum", "services", "payout-policy", "registered-subnet-roles"}, Postconditions: []string{"ur-validator-services"}},
+		{Id: "start-ur-validators", Phase: 4, Description: "Start every admitted standard UR validator with the policy's healthy-operator quorum before requiring its first production rows", DependsOn: []string{"register-subnet-roles"}, Requirements: []string{"ur-validators", "operator-quorum", "services", "payout-policy", "registered-subnet-roles"}, Postconditions: []string{"ur-validator-services"}},
 		{Id: "admit-operations", Phase: 4, Description: "Start independent monitoring and verify alert/repair ownership", DependsOn: []string{"review-authority"}, Requirements: []string{"monitor-oncall", "services"}},
 		{Id: "activate-native-miner-emissions", Phase: 5, Description: "Activate the approved 10/90 evidence-based producer and owner Recycle mode; retain actual rows and native state before economic acceptance", DependsOn: []string{"start-root-validator", "start-ur-validators", "admit-operations"}, Requirements: []string{"emission-mechanism", "recycle-policy", "payout-policy", "activation-boundary", "ur-validator-services"}, Postconditions: []string{"ur-validator-rows", "emission-activation-state"}},
 		{Id: "accept-and-reconcile", Phase: 6, Description: "Observe actual production outcomes, settle accrued value and publish complete evidence", DependsOn: []string{"activate-native-miner-emissions"}, Requirements: []string{"acceptance-policy", "monitor-oncall", "recycle-policy", "ur-validator-rows", "emission-activation-state"}, Postconditions: []string{"native-emission-outcomes"}},
