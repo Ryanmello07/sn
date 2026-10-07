@@ -37,7 +37,15 @@ func newValidatorActivationTreasuryFixture(t *testing.T, mutate func(*types.Meta
 			policy.Remove[index].Coldkey = fmt.Sprintf("0x%x", destination)
 			census.set(t, "Owner", destination[:], bytes.Repeat([]byte{byte(0x45 + index)}, 32))
 		}
-	}, func(fixture *bootstrapChainValidatorFixture) {
+	}, bootstrapChainTreasuryApproval(destination))
+	chain.result(t, "apply")
+	return newValidatorActivationFixtureForChain(t, chain)
+}
+
+// Every producer approval selects the same receiving policy for the two
+// synthetic recipient seats. Selection carries no recipient signing key.
+func bootstrapChainTreasuryApproval(destination [32]byte) func(*bootstrapChainValidatorFixture) {
+	return func(fixture *bootstrapChainValidatorFixture) {
 		fixture.config.TreasuryApproval, fixture.config.OwnerRecycleApproval = fixture.config.OwnerRecycleApproval, nil
 		approval := &fixture.approval
 		approval.Schema, approval.Proposal.Schema, approval.Production.Schema = validator.TreasuryApprovalSchema, validator.TreasuryProposalSchema, validator.TreasuryProductionScope
@@ -47,9 +55,7 @@ func newValidatorActivationTreasuryFixture(t *testing.T, mutate func(*types.Meta
 				{Uid: 4, Hotkey: [32]byte(bytes.Repeat([]byte{0x45}, 32)), RegistrationBlock: 44},
 				{Uid: 5, Hotkey: [32]byte(bytes.Repeat([]byte{0x46}, 32)), RegistrationBlock: 45},
 			}, ProviderShare: protocol.Rational{Numerator: 1, Denominator: 10}, TreasuryShare: protocol.Rational{Numerator: 9, Denominator: 10}, MaxWeightLimitU16: 32768}
-	})
-	chain.result(t, "apply")
-	return newValidatorActivationFixtureForChain(t, chain)
+	}
 }
 
 // The pre-fix public command refuses both Burn and authenticated absence even

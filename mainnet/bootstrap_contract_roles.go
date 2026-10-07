@@ -97,7 +97,7 @@ func loadBootstrapContractRolePlan(ctx context.Context, path string) (bootstrapC
 		ContractPlanHash: preparation.Contracts.Config.Plan.hash(), Artifacts: preparation.Contracts.Config.Plan.Artifacts,
 		CoordinatorProxy: proxy.Address, CoordinatorImplementation: implementation.Address, SettlementVault: vault.Address,
 		EvidenceJournal: evidence.Address, EvidenceDomain: *evidence.EvidenceConstructor, InitialPolicyHash: policy,
-		Validators: bindings, DeclarationsVerified: true, PendingChainPhases: bootstrapChainPendingPhases()}
+		Validators: bindings, DeclarationsVerified: true, PendingChainPhases: bootstrapChainPendingPhasesForSchema(preparation.Plan.Config.Schema)}
 	result.ContentHash = rootObjectHash(result)
 	return result, nil
 }

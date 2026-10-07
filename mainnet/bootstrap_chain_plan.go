@@ -1,5 +1,6 @@
-// Offline launch preparation binds the retained trim scope and two UR roles to
-// the existing signed contract and root custody plans. It grants no chain effect.
+// Offline launch preparation binds the retained trim scope and its UR roles (two,
+// or v5's sole role) to the signed contract and root custody plans. It grants
+// no chain effect.
 package main
 
 import (
@@ -25,11 +26,14 @@ const bootstrapChainConfigSchema = "urnetwork-mainnet-bootstrap-chain-config-v3"
 const bootstrapChainPlanSchema = "urnetwork-mainnet-bootstrap-chain-preparation-v3"
 const bootstrapChainConfigSchemaV4 = "urnetwork-mainnet-bootstrap-chain-config-v4"
 const bootstrapChainPlanSchemaV4 = "urnetwork-mainnet-bootstrap-chain-preparation-v4"
+const bootstrapChainConfigSchemaV5 = "urnetwork-mainnet-bootstrap-chain-config-v5"
+const bootstrapChainPlanSchemaV5 = "urnetwork-mainnet-bootstrap-chain-preparation-v5"
 const bootstrapChainStateFile = "bootstrap-chain.json"
 const maximumBootstrapChainPlanBytes = 512 * 1024
 
-// The intended majority and secondary roles use the standard validator config
-// grammar. Role labels do not prove live stake, key custody or service identity.
+// The intended majority and secondary roles, or v5's sole role, use the standard
+// validator config grammar. Role labels do not prove live stake, key custody or
+// service identity.
 type bootstrapChainValidator struct {
 	ValidatorId uint64 `json:"validator_id"`
 	subnetIdentityExpectation
@@ -103,6 +107,8 @@ func bootstrapChainPlanSchemaForConfig(schema string) string {
 		return bootstrapChainPlanSchema
 	case bootstrapChainConfigSchemaV4:
 		return bootstrapChainPlanSchemaV4
+	case bootstrapChainConfigSchemaV5:
+		return bootstrapChainPlanSchemaV5
 	default:
 		return ""
 	}
@@ -116,6 +122,34 @@ func bootstrapChainPendingPhases() []string {
 	return []string{"owner-trim-execution-and-generation-reconciliation", "complete-contract-installation-and-evidence-binding", "two-ur-validator-production-admissions-and-healthy-operators", "root-current-authority-and-service-activation", "native-10-percent-allocation-and-90-percent-recycle-acceptance"}
 }
 
+// Only the new v5 schema seals a one-validator phase. Every two-role schema
+// keeps the original names above, so no retained seal or child marker moves.
+func bootstrapChainPendingPhasesForSchema(schema string) []string {
+	phases := bootstrapChainPendingPhases()
+	if schema == bootstrapChainConfigSchemaV5 {
+		phases[2] = "one-ur-validator-production-admission-and-healthy-operators"
+	}
+	return phases
+}
+
+// Each schema fixes its ordered UR role labels. A one-role launch cannot borrow
+// the majority or secondary label, and a two-role plan cannot select "sole".
+func bootstrapChainValidatorRoles(schema string) []string {
+	if schema == bootstrapChainConfigSchemaV5 {
+		return []string{"sole"}
+	}
+	return []string{"majority", "secondary"}
+}
+
+// Every role's exact config input in sealed role order, for overlap checks.
+func (self bootstrapChainConfig) validatorConfigPaths() []string {
+	paths := make([]string, 0, len(self.Validators))
+	for _, role := range self.Validators {
+		paths = append(paths, role.Config.Path)
+	}
+	return paths
+}
+
 // The accepted plan owns only one local journal and never supplies a signing key.
 func (self bootstrapChainPlan) validate() error {
 	c := self.Config
@@ -124,15 +158,20 @@ func (self bootstrapChainPlan) validate() error {
 		return errors.Join(errors.New("bootstrap chain preparation exceeds its retained plan bound"), err)
 	}
 	legacy := c.Schema == bootstrapChainConfigSchemaV1
+	roles := bootstrapChainValidatorRoles(c.Schema)
 	if self.Schema == "" || self.Schema != bootstrapChainPlanSchemaForConfig(c.Schema) || !planLabel(c.DeploymentId) || c.Netuid != 25 ||
 		strings.TrimSpace(c.Network.NativeChain) == "" || !rootCanonicalHash(c.Network.GenesisHash) || c.Network.EvmChainId != mainnetEvmChainId ||
 		!bootstrapRootAbsolutePath(c.RunDirectory) || !bootstrapRootAbsolutePath(self.ConfigPath) || !planSha256(self.ConfigSha256) ||
 		!planSha256(self.OwnerTrimContentHash) || !planSha256(self.ContractPlanHash) || !planSha256(self.RootPlanHash) ||
 		self.NetworkEffects || self.NativeSigning || self.ActivationReady || len(self.OwnerTrimBlockers) == 0 ||
-		!slices.Equal(self.PendingChainPhases, bootstrapChainPendingPhases()) || self.ContentHash != bootstrapChainPlanHash(self) || len(c.Validators) != 2 {
+		!slices.Equal(self.PendingChainPhases, bootstrapChainPendingPhasesForSchema(c.Schema)) || self.ContentHash != bootstrapChainPlanHash(self) || len(c.Validators) != len(roles) {
 		return errors.New("bootstrap chain preparation schema, identity, bounds or seal differs")
 	}
-	for _, reference := range []planFileReference{c.OwnerTrimPolicy, c.OwnerTrimPlan, c.Contracts, c.Root, c.Validators[0].Config, c.Validators[1].Config} {
+	references := []planFileReference{c.OwnerTrimPolicy, c.OwnerTrimPlan, c.Contracts, c.Root}
+	for _, role := range c.Validators {
+		references = append(references, role.Config)
+	}
+	for _, reference := range references {
 		if !bootstrapRootAbsolutePath(reference.Path) || !planSha256(reference.Sha256) {
 			return errors.New("bootstrap chain preparation requires exact private input pins")
 		}
@@ -140,13 +179,16 @@ func (self bootstrapChainPlan) validate() error {
 	for i, role := range c.Validators {
 		if role.ValidatorId == 0 || !rootCanonicalHash(role.Hotkey) || !rootCanonicalHash(role.Coldkey) || role.RegistrationBlock == nil ||
 			i != 0 && (role.ValidatorId == c.Validators[0].ValidatorId || role.Hotkey == c.Validators[0].Hotkey || role.Config.Path == c.Validators[0].Config.Path || role.Config.Sha256 == c.Validators[0].Config.Sha256) {
-			return errors.New("bootstrap chain requires two distinct explicit UR validator identities and config inputs")
+			return errors.New("bootstrap chain requires distinct explicit UR validator identities and config inputs")
 		}
 		if legacy {
 			if role.Role != "" || role.Implementation != "" || role.ApprovalPublicKey != "" || len(self.ValidatorInspections) != 0 {
 				return errors.New("bootstrap chain v1 cannot acquire production config inspection authority")
 			}
-		} else if role.Role != []string{"majority", "secondary"}[i] || role.Implementation != "sn/validator" || !rootCanonicalHash(role.ApprovalPublicKey) {
+		} else if role.Role != roles[i] || role.Implementation != "sn/validator" || !rootCanonicalHash(role.ApprovalPublicKey) {
+			if len(roles) == 1 {
+				return errors.New("bootstrap chain v5 requires one sole sn/validator role with an independent approval signer pin")
+			}
 			return errors.New("bootstrap chain requires ordered majority and secondary sn/validator roles with independent approval signer pins")
 		}
 	}
@@ -174,7 +216,7 @@ func (self bootstrapChainPreparation) validate() error {
 		return err
 	}
 	c, contract, root := self.Plan.Config, self.Contracts.Config.Plan, self.Root
-	if (c.Schema == bootstrapChainConfigSchemaV4) != (root.PassiveService != nil) {
+	if bootstrapChainPassiveRoot(c.Schema) != (root.PassiveService != nil) {
 		return errors.New("bootstrap chain schema cannot convert legacy custody to passive observation")
 	}
 	if c.DeploymentId != contract.DeploymentId || c.DeploymentId != root.DeploymentId || c.Network != contract.Network || c.Network != root.Network ||
@@ -189,7 +231,8 @@ func (self bootstrapChainPreparation) validate() error {
 		}
 		seen[path], seen[path+".lock"] = true, true
 	}
-	for _, path := range []string{self.Plan.ConfigPath, c.OwnerTrimPolicy.Path, c.OwnerTrimPlan.Path, c.Contracts.Path, c.Root.Path, c.Validators[0].Config.Path, c.Validators[1].Config.Path, contract.Artifacts.Path, root.ServiceInput.Path} {
+	inputs := append([]string{self.Plan.ConfigPath, c.OwnerTrimPolicy.Path, c.OwnerTrimPlan.Path, c.Contracts.Path, c.Root.Path}, c.validatorConfigPaths()...)
+	for _, path := range append(inputs, contract.Artifacts.Path, root.ServiceInput.Path) {
 		if !bootstrapRootAbsolutePath(path) || seen[path] {
 			return errors.New("bootstrap chain inputs overlap each other, a journal or a lock marker")
 		}
@@ -227,10 +270,16 @@ func (self bootstrapChainPreparation) protectedPaths() []string {
 	return paths
 }
 
-// Both explicit schemas authenticate separate UR and root service roles. Older
-// retained plans cannot gain this authority by adding fields or changing names.
+// These explicit schemas authenticate UR and root service roles; only v5 may
+// name its sole UR hotkey as the root seat's hotkey. Older retained plans
+// cannot gain this authority by adding fields or changing names.
 func bootstrapChainHasRootRole(schema string) bool {
-	return schema == bootstrapChainConfigSchema || schema == bootstrapChainConfigSchemaV4
+	return schema == bootstrapChainConfigSchema || schema == bootstrapChainConfigSchemaV4 || schema == bootstrapChainConfigSchemaV5
+}
+
+// v4 and v5 select passive root observation; v3 keeps legacy root custody.
+func bootstrapChainPassiveRoot(schema string) bool {
+	return schema == bootstrapChainConfigSchemaV4 || schema == bootstrapChainConfigSchemaV5
 }
 
 // Every bounded read checks the exact file bytes before its sole decode. No
@@ -258,8 +307,8 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 	if err := decodePlanJson(raw, &config); err != nil {
 		return result, err
 	}
-	if bootstrapChainPlanSchemaForConfig(config.Schema) == "" || len(config.Validators) != 2 {
-		return result, errors.New("bootstrap chain config requires its schema and exactly two UR roles")
+	if bootstrapChainPlanSchemaForConfig(config.Schema) == "" || len(config.Validators) != len(bootstrapChainValidatorRoles(config.Schema)) {
+		return result, errors.New("bootstrap chain config requires its schema and exactly that schema's UR roles")
 	}
 	if !bootstrapChainHasRootRole(config.Schema) && config.RootValidator != nil {
 		return result, errors.New("bootstrap chain v1/v2 cannot acquire root config inspection authority")
@@ -336,7 +385,9 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 	}
 	var inspections []validator.ProductionBootstrapInspection
 	for _, role := range config.Validators {
-		if role.RegistrationBlock == nil || role.Hotkey == scope.Hotkey {
+		// Only v5's sole role may also hold the root seat, under the same owner.
+		shared := config.Schema == bootstrapChainConfigSchemaV5 && role.Coldkey == scope.Coldkey
+		if role.RegistrationBlock == nil || role.Hotkey == scope.Hotkey && !shared {
 			return result, errors.New("bootstrap chain UR role is incomplete or reuses the separate root identity")
 		}
 		protected := slices.ContainsFunc(policy.Preserve, func(candidate subnetProtectedIdentity) bool {
@@ -378,7 +429,7 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 	}
 	result.Plan = bootstrapChainPlan{Schema: bootstrapChainPlanSchemaForConfig(config.Schema), ConfigPath: path, ConfigSha256: digest, Config: config,
 		OwnerTrimContentHash: trim.ContentHash, OwnerTrimBlockers: trim.ExecutionBlockers, ContractPlanHash: contracts.Plan.hash(), RootPlanHash: result.Root.ContentHash,
-		ValidatorInspections: inspections, RootInspection: rootInspection, PendingChainPhases: bootstrapChainPendingPhases()}
+		ValidatorInspections: inspections, RootInspection: rootInspection, PendingChainPhases: bootstrapChainPendingPhasesForSchema(config.Schema)}
 	result.Plan.ContentHash = bootstrapChainPlanHash(result.Plan)
 	return result, errors.Join(result.validate(), ctx.Err())
 }
