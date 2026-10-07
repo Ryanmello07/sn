@@ -1711,7 +1711,7 @@ Current source changes matter to this design:
 | Subject | Source-backed observation | Bootstrap consequence |
 | --- | --- | --- |
 | Subnet emission allocation | The inspected `get_shares` uses price EMA, a `1 - MinerBurned` adjustment, then an emission gate. A flow-based helper also exists but is not the selected `get_shares` path. [Source][subtensor-shares] | Do not assume an older Taoflow formula or a root-validator vote controls our subnet's allocation. Attest the actual runtime path. |
-| Current root strategy | Runtime470 has removed `set_root_weights`. Dividends accumulate where earned; optional coldkey/proxy basket trades change holdings. [Current guide][root-reborn-470], [removal migration][root-removal-470] | Select the separately approved [passive root service](ROOT-PASSIVE-SERVICE.md) in a fresh v4 plan alongside both UR validators. Retain legacy signed actions and their recovery history. |
+| Current root strategy | Runtime470 has removed `set_root_weights`. Dividends accumulate where earned; optional coldkey/proxy basket trades change holdings. [Current guide][root-reborn-470], [removal migration][root-removal-470] | Select the separately approved [passive root service](ROOT-PASSIVE-SERVICE.md) in a fresh v4 plan alongside both UR validators, or a v5 plan alongside the sole one (the SN25 launch). Retain legacy signed actions and their recovery history. |
 | Miner collateral | Registration collateral can survive deregistration; later earnings can affect release and capture. [Official collateral guide, pinned source][collateral-guide] | A UID reset is not a balance, lock, or stake reset. Pool capture must distinguish emission, locked collateral, and principal. |
 | Native versus signed limits | The local whitepaper records runtime-dependent weight-limit behavior and requires a signed policy cap. [Local specification](../WHITEPAPER.md#15-concrete-parameters) | Observe runtime getters and enforce the signed cap independently. Do not assume a successful setter changed native enforcement. |
 
@@ -2146,7 +2146,12 @@ checks alone do not establish composed launch acceptance.
 
 Preserve the current guarantees: the coordinator owns neither custody position, the sink has no outbound path, and valid earned vault claims survive coordinator pause or upgrade. Pausing new application activity is not a native emission kill switch. Initial contracts establish their epoch clock at deployment, so the plan must include sufficient time to finish setup and a future activation boundary; it cannot assume a dormant deployment has no running clock.
 
-## Running both validators
+## Running the validators
+
+**October 7 decision:** SN25 launches with one UR validator, `ur-mainnet`, whose hotkey also holds the root seat
+([decision](#one-operator-and-one-validator--october-7)). Its preparation is a one-role bootstrap v5, and it runs as
+`validator run` through xops on snow ([LAUNCH.md](LAUNCH.md#run-it-on-snow)). The two-unit `activate-validators`
+component below refuses v5 and is not the launch path; it remains for two-validator deployments.
 
 The [initial two-UR installation component](VALIDATOR-ACTIVATION.md) now provides
 a concrete `activate-validators` command for exact static-unit installation,
@@ -2220,10 +2225,10 @@ remain open.
 
 The [runtime470 source/artifact review](../docs/spec/runtime-470-audit.md) and
 [passive root service](ROOT-PASSIVE-SERVICE.md) define an implemented observation
-path: fresh bootstrap schema v4, two independently approved UR production
-configs, and a separately approved existing netuid-0 role using
-`passive_accumulate_in_place`. This observer does not complete the requested
-actual root participation/earnings or authority for necessary coldkey lifecycle actions. At reviewed source
+path: fresh bootstrap schema v4 with two independently approved UR production
+configs, or v5 with one (the SN25 launch), and a separately approved existing
+netuid-0 role using `passive_accumulate_in_place`. This observer does not
+complete the requested actual root participation/earnings or authority for necessary coldkey lifecycle actions. At reviewed source
 `b4662ed8`, [root_service_command.go](root_service_command.go) returns
 `activation-blocked` from `activate`; [root_service_runtime.go](root_service_runtime.go)
 constructs observation/reconciliation and offline custody ports, leaving native
@@ -2244,7 +2249,7 @@ Its `ready` result is observation readiness and `activation_ready` stays false.
 The separately signed [`activate-root-passive` host owner](ROOT-PASSIVE-SERVICE.md#independently-approved-static-host-owner)
 now provides exact sandboxed static installation and one durable process start,
 with invocation recovery and a dedicated writable checkpoint directory. It keeps
-the original v4 private approvals unchanged and consumes no UR start allowance.
+the original v4 or v5 private approvals unchanged and consumes no UR start allowance.
 Historical status and manager liveness do not prove continuing observer health.
 Its [qualification](evidence/passive-root-host-20261001.md) supplies no live host
 approval or deployment; actual current seat/stake, independent runtime authority,
@@ -2293,7 +2298,7 @@ Registration accepts only the explicit `operator_balance_exposure: "whole-reduci
 
 The sequence is `observe`, `plan`, independent consent, `reserve`, `export`, owner-local `inspect-request`/`ledger-plan`/`sign`, `import-reply` (or pinned `import`), `submit-plan`, independent submission consent, then `submit`/`reconcile`. The daemon state uses the new `mainnet-root-register` physical owner kind and `root-register-action.json`; operator-device custody is independently provisioned. One original nonce, era, signature and finite cumulative post allowance survive restart. Every post first reconciles exact canonical bodies; uncertain signing is not repeated, an existing seat is not re-registered, and expiry never silently changes the approved action. A new unsigned plan requires fresh observation and approval.
 
-`bootstrap-handoff` requires the original finalized `NeuronRegistered(0, uid, hotkey)` event and agreeing inclusion-block ownership/registration generation. It emits a proposed passive root role and original receipt pins; the passive configuration and service approval must still be completed independently before existing bootstrap-chain v4 orchestration. Its eight contract actions are unchanged. A successful receipt retains the exact transaction fee but leaves actual burn unknown; parent-block Burn or end-block balance differences do not identify that debit. These new source paths and deterministic regressions require focused execution qualification; source review grants no spending or activation authority.
+`bootstrap-handoff` requires the original finalized `NeuronRegistered(0, uid, hotkey)` event and agreeing inclusion-block ownership/registration generation. It emits a proposed passive root role and original receipt pins; the passive configuration and service approval must still be completed independently before existing bootstrap-chain v4 or v5 orchestration. Its eight contract actions are unchanged. A successful receipt retains the exact transaction fee but leaves actual burn unknown; parent-block Burn or end-block balance differences do not identify that debit. These new source paths and deterministic regressions require focused execution qualification; source review grants no spending or activation authority.
 
 The root-seat admission choice must be explicit:
 
@@ -2414,7 +2419,8 @@ This is one implemented phase, not full bootstrap or root service activation.
 
 The [offline chain composition](BOOTSTRAP-CHAIN.md) now joins that root owner,
 reserve CREATE custody, a retained trim review and two distinct protected UR
-role inputs under one durable local preparation. Its [component qualification](evidence/bootstrap-chain-qualification-20260928.md)
+role inputs (one `sole` role under the later v5 schema) under one durable local
+preparation. Its [component qualification](evidence/bootstrap-chain-qualification-20260928.md)
 passed 369 full normal roots, all 87 selected race roots in six disjoint shards,
 and four causal families. The original aggregate race timeout remains retained.
 Tests used physical Connect `358cefae`, server `0633780c` and SDK `42241118`;
@@ -2424,8 +2430,9 @@ root authority, all live services and native economic acceptance remain open.
 
 The v2 offline admission addition now reuses the standard validator's strict
 schema-3 config and production approval verification for the intended majority
-and secondary UR roles. It binds exact public identities, independent signer
-pins and runtime/source/deployment to the retained protected generations.
+and secondary UR roles; v5 applies the same verification to its one sole role.
+It binds exact public identities, independent signer pins and
+runtime/source/deployment to the retained protected generations.
 Current stake/permit, key possession, operator evidence and healthy services,
 deployed contracts and runtime authenticity remain unproven. V1 journals retain
 their original limited status and cannot be silently upgraded. This addition

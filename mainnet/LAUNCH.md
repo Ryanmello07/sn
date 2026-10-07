@@ -81,8 +81,10 @@ Collect these inputs before requesting signatures:
 
 - Reviewed source/build locks, exact binary and contract artifact hashes.
 - Selected deployment label, validated mainnet protocol policy and all typed
-  chain/contract configurations. Fresh passive-root composition uses
-  `urnetwork-mainnet-bootstrap-chain-config-v4`.
+  chain/contract configurations. Fresh composition for this launch uses
+  `urnetwork-mainnet-bootstrap-chain-config-v5`: passive root and one `sole` UR
+  role, whose hotkey may also hold the root seat under the same coldkey
+  ([BOOTSTRAP-CHAIN.md](BOOTSTRAP-CHAIN.md)). The two-role passive form is v4.
 - The operator-held Ed25519 approval public key (see [Who signs what](#who-signs-what))
   and separately approved runtime, metadata, network, submission route, attempt
   and value budgets.
