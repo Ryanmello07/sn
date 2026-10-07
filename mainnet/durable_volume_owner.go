@@ -429,6 +429,8 @@ func mainnetStorageContext(contexts []context.Context) context.Context {
 
 // Retained observations and effects require local custody. Only explicit pure
 // review modes may run before provisioning; their own parsers still bind scope.
+// Treasury approval files are immutable public inputs that the validator
+// retains itself, not custody journals.
 func mainnetRequiresDurableVolumes(args []string) bool {
 	if len(args) == 0 {
 		return false
@@ -437,7 +439,7 @@ func mainnetRequiresDurableVolumes(args []string) bool {
 	case "treasury":
 		if len(args) > 1 {
 			switch args[1] {
-			case "describe", "observe", "plan", "policy-plan", "inspect-request", "ledger-plan":
+			case "describe", "observe", "plan", "policy-plan", "approval-plan", "approval-envelope", "inspect-request", "ledger-plan":
 				return false
 			}
 		}

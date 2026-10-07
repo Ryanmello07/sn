@@ -25,7 +25,7 @@ func runTreasuryCommand(ctx context.Context, args []string, stdout, stderr io.Wr
 // The real dispatcher owns bounded original inputs and emits no inferred grants.
 func runTreasuryCommandWithAdapter(ctx context.Context, args []string, stdout, stderr io.Writer, adapter ownerSigningAdapter) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "treasury requires describe, observe, plan, policy-plan, reserve, export, inspect-request, ledger-plan, sign, import-reply, status, reconcile or submit")
+		fmt.Fprintln(stderr, "treasury requires describe, observe, plan, policy-plan, approval-plan, approval-envelope, reserve, export, inspect-request, ledger-plan, sign, import-reply, status, reconcile or submit")
 		return 2
 	}
 	var value any
@@ -48,6 +48,10 @@ func runTreasuryCommandWithAdapter(ctx context.Context, args []string, stdout, s
 		}
 	case "observe", "plan", "policy-plan":
 		value, err = treasuryPlanCommand(ctx, args, stderr)
+	case "approval-plan":
+		value, err = treasuryApprovalPlanCommand(ctx, args, stderr)
+	case "approval-envelope":
+		value, err = treasuryApprovalEnvelopeCommand(ctx, args, stderr)
 	case "inspect-request", "ledger-plan", "sign":
 		value, err = treasuryOwnerCommand(ctx, args, stderr, adapter)
 	case "reserve", "export", "import-reply", "status", "reconcile", "submit":
