@@ -143,8 +143,9 @@ with the coldkey. Any tool that builds a coldkey-swap call must refuse a source
 equal to the chain's `SubnetOwner(25)`. No `sn-mainnet` command builds a
 coldkey-swap call today. `TestOwnerTrimMultisigNoToolBuildsColdkeySwap` fails
 if a tool starts building one, so that tool must add the refusal before it can
-pass. The treasury setup's coldkey swap uses a separate, dedicated source
-account ([TREASURY-RECEIVE-SETUP.md](TREASURY-RECEIVE-SETUP.md)).
+pass. The treasury setup needs no coldkey swap at all: `ur-reserve` registers
+its recipients through its own multisig
+([TREASURY-RECEIVE-SETUP.md](TREASURY-RECEIVE-SETUP.md)).
 
 ## Execution order and parallel work
 
