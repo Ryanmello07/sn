@@ -83,8 +83,9 @@ Collect these inputs before requesting signatures:
 - Selected deployment label, validated mainnet protocol policy and all typed
   chain/contract configurations. Fresh passive-root composition uses
   `urnetwork-mainnet-bootstrap-chain-config-v4`.
-- Independent Ed25519 approval public keys and separately approved runtime,
-  metadata, network, submission route, attempt and value budgets.
+- The operator-held Ed25519 approval public key (see [Who signs what](#who-signs-what))
+  and separately approved runtime, metadata, network, submission route, attempt
+  and value budgets.
 - EVM deployer, governance Safe, guardian and commitment oracle; these roles
   are distinct. Actual sender nonces, bounded fees and validity windows.
 - Each operator's distinct EVM `depositSigner` and `rootSigner`, native validator
@@ -93,16 +94,17 @@ Collect these inputs before requesting signatures:
 - Host and owner-local durable-volume declarations and their exact hashes
   (ext4, xfs or btrfs on Linux; a qualified APFS volume on macOS).
 
-Private keys belong in their existing custody: owners' Ledger devices and
-operators' secrets vaults. Request packages contain public artifacts, exact
+Private keys belong in their existing custody: owners' Ledger devices,
+operators' secrets vaults and, for the approval key, the git-crypt `root`
+repository. Request packages contain public artifacts, exact
 messages and reviewed pins, never seed phrases or copied keys.
 
 ## Who signs what
 
 | Authority | Request | Result |
 | --- | --- | --- |
-| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | The owner trim needs two signatories. Each signs their own approved request on their own computer and Ledger: first the opening approval, then the final approval for the read-back timepoint ([native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner)) | One public signed native reply per signatory; the final approval executes the trim from the multisig. No signatory needs Snow access |
-| Independent Ed25519 approver | Exact bytes emitted by plan previews for the specified approval domain | Approval envelope binding the exact plan, not transaction custody |
+| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | Nothing for this launch: there is no owner trim (step 2 of the [execution order](#execution-order-and-parallel-work)) and no coldkey swap ([hard rule](#hard-rule-sn25-ownership-stays-with-ur-owner)). If a trim is ever selected, two signatories sign it through the [native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner) path | None |
+| Ed25519 approval key: one operator-held key in `root/subtensor/approval/` (owner decision, October 7: approvals of plans that don't touch the chain need no multiparty sign-off) | Exact bytes emitted by plan previews for the specified approval domain | Approval envelope binding the exact plan, not transaction custody |
 | EVM deployer | Exact approved EIP-1559 creation/link transaction | Binary signed chain-964 transaction |
 | Coordinator governance Safe owners | Exact evidence-anchor Safe EIP-712 transaction | Accepted ordered Safe signatures |
 | Safe relayer | Exact outer EIP-1559 `execTransaction` transaction | Binary signed relayer transaction |
@@ -113,8 +115,9 @@ messages and reviewed pins, never seed phrases or copied keys.
 `SubnetOwner(25)`. brien-ur-owner is `5HnhcDkB7fQcbabDsmQXeP6N4fDKnciKjMkKCScUwkJYHH3u`
 at `m/44'/354'/1'/0'/0'` on Brien's Ledger (Polkadot generic app, Ed25519);
 jack-ur is `5GeoGiGEvUEQqTfTaUsvXqMQD4zVMNeYtYqMN8JLaMfiDp4J` and keith-ur is
-`5DFCNQmzRedo6hbZci4PTFMRuQJQ5PX6f6WrJBxDCDU3yBzS`. The tool signs only with a
-Ledger running the Polkadot generic app, so both trim signatories need one.
+`5DFCNQmzRedo6hbZci4PTFMRuQJQ5PX6f6WrJBxDCDU3yBzS`. If a trim is ever selected,
+the tool signs only with a Ledger running the Polkadot generic app, so both trim
+signatories would need one.
 
 The Ledger Polkadot owner path is not an Ethereum signing interface. Establish
 EVM signer custody separately. `STCoordinator.rootSigner` signs operator payout
@@ -129,8 +132,9 @@ The `ur-reserve` 2-of-3 multisig receives emissions; it signs only to register i
 AccountId32: 0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410
 ```
 
-Do not request reserve spending, gas payment or multisig signing. This native
-wallet is distinct from the immutable EVM `STReserveSink`.
+Those two registrations are its only signing: do not request reserve spending,
+gas payment or any other multisig call. This native wallet is distinct from the
+immutable EVM `STReserveSink`.
 
 ### Hard rule: SN25 ownership stays with `ur-owner`
 
@@ -203,7 +207,7 @@ established the original custody, the host sequence for the `ur-owner`
 multisig is in [OWNER-TRIM-BEST-EFFORT.md](OWNER-TRIM-BEST-EFFORT.md#native-multisig-owner):
 
 1. `bootstrap-chain trim-plan` with the multisig template prepares the first
-   approval. Attach the independent exact execution approval, then
+   approval. Attach the exact execution approval, then
    `trim-apply` and `trim-export --multisig-step 0`.
 2. Send the first signatory the portable request and, through an independently
    authenticated channel, the request content hash, genesis, approval key, the
@@ -264,9 +268,22 @@ jq -r '.approval_signing_message_hex' "$REVIEW_DIR/contracts-preview.json" |
 ```
 
 The preview accepts the unsigned
-`urnetwork-mainnet-contract-phase-config-v1` draft. Ask the independent Ed25519
-approver to sign the **decoded message bytes**, not the displayed hex text or
-SHA-256. Insert the 128-character unprefixed signature into
+`urnetwork-mainnet-contract-phase-config-v1` draft. Sign the **decoded message
+bytes** with the approval key, not the displayed hex text or SHA-256. The helper
+beside the key uses only the Go standard library. It checks the key against its
+pinned `.pub` file, refuses input without the domain's NUL separator, prints the
+domain and message SHA-256 to stderr and the signature to stdout:
+
+```bash
+APPROVAL=/absolute/path/root/subtensor/approval
+go run "$APPROVAL/sign.go" -key "$APPROVAL/sn25-mainnet-approval.key" \
+  "$REVIEW_DIR/contract-approval-message.bin"
+```
+
+The approval public key is
+`0xbf98605c152091b05f4ad66a328b07a361ccbc36475bf9fa56c743ce0bbf0deb`.
+
+Insert the 128-character unprefixed signature into
 `approval_signature_ed25519`, preserving the complete plan and independently
 pinned approval public key. The domain is
 `urnetwork-mainnet-contract-phase-approval-v1`, followed by NUL and the exact
@@ -344,10 +361,10 @@ coordinator-owner Safe. Do not expand the original eight-attempt phase cap.
 Follow [BOOTSTRAP-SUCCESSOR-EXECUTION.md](BOOTSTRAP-SUCCESSOR-EXECUTION.md),
 [BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CAPABILITY.md)
 and [BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CUSTODY.md](BOOTSTRAP-SUCCESSOR-SAFE-CURRENT-CUSTODY.md).
-The sequence is successor plan/preview, independent preparation approval,
-prepare, Safe review, Safe-owner signatures, relayer signing, execution preview,
-independent execution approval, claim, canonical authorization, reconcile,
-scoped submit and installation readback.
+The sequence is successor plan/preview, preparation approval, prepare, Safe
+review, Safe-owner signatures, relayer signing, execution preview, execution
+approval, claim, canonical authorization, reconcile, scoped submit and
+installation readback.
 
 The current profile requires an independently verified 2-of-3 Safe with three
 sorted distinct owners, no modules, guard or fallback handler. Two actual owners
@@ -516,8 +533,11 @@ Each coldkey step is `btcli call <Pallet.call> --args <json> --multisig ur-mainn
 signed by one signatory. Brien signs on the Ledger with `--ledger
 --ledger-account 10`. A second signatory then approves the pending call, which
 `btcli multisig pending ur-mainnet` lists. Preview each call with `--dry-run`
-first. The multisig account pays the burn, the multisig deposit and the fees,
-so fund `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3` before the first call.
+first. The multisig account pays the burns and the stake, so fund
+`5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3` before the first call. The
+proposing signatory's own account holds the 0.196 TAO multisig deposit
+(DepositBase 0.132 + 2 × DepositFactor 0.032) until the call executes, and each
+signatory pays the fee for their own approval.
 
 `validator take status --config=<path>` reads the live values at an
 authenticated finalized block without any key; use it before and after each
@@ -600,6 +620,24 @@ Then `take status` must show:
 - `childkey take (netuid 25): 11796/65535 (18.00%) stored`;
 - `children (netuid 25): none`, unless the owner chose children;
 - `parents (netuid 25)`: the hotkeys that name ours as their child.
+
+### As submitted for this launch
+
+The first approvals went in as two multisig operations, which
+`btcli multisig pending ur-mainnet` lists:
+
+1. `register_limit` on SN25 with a 0.01 TAO price limit.
+2. The remaining calls as one `Utility.batch_all`:
+   `set_auto_parent_delegation_enabled` false, `add_stake` of 1 TAO on netuid 0,
+   `root_register`, then `set_childkey_take` 11,796 on netuid 25. Call hash
+   `0xf814acf89d736e7956dabdebe03c2d57411896a1f488df6409e961c223ff4e93`.
+
+A batch holds one deposit instead of four, and it is atomic: if any call fails,
+none applies and the deposit is returned. The second signatory must approve the
+registration first. Until it executes, the multisig doesn't own the hotkey, so the
+batch would fail. btcli takes nested calls in enum-variant form,
+`{"calls": [{"SubtensorModule": {"<call>": {...}}}, ...]}`, and every signatory
+must pass the same calls in the same order.
 
 ### Run it on snow
 
