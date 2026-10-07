@@ -104,7 +104,7 @@ func (self OwnerRecycleApproval) SigningMessage() ([]byte, error) {
 		domain = "urnetwork-owner-recycle-production-approval-signature-v2\n"
 	}
 	if self.Schema == TreasuryApprovalSchema {
-		domain = "urnetwork-native-treasury-approval-signature-v1\n"
+		domain = TreasuryApprovalSignatureDomain
 	}
 	digest := sha256.Sum256(append([]byte(domain), raw...))
 	return digest[:], nil
