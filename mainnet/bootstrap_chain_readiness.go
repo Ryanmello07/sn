@@ -46,6 +46,7 @@ type bootstrapChainReadiness struct {
 	RootValidator            bootstrapChainRoleReadiness   `json:"root_validator"`
 	Blockers                 []string                      `json:"observation_blockers"`
 	PendingChainPhases       []string                      `json:"pending_chain_phases"`
+	OwnerTrimPhase           string                        `json:"owner_trim_phase,omitempty"`
 	CurrentAuthorityVerified bool                          `json:"current_authority_verified"`
 	NativeSigning            bool                          `json:"native_signing"`
 	NetworkEffects           bool                          `json:"network_effects"`
@@ -54,9 +55,11 @@ type bootstrapChainReadiness struct {
 }
 
 // Every role observation begins unresolved even when all offline approvals pass.
+// A no-trim receipt records the owner's decision beside the unexecuted phase.
 func newBootstrapChainReadiness(preparation bootstrapChainPreparation) bootstrapChainReadiness {
 	result := bootstrapChainReadiness{Schema: bootstrapChainReadinessSchema, PlanHash: preparation.Plan.ContentHash,
-		Status: "unresolved", Blockers: []string{"CURRENT_FINALIZED_OBSERVATION_UNRESOLVED"}, PendingChainPhases: bootstrapChainPendingPhasesForSchema(preparation.Plan.Config.Schema)}
+		Status: "unresolved", Blockers: []string{"CURRENT_FINALIZED_OBSERVATION_UNRESOLVED"}, PendingChainPhases: bootstrapChainPendingPhasesForSchema(preparation.Plan.Config.Schema),
+		OwnerTrimPhase: preparation.Plan.OwnerTrimPhase}
 	for i, role := range preparation.Plan.Config.Validators {
 		approval := preparation.Plan.ValidatorInspections[i].Approval
 		result.UrValidators = append(result.UrValidators, bootstrapChainRoleReadiness{Role: role.Role, ValidatorId: role.ValidatorId,

@@ -52,6 +52,7 @@ type bootstrapContractReceiptAdmission struct {
 	ActivationReady              bool                                `json:"activation_ready"`
 	NetworkEffects               bool                                `json:"network_effects"`
 	PendingChainPhases           []string                            `json:"pending_chain_phases"`
+	OwnerTrimPhase               string                              `json:"owner_trim_phase,omitempty"`
 	ContentHash                  string                              `json:"content_hash"`
 }
 
@@ -282,6 +283,7 @@ func (self *bootstrapContractReceiptScope) inspect(ctx context.Context) (bootstr
 	result.FinalityAssumption, result.EarliestOriginalEvmBlock = "owned-rpc-assertion", earliest
 	result.CanonicalReceiptsVerified, result.HistoricalStateVerified, result.DeploymentScanFloorsVerified = true, true, true
 	result.PendingChainPhases = bootstrapChainPendingPhasesForSchema(self.preparation.Plan.Config.Schema)
+	result.OwnerTrimPhase = self.preparation.Plan.OwnerTrimPhase
 	result.ContentHash = rootObjectHash(result)
 	return result, nil
 }

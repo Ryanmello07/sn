@@ -83,6 +83,13 @@ func runBootstrapTrimCommand(ctx context.Context, args []string, stdout, stderr 
 		fmt.Fprintln(stderr, "trim phase original preparation differs:", err)
 		return 3
 	}
+	// The sealed no-trim decision has no review to sign; no trim input or
+	// custody marker is read, opened or claimed for it.
+	if preparation.Plan.Config.noOwnerTrim() {
+		fmt.Fprintf(stderr, "bootstrap-chain %s refused: the accepted v5 preparation sealed owner_trim_mode %q, so its owner-trim phase is %s and has no trim review, action or custody\n",
+			mode, bootstrapChainOwnerTrimNone, bootstrapChainOwnerTrimNotSelected)
+		return 3
+	}
 	raw, _, err := readBootstrapRootFile(ctx, *trimPath, maxRpcReplyBytes)
 	if err != nil {
 		fmt.Fprintln(stderr, "trim phase input:", err)
