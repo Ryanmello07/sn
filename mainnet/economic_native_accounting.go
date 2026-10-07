@@ -54,6 +54,9 @@ func nativeExecutionEmpty(from economicEmissionBoundary) nativeExecutionWindow {
 	return nativeExecutionWindow{From: from, Through: from, EvidenceChain: rootObjectHash(from), MinerAllocation: "0", ProviderEntitlement: "0", OwnerRecycled: "0", ResidualEntitlement: "0", CollateralCapture: "0", RedirectedToValidators: "0", AllocationDifference: "0", FixedPointDust: "0", FixedPointTolerance: "0", ProviderReference: "0", OwnerRecycleReference: "0"}
 }
 
+// These references apply the fixed split to the complete tranche; the window
+// cannot see weight inputs. Conformance removes treasury reserve-only tranches,
+// which the complete allocation witness identifies, from the provider basis.
 func (self *nativeExecutionWindow) references() error {
 	var amounts []*big.Int
 	for _, raw := range []string{self.MinerAllocation, self.ProviderEntitlement, self.OwnerRecycled} {
