@@ -61,6 +61,7 @@ type bootstrapChainContractReadiness struct {
 	SuccessorRequirements            bootstrapContractSuccessorRequirements `json:"successor_requirements"`
 	Blockers                         []string                               `json:"installation_blockers"`
 	PendingChainPhases               []string                               `json:"pending_chain_phases"`
+	OwnerTrimPhase                   string                                 `json:"owner_trim_phase,omitempty"`
 	CurrentChainVerified             bool                                   `json:"current_chain_verified"`
 	SafeAuthorityVerified            bool                                   `json:"safe_authority_verified"`
 	Signing                          bool                                   `json:"signing"`
@@ -209,6 +210,7 @@ func runBootstrapChainContractCommand(ctx context.Context, args []string, stdout
 		return 2
 	}
 	result.PlanHash, result.PendingChainPhases = preparation.Plan.ContentHash, bootstrapChainPendingPhasesForSchema(preparation.Plan.Config.Schema)
+	result.OwnerTrimPhase = preparation.Plan.OwnerTrimPhase
 	if command == "contract-readiness" {
 		result.Scope, result.Status = "retained-custody", "unresolved"
 		retained, openErr := openBootstrapChainReadinessState(ctx, preparation)

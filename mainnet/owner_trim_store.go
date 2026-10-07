@@ -44,6 +44,9 @@ func openOwnerTrimStore(ctx context.Context, preparation bootstrapChainPreparati
 // The scoped test hook stops only after real marker or reservation durability.
 // It cannot change the accepted preparation, checkpoint or effect allowance.
 func openOwnerTrimStoreWithClaimHook(ctx context.Context, preparation bootstrapChainPreparation, config ownerTrimExecutionConfig, key string, create bool, claimHook func(string) error) (_ *ownerTrimStore, resultErr error) {
+	if preparation.Plan.Config.noOwnerTrim() {
+		return nil, errors.New("owner trim custody refused: the accepted preparation sealed no owner trim")
+	}
 	if err := config.validate(key); err != nil {
 		return nil, err
 	}

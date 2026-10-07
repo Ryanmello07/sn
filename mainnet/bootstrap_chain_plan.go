@@ -1,6 +1,6 @@
-// Offline launch preparation binds the retained trim scope and its UR roles (two,
-// or v5's sole role) to the signed contract and root custody plans. It grants
-// no chain effect.
+// Offline launch preparation binds the retained trim scope, or v5's explicit
+// no-trim census, and its UR roles (two, or v5's sole role) to the signed
+// contract and root custody plans. It grants no chain effect.
 package main
 
 import (
@@ -45,12 +45,14 @@ type bootstrapChainValidator struct {
 
 // All network, deployment and custody coordinates are independently supplied.
 // The two signed child plans retain their own authority and exact state paths.
+// Only v5 may name an owner-trim mode; an absent mode keeps the retained trim.
 type bootstrapChainConfig struct {
 	Schema          string                       `json:"schema"`
 	DeploymentId    string                       `json:"deployment_id"`
 	Netuid          uint16                       `json:"netuid"`
 	Network         planNetwork                  `json:"network"`
 	RunDirectory    string                       `json:"run_directory"`
+	OwnerTrimMode   string                       `json:"owner_trim_mode,omitempty"`
 	OwnerTrimPolicy planFileReference            `json:"owner_trim_policy"`
 	OwnerTrimPlan   planFileReference            `json:"owner_trim_plan"`
 	Contracts       planFileReference            `json:"contracts"`
@@ -61,6 +63,7 @@ type bootstrapChainConfig struct {
 
 // The domain and fixed false flags distinguish local custody preparation from
 // an executable chain graph. Existing trim blockers remain part of its seal.
+// A no-trim plan also seals the owner's decision beside the unchanged phases.
 type bootstrapChainPlan struct {
 	Schema               string                                    `json:"schema"`
 	ConfigPath           string                                    `json:"config_path"`
@@ -73,6 +76,7 @@ type bootstrapChainPlan struct {
 	ValidatorInspections []validator.ProductionBootstrapInspection `json:"ur_validator_config_inspections,omitempty"`
 	RootInspection       *bootstrapChainRootInspection             `json:"root_validator_config_inspection,omitempty"`
 	PendingChainPhases   []string                                  `json:"pending_chain_phases"`
+	OwnerTrimPhase       string                                    `json:"owner_trim_phase,omitempty"`
 	NetworkEffects       bool                                      `json:"network_effects"`
 	NativeSigning        bool                                      `json:"native_signing"`
 	ActivationReady      bool                                      `json:"activation_ready"`
@@ -166,6 +170,9 @@ func (self bootstrapChainPlan) validate() error {
 		self.NetworkEffects || self.NativeSigning || self.ActivationReady || len(self.OwnerTrimBlockers) == 0 ||
 		!slices.Equal(self.PendingChainPhases, bootstrapChainPendingPhasesForSchema(c.Schema)) || self.ContentHash != bootstrapChainPlanHash(self) || len(c.Validators) != len(roles) {
 		return errors.New("bootstrap chain preparation schema, identity, bounds or seal differs")
+	}
+	if !c.validOwnerTrimMode() || self.OwnerTrimPhase != c.ownerTrimPhase() {
+		return errors.New("bootstrap chain owner-trim mode or its sealed phase decision differs")
 	}
 	references := []planFileReference{c.OwnerTrimPolicy, c.OwnerTrimPlan, c.Contracts, c.Root}
 	for _, role := range c.Validators {
@@ -313,6 +320,10 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 	if !bootstrapChainHasRootRole(config.Schema) && config.RootValidator != nil {
 		return result, errors.New("bootstrap chain v1/v2 cannot acquire root config inspection authority")
 	}
+	if !config.validOwnerTrimMode() {
+		return result, fmt.Errorf("bootstrap chain owner_trim_mode is v5-only and its sole explicit value is %q", bootstrapChainOwnerTrimNone)
+	}
+	noTrim := config.noOwnerTrim()
 	if err := bootstrapRootDirectory(config.RunDirectory); err != nil {
 		return result, err
 	}
@@ -332,7 +343,12 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 	if err := decodePlanJson(trimRaw, &trim); err != nil {
 		return result, err
 	}
-	if err := validateOwnerTrimGuardPlan(policy, config.OwnerTrimPolicy.Sha256, trim); err != nil {
+	if noTrim {
+		err = validateBootstrapChainNoTrimReview(policy, config.OwnerTrimPolicy.Sha256, trim)
+	} else {
+		err = validateOwnerTrimGuardPlan(policy, config.OwnerTrimPolicy.Sha256, trim)
+	}
+	if err != nil {
 		return result, err
 	}
 	for i := range trim.Census.Observation.Seats {
@@ -393,11 +409,19 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 		protected := slices.ContainsFunc(policy.Preserve, func(candidate subnetProtectedIdentity) bool {
 			return candidate.Hotkey == role.Hotkey && candidate.Coldkey == role.Coldkey && *candidate.RegistrationBlock == *role.RegistrationBlock && slices.Contains(candidate.Roles, "ur-validator")
 		})
-		survives := slices.ContainsFunc(trim.Best.Survivors, func(candidate subnetUidMapping) bool {
-			return candidate.Hotkey == role.Hotkey && candidate.Coldkey == role.Coldkey && candidate.RegistrationBlock == *role.RegistrationBlock
-		})
-		if !protected || !survives {
-			return result, errors.New("bootstrap chain UR validator generation is not explicitly protected and retained by the trim plan")
+		if noTrim {
+			// No selection exists; the finalized census itself must hold the
+			// exact generation as a preserved UR validator seat.
+			if !protected || !bootstrapChainNoTrimCensusPreserves(trim.Census.Observation, role) {
+				return result, errors.New("bootstrap chain UR validator generation is not explicitly protected and preserved in the retained no-trim census")
+			}
+		} else {
+			survives := slices.ContainsFunc(trim.Best.Survivors, func(candidate subnetUidMapping) bool {
+				return candidate.Hotkey == role.Hotkey && candidate.Coldkey == role.Coldkey && candidate.RegistrationBlock == *role.RegistrationBlock
+			})
+			if !protected || !survives {
+				return result, errors.New("bootstrap chain UR validator generation is not explicitly protected and retained by the trim plan")
+			}
 		}
 		configRaw, err := readBootstrapChainInput(ctx, role.Config, 2*1024*1024)
 		if err != nil {
@@ -429,7 +453,8 @@ func loadBootstrapChainPreparation(ctx context.Context, path string) (bootstrapC
 	}
 	result.Plan = bootstrapChainPlan{Schema: bootstrapChainPlanSchemaForConfig(config.Schema), ConfigPath: path, ConfigSha256: digest, Config: config,
 		OwnerTrimContentHash: trim.ContentHash, OwnerTrimBlockers: trim.ExecutionBlockers, ContractPlanHash: contracts.Plan.hash(), RootPlanHash: result.Root.ContentHash,
-		ValidatorInspections: inspections, RootInspection: rootInspection, PendingChainPhases: bootstrapChainPendingPhasesForSchema(config.Schema)}
+		ValidatorInspections: inspections, RootInspection: rootInspection, PendingChainPhases: bootstrapChainPendingPhasesForSchema(config.Schema),
+		OwnerTrimPhase: config.ownerTrimPhase()}
 	result.Plan.ContentHash = bootstrapChainPlanHash(result.Plan)
 	return result, errors.Join(result.validate(), ctx.Err())
 }

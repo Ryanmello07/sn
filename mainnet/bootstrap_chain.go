@@ -24,6 +24,7 @@ type bootstrapChainResult struct {
 	RootValidatorStatus         string              `json:"root_validator_status,omitempty"`
 	RootValidatorConfigVerified bool                `json:"root_validator_config_verified,omitempty"`
 	PendingChainPhases          []string            `json:"pending_chain_phases"`
+	OwnerTrimPhase              string              `json:"owner_trim_phase,omitempty"`
 	CurrentEconomicAcceptance   string              `json:"current_economic_acceptance,omitempty"`
 	Contracts                   evmCreateResult     `json:"contract_custody"`
 	Root                        bootstrapRootResult `json:"root_custody"`
@@ -122,7 +123,11 @@ func advanceBootstrapChain(ctx context.Context, store *bootstrapChainStore, boun
 	}
 	result = bootstrapChainResult{Schema: bootstrapChainResultSchema, PlanHash: preparation.Plan.ContentHash, LocalPreparationComplete: true,
 		OwnerTrimStatus: "retained-review-execution-blocked", UrValidatorsStatus: "two-protected-role-inputs-pinned-production-admission-pending",
-		PendingChainPhases: bootstrapChainPendingPhasesForSchema(preparation.Plan.Config.Schema), Contracts: contracts, Root: root}
+		PendingChainPhases: bootstrapChainPendingPhasesForSchema(preparation.Plan.Config.Schema), OwnerTrimPhase: preparation.Plan.OwnerTrimPhase, Contracts: contracts, Root: root}
+	// A sealed no-trim preparation retains its census and protection set only.
+	if preparation.Plan.Config.noOwnerTrim() {
+		result.OwnerTrimStatus = "retained-census-trim-not-selected"
+	}
 	// The original sealed phase names stay byte-compatible. This unsealed
 	// report clarifies the outcome selected by every verified producer approval.
 	if len(preparation.Plan.ValidatorInspections) != 0 && preparation.Plan.ValidatorInspections[0].Approval.Proposal.Treasury != nil {
