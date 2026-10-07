@@ -3,10 +3,11 @@
 # validator, server and treasury configs. Comments and key order don't change
 # the hash; any value does.
 #
-# One operator and one validator, a steady seven-day cadence from epoch 0, the
-# 32768 weight cap the treasury policy requires, and the zero-price launch from
-# price.yml (all rates 0, equal_demand). The 10%/90% provider/reserve split is
-# not a field here; it lives in the separately hashed treasury policy.
+# One operator and one validator, a one-day first epoch (epoch 0) and then a
+# steady seven-day cadence from epoch 1, the 32768 weight cap the treasury
+# policy requires, and the zero-price launch from price.yml (all rates 0,
+# equal_demand). The 10%/90% provider/reserve split is not a field here; it
+# lives in the separately hashed treasury policy.
 policy:
   schema: urnetwork-policy-v1
   network_profile: mainnet
@@ -15,12 +16,18 @@ policy:
   # with a greater policy_id and effective_epoch.
   effective_epoch: 0
   settlement:
-    # Seven days of 12-second blocks.
-    epoch_blocks: 50400
-    # Roots commit within 4 hours of an epoch's close and the epoch finalizes
-    # 48 hours in, after the audit window; 24 minutes of close grace.
+    # The initial cadence covers epoch 0 only: one day of 12-second blocks, so
+    # the validator can activate at epoch 1 a day after the contracts deploy
+    # instead of a week. The coordinator is initialized with these windows and
+    # the owner Safe schedules production_cadence from epoch 1, under the same
+    # policy hash. The settlement vault's immutable minimum claim window is
+    # derived from this epoch: 8 x 7200 blocks, about 8 days.
+    epoch_blocks: 7200
+    # The root window and close grace keep their production values, which the
+    # operator server applies when it closes and commits the previous epoch.
+    # Epoch 0 finalizes 8 hours in, inside its one-day length.
     root_commit_window_blocks: 1200
-    finalize_offset_blocks: 14400
+    finalize_offset_blocks: 2400
     close_grace_blocks: 120
     # Claims stay open 8 epochs (56 days) plus 1 epoch of grace.
     claim_ttl_epochs: 8
@@ -30,9 +37,10 @@ policy:
     shares_total_bps: 10000
     rounding: largest_remainder_then_client_id_ascending
   production_cadence:
-    # Steady from the first epoch: no accelerated period, so every window must
-    # equal its settlement value.
-    after_accelerated_epochs: 0
+    # From epoch 1: seven days of 12-second blocks. Roots commit within 4 hours
+    # of an epoch's close and the epoch finalizes 48 hours in, after the audit
+    # window; 24 minutes of close grace.
+    after_accelerated_epochs: 1
     epoch_blocks: 50400
     root_commit_window_blocks: 1200
     finalize_offset_blocks: 14400

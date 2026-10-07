@@ -417,15 +417,29 @@ installation readback before allowing operator or service writes.
 ## Produce the protocol policy hash
 
 Use approved mainnet policy YAML with a `policy:` wrapper and schema
-`urnetwork-policy-v1`; do not copy accelerated testnet settings. Mainnet steady
-production cadence is 50,400 blocks. A steady initial policy has
-`after_accelerated_epochs: 0` and matching initial/production windows.
+`urnetwork-policy-v1`; do not copy testnet settings. Mainnet production cadence
+is 50,400 blocks.
 
 The owner approved the mainnet policy on October 7:
 [`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml), hash
-`0xca3274895fa7423e1a49d686dbaeea8f970ee1e4b28c268eb624723d4108011c`. It has one
+`0x6b188830b47e3b7dbfafc2839d7e1f460125115c9fbded053fa46293c79130a2`. It has one
 operator and one validator, the treasury's 32768 weight cap, the zero-price launch
 and 12-epoch fleet bindings. It is not installed yet.
+
+Its first epoch is accelerated (`after_accelerated_epochs: 1`) so the validator can
+start a day after the contracts deploy rather than a week. `validator activate`
+activates only for the coordinator's next epoch, and the coordinator starts epoch 0
+at initialization. The coordinator is initialized with the settlement windows:
+epoch 0 lasts 7,200 blocks and finalizes 2,400 blocks in, keeping the production
+1,200-block root window and 120-block close grace that the operator server applies.
+During epoch 0, after the validator's activation is published, the owner Safe
+calls `schedulePolicy` with the production cadence (50,400, 1,200, 14,400 and 120
+blocks) effective at epoch 1, under the same policy hash. If it lands late, epoch 1
+keeps the one-day length and the Safe schedules epoch 2 instead. The settlement
+vault's immutable minimum claim window comes from epoch 0: 8 × 7,200 blocks,
+about 8 days. Policy claims still stay open 8 epochs plus 1 of grace. The owner
+accepted that floor on October 7. The earlier all-weekly policy, hash
+`0xca3274895fa7423e1a49d686dbaeea8f970ee1e4b28c268eb624723d4108011c`, is superseded.
 
 There is no dedicated `policy-hash` CLI. Save this helper outside repository
 package directories, for example `$REVIEW_DIR/policyhash.go`, then run it from

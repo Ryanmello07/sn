@@ -6,8 +6,9 @@ The owner decided that SN25 launches with **one network operator (UR) and one va
 coordinator's governance Safe starts with one owner. The code still supports the two-operator, two-validator and 2-of-3
 forms with unchanged behavior and bytes; the launch uses the new one-operator, one-validator and 1-of-1 forms:
 - **Policy.** The approved [`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml), hash
-  `0xca3274895fa7423e1a49d686dbaeea8f970ee1e4b28c268eb624723d4108011c`, sets `minimum_healthy_no_count` and
-  `minimum_live_validator_count` to 1 and binds fleets for 12 epochs. On mainnet the weight-cap feasibility check counts
+  `0x6b188830b47e3b7dbfafc2839d7e1f460125115c9fbded053fa46293c79130a2`, sets `minimum_healthy_no_count` and
+  `minimum_live_validator_count` to 1 and binds fleets for 12 epochs. Its first epoch lasts one day and the
+  owner Safe schedules the weekly production cadence from epoch 1 ([LAUNCH.md](LAUNCH.md#produce-the-protocol-policy-hash)). On mainnet the weight-cap feasibility check counts
   the treasury's reserve recipients, so the 32768 cap holds with one operator. Testnet keeps the pool-only rule.
 - **No independent cross-check.** The validator runs with `controlled_no_ids: []` and scores UR's own pool. A config may
   not list every configured operator there, because that would leave no weight to submit. Nothing independent checks
