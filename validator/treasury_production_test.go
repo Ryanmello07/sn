@@ -53,7 +53,10 @@ func configureTreasuryProductionTestWithPolicy(t *testing.T, fixture *ownerRecyc
 	t.Helper()
 	measurement := fixture.operator.measurement
 	admission, cfg := measurement.admission, fixture.cfg
-	_, provider, err := DecodeReleaseMeasurementArtifactV2(t.Context(), measurement.encoded, measurement.provider.options(t))
+	// Only the masks are read here; a reserve-only fixture has no provider row.
+	options := measurement.provider.options(t)
+	options.treasuryReserveFallback = true
+	_, provider, err := DecodeReleaseMeasurementArtifactV2(t.Context(), measurement.encoded, options)
 	if err != nil {
 		t.Fatal(err)
 	}

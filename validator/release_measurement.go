@@ -768,12 +768,14 @@ func VerifyReleaseMeasurementArtifact(artifact *ReleaseMeasurementArtifact) (*Ve
 	if err != nil {
 		return nil, err
 	}
-	return assembleReleaseMeasurement(artifact, statsByNO, fleets, bound, membersByUID, stale, controlled)
+	return assembleReleaseMeasurement(artifact, statsByNO, fleets, bound, membersByUID, stale, controlled, false)
 }
 
 // Only fully authenticated legacy or compact projections reach the common
-// exact top-200, EMA, pool, exclusion and vector mathematics.
-func assembleReleaseMeasurement(artifact *ReleaseMeasurementArtifact, statsByNO map[uint64]VerifiedReleaseStats, fleets map[FleetScoreKey]map[[32]byte]bool, bound map[uint64]map[connect.Id]bool, membersByUID map[uint16][]releaseHeadMember, stale []StaleHeadBinding, controlled map[uint64]bool) (*VerifiedReleaseMeasurement, error) {
+// exact top-200, EMA, pool, exclusion and vector mathematics. Only a mainnet
+// treasury caller may admit an empty provider allocation, which then yields no
+// provider row; every other caller keeps the no-positive-weight refusal.
+func assembleReleaseMeasurement(artifact *ReleaseMeasurementArtifact, statsByNO map[uint64]VerifiedReleaseStats, fleets map[FleetScoreKey]map[[32]byte]bool, bound map[uint64]map[connect.Id]bool, membersByUID map[uint16][]releaseHeadMember, stale []StaleHeadBinding, controlled map[uint64]bool, emptyProviders bool) (*VerifiedReleaseMeasurement, error) {
 	eligible, selection, err := releaseMeasurementHead(artifact, fleets)
 	if err != nil {
 		return nil, err
@@ -796,7 +798,7 @@ func assembleReleaseMeasurement(artifact *ReleaseMeasurementArtifact, statsByNO 
 	}
 	sort.Slice(maskedUIDs, func(i, j int) bool { return maskedUIDs[i] < maskedUIDs[j] })
 	uids, scores, err := BuildWeightVectorExact(poolWeights, selection.Selected, artifact.Policy.Steering.Theta, masked)
-	if err != nil {
+	if err != nil && (!emptyProviders || artifact.Policy.NetworkProfile != "mainnet" || !errors.Is(err, errNoPositiveUnmaskedWeights)) {
 		return nil, err
 	}
 	return &VerifiedReleaseMeasurement{

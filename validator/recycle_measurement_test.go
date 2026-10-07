@@ -148,7 +148,12 @@ func newRecycleMeasurementFixtureWithActivation(t *testing.T, completed int, set
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, _, err := SealReleaseMeasurementArtifactV2(t.Context(), artifact, provider.options(t))
+	// Sealing proves only the canonical provider bytes. An empty allocation is
+	// sealed as the treasury producer would; every consumer below still replays
+	// it under its own authority, so other paths keep their original refusal.
+	options := provider.options(t)
+	options.treasuryReserveFallback = true
+	encoded, _, err := SealReleaseMeasurementArtifactV2(t.Context(), artifact, options)
 	if err != nil {
 		t.Fatal(err)
 	}
