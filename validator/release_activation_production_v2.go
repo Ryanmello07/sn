@@ -19,6 +19,7 @@ import (
 	"reflect"
 	"slices"
 
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -91,6 +92,26 @@ func validateReleaseProductionSuccessorPaths(original *ReleaseConfig, originalPa
 	return nil
 }
 
+// One finalized drained native boundary: the block at which the subnet's
+// native epoch ran with no pending miner emission left, and that epoch.
+type productionSuccessorBoundary struct {
+	Epoch uint64
+	Block uint64
+	Hash  [32]byte
+}
+
+// Moves only the drained activation terms. Production is copied first, so the
+// original approval it came from is never changed through the shared pointer.
+func (self productionSuccessorBoundary) apply(approval *OwnerRecycleApproval) {
+	production := *approval.Production
+	production.ActivationNativeHash = self.Hash
+	if production.ActivationNativeBlock != 0 {
+		production.ActivationNativeBlock = self.Block
+	}
+	approval.Production = &production
+	approval.FirstNativeEpoch, approval.ValidFromNativeBlock = self.Epoch, self.Block
+}
+
 // The unsigned successor of one signed activation-pending config. Its config
 // selects only the successor approval's path until the signature completes it.
 type releaseProductionSuccessor struct {
@@ -104,9 +125,11 @@ type releaseProductionSuccessor struct {
 }
 
 // Builds the successor from the loaded original and the rendered entries.
-// The approval is the original verbatim except its complete-config hash, and
-// the rendering rule the producer loader applies is checked before any output.
-func buildReleaseProductionSuccessor(ctx context.Context, original *ReleaseConfig, originalPath string, rendered []ReleaseEvidenceV2OperatorConfig, options ReleaseProductionSuccessorOptions) (*releaseProductionSuccessor, error) {
+// The approval is the original verbatim except its complete-config hash and,
+// when boundary is set, the later drained activation it re-selects. The
+// rendering rule the producer loader applies and every approval admission rule
+// that precedes a signature are checked before any output.
+func buildReleaseProductionSuccessor(ctx context.Context, original *ReleaseConfig, originalPath string, rendered []ReleaseEvidenceV2OperatorConfig, options ReleaseProductionSuccessorOptions, boundary *productionSuccessorBoundary) (*releaseProductionSuccessor, error) {
 	if ctx == nil {
 		return nil, errors.New("production successor context is absent")
 	}
@@ -166,11 +189,14 @@ func buildReleaseProductionSuccessor(ctx context.Context, original *ReleaseConfi
 		return nil, errors.Join(errors.New("production successor changes under strict document decoding"), beforeErr, afterErr)
 	}
 	approval := approved.Approval
+	if boundary != nil {
+		boundary.apply(&approval)
+	}
 	approval.ConfigHash = afterHash
 	if err := validateProductionEvidenceRendering(original, decoded, approved.Approval, approval); err != nil {
 		return nil, err
 	}
-	message, err := approval.SigningMessage()
+	message, err := admitOwnerRecycleApproval(decoded, &approval)
 	if err != nil {
 		return nil, err
 	}
@@ -200,6 +226,14 @@ func (self *releaseProductionSuccessor) print(output io.Writer) {
 		self.reference.Path, self.reference.Bytes, self.reference.SHA256, original.Path, original.SHA256)
 	fmt.Fprintf(output, "successor: %s selects the re-approval at %s; complete-config hash %s\n",
 		self.options.RenderedConfigPath, self.options.SuccessorApprovalPath, attemptHex32(self.approval.ConfigHash))
+	if prior, err := ownerRecycleProductionApproval(self.original); err == nil && prior.Approval.FirstNativeEpoch != self.approval.FirstNativeEpoch {
+		fmt.Fprintf(output, "successor: re-selects the drained activation at native epoch %d, block %d (%s), after the original's epoch %d at block %d; the first decision must be made in native epoch %d\n",
+			self.approval.FirstNativeEpoch, self.approval.ValidFromNativeBlock, attemptHex32(self.approval.Production.ActivationNativeHash),
+			prior.Approval.FirstNativeEpoch, prior.Approval.ValidFromNativeBlock, self.approval.FirstNativeEpoch)
+	} else {
+		fmt.Fprintf(output, "successor: keeps the original drained activation at native epoch %d, block %d; the first decision must be made in that native epoch\n",
+			self.approval.FirstNativeEpoch, self.approval.ValidFromNativeBlock)
+	}
 	fmt.Fprintf(output, "successor approval (unsigned, %s): %s\n", self.approval.Schema, approval)
 	fmt.Fprintf(output, "successor approval signing message: 0x%x\n", self.message)
 }
@@ -218,7 +252,7 @@ func (self *releaseProductionSuccessor) publish(ctx context.Context, signatureHe
 		return nil, err
 	}
 	if !ed25519.Verify(signer[:], self.message, signature) {
-		return nil, errors.New("--approval-signature does not verify the successor approval message under the pinned approval key")
+		return nil, errors.New("--approval-signature does not verify the successor approval message under the pinned approval key; a request made for an earlier drained native epoch is replaced by the one printed above")
 	}
 	if err := self.retainOriginalAuthority(ctx); err != nil {
 		return nil, err
@@ -257,6 +291,75 @@ func (self *releaseProductionSuccessor) publish(ctx context.Context, signatureHe
 	return document, ctx.Err()
 }
 
+// The latest drained native boundary at the authenticated finalized head: the
+// block at which the subnet's current native epoch ran, its canonical hash, and
+// at that block the head's epoch index with no pending miner emission. Under
+// the tempo-drift schedule that block is LastEpochBlock. Nothing is written.
+func (self *releaseActivationSetup) latestDrainedNativeBoundary(ctx context.Context) (productionSuccessorBoundary, error) {
+	view := *self.native
+	head, err := authenticatePinnedNativeRuntimeContext(ctx, &view, self.cfg)
+	if err != nil {
+		return productionSuccessorBoundary{}, fmt.Errorf("authenticate native runtime before the drained boundary: %w", err)
+	}
+	state, err := view.EpochScheduleStateAtContext(ctx, self.cfg.Netuid, head)
+	if err != nil {
+		return productionSuccessorBoundary{}, err
+	}
+	if state.LastEpochBlock == 0 || state.LastEpochBlock > state.CurrentBlock {
+		return productionSuccessorBoundary{}, errors.New("native epoch schedule names no drained boundary at the finalized head")
+	}
+	var encoded string
+	if err := view.API.Client.CallContext(ctx, &encoded, "chain_getBlockHash", state.LastEpochBlock); err != nil {
+		return productionSuccessorBoundary{}, fmt.Errorf("read drained native boundary hash: %w", err)
+	}
+	hash, err := parseHash32("drained native boundary hash", encoded)
+	if err != nil {
+		return productionSuccessorBoundary{}, err
+	}
+	facts, err := readOwnerRecycleDrainedBoundaryAt(ctx, self.native, self.cfg, types.Hash(hash))
+	if err != nil {
+		return productionSuccessorBoundary{}, err
+	}
+	if facts.Block != state.LastEpochBlock || facts.Epoch != state.SubnetEpochIndex || facts.PendingServerEmission != 0 {
+		return productionSuccessorBoundary{}, fmt.Errorf("native epoch boundary at block %d is not drained for the finalized epoch %d (epoch %d, pending miner emission %d)",
+			state.LastEpochBlock, state.SubnetEpochIndex, facts.Epoch, facts.PendingServerEmission)
+	}
+	return productionSuccessorBoundary{Epoch: facts.Epoch, Block: facts.Block, Hash: hash}, nil
+}
+
+// Selects the drained activation the successor approval names. The original's
+// boundary is kept while it is still the current native epoch. Otherwise the
+// latest drained boundary is re-selected once it lies at or after the common
+// activation boundary, compared as heights exactly as the pinned-chain lag
+// check compares EVM and native heights; before that activate waits. A
+// signature is valid only for the boundary it was made over: once a newer
+// native epoch has begun, re-running prints a new request.
+func (self *releaseActivationSetup) productionSuccessorBoundary(ctx context.Context, completed *ReleaseActivationSetupCompletedV2) (*productionSuccessorBoundary, bool, error) {
+	approved, err := ownerRecycleProductionApproval(self.cfg)
+	if err != nil {
+		return nil, false, err
+	}
+	original := approved.Approval
+	latest, err := self.latestDrainedNativeBoundary(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	if latest.Epoch == original.FirstNativeEpoch && latest.Block == ownerRecycleActivationBlock(&original) && latest.Hash == original.Production.ActivationNativeHash {
+		return nil, true, nil
+	}
+	if latest.Block < completed.Boundary.Number {
+		fmt.Fprintf(self.output, "waiting: no native epoch has drained since the activation boundary %d (latest drained native epoch %d at block %d); re-run `validator activate` after the next native epoch begins\n",
+			completed.Boundary.Number, latest.Epoch, latest.Block)
+		return nil, false, nil
+	}
+	next := original
+	latest.apply(&next)
+	if err := validateProductionRenderingApproval(original, next); err != nil {
+		return nil, false, fmt.Errorf("latest drained native epoch %d at block %d: %w", latest.Epoch, latest.Block, err)
+	}
+	return &latest, true, nil
+}
+
 // completeProduction renders the inputs at the paths the signed config
 // pre-declared and builds its successor; the signed original is never
 // rewritten. Without the approval key's signature it stops after printing the
@@ -265,11 +368,15 @@ func (self *releaseActivationSetup) completeProduction(ctx context.Context, prep
 	if err := validateReleaseProductionSuccessorPaths(self.cfg, self.configPath, options); err != nil {
 		return err
 	}
+	boundary, ready, err := self.productionSuccessorBoundary(ctx, completed)
+	if err != nil || !ready {
+		return err
+	}
 	rendered, err := self.renderInputs(ctx, prepared, completed)
 	if err != nil {
 		return err
 	}
-	successor, err := buildReleaseProductionSuccessor(ctx, self.cfg, self.configPath, rendered, options)
+	successor, err := buildReleaseProductionSuccessor(ctx, self.cfg, self.configPath, rendered, options, boundary)
 	if err != nil {
 		return err
 	}

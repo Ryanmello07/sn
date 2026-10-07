@@ -799,6 +799,13 @@ func RunReleaseActivation(ctx context.Context, options ReleaseActivationOptions)
 	}
 	if !options.Apply {
 		if options.Successor != nil {
+			boundary, ready, err := setup.productionSuccessorBoundary(ctx, completed)
+			if err != nil || !ready {
+				return err
+			}
+			if boundary != nil {
+				fmt.Fprintf(setup.output, "dry run: the successor approval would re-select the drained activation at native epoch %d, block %d (%s)\n", boundary.Epoch, boundary.Block, attemptHex32(boundary.Hash))
+			}
 			fmt.Fprintf(setup.output, "dry run: the activation epoch has begun and every activation is finalized; re-run with --apply to render the inputs and build the successor configuration for the approval key\n")
 			return nil
 		}

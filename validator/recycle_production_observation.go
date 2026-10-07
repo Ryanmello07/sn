@@ -181,6 +181,70 @@ func observeOwnerRecycleProductionEligibilityAttempt(ctx context.Context, cfg *R
 	return result, ctx.Err()
 }
 
+// The facts each decision checks at a signed activation, read at one candidate
+// block before an approval names it: its canonical height, native epoch index
+// and pending miner emission, under that block's approved historical runtime.
+func readOwnerRecycleDrainedBoundaryAt(ctx context.Context, native *crv4.Chain, cfg *ReleaseConfig, block types.Hash) (productionDrainedBoundaryFacts, error) {
+	return crv4.ReadRuntimeObservationContext(ctx, native, func(ctx context.Context) (productionDrainedBoundaryFacts, error) {
+		view := *native
+		if err := authenticateHistoricalNativeRuntimeAtContext(ctx, &view, cfg, block); err != nil {
+			return productionDrainedBoundaryFacts{}, err
+		}
+		number, _, err := view.CanonicalHeaderAtContext(ctx, block)
+		if err != nil {
+			return productionDrainedBoundaryFacts{}, fmt.Errorf("read drained native boundary header: %w", err)
+		}
+		allowed, err := releaseHistoricalRuntimeArtifactsAt(cfg, number)
+		if err != nil {
+			return productionDrainedBoundaryFacts{}, err
+		}
+		artifact, err := crv4.ReadRuntimeArtifactAtContext(ctx, &view, block, allowed...)
+		if err != nil {
+			return productionDrainedBoundaryFacts{}, err
+		}
+		entries, err := ownerRecycleProductionStorageProfile(artifact.Metadata)
+		if err != nil {
+			return productionDrainedBoundaryFacts{}, err
+		}
+		facts := productionDrainedBoundaryFacts{Block: number}
+		for _, field := range []struct {
+			name   string
+			target *uint64
+		}{
+			{name: "PendingServerEmission", target: &facts.PendingServerEmission},
+			{name: "SubnetEpochIndex", target: &facts.Epoch},
+		} {
+			key, err := types.CreateStorageKey(artifact.Metadata, crv4.PalletName, field.name, binary.LittleEndian.AppendUint16(nil, cfg.Netuid))
+			if err != nil {
+				return productionDrainedBoundaryFacts{}, err
+			}
+			value := ownerRecycleStorageValue{limit: 8}
+			if err := view.API.Client.CallContext(ctx, &value, "state_getStorage", key.Hex(), block.Hex()); err != nil {
+				return productionDrainedBoundaryFacts{}, fmt.Errorf("read drained native boundary %s: %w", field.name, err)
+			}
+			raw := value.raw
+			if !value.present {
+				raw = entries[field.name].Fallback
+			}
+			if len(raw) != 8 {
+				return productionDrainedBoundaryFacts{}, fmt.Errorf("drained native boundary %s is not an exact u64", field.name)
+			}
+			*field.target = binary.LittleEndian.Uint64(raw)
+		}
+		if err := view.CheckCanonicalBlockAtContext(ctx, block, number); err != nil {
+			return productionDrainedBoundaryFacts{}, err
+		}
+		return facts, ctx.Err()
+	})
+}
+
+// Observations only; an approval decides separately whether to name them.
+type productionDrainedBoundaryFacts struct {
+	Block                 uint64
+	Epoch                 uint64
+	PendingServerEmission uint64
+}
+
 // Additional consumed fields have the same exact metadata discipline as the
 // owner census. Zero defaults are accepted only when their type defines them.
 func ownerRecycleProductionStorageProfile(metadata *types.Metadata) (map[string]types.StorageEntryMetadataV14, error) {

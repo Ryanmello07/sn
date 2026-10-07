@@ -165,7 +165,9 @@ Options:
     --original-authority=<path>  Where activate writes the signed config and its approval as the
                                  successor's immutable authority history.
     --approval-signature=<hex>   The approval key's Ed25519 signature (128 lowercase hex) over the
-                                 successor approval signing message that activate printed.
+                                 successor approval signing message that activate printed. That
+                                 approval names the latest drained native epoch, in which the first
+                                 decision must be made; sign and re-run within that native epoch.
     --apply                      Sign, journal and broadcast. Without it every mutating command is a
                                  dry run that reads the live economics and reports what it would do.
     --dry-run                    Explicit dry run (the default).

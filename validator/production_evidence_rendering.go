@@ -99,10 +99,54 @@ func productionEvidenceRenderingProjection(cfg *ReleaseConfig) ([]byte, error) {
 	return json.Marshal(&owned)
 }
 
+// The terms a rendering re-approval can never move: everything except the
+// complete-config hash and the drained activation boundary. The window's end,
+// census, owners, limits, runtime and economic policy all stay the original's.
+func productionRenderingFixedTerms(approval OwnerRecycleApproval) string {
+	approval.FirstNativeEpoch, approval.ValidFromNativeBlock = 0, 0
+	if approval.Production != nil {
+		production := *approval.Production
+		production.ActivationNativeHash, production.ActivationNativeBlock = [32]byte{}, 0
+		approval.Production = &production
+	}
+	return productionCapacityEconomicHash(approval)
+}
+
+// Rendering waits at least one coordinator epoch after the original was signed,
+// so the original's drained activation epoch has long passed when the first
+// decision can be made. The re-approval either keeps that boundary exactly or
+// advances it to one later drained native boundary: a strictly later epoch and
+// block, the activation block equal to the new valid_from in the original's
+// wire form, and still inside the original's unchanged block and epoch window.
+// That block's finalized facts are read by activate before it asks for the
+// signature and re-read at every decision; this rule needs no chain.
+func validateProductionRenderingApproval(prior, next OwnerRecycleApproval) error {
+	if prior.Production == nil || next.Production == nil {
+		return errors.New("evidence rendering has no production approval window")
+	}
+	if productionRenderingFixedTerms(prior) != productionRenderingFixedTerms(next) {
+		return errors.New("evidence rendering changes the original economic approval")
+	}
+	if next.FirstNativeEpoch == prior.FirstNativeEpoch && next.ValidFromNativeBlock == prior.ValidFromNativeBlock &&
+		next.Production.ActivationNativeHash == prior.Production.ActivationNativeHash && next.Production.ActivationNativeBlock == prior.Production.ActivationNativeBlock {
+		return nil
+	}
+	activation := ownerRecycleActivationBlock(&next)
+	if next.FirstNativeEpoch <= prior.FirstNativeEpoch || next.ValidFromNativeBlock <= prior.ValidFromNativeBlock ||
+		activation != next.ValidFromNativeBlock || activation <= ownerRecycleActivationBlock(&prior) ||
+		(next.Production.ActivationNativeBlock == 0) != (prior.Production.ActivationNativeBlock == 0) ||
+		next.Production.ActivationNativeHash == ([32]byte{}) || next.Production.ActivationNativeHash == prior.Production.ActivationNativeHash ||
+		next.ValidFromNativeBlock > next.ValidThroughNativeBlock || next.FirstNativeEpoch > next.Production.ValidThroughNativeEpoch {
+		return errors.New("evidence rendering may only advance its signed drained activation to a later native epoch and block inside the original window")
+	}
+	return nil
+}
+
 // A rendering successor pins every pending reference at its pre-declared path
-// and changes nothing else. Like a capacity revision, its approval retains the
-// original verbatim except the complete-config hash. Callers authenticate both
-// envelopes; the preview applies this same rule to its unsigned successor.
+// and changes nothing else in the config. Its approval retains the original
+// verbatim except the complete-config hash and, optionally, one later drained
+// activation boundary. Callers authenticate both envelopes; the preview applies
+// this same rule to its unsigned successor.
 func validateProductionEvidenceRendering(original, current *ReleaseConfig, prior, next OwnerRecycleApproval) error {
 	if original == nil || current == nil || prior.Production == nil || next.Production == nil {
 		return errors.New("evidence rendering has no authenticated production predecessor")
@@ -140,8 +184,5 @@ func validateProductionEvidenceRendering(original, current *ReleaseConfig, prior
 	if !bytes.Equal(before, after) {
 		return errors.New("evidence rendering changes signed configuration beyond its rendered references")
 	}
-	if productionCapacityEconomicHash(prior) != productionCapacityEconomicHash(next) {
-		return errors.New("evidence rendering changes the original economic approval")
-	}
-	return nil
+	return validateProductionRenderingApproval(prior, next)
 }

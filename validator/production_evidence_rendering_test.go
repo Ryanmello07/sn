@@ -348,7 +348,7 @@ func TestProductionRenderedSuccessorRunsOnlyWithAuthenticatedLineage(t *testing.
 		}
 		rendered := productionPendingTestRender(t, f.cfg)
 		options := productionPendingTestOptions(t)
-		successor, err := buildReleaseProductionSuccessor(t.Context(), f.cfg, f.path, rendered, options)
+		successor, err := buildReleaseProductionSuccessor(t.Context(), f.cfg, f.path, rendered, options, nil)
 		if err != nil {
 			t.Fatal(treasury, err)
 		}
@@ -412,7 +412,7 @@ func TestProductionRenderedSuccessorRefusesUnauthorizedRendering(t *testing.T) {
 	f := newProductionPendingTestFixture(t, true)
 	rendered := productionPendingTestRender(t, f.cfg)
 	options := productionPendingTestOptions(t)
-	successor, err := buildReleaseProductionSuccessor(t.Context(), f.cfg, f.path, rendered, options)
+	successor, err := buildReleaseProductionSuccessor(t.Context(), f.cfg, f.path, rendered, options, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
