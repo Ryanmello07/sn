@@ -22,7 +22,9 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -296,26 +298,89 @@ func (self *releaseActivationSetup) nativeObservationAt(ctx context.Context, num
 	return observation, nil
 }
 
+// The configured part of every member's attempt-ledger identity.
+func releaseActivationLedger(cfg *ReleaseConfig) ReleaseActivationLedgerV2 {
+	return ReleaseActivationLedgerV2{DeploymentID: cfg.DeploymentID, ChainID: cfg.ChainID, GenesisHash: strings.ToLower(cfg.GenesisHash), Netuid: cfg.Netuid, ValidatorID: cfg.ValidatorID}
+}
+
+// The ledger identity rendering pins in each member's initial cut context, and
+// so the identity `validator run` opens that operator's attempt ledger with.
+func releaseActivationLedgerIdentity(cfg *ReleaseConfig, member ReleaseActivationMemberV2) AttemptLedgerIdentity {
+	ledger := releaseActivationLedger(cfg)
+	return AttemptLedgerIdentity{DeploymentID: ledger.DeploymentID, ChainID: ledger.ChainID, GenesisHash: ledger.GenesisHash, Netuid: ledger.Netuid,
+		ValidatorID: ledger.ValidatorID, ValidatorUID: member.ValidatorUID, NoID: member.NoID, ValidatorVPK: attemptHex32(member.Activation.VPK)}
+}
+
 // Fresh activation is refused while any operator state survives on disk; a
 // retained history needs an authenticated migration prefix, never a fresh one.
-func requireFreshReleaseOperatorState(cfg *ReleaseConfig) error {
+// The one exception is storage-prepare's output for a fresh durable root: an
+// empty attempt ledger whose receipts, backend and published custody checkpoint
+// name exactly this member's ledger identity, which `validator run` requires.
+func requireFreshReleaseOperatorState(ctx context.Context, cfg *ReleaseConfig, members []ReleaseActivationMemberV2) ([]uint64, error) {
+	var admitted []uint64
 	for _, operator := range cfg.Operators {
 		entries, err := os.ReadDir(operator.StateDir)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
+		prepared := false
 		for _, entry := range entries {
 			name := entry.Name()
 			if name == filepath.Base(operator.ClientKeySeedFile) || name == filepath.Base(operator.NetworkJWTFile) || name == filepath.Base(operator.ClientJWTFile) {
 				continue
 			}
-			return fmt.Errorf("operator no_id %d state directory %s already holds %s; a fresh activation cannot replace retained validator history", operator.NoID, operator.StateDir, name)
+			if name == attemptLedgerStoreName || name == attemptLedgerImportName || name == attemptLedgerReadyName {
+				prepared = true
+				continue
+			}
+			return nil, fmt.Errorf("operator no_id %d state directory %s already holds %s; a fresh activation cannot replace retained validator history", operator.NoID, operator.StateDir, name)
 		}
+		if !prepared {
+			continue
+		}
+		index := slices.IndexFunc(members, func(member ReleaseActivationMemberV2) bool { return member.NoID == operator.NoID })
+		if index < 0 {
+			return nil, fmt.Errorf("operator no_id %d has no activation member for its prepared ledger", operator.NoID)
+		}
+		if err := requirePreparedEmptyReleaseLedger(ctx, cfg, operator, members[index]); err != nil {
+			identity := releaseActivationLedgerIdentity(cfg, members[index])
+			return nil, fmt.Errorf("operator no_id %d state directory %s holds a ledger that is not this activation's storage-prepared empty ledger (validator_id %d, validator_uid %d, validator_vpk %s, coordinator %s), so a fresh activation cannot replace it: %w",
+				operator.NoID, operator.StateDir, identity.ValidatorID, identity.ValidatorUID, identity.ValidatorVPK, strings.ToLower(cfg.Coordinator), err)
+		}
+		admitted = append(admitted, operator.NoID)
 	}
-	return nil
+	return admitted, nil
+}
+
+// Read-only: the offline inspector checks the import and ready receipts, the
+// empty signed backend and its member census against the member's identity,
+// coordinator and disk limits, and that any custody checkpoint is the one
+// storage-prepare publishes for them. That checkpoint must be present.
+func requirePreparedEmptyReleaseLedger(ctx context.Context, cfg *ReleaseConfig, operator OperatorConfig, member ReleaseActivationMemberV2) (resultErr error) {
+	if operator.RequestPreparation != nil {
+		return errors.New("a fresh activation admits no prepared provider request journal")
+	}
+	scope := AttemptLedgerPreparationScope{Identity: releaseActivationLedgerIdentity(cfg, member), Coordinator: strings.ToLower(cfg.Coordinator),
+		Limits: cfg.EvidenceV2.Bounds.Disk, ExpectedHead: AttemptLedgerHead{Root: zeroAttemptHash()}}
+	directory, err := os.OpenFile(operator.StateDir, os.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, directory.Close()) }()
+	census, err := InspectAttemptLedgerPreparation(ctx, directory, scope)
+	if err != nil {
+		return err
+	}
+	if census.Head != scope.ExpectedHead || census.RestartAuthorized {
+		return errors.New("prepared ledger is not empty")
+	}
+	if _, err := readAttemptLedgerCustodyAttribute(directory); err != nil {
+		return errors.Join(errors.New("prepared ledger has no published custody checkpoint"), err)
+	}
+	return ctx.Err()
 }
 
 // prepare builds (but does not sign or persist) one activation per operator
@@ -495,12 +560,17 @@ func (self *releaseActivationSetup) loadOrPrepare(ctx context.Context, apply boo
 	if _, err := os.Lstat(completedPath); err == nil {
 		return nil, nil, errors.New("activation setup completion exists without its original preparation")
 	}
-	if err := requireFreshReleaseOperatorState(self.cfg); err != nil {
-		return nil, nil, err
-	}
+	// Preparation only reads; its observed UIDs complete each ledger identity.
 	prepared, err = self.prepare(ctx)
 	if err != nil {
 		return nil, nil, err
+	}
+	admitted, err := requireFreshReleaseOperatorState(ctx, self.cfg, prepared.Members)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, noID := range admitted {
+		fmt.Fprintf(self.output, "prepared: no_id %d storage-prepared empty attempt ledger matches this activation's ledger identity\n", noID)
 	}
 	if !apply {
 		fmt.Fprintf(self.output, "prepared (dry run): nothing written; re-run with --apply to sign and journal this preparation\n")
@@ -676,7 +746,7 @@ func (self *releaseActivationSetup) renderInputs(ctx context.Context, prepared *
 		return nil, err
 	}
 	boundary := ReleaseActivationBoundaryV2{Block: completed.Boundary.Number, Hash: boundaryHash}
-	ledger := ReleaseActivationLedgerV2{DeploymentID: self.cfg.DeploymentID, ChainID: self.cfg.ChainID, GenesisHash: strings.ToLower(self.cfg.GenesisHash), Netuid: self.cfg.Netuid, ValidatorID: self.cfg.ValidatorID}
+	ledger := releaseActivationLedger(self.cfg)
 	rendered := make([]ReleaseEvidenceV2OperatorConfig, 0, len(prepared.Members))
 	for index, operator := range self.cfg.EvidenceV2.Operators {
 		member := prepared.Members[index]
