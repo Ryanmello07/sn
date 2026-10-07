@@ -106,6 +106,7 @@ Usage:
         [--fee_limit_rao=<n>] [--apply | --dry-run]
         [-v...]
     validator activate --config=<path> [--relayer_key_file=<path>] [--apply | --dry-run]
+        [--rendered-config=<path> --successor-approval=<path> --original-authority=<path> [--approval-signature=<hex>]]
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     validator run --config=<path> [--progress-file=<path>]
@@ -157,6 +158,14 @@ Options:
                                  take status shows both, for the config netuid and --netuid.
     --relayer_key_file=<path>    Hex secp256k1 EVM key that pays gas to publish the activations through
                                  the evidence journal; it receives no authority.
+    --rendered-config=<path>     With a signed schema 3 --config, whose evidence_v2 inputs are
+                                 activation-pending: the separate successor config activate writes; the
+                                 signed config is never rewritten. Canonical absolute path, like the next two.
+    --successor-approval=<path>  Where activate writes the approval key's re-approval of the successor.
+    --original-authority=<path>  Where activate writes the signed config and its approval as the
+                                 successor's immutable authority history.
+    --approval-signature=<hex>   The approval key's Ed25519 signature (128 lowercase hex) over the
+                                 successor approval signing message that activate printed.
     --apply                      Sign, journal and broadcast. Without it every mutating command is a
                                  dry run that reads the live economics and reports what it would do.
     --dry-run                    Explicit dry run (the default).

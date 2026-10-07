@@ -222,9 +222,21 @@ func decodeProductionAuthorityBundle(raw []byte, current *ReleaseConfig, prefix 
 
 // This first continuity class preserves policy, identities, operators, proof
 // bounds and custody. Runtime pins, approval history and polling may advance.
+// Rendering an activation-pending census is a separate exact class.
 func validateProductionAuthorityContinuity(original, current *ReleaseConfig) error {
 	if err := validateProductionCapacityTransition(original, current); err != nil {
 		return err
+	}
+	if productionEvidenceRenderingTransition(original, current) {
+		prior, err := ownerRecycleProductionApproval(original)
+		if err != nil {
+			return err
+		}
+		next, err := ownerRecycleProductionApproval(current)
+		if err != nil {
+			return err
+		}
+		return validateProductionEvidenceRendering(original, current, prior.Approval, next.Approval)
 	}
 	stable := func(cfg *ReleaseConfig) ([]byte, error) {
 		owned := *cfg

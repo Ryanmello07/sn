@@ -807,7 +807,9 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	if errors.Is(err, ErrReleaseEvidenceV2ActivationPending) && retainedSetup == nil && adoption == nil {
 		// The inputs are missing. The lifecycle allows run to finish an
 		// activation that was prepared and published earlier once its epoch
-		// has begun; it never signs, publishes or invents one.
+		// has begun; it never signs, publishes or invents one. A signed schema 3
+		// config reports ErrReleaseProductionActivationPending instead and is
+		// never completed in place.
 		fmt.Fprintf(os.Stderr, "validator: evidence_v2 inputs are not rendered; completing the pending activation\n")
 		if completeErr := CompletePendingReleaseActivation(ctx, configPath, os.Stderr); completeErr != nil {
 			return errors.Join(err, completeErr)
