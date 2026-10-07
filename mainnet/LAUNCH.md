@@ -483,7 +483,11 @@ traffic. This supersedes the earlier owner-recycling proposal.
 At least two ordinary registered recipient hotkeys must be owned by the reserve
 coldkey, outside the subnet-owner hotkey set and provider roles. Retain observed
 UID/hotkey/coldkey/registration generations; initially split the reserve row
-approximately 45% each because of the native per-weight cap. An empty recipient
+approximately 45% each because of the native per-weight cap. In an epoch with no
+provider weight, the validator submits the treasury's reserve-only row instead:
+half to each recipient and nothing to providers, marked
+`reserve_only_empty_provider_allocation`, which every verifier rederives
+([treasury production](../validator/TREASURY-PRODUCTION.md)). An empty recipient
 list identifies a destination but cannot establish routing readiness.
 
 Keep the reserve public configuration in its selected `vault/main/sn.yml`

@@ -32,8 +32,10 @@ ordinary registered SN25 recipient hotkeys. Native incentive reception requires
 no reserve or recipient signature. The account must differ from `SubnetOwner`;
 neither recipient may belong to that owner's registered `OwnedHotkeys` or equal
 `SubnetOwnerHotkey`. The existing signed `32768/65535` per-recipient cap requires
-at least two usable treasury UIDs
-for a 90% row, initially 45% each. These are explicit treasury recipients, never
+at least two usable treasury UIDs for a 90% row, initially 45% each. In an epoch
+with no provider weight the validator submits the reserve-only row instead: the
+recipients share the whole row equally (half each with two, still under the cap)
+and providers get nothing. These are explicit treasury recipients, never
 invented provider contributions. If they are not already registered to the
 supplied account, one-time external registration is a prerequisite. Registration
 uses ordinary coldkey authority, subject to current eligibility, capacity, fees
@@ -154,7 +156,7 @@ not authorize emissions:
 | Treasury account | Exact supplied native AccountId32, selected for receive-only routing; no signing custody or device paths |
 | Treasury recipient roster | At least two exact hotkey/UID/registration generations owned by that account; no provider-role overlap |
 | Allocation denominator | Full actual native miner allocation before distribution, excluding other emission tranches and principal |
-| Distribution fractions | `1/1` distributed: providers `1/10`, treasury `9/10`; no deliberate owner recycle or deferred provider liability |
+| Distribution fractions | `1/1` distributed: providers `1/10`, treasury `9/10`; no deliberate owner recycle or deferred provider liability. An epoch with no provider weight submits the reserve-only row instead: treasury `1/1`, providers `0` |
 | Per-recipient cap and assurance | Existing `32768/65535` cap and observed-native-target with exact runtime tolerance; theta applies only to providers |
 | Auto-stake destination | Omitted means authenticated absence; a supplied public AccountId32 must match original native storage exactly |
 
@@ -234,7 +236,11 @@ hardware signing, native execution or launch authority.
 
 Let `M` be cumulative actual native miner allocation before distribution, in
 alpha atomic units, over exact activated intervals. Preserve the cumulative
-provider reference `P = floor(M / 10)` and define treasury reference `T = M - P`.
+provider reference `P = floor((M - R) / 10)` and define treasury reference
+`T = M - P`, where `R` is the miner allocation of reserve-only epochs (zero when
+there are none). The complete allocation witness identifies those epochs by
+their actual weight inputs, never by their outcome, and mainnet conformance
+reports their sum as `reserve_only_miner_allocation_alpha`.
 Theta divides only `P` between provider head and tail; paid/free completed traffic
 keeps equal weight. Treasury retention creates no deferred provider entitlement.
 Exclude owner cuts, validator/root dividends, deposits and existing principal
@@ -258,10 +264,10 @@ continues. This operational selection preserves unknown custody causes and
 spendable bounds. It creates no reserve signing action, provider claim collateral
 or additional treasury earning authority.
 
-The submitted 90/10 row is a target. Yuma masks, other validators, clipping,
-normalization and integer rounding determine actual incentive. Preserve the
-observed-native-target assurance and runtime-derived tolerance; no hard payout
-guarantee follows from owner control. Removing deliberate owner withholding
+The submitted 90/10 row, like a reserve-only row, is a target. Yuma masks, other
+validators, clipping, normalization and integer rounding determine actual
+incentive. Preserve the observed-native-target assurance and runtime-derived
+tolerance; no hard payout guarantee follows from owner control. Removing deliberate owner withholding
 removes that component of `MinerBurned`; subsequent price-share renormalization
 and emission gating still determine the subnet's allocation.
 [Yuma source](https://github.com/RaoFoundation/subtensor/blob/923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d/pallets/subtensor/src/epoch/run_epoch.rs#L750),
