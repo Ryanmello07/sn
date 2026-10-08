@@ -5,7 +5,11 @@ package validator
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -232,6 +236,98 @@ func TestProductionRuntimeSuccessorHaltsWithoutOptInOrOnChangedInterface(t *test
 			}
 			if native.Meta != oldMeta || native.Runtime != oldRuntime || validateReleaseNativeSigningRuntime(native, cfg) != nil {
 				t.Fatal("refused upgrade changed the retained approved signing view")
+			}
+		})
+	}
+}
+
+// An independently signed renewal over a changed runtime, as an operator would
+// produce it. The load error is returned so continuity refusals are observable.
+func productionSuccessorRenewal(t *testing.T, original *ReleaseConfig, approved OwnerRecycleApproval, private ed25519.PrivateKey, profile string) (*ReleaseConfig, error) {
+	t.Helper()
+	raw, err := BuildOwnerRecycleProductionAuthority(t.Context(), original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference, err := WriteReleaseEvidenceV2File(t.Context(), filepath.Join(identityTestStateDir(t), "original-authority.json"), raw, maximumProductionAuthorityBundleBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg ReleaseConfig
+	var approval OwnerRecycleApproval
+	for _, pair := range []struct{ from, to any }{{original, &cfg}, {approved, &approval}} {
+		raw, err := json.Marshal(pair.from)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, pair.to); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg.ProductionAuthorityHistory = append(cfg.ProductionAuthorityHistory, reference)
+	cfg.OwnerRecycleApproval.Approval = ReleaseEvidenceV2File{Path: filepath.Join(identityTestStateDir(t), "successor-approval.json")}
+	cfg.RuntimeSuccessorProfile = profile
+	cfg.RuntimeSpec++
+	cfg.RuntimeCodeHash = releaseHex32([32]byte{0x95, 0x01})
+	approval.Production.ActivationNativeBlock = ownerRecycleActivationBlock(&approval)
+	approval.ValidFromNativeBlock++
+	approval.Proposal.Runtime.Version.SpecVersion = cfg.RuntimeSpec
+	approval.Proposal.Runtime.CodeHash, _ = parseHash32("renewed code", cfg.RuntimeCodeHash)
+	approval.RuntimeReviewHash = recycleTestId(4300)
+	approval.ConfigHash, err = OwnerRecycleConfigHash(&cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approver := recycleAdmissionFixture{cfg: &cfg, approval: approval, private: private}
+	approver.sign(t)
+	if err := loadOwnerRecycleProductionConfig(&cfg); err != nil {
+		return nil, err
+	}
+	if err := loadReleaseProductionRuntimeHistory(&cfg); err != nil {
+		return nil, err
+	}
+	if err := loadReleaseProductionAuthorityHistory(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// Decisions an opted-in original made under a successor must keep verifying,
+// so a renewal cannot withdraw the opt-in. A renewal may newly opt in; only
+// opted-in configs contribute their approved artifact as an anchor.
+func TestProductionRuntimeSuccessorRenewalKeepsOriginalOptIn(t *testing.T) {
+	profile := crv4.ValidatorProducerRuntimeProfile
+	for _, test := range []struct {
+		name, original, renewed string
+	}{{"kept", profile, profile}, {"withdrawn", profile, ""}, {"added", "", profile}, {"exact", "", ""}} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newOwnerRecycleProductionTestFixtureWithInputs(t, newRecycleOperatorFixtureWithHotkey, func(fixture *ownerRecycleProductionTestFixture) {
+				fixture.cfg.RuntimeSuccessorProfile = test.original
+			})
+			admission := fixture.operator.measurement.admission
+			renewed, err := productionSuccessorRenewal(t, fixture.cfg, admission.approval, admission.private, test.renewed)
+			if test.name == "withdrawn" {
+				if err == nil || !strings.Contains(err.Error(), "cannot withdraw or change runtime successor admission") {
+					t.Fatalf("renewal withdrew an original successor opt-in: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			anchors, err := releaseRuntimeSuccessionAnchors(renewed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var want []crv4.RuntimeArtifactIdentity
+			if test.renewed != "" {
+				want = append(want, releaseNativeRuntimeIdentity(renewed))
+			}
+			if test.original != "" {
+				want = append(want, releaseNativeRuntimeIdentity(fixture.cfg))
+			}
+			if !slices.Equal(anchors, want) {
+				t.Fatalf("renewal anchors %+v, want %+v", anchors, want)
 			}
 		})
 	}
