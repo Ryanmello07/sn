@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -213,6 +214,20 @@ func newValidatorUploadAdmissionState(ctx context.Context, chain *ChainClient, n
 		digests = append(digests, digest)
 		if config.ProvisionalRetainedContextAuthority {
 			retainedContexts = append(retainedContexts, parsed)
+		}
+	}
+	// The signed mainnet producer config's opt-in also lets staging follow its
+	// validator across a compatible upgrade. Staging decodes only producer-
+	// profile interfaces, which crv4 checks for every successor. A different
+	// route genesis keeps the exact refusal that the refresh reports.
+	if owner := config.Deployment.productionRuntime; owner != nil && len(owner.successors) != 0 && native.GenesisHash == types.Hash(config.Deployment.GenesisHash) {
+		if err := native.EnableRuntimeSuccession(types.Hash(config.Deployment.GenesisHash), crv4.ValidatorProducerRuntimeProfile, owner.successors, func(successor crv4.RuntimeSuccessor) error {
+			fmt.Fprintf(os.Stderr, "validator staging: admitted runtime %s/%d code=%s metadata=%s at %s as a %s successor of approved %d\n",
+				successor.Artifact.Version.SpecName, successor.Artifact.Version.SpecVersion, successor.Artifact.CodeHash, successor.Artifact.MetadataHash,
+				successor.BlockHash.Hex(), crv4.ValidatorProducerRuntimeProfile, successor.Approved.Version.SpecVersion)
+			return nil
+		}); err != nil {
+			return nil, err
 		}
 	}
 	if config.ProvisionalRuntimeCompatibility != "" {

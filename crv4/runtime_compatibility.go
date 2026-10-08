@@ -40,6 +40,9 @@ func (self *Chain) EnableProvisionalRuntimeCompatibility(expectedGenesis types.H
 	}
 	runtimeMetadataArtifactCacheInitialization.stateLock.Lock()
 	defer runtimeMetadataArtifactCacheInitialization.stateLock.Unlock()
+	if self.runtimeSuccession != nil {
+		return errors.New("provisional runtime compatibility cannot join mainnet successor admission")
+	}
 	if self.provisionalRuntime != nil {
 		if self.provisionalRuntime.genesis != expectedGenesis {
 			return errors.New("provisional runtime genesis changed")

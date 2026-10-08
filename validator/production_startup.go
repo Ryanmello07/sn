@@ -86,6 +86,11 @@ func dialProductionNativeHistory(ctx context.Context, cfg *ReleaseConfig) (*crv4
 		attempt, cancel := context.WithTimeout(ctx, releaseNativeEndpointTimeout(cfg))
 		native, err := crv4.DialChainAtContext(attempt, endpoint, block)
 		if err == nil {
+			// A signed opt-in installs successor admission before any shared
+			// read; without it this connection keeps exact runtime pins.
+			err = enableReleaseRuntimeSuccession(native, cfg)
+		}
+		if err == nil {
 			err = authenticateHistoricalNativeRuntimeAtContext(attempt, native, cfg, block)
 		}
 		cancel()

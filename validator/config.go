@@ -86,6 +86,7 @@ type ReleaseConfig struct {
 
 	ProvisionalDeferClosedNativeInput bool   `yaml:"provisional_defer_closed_native_input,omitempty" json:"provisional_defer_closed_native_input,omitempty"`
 	ProvisionalRuntimeCompatibility   string `yaml:"provisional_runtime_compatibility,omitempty" json:"provisional_runtime_compatibility,omitempty"`
+	RuntimeSuccessorProfile           string `yaml:"runtime_successor_profile,omitempty" json:"runtime_successor_profile,omitempty"`
 	historyAdoptionV2                 *ReleaseHistoryAdoptionV2
 	mainnetRuntimeHistory             *releaseMainnetRuntimeHistory
 	ownerRecycleProduction            *ownerRecycleProductionAuthority
@@ -455,6 +456,9 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 		return errors.New("provisional closed native input deferral requires chain 945 and testnet policy")
 	}
 	if err := validateReleaseProvisionalRuntimeCompatibility(&c); err != nil {
+		return err
+	}
+	if err := validateReleaseRuntimeSuccessorProfile(&c); err != nil {
 		return err
 	}
 	if historical && c.ProvisionalRuntimeCompatibility != "" && !provisionalActivationObservation {

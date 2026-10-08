@@ -133,6 +133,9 @@ func validateOwnerRecycleApprovalScope(cfg *ReleaseConfig) error {
 	if _, err := parseHash32("owner-recycle mainnet genesis", cfg.GenesisHash); err != nil {
 		return err
 	}
+	if err := validateReleaseRuntimeSuccessorProfile(cfg); err != nil {
+		return err
+	}
 	if len(cfg.Substrate) == 0 || len(cfg.RPC) == 0 {
 		return errors.New("owner-recycle approval needs explicit native and EVM routes")
 	}

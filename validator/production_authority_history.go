@@ -238,10 +238,16 @@ func validateProductionAuthorityContinuity(original, current *ReleaseConfig) err
 		}
 		return validateProductionEvidenceRendering(original, current, prior.Approval, next.Approval)
 	}
+	// A renewal may newly opt in to successor admission, but cannot withdraw
+	// or change the profile under which original decisions were admitted.
+	if original.RuntimeSuccessorProfile != "" && current.RuntimeSuccessorProfile != original.RuntimeSuccessorProfile {
+		return errors.New("production authority continuity cannot withdraw or change runtime successor admission")
+	}
 	stable := func(cfg *ReleaseConfig) ([]byte, error) {
 		owned := *cfg
 		owned.RuntimeSpec, owned.TransactionVersion, owned.StateVersion = 0, 0, 0
 		owned.RuntimeCodeHash, owned.RuntimeMetadataHash = "", ""
+		owned.RuntimeSuccessorProfile = ""
 		owned.ProductionRuntimeApprovals, owned.ProductionAuthorityHistory = nil, nil
 		owned.OwnerRecycleApproval = &ReleaseOwnerRecycleApprovalConfig{Signer: productionEconomicSelection(cfg).Signer}
 		owned.TreasuryApproval = nil

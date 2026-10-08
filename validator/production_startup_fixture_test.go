@@ -515,6 +515,12 @@ func newProductionStartupTestFixture(t *testing.T) *productionStartupTestFixture
 // Opt-in belongs to the actual complete signed configuration, before any
 // source or intent exists. Default fixtures preserve historical config bytes.
 func newProductionStartupTestFixtureWithRegistration(t *testing.T, allowRegistration bool) *productionStartupTestFixture {
+	return newProductionStartupTestFixtureWithConfig(t, allowRegistration, nil)
+}
+
+// configure edits the complete config before the independent approval signs
+// it; nil keeps the default fixture's config bytes unchanged.
+func newProductionStartupTestFixtureWithConfig(t *testing.T, allowRegistration bool, configure func(*ReleaseConfig)) *productionStartupTestFixture {
 	t.Helper()
 	self := &productionStartupTestFixture{activationKVs: map[uint64]protocol.ValidatorEvidenceActivation{}, contextKVs: map[uint64]ReleaseEvidenceV2ActivationContext{}, latestRead: make(chan struct{})}
 	root := identityTestStateDir(t)
@@ -644,6 +650,9 @@ func newProductionStartupTestFixtureWithRegistration(t *testing.T, allowRegistra
 			t.Cleanup(func() { close(api.release); server.Close() })
 			op.APIURL, op.ConnectURL = server.URL, "ws"+strings.TrimPrefix(server.URL, "http")+"/connect"
 			self.origins[index] = api
+		}
+		if configure != nil {
+			configure(cfg)
 		}
 		normalizeProductionStartupTestConfig(t, cfg, root)
 	})
