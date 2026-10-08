@@ -4,7 +4,6 @@ package validator
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -152,19 +151,10 @@ func loadOwnerRecycleProductionConfig(cfg *ReleaseConfig) error {
 	if err := validateOwnerRecycleApprovalSelection(cfg); err != nil {
 		return err
 	}
-	reference := productionEconomicSelection(cfg).Approval
-	raw, sourceErr := ReadReleaseEvidenceV2File(context.Background(), reference, maximumOwnerRecycleApprovalBytes)
-	if sourceErr != nil {
-		reference.Path = retainedProductionApprovalPath(cfg)
-		var err error
-		raw, err = ReadReleaseEvidenceV2File(context.Background(), reference, maximumOwnerRecycleApprovalBytes)
-		if err != nil {
-			reference.Path = filepath.Join(cfg.StateDir, retainedOwnerRecycleApprovalName)
-			raw, err = ReadReleaseEvidenceV2File(context.Background(), reference, maximumOwnerRecycleApprovalBytes)
-			if err != nil {
-				return errors.Join(sourceErr, err)
-			}
-		}
+	raw, err := readRetainedProductionFile(cfg, productionEconomicSelection(cfg).Approval, maximumOwnerRecycleApprovalBytes,
+		retainedProductionApprovalPath(cfg), filepath.Join(cfg.StateDir, retainedOwnerRecycleApprovalName))
+	if err != nil {
+		return err
 	}
 	return loadOwnerRecycleProductionConfigBytes(cfg, raw)
 }

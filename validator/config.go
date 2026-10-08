@@ -92,6 +92,9 @@ type ReleaseConfig struct {
 	ownerRecycleProduction            *ownerRecycleProductionAuthority
 	productionRuntimeHistory          *releaseProductionRuntimeHistory
 	productionAuthorityHistory        *releaseProductionAuthorityHistory
+	// Server staging's pinned config directory, a last retained-copy location.
+	// Unexported, so neither the YAML/JSON schema nor any config hash sees it.
+	stagingConfigDirectory string
 }
 
 func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
@@ -132,6 +135,8 @@ type releaseConfigLoadMode struct {
 	productionPreActivation          bool
 	ownerRecycleAdmission            bool
 	mainnetRuntimeObservation        bool
+	// Only server staging sets this: it mounts no validator state_dir.
+	stagingConfigDirectory string
 }
 
 func loadReleaseConfig(path string, mode releaseConfigLoadMode) (*ReleaseConfig, error) {
@@ -218,6 +223,7 @@ func decodeReleaseConfigBytesMode(abs string, b []byte, mode releaseConfigLoadMo
 		}
 		cfg.Coordinator = strings.ToLower(cfg.Coordinator)
 		cfg.SettlementVault = strings.ToLower(cfg.SettlementVault)
+		cfg.stagingConfigDirectory = mode.stagingConfigDirectory
 		if err := loadOwnerRecycleProductionConfig(&cfg); err != nil {
 			return nil, fmt.Errorf("validator production config %s: %w", abs, err)
 		}

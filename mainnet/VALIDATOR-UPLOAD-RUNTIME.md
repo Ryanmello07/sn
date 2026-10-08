@@ -12,11 +12,20 @@ The server already embeds `ValidatorUploadAdmissionConfig` in its strict YAML
 configuration and passes it to `NewValidatorUploadAdmission`. No endpoint,
 upload header or requesting validator chooses this reference. Provision it
 through the server's approved configuration. Its file must be a private regular
-file in an owner-private directory, with the referenced approval and production
-history documents available at the paths selected by the signed configuration.
-Resolve those paths before approving and copying the configuration; changing
-them changes the signed configuration. Custody paths remain strings: the upload
-loader never opens a native seed, starts a producer or submits a transaction.
+file in an owner-private directory. The loader reads each approval and
+production history document the signed configuration selects at its signed
+path, then under the validator's retained name in its `state_dir`, and last
+under that same name in the pinned config's own directory. A server that mounts
+neither the validator's durable root nor its `state_dir` therefore keeps private
+copies beside the config: `treasury-production-approval-<sha256>.json` (or
+`owner-recycle-production-approval-<sha256>.json`), plus
+`owner-recycle-production-runtime-<sha256>.json` and
+`owner-recycle-production-authority-<sha256>.json` for each selected runtime
+and original-authority document, where `<sha256>` is the selected hash without
+`0x`. `validator run` writes the same names into its `state_dir`. Each copy must
+still match the signed size and hash; changing a signed path changes the signed
+configuration. Custody paths remain strings: the upload loader never opens a
+native seed, starts a producer or submits a transaction.
 
 The loader checks the exact config bytes, the separate approval signature and
 the finite production history, including exact original full-authority bundles
