@@ -485,6 +485,8 @@ func AuthenticateRuntimeArtifactAtContext(ctx context.Context, chain *Chain, blo
 			break
 		}
 	}
+	var successor *runtimeSuccessorAdmission
+	var prefetched *types.Metadata
 	if selectedIdentity == nil || (version.SpecVersion > ReviewedRuntimeSpecVersion && chain.ProvisionalRuntimeCompatibilityEnabled()) {
 		if chain.ProvisionalRuntimeCompatibilityEnabled() {
 			result, err := authenticateProvisionalRuntimeArtifact(ctx, chain, blockHash, version, canonicalRuntimeArtifactIdentities)
@@ -496,7 +498,17 @@ func AuthenticateRuntimeArtifactAtContext(ctx context.Context, chain *Chain, blo
 			}
 			return result, nil
 		}
-		return result, fmt.Errorf("runtime at %s has unreviewed identity %s/%d/%d/%d", blockHash.Hex(), version.SpecName, version.SpecVersion, version.TransactionVersion, version.StateVersion)
+		// Only an explicitly installed mainnet policy, naming an approved
+		// anchor in this exact allowlist, can select a successor artifact.
+		successor, prefetched, err = authenticateRuntimeSuccessorAtContext(ctx, chain, blockHash, version, canonicalRuntimeArtifactIdentities)
+		if err != nil {
+			return result, err
+		}
+		if successor == nil {
+			return result, fmt.Errorf("runtime at %s has unreviewed identity %s/%d/%d/%d", blockHash.Hex(), version.SpecName, version.SpecVersion, version.TransactionVersion, version.StateVersion)
+		}
+		admitted := successor.artifact
+		selectedIdentity = &admitted
 	}
 	codeHash, err := RuntimeCodeHashAtContext(ctx, chain, blockHash)
 	if err != nil {
@@ -510,6 +522,11 @@ func AuthenticateRuntimeArtifactAtContext(ctx context.Context, chain *Chain, blo
 		return result, fmt.Errorf("observed runtime code hash %s, want %s", codeHash, selectedIdentity.CodeHash)
 	}
 	metadata, metadataHash, err := chain.runtimeMetadataArtifactCache().load(ctx, *selectedIdentity, func(fetchCtx context.Context) (*types.Metadata, string, error) {
+		if prefetched != nil {
+			// The successor gate just read and hashed these exact bytes at
+			// this block; the cache still verifies them against the identity.
+			return prefetched, selectedIdentity.MetadataHash, nil
+		}
 		return RuntimeMetadataAtContext(fetchCtx, chain, blockHash)
 	})
 	if err != nil {
@@ -527,7 +544,7 @@ func AuthenticateRuntimeArtifactAtContext(ctx context.Context, chain *Chain, blo
 	}
 	result.authenticationProof = &runtimeArtifactProof{
 		owner: chain.runtimeMetadataArtifactCache(), api: chain.API, blockHash: blockHash, genesisHash: chain.GenesisHash,
-		identity: *selectedIdentity, metadata: metadata, transport: transport,
+		identity: *selectedIdentity, metadata: metadata, transport: transport, successor: successor,
 	}
 	return result, nil
 }
