@@ -46,10 +46,24 @@ type rootRegisterPolicy struct {
 	SubnetOwner         string                      `json:"subnet_owner_account_id"`
 }
 
-// The reviewed473 implementation is the only registration source admitted here.
+// Root registration admits only sources whose registration semantics were
+// reviewed, each bound to its own exact spec number. Sources 473 and 475 share
+// root.rs, the root pruning, replacement and burn rules, and these constants.
+func rootRegisterReviewedSpec(source string) (uint32, bool) {
+	switch source {
+	case crv4.NativeOwnerSource473:
+		return 473, true
+	case crv4.NativeOwnerSource475:
+		return 475, true
+	default:
+		return 0, false
+	}
+}
+
 func (self rootRegisterPolicy) validate() error {
-	if self.Schema != rootRegisterPolicySchema || strings.TrimSpace(self.NativeChain) == "" || self.EvmChainId != mainnetEvmChainId || self.RuntimeSourceCommit != crv4.NativeOwnerSource473 || self.RuntimeVersion.SpecName != "node-subtensor" || self.RuntimeVersion.SpecVersion != 473 || self.RuntimeVersion.TransactionVersion != 1 || self.RuntimeVersion.StateVersion != 1 {
-		return errors.New("root registration requires the independently reviewed473 source and complete mainnet runtime tuple")
+	spec, reviewed := rootRegisterReviewedSpec(self.RuntimeSourceCommit)
+	if self.Schema != rootRegisterPolicySchema || strings.TrimSpace(self.NativeChain) == "" || self.EvmChainId != mainnetEvmChainId || !reviewed || self.RuntimeVersion.SpecName != "node-subtensor" || self.RuntimeVersion.SpecVersion != spec || self.RuntimeVersion.TransactionVersion != 1 || self.RuntimeVersion.StateVersion != 1 {
+		return errors.New("root registration requires an independently reviewed registration source and its complete mainnet runtime tuple")
 	}
 	for _, value := range []string{self.GenesisHash, self.RuntimeCodeHash, self.RuntimeMetadataHash, self.Hotkey, self.Operator, self.Reserve, self.SubnetOwner} {
 		if !rootCanonicalHash(value) {

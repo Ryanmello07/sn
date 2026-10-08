@@ -27,10 +27,10 @@ func nativeTreasuryMigrationKey() []byte {
 
 // The original signed activation pins the header. Runtime code and the explicit
 // true marker must both be committed by that root; future proofs cannot move it.
-// The completion marker is monotonic in this exact reviewed source. Later
-// executions still authenticate that source's original runtime artifact.
+// The completion marker is monotonic in each reviewed post-migration source.
+// Later executions still authenticate that source's original runtime artifact.
 func (self *nativeTreasuryAuthority) validateMigration(runtime validator.OwnerRecycleRuntimePin) error {
-	if runtime.SourceCommit != crv4.NativeOwnerSource473 {
+	if !crv4.ReviewedPostAlphaMigrationSource(runtime.SourceCommit) {
 		if self.MigrationComplete != nil {
 			return errors.New("historical treasury authority cannot inherit a migration completion")
 		}
