@@ -87,6 +87,29 @@ func retainedProductionRuntimePath(cfg *ReleaseConfig, hash string) string {
 	return filepath.Join(cfg.StateDir, "owner-recycle-production-runtime-"+strings.TrimPrefix(hash, "0x")+".json")
 }
 
+// After the signed path fails, each retained copy is read only at the signed
+// size and digest, so a location never changes the admitted bytes. Staging
+// mounts no state_dir and last tries the content-addressed name beside its
+// pinned config; a fixed record name is looked up in state_dir only.
+func readRetainedProductionFile(cfg *ReleaseConfig, reference ReleaseEvidenceV2File, maximum uint64, retained string, fixed ...string) ([]byte, error) {
+	raw, sourceErr := ReadReleaseEvidenceV2File(context.Background(), reference, maximum)
+	if sourceErr == nil {
+		return raw, nil
+	}
+	paths := append([]string{retained}, fixed...)
+	if cfg.stagingConfigDirectory != "" {
+		paths = append(paths, filepath.Join(cfg.stagingConfigDirectory, filepath.Base(retained)))
+	}
+	var err error
+	for _, path := range paths {
+		reference.Path = path
+		if raw, err = ReadReleaseEvidenceV2File(context.Background(), reference, maximum); err == nil {
+			return raw, nil
+		}
+	}
+	return nil, errors.Join(sourceErr, err)
+}
+
 // Each original config must select exactly the already approved prefix. The
 // current signature therefore commits the complete finite authority lineage.
 func loadReleaseProductionAuthorityHistory(cfg *ReleaseConfig) error {
@@ -120,14 +143,9 @@ func loadReleaseProductionAuthorityHistory(cfg *ReleaseConfig) error {
 	history := &releaseProductionAuthorityHistory{}
 	seenKVs := map[[32]byte]bool{}
 	for index, reference := range cfg.ProductionAuthorityHistory {
-		raw, sourceErr := ReadReleaseEvidenceV2File(context.Background(), reference, maximumProductionAuthorityBundleBytes)
-		if sourceErr != nil {
-			retained := reference
-			retained.Path = retainedProductionAuthorityPath(cfg, reference.SHA256)
-			raw, err = ReadReleaseEvidenceV2File(context.Background(), retained, maximumProductionAuthorityBundleBytes)
-			if err != nil {
-				return errors.Join(sourceErr, err)
-			}
+		raw, err := readRetainedProductionFile(cfg, reference, maximumProductionAuthorityBundleBytes, retainedProductionAuthorityPath(cfg, reference.SHA256))
+		if err != nil {
+			return err
 		}
 		original, err := decodeProductionAuthorityBundle(raw, cfg, history.entries, index)
 		if err != nil {

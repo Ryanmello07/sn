@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"path/filepath"
 	"slices"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
@@ -35,6 +36,9 @@ type validatorUploadRuntimeAuthority struct {
 
 // Parse exactly the content-addressed bytes, with the existing signature and
 // history loaders. Config paths name public approvals; seed files are not read.
+// The server mounts no validator path, so retained copies of those approvals
+// may sit beside the pinned config under their state_dir names; each must
+// still match its signed size and digest.
 func loadValidatorUploadRuntimeContext(ctx context.Context, deployment ValidatorUploadDeployment, reference ReleaseEvidenceV2File) (ValidatorUploadDeployment, error) {
 	if ctx == nil {
 		return ValidatorUploadDeployment{}, errors.New("validator staging runtime context is absent")
@@ -52,7 +56,7 @@ func loadValidatorUploadRuntimeContext(ctx context.Context, deployment Validator
 	if err != nil {
 		return ValidatorUploadDeployment{}, err
 	}
-	cfg, err := decodeReleaseConfigBytes(reference.Path, raw)
+	cfg, err := decodeReleaseConfigBytesMode(reference.Path, raw, releaseConfigLoadMode{stagingConfigDirectory: filepath.Dir(reference.Path)})
 	if err != nil {
 		return ValidatorUploadDeployment{}, err
 	}
