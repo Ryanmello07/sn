@@ -760,6 +760,16 @@ func dialPinnedNative(ctx context.Context, cfg *ReleaseConfig) (*crv4.Chain, err
 			errs = append(errs, fmt.Errorf("%s: provisional runtime authority: %w", endpoint, err))
 			continue
 		}
+		// Only signed production configs reach here through read-only activation;
+		// legacy and bootstrap configs keep their exact pins.
+		if isOwnerRecycleProductionConfig(cfg) {
+			if err := enableReleaseRuntimeSuccession(chain, cfg); err != nil {
+				cancel()
+				chain.API.Client.Close()
+				errs = append(errs, fmt.Errorf("%s: runtime successor authority: %w", endpoint, err))
+				continue
+			}
+		}
 		if _, err := authenticatePinnedNativeRuntimeContext(endpointCtx, chain, cfg); err != nil {
 			cancel()
 			chain.API.Client.Close()

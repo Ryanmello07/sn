@@ -29,6 +29,8 @@ type validatorUploadRuntimeAuthority struct {
 	nativeRoutes []string
 	current      validatorUploadRuntimeWindow
 	history      []validatorUploadRuntimeWindow
+	// Approved anchors whose signed configs opted in to successor admission.
+	successors []crv4.RuntimeArtifactIdentity
 }
 
 // Parse exactly the content-addressed bytes, with the existing signature and
@@ -80,6 +82,10 @@ func loadValidatorUploadRuntimeContext(ctx context.Context, deployment Validator
 	}
 	for _, window := range windows {
 		owner.history = append(owner.history, validatorUploadRuntimeWindow{from: window.from, through: window.through, artifact: window.artifact})
+	}
+	owner.successors, err = releaseRuntimeSuccessionAnchors(cfg)
+	if err != nil {
+		return ValidatorUploadDeployment{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return ValidatorUploadDeployment{}, err
