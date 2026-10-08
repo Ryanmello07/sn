@@ -285,6 +285,11 @@ func (self *monitorOperatorTestSink) WriteContext(ctx context.Context, raw []byt
 func startMonitorOperatorTest(t *testing.T, fixture *monitorServicesFixture, url string, hooks monitorServiceHooks) (context.CancelFunc, <-chan int, *monitorOperatorTestSink, chan struct{}) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	args := fixture.args(url)
+	// Fatal fixture enrollment belongs to the test goroutine, before its worker
+	// can make an RPC-entry or output barrier reachable.
+	ctx = monitorTestStorageContext(t, ctx, args)
 	sink := &monitorOperatorTestSink{events: make(chan monitorOperatorTestEvent, 4), validators: make(chan string, 4)}
 	resume := make(chan struct{})
 	done := make(chan int, 1)
@@ -302,9 +307,9 @@ func startMonitorOperatorTest(t *testing.T, fixture *monitorServicesFixture, url
 	}
 	go func() {
 		defer close(done)
-		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, io.Discard, fixture.clock.now, hooks)
+		done <- runMainWithMonitorHooks(ctx, args, sink, io.Discard, fixture.clock.now, hooks)
 	}()
-	t.Cleanup(func() { cancel(); <-done })
+	t.Cleanup(func() { joinMonitorTestWorker(t, cancel, done) })
 	return cancel, done, sink, resume
 }
 

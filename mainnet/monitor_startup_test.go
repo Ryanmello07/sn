@@ -537,11 +537,13 @@ func TestMonitorStartupPublicAdmissionStatusDoesNotInventFreshMetrics(t *testing
 			}
 			return nil
 		}}
+		args := f.args(url)
+		ctx = monitorTestStorageContext(t, ctx, args)
 		go func() {
 			defer close(run.done)
-			run.exit = runMonitorStorageTestWithHooks(t, ctx, f.args(url), sink, &run.stderr, f.clock.now, hooks)
+			run.exit = runMainWithMonitorHooks(ctx, args, sink, &run.stderr, f.clock.now, hooks)
 		}()
-		t.Cleanup(func() { run.cancel(); <-run.done })
+		t.Cleanup(func() { joinMonitorTestWorker(t, run.cancel, run.done) })
 		nextStatus := func() monitorAdmissionEvent {
 			t.Helper()
 			select {

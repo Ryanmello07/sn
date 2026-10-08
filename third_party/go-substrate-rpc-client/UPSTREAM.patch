@@ -1,6 +1,15 @@
 --- a/gethrpc/client.go
 +++ b/gethrpc/client.go
-@@ -143,8 +143,13 @@
+@@ -79,6 +79,8 @@
+ 	services *serviceRegistry
+ 
+ 	idCounter uint32
++	// Copies made by the compatibility client share transport custody.
++	transportGeneration *atomic.Uint64
+ 
+ 	// This function, if non-nil, is called when the connection is lost.
+ 	reconnectFunc reconnectFunc
+@@ -143,8 +145,13 @@
  			}
  		}
  		return nil, ctx.Err()
@@ -16,7 +25,61 @@
  	}
  }
  
-@@ -543,11 +548,13 @@
+@@ -205,20 +212,22 @@
+ func initClient(conn ServerCodec, idgen func() ID, services *serviceRegistry) *Client {
+ 	_, isHTTP := conn.(*httpConn)
+ 	c := &Client{
+-		idgen:       idgen,
+-		isHTTP:      isHTTP,
+-		services:    services,
+-		writeConn:   conn,
+-		close:       make(chan struct{}),
+-		closing:     make(chan struct{}),
+-		didClose:    make(chan struct{}),
+-		reconnected: make(chan ServerCodec),
+-		readOp:      make(chan readOp),
+-		readErr:     make(chan error),
+-		reqInit:     make(chan *requestOp),
+-		reqSent:     make(chan error, 1),
+-		reqTimeout:  make(chan *requestOp),
++		idgen:               idgen,
++		isHTTP:              isHTTP,
++		services:            services,
++		writeConn:           conn,
++		transportGeneration: new(atomic.Uint64),
++		close:               make(chan struct{}),
++		closing:             make(chan struct{}),
++		didClose:            make(chan struct{}),
++		reconnected:         make(chan ServerCodec),
++		readOp:              make(chan readOp),
++		readErr:             make(chan error),
++		reqInit:             make(chan *requestOp),
++		reqSent:             make(chan error, 1),
++		reqTimeout:          make(chan *requestOp),
+ 	}
++	c.transportGeneration.Store(1)
+ 	if !isHTTP {
+ 		go c.dispatch(conn)
+ 	}
+@@ -250,6 +259,9 @@
+ 
+ // Close closes the client, aborting any in-flight requests.
+ func (c *Client) Close() {
++	if c.transportGeneration != nil {
++		c.transportGeneration.Store(0)
++	}
+ 	if c.isHTTP {
+ 		return
+ 	}
+@@ -524,6 +536,7 @@
+ 		log.Trace("RPC client reconnect failed", "err", err)
+ 		return err
+ 	}
++	c.advanceTransportGeneration()
+ 	select {
+ 	case c.reconnected <- newconn:
+ 		c.writeConn = newconn
+@@ -543,11 +556,13 @@
  		reqInitLock = c.reqInit // nil while the send lock is held
  		conn        = c.newClientConn(codec)
  		reading     = true
@@ -31,7 +94,11 @@
  			c.drainRead()
  		}
  		close(c.didClose)
-@@ -573,6 +580,7 @@
+@@ -570,9 +585,11 @@
+ 			}
+ 
+ 		case err := <-c.readErr:
++			c.advanceTransportGeneration()
  			conn.handler.log.Debug("RPC connection read error", "err", err)
  			conn.close(err, lastOp)
  			reading = false
@@ -39,7 +106,7 @@
  
  		// Reconnect:
  		case newcodec := <-c.reconnected:
-@@ -586,8 +594,12 @@
+@@ -586,8 +603,12 @@
  				conn.close(errClientReconnected, lastOp)
  				c.drainRead()
  			}
@@ -52,7 +119,7 @@
  			conn = c.newClientConn(newcodec)
  			// Re-register the in-flight request on the new handler
  			// because that's where it will be sent.
-@@ -605,6 +617,10 @@
+@@ -605,6 +626,10 @@
  				// Remove response handlers for the last send. When the read loop
  				// goes down, it will signal all other current operations.
  				conn.handler.removeRequestOp(lastOp)
@@ -63,6 +130,34 @@
  			}
  			// Let the next request in.
  			reqInitLock = c.reqInit
+--- /dev/null
++++ b/gethrpc/client_generation.go
+@@ -0,0 +1,25 @@
++// Transport generations revoke observations across socket replacement without
++// changing RPC requests, retained signed bytes, or reconnect ownership.
++package rpc
++
++// Zero means closed or uninitialized. It never reappears as a valid owner.
++func (self *Client) TransportGeneration() uint64 {
++	if self == nil || self.transportGeneration == nil {
++		return 0
++	}
++	return self.transportGeneration.Load()
++}
++
++// Called at real disconnect/reconnect boundaries. Saturation refuses future
++// authority instead of wrapping into an earlier issued generation.
++func (self *Client) advanceTransportGeneration() {
++	if self == nil || self.transportGeneration == nil {
++		return
++	}
++	for {
++		before := self.transportGeneration.Load()
++		if before == 0 || self.transportGeneration.CompareAndSwap(before, before+1) {
++			return
++		}
++	}
++}
 --- a/gethrpc/handler.go
 +++ b/gethrpc/handler.go
 @@ -173,11 +173,13 @@
@@ -373,10 +468,10 @@ index 00000000..f7dc0a19
 +	return nil
 +}
 diff --git a/gethrpc/http.go b/gethrpc/http.go
-index 2c0cb5ed..dd7953a2 100644
+index 2c0cb5ed..59b8cc4d 100644
 --- a/gethrpc/http.go
 +++ b/gethrpc/http.go
-@@ -127,46 +127,59 @@ func DialHTTP(endpoint string) (*Client, error) {
+@@ -127,46 +127,76 @@ func DialHTTP(endpoint string) (*Client, error) {
  
  func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
  	hc := c.writeConn.(*httpConn)
@@ -405,8 +500,11 @@ index 2c0cb5ed..dd7953a2 100644
 +	if err := json.Unmarshal(body, &respmsg); err != nil {
  		return err
  	}
-+	if !respmsg.isResponse() || !bytes.Equal(respmsg.ID, op.ids[0]) {
++	if !validHttpResponseEnvelope(&respmsg) || !bytes.Equal(respmsg.ID, op.ids[0]) {
 +		return errors.New("HTTP RPC response does not match request")
++	}
++	if respmsg.Result == nil && respmsg.Error == nil {
++		return ErrNoResult
 +	}
  	op.resp <- &respmsg
  	return nil
@@ -436,10 +534,17 @@ index 2c0cb5ed..dd7953a2 100644
 +		pending[string(id)] = true
 +	}
 +	for _, response := range respmsgs {
-+		if !response.isResponse() || !pending[string(response.ID)] {
++		if !validHttpResponseEnvelope(&response) || !pending[string(response.ID)] {
 +			return errors.New("HTTP RPC batch response does not match request")
 +		}
 +		delete(pending, string(response.ID))
++	}
++	// Omission retains its public failure identity only after every envelope
++	// matches. No sibling result is published from an incomplete batch.
++	for _, response := range respmsgs {
++		if response.Result == nil && response.Error == nil {
++			return ErrNoResult
++		}
 +	}
  	for i := 0; i < len(respmsgs); i++ {
  		op.resp <- &respmsgs[i]
@@ -447,12 +552,19 @@ index 2c0cb5ed..dd7953a2 100644
  	return nil
  }
  
++// Envelope admission is separate from the result/error requirement so an
++// exact omitted result remains ErrNoResult without admitting foreign replies.
++func validHttpResponseEnvelope(response *jsonrpcMessage) bool {
++	return response.Version == vsn && response.hasValidID() && response.Method == "" && response.Params == nil &&
++		(response.Result == nil || response.Error == nil)
++}
++
 -func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadCloser, error) {
 +func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) ([]byte, error) {
  	body, err := json.Marshal(msg)
  	if err != nil {
  		return nil, err
-@@ -179,10 +192,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
+@@ -179,10 +209,7 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
  	if err != nil {
  		return nil, err
  	}

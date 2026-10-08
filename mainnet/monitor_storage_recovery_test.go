@@ -102,16 +102,18 @@ func TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops(t *testing.T
 			return false
 		}
 	}}
+	args := fixture.args(url)
+	ctx = monitorTestStorageContext(t, ctx, args)
 	done := make(chan int, 1)
 	go func() {
 		defer close(done)
-		done <- runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, nil, fixture.clock.now, hooks)
+		done <- runMainWithMonitorHooks(ctx, args, sink, nil, fixture.clock.now, hooks)
 	}()
-	t.Cleanup(func() { cancel(); <-done })
-	if event := <-sink.events; event.Publication != "published" {
+	t.Cleanup(func() { joinMonitorTestWorker(t, cancel, done) })
+	if event := monitorTestEvent(t, done, sink.events); event.Publication != "published" {
 		t.Fatal("operator fixture did not publish its real journal observation", event)
 	}
-	<-sink.validators
+	monitorTestEvent(t, done, sink.validators)
 	checkpoint, metrics := monitorOperatorPaths(fixture.checkpointPath, fixture.metricsPath, "operator-a")
 	if err := os.Rename(metrics, metrics+".retained"); err != nil {
 		t.Fatal(err)
@@ -119,11 +121,11 @@ func TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops(t *testing.T
 	if err := os.Symlink(metrics+".retained", metrics); err != nil {
 		t.Fatal(err)
 	}
-	resume["operator-a"] <- struct{}{}
-	if event := <-sink.events; event.Publication != "ownership-error" {
+	resumeMonitorTestWorker(t, done, resume["operator-a"])
+	if event := monitorTestEvent(t, done, sink.events); event.Publication != "ownership-error" {
 		t.Fatal("operator publisher loss did not stop its own role", event)
 	}
-	if exit := <-terminal; exit != 3 {
+	if exit := monitorTestEvent(t, done, terminal); exit != 3 {
 		t.Fatal("operator terminal exit differs", exit)
 	}
 	for _, path := range []string{metrics + ".lock", checkpoint + ".lock"} {
@@ -136,12 +138,12 @@ func TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops(t *testing.T
 			t.Fatal("stopped operator retained its lock", path, err)
 		}
 	}
-	resume["alpha"] <- struct{}{}
-	if role := <-sink.validators; role != "alpha" {
+	resumeMonitorTestWorker(t, done, resume["alpha"])
+	if role := monitorTestEvent(t, done, sink.validators); role != "alpha" {
 		t.Fatal("stopped operator suppressed validator publication", role)
 	}
 	cancel()
-	if exit := <-done; exit != 3 {
+	if exit := monitorTestEvent(t, nil, done); exit != 3 {
 		t.Fatal("operator terminal result disappeared", exit)
 	}
 }
