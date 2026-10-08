@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-// The production decision path, its durable pending owner and server staging
+// The production decision path, the public startup root and server staging
 // cross a compatible runtime upgrade under the signed opt-in. Real provider
 // replay, CRv4 preparation, signatures and intent custody run unchanged.
 package validator
