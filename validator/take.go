@@ -10,7 +10,7 @@
 // it would sign.
 //
 // Takes are PerU16 parts of 65535 (18% is 11796). The preflight mirrors the
-// subtensor rules, unchanged from runtime 455 through 473:
+// subtensor rules, unchanged from runtime 455 through 475:
 //   - decrease_take: below a stored take (any take when none is stored), at
 //     least MinDelegateTake, never rate limited, and it restarts the increase
 //     window;

@@ -43,11 +43,17 @@ func nativeMigrationTestWitness(t *testing.T, marker []byte) (safeCurrentStorage
 // A fresh synthetic approval signs the completed opening, never old authority.
 func nativeMigrationTestAuthority(t *testing.T) (*nativeTreasuryAuthority, economicEmissionPolicy) {
 	t.Helper()
+	return nativeMigrationTestAuthorityFor(t, crv4.NativeOwnerSource473, 473)
+}
+
+// Each reviewed post-migration source signs its own completed opening.
+func nativeMigrationTestAuthorityFor(t *testing.T, source string, spec uint32) (*nativeTreasuryAuthority, economicEmissionPolicy) {
+	t.Helper()
 	authority, policy := nativeTreasuryTestAuthority(t)
 	witness, code := nativeMigrationTestWitness(t, []byte{1})
 	authority.MigrationComplete = &witness
-	policy.Runtime.RuntimeSourceCommit = crv4.NativeOwnerSource473
-	policy.Runtime.RuntimeVersion.SpecVersion = 473
+	policy.Runtime.RuntimeSourceCommit = source
+	policy.Runtime.RuntimeVersion.SpecVersion = spec
 	policy.Runtime.RuntimeCodeHash = fmt.Sprintf("0x%x", code)
 	policy.From = economicEmissionBoundary{Number: 703, Hash: witness.At}
 	policy.Through = economicEmissionBoundary{Number: 704, Hash: "0x" + strings.Repeat("43", 32)}

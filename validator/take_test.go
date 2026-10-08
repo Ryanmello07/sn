@@ -34,6 +34,8 @@ const (
 	takeTestRuntime461MetadataHash   = "0x98b2cfd0d6633488dfe5b3b70b869d5753aa3c42396533013df131e4e0e5ca68"
 	takeTestRuntime470Projection     = "../mainnet/testdata/runtime470-subnet-codec.scale.gz.base64"
 	takeTestRuntime470ProjectionHash = "0xcdb975f33cf23ba0df2279208feeacdcf0e629f4cd0d0b3e972ee63d1ebdc0a4"
+	takeTestRuntime475Metadata       = "../crv4/testdata/runtime475-metadata.scale.gz.base64"
+	takeTestRuntime475MetadataHash   = "0x983cfdabc62b0c6b08faafb47f24303999236e0022598d1b5a3ec70fbde895ff"
 )
 
 func TestTakePercentRoundsDownToPartsOf65535(t *testing.T) {
@@ -156,12 +158,13 @@ func TestChildkeyTakeDecisionFollowsTheRuntimeRules(t *testing.T) {
 }
 
 // Pallet 7 with calls 65, 66 and 75 is the reviewed layout from runtime 455
-// through the runtime 470 projection.
+// through the runtime 470 projection and the exact runtime 475 metadata.
 func TestTakeCallsMatchReviewedRuntimeLayouts(t *testing.T) {
 	hotkey := [32]byte{7, 7, 7}
 	for _, fixture := range []struct{ path, hash string }{
 		{path: takeTestRuntime461Metadata, hash: takeTestRuntime461MetadataHash},
 		{path: takeTestRuntime470Projection, hash: takeTestRuntime470ProjectionHash},
+		{path: takeTestRuntime475Metadata, hash: takeTestRuntime475MetadataHash},
 	} {
 		metadata, _ := provisionalValidatorMetadataTest(t, fixture.path, fixture.hash)
 		for _, testCase := range []struct {
@@ -195,6 +198,22 @@ func TestTakeCallsMatchReviewedRuntimeLayouts(t *testing.T) {
 			if _, err := takeCall(metadata, testCase.name, testCase.hotkey, testCase.netuid, 11796); err == nil {
 				t.Errorf("%s accepted %s for netuid %d and hotkey %x", fixture.path, testCase.name, testCase.netuid, testCase.hotkey)
 			}
+		}
+	}
+}
+
+// The delegate-take rate key keeps its variant when 475 appends hyperparameters.
+func TestTakeDelegateRateKeyMatchesReviewedRuntimes(t *testing.T) {
+	hotkey := [32]byte{7, 7, 7}
+	want := append([]byte{5}, hotkey[:]...)
+	for _, fixture := range []struct{ path, hash string }{
+		{path: takeTestRuntime461Metadata, hash: takeTestRuntime461MetadataHash},
+		{path: takeTestRuntime475Metadata, hash: takeTestRuntime475MetadataHash},
+	} {
+		metadata, _ := provisionalValidatorMetadataTest(t, fixture.path, fixture.hash)
+		key, err := delegateTakeRateKey(metadata, hotkey)
+		if err != nil || !bytes.Equal(key, want) {
+			t.Fatalf("%s delegate take rate key %x: %v", fixture.path, key, err)
 		}
 	}
 }

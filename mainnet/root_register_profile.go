@@ -15,7 +15,6 @@ import (
 	"sort"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/urfoundation/sn/crv4"
 )
 
 const rootRegisterObservationSchema = "urnetwork-mainnet-root-register-observation-v1"
@@ -142,8 +141,8 @@ func rootRegisterStorageSpecs() []rootStorageSpec {
 	}
 }
 
-// Source473 uses a u64 existential deposit of 500 rao. Authenticate its constant
-// before applying a conservative quote; no frozen/reserved reduction is guessed.
+// Sources 473 and 475 use a u64 existential deposit of 500 rao. Authenticate the
+// constant before applying a conservative quote; no frozen/reserved reduction is guessed.
 func rootRegisterExistentialDeposit(metadata *types.Metadata) (uint64, error) {
 	if metadata == nil || metadata.Version != 14 {
 		return 0, errors.New("root registration balance constants unavailable")
@@ -167,7 +166,7 @@ func rootRegisterExistentialDeposit(metadata *types.Metadata) (uint64, error) {
 		}
 	}
 	if pallets != 1 || constants != 1 || deposit != 500 {
-		return 0, errors.New("root registration existential deposit differs from source473")
+		return 0, errors.New("root registration existential deposit differs from the reviewed sources")
 	}
 	return deposit, nil
 }
@@ -186,7 +185,7 @@ func (self rootRegisterObservation) eligibility(policy rootRegisterPolicy, metad
 	}
 	claimed := self.ContentHash
 	self.ContentHash = ""
-	if policy.RuntimeSourceCommit != crv4.NativeOwnerSource473 || self.Schema != rootRegisterObservationSchema || self.PolicyHash != rootObjectHash(policy) || claimed != rootObjectHash(self) || self.FinalizedNumber == 0 || self.FinalizedNumber > uint64(^uint32(0)) || !rootCanonicalHash(self.FinalizedHash) {
+	if _, reviewed := rootRegisterReviewedSpec(policy.RuntimeSourceCommit); !reviewed || self.Schema != rootRegisterObservationSchema || self.PolicyHash != rootObjectHash(policy) || claimed != rootObjectHash(self) || self.FinalizedNumber == 0 || self.FinalizedNumber > uint64(^uint32(0)) || !rootCanonicalHash(self.FinalizedHash) {
 		return result, errors.New("root registration observation source, domain or seal changed")
 	}
 	if _, err := rootRegisterCall(metadata); err != nil {
@@ -411,7 +410,7 @@ func (self rootRegisterObservation) eligibility(policy rootRegisterPolicy, metad
 	if len(used) != len(rowKVs) {
 		return result, errors.New("root registration observation contains unrelated storage rows")
 	}
-	// Source473 saturates the u16 interval multiplier. Counters are current-block
+	// Sources 473 and 475 saturate the u16 interval multiplier. Counters are current-block
 	// observations and can reset or change before the mortal call is included.
 	intervalLimit := min(uint32(result.TargetInInterval)*3, uint32(^uint16(0)))
 	switch {
@@ -441,8 +440,8 @@ func (self rootRegisterObservation) eligibility(policy rootRegisterPolicy, metad
 	return result, nil
 }
 
-// Source473 uses PalletId("subtensr").try_from_sub_account::<NetUid>.
-// Its pinned SDK decodes "modl", the eight-byte pallet ID and a u16, then
+// Sources 473 and 475 use PalletId("subtensr").try_from_sub_account::<NetUid>.
+// Their pinned SDK decodes "modl", the eight-byte pallet ID and a u16, then
 // requires every remaining AccountId32 byte to be zero, even for absent subnets.
 func rootRegisterReservedHotkey(account string) bool {
 	raw, err := rootReceiptHex(account, 32)
