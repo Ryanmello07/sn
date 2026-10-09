@@ -104,6 +104,7 @@ func (self allOperatorsSettings) operatorRunner(operator operatorlist.Operator) 
 	runner.apiUrl, runner.connectUrl = operator.ApiUrl, operator.ConnectUrl
 	runner.stateDir = operatorlist.DomainStateDir(self.measurement.stateDir, operator.Domain)
 	runner.networkPath = filepath.Join(runner.stateDir, "jwt")
+	runner.authCommand = self.authCommand(operator.Domain)
 	return runner
 }
 

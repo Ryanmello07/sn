@@ -619,6 +619,9 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 	if err != nil {
 		closeErr := api.CloseAndWait(context.Background())
 		strategy.Close()
+		if clientauth.IsNetworkCredentialRejected(err) {
+			err = fmt.Errorf("%w; sign in again and write a fresh network JWT to %s", err, op.NetworkJWTFile)
+		}
 		return nil, errors.Join(fmt.Errorf("no_id %d authentication: %w", op.NoID, err), releaseStageError("authentication API shutdown", closeErr))
 	}
 

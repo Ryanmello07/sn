@@ -989,6 +989,14 @@ validator run --config=<path> ... [--operators-refresh=<duration> [--operators-u
   the config does not pin, for observation only, under
   `<config.state_dir>/observed-operators/<domain>/`. It signs in and provisions with the
   config's `hotkey_seed_file`. Its results never reach weights, evidence or production state.
+- **A rejected network sign-in.** When an operator rejects the network JWT a registration
+  carries (401: the sign-in expired, its credentials were rotated, or the network is gone),
+  the production operator latches with `code=network_sign_in_rejected` instead of
+  `authentication_recovery_required`, and native observation continues. Sign in again, write
+  the fresh network JWT to that operator's `network_jwt_file`, and restart. The measurement
+  runner reports `the network sign-in at <path> was rejected or has expired; run
+  `validator auth` to sign in again`, naming `validator auth --operator=<domain>` under
+  `--all-operators`. The validator never renews its own network JWTs.
 - Pinned operators keep their configured `network_jwt_file`. A missing one is reported as
   before and never created.
 

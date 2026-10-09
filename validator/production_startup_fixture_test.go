@@ -212,15 +212,17 @@ type productionStartupApiTestFixture struct {
 	seedOnce                sync.Once
 	release                 chan struct{}
 	registrationUnavailable bool
-	registrationRequest     []byte
-	registrationPosts       int
-	registrationRead        chan struct{}
-	registrationOnce        sync.Once
-	rejectRefreshAfter      int
-	beforeRefreshReject     func(context.Context)
-	beforeRefresh           func(context.Context)
-	invalidRefreshAfter     int
-	invalidRefresh          string
+	// the operator rejects the network JWT that registration carries (401)
+	registrationRejected bool
+	registrationRequest  []byte
+	registrationPosts    int
+	registrationRead     chan struct{}
+	registrationOnce     sync.Once
+	rejectRefreshAfter   int
+	beforeRefreshReject  func(context.Context)
+	beforeRefresh        func(context.Context)
+	invalidRefreshAfter  int
+	invalidRefresh       string
 }
 
 // This HTTP fixture retains one exact operation even when its reply is lost.
@@ -239,6 +241,7 @@ func (self *productionStartupApiTestFixture) registerClient(writer http.Response
 	same := bytes.Equal(self.registrationRequest, raw)
 	self.registrationPosts++
 	unavailable := self.registrationUnavailable
+	rejected := self.registrationRejected
 	self.stateLock.Unlock()
 	self.registrationOnce.Do(func() { close(self.registrationRead) })
 	if !same {
@@ -247,6 +250,10 @@ func (self *productionStartupApiTestFixture) registerClient(writer http.Response
 	}
 	if unavailable {
 		writer.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	if rejected {
+		writer.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	claims := gojwt.MapClaims{}
