@@ -5,6 +5,7 @@ package clientauth
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // Renewal publishes through descriptor-relative custody, which only Unix
@@ -23,4 +24,9 @@ func WriteNetworkTokenWithContext(ctx context.Context, path string, token string
 		return err
 	}
 	return RemoveToken(networkCredentialLineagePath(path))
+}
+
+// Quarantine renames through descriptor-relative custody too.
+func QuarantineNetworkToken(string, string, time.Time) (NetworkTokenQuarantine, bool, error) {
+	return NetworkTokenQuarantine{}, false, errors.New("network token quarantine requires Unix custody support")
 }

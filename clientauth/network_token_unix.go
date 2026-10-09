@@ -250,3 +250,74 @@ func (self *registrationStore) readNetworkCredential(name string) (token string,
 	}
 	return token, networkCredentialFingerprintOf(token, stat.Mtim.Nano(), true), self.check()
 }
+
+// QuarantineNetworkToken sets the rejected network token at path aside: it
+// renames the file, keeping its mode and content, to
+// <name>.rejected-<unixnano>-<consecutive> in the same directory
+// (network_token_quarantine.go). It holds the token's registration owner
+// lock, the lock every explicit sign-in and renewal holds, and acts only while
+// the file still holds rejected: a sign-in that replaced it first is never set
+// aside (false, nil), and none lands between the check and the rename. It
+// keeps the newest maximumNetworkTokenQuarantine set-aside files, the one it
+// writes always among them. The lineage stays beside the missing token; the
+// next sign-in replaces it under the same lock. ErrNetworkTokenBusy is a held
+// lock; try again later.
+func QuarantineNetworkToken(path string, rejected string, now time.Time) (_ NetworkTokenQuarantine, _ bool, returnErr error) {
+	rejected = strings.TrimSpace(rejected)
+	if rejected == "" {
+		return NetworkTokenQuarantine{}, false, errors.New("network token quarantine needs the rejected token")
+	}
+	store, err := openRegistrationStore(path)
+	if err != nil {
+		if errors.Is(err, errRegistrationOwnerActive) {
+			return NetworkTokenQuarantine{}, false, ErrNetworkTokenBusy
+		}
+		return NetworkTokenQuarantine{}, false, err
+	}
+	defer func() { returnErr = errors.Join(returnErr, store.close()) }()
+	name := filepath.Base(path)
+	current, _, err := store.readNetworkCredential(name)
+	if errors.Is(err, os.ErrNotExist) {
+		return NetworkTokenQuarantine{}, false, nil
+	}
+	if err != nil {
+		return NetworkTokenQuarantine{}, false, err
+	}
+	if current != rejected {
+		return NetworkTokenQuarantine{}, false, nil
+	}
+	names, err := store.names(4096)
+	if err != nil {
+		return NetworkTokenQuarantine{}, false, err
+	}
+	quarantines := networkTokenQuarantines(store.path, name, names)
+	at, consecutive := nextNetworkTokenQuarantine(quarantines, now)
+	target := networkTokenQuarantineName(name, at, consecutive)
+	if hook := networkQuarantineTestHooks.beforeRename; hook != nil {
+		hook()
+	}
+	if err := store.check(); err != nil {
+		return NetworkTokenQuarantine{}, false, err
+	}
+	if err := unix.Renameat(int(store.directory.Fd()), name, int(store.directory.Fd()), target); err != nil {
+		return NetworkTokenQuarantine{}, false, err
+	}
+	if err := errors.Join(store.directory.Sync(), store.check()); err != nil {
+		return NetworkTokenQuarantine{}, false, err
+	}
+	quarantine := NetworkTokenQuarantine{Path: filepath.Join(store.path, target), Time: at, Consecutive: consecutive}
+	// the oldest beyond the bound go; the one just written is the newest
+	kept := append(quarantines, quarantine)
+	for _, old := range kept[:max(0, len(kept)-maximumNetworkTokenQuarantine)] {
+		if err := store.remove(filepath.Base(old.Path)); err != nil {
+			return quarantine, true, err
+		}
+	}
+	return quarantine, true, nil
+}
+
+// networkQuarantineTestHooks holds a quarantine with its owner lock held,
+// after its check and before its rename.
+var networkQuarantineTestHooks struct {
+	beforeRename func()
+}
