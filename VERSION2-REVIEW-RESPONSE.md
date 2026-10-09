@@ -1135,6 +1135,45 @@ reverts the batch; a leaf with nothing new to credit reverts the batch unless
 `skipPaid` is set, in which case it is skipped and emitted. Default daemons
 sign permits only for the operator's published sweep relayer.
 
+#### 11.1 Miner app support for cumulative claims
+
+Every miner-facing app that displays rewards or submits claims must support
+v2 cumulative claims before phase A activation. The app presents one accrued
+balance per payout coldkey, operator and vault, including earnings from all
+finalized v2 epochs. It obtains a proof against a currently accepted finalized
+root; claiming accumulated earnings does not require a claim or proof for
+each earning epoch. Epoch history remains available as an earnings breakdown,
+not as separate v2 claim tasks.
+
+The reward view distinguishes pending earnings, finalized cumulative
+entitlement, newly claimable amount, accepted but unpaid claim credit, and
+confirmed transfers. Newly claimable amount is
+`max(0, cumulativeRao - paidRao[noId][coldkey])`. `paidRao` is a credit
+watermark, not proof of a successful runtime transfer. Existing
+`claimCredit[coldkey]` is vault-wide and must be displayed once, not counted
+again for each operator or included in a new cumulative claim. A deferred
+transfer is shown as unpaid credit with a withdrawal action, not as received
+funds. Missing evidence or an unavailable proof is an explicit status, not a
+zero earnings balance.
+
+Before submission, the app refreshes the finalized root, verifies the proof,
+reads the watermark and credit, and shows the expected claim increment, gas
+or relayer fee, net credit, and transfer-minimum status. A newer root or a
+claim by another client triggers refresh; submission and transfer results are
+reconciled from finalized chain state. An on-demand claim remains available
+when supported, alongside an optional economic threshold; balances below the
+runtime transfer minimum are described as accruing or credited, without a
+promise of immediate payment. Relayer permits show their fee cap, minimum net
+amount, recipient, relayer, expiry and chain/vault identity before signing.
+
+Apps resolve `claim_schema` and settlement identity for migration, retain v1
+claim and credit-withdrawal support, and display v1 and v2 balances separately.
+They do not combine credits across vaults to satisfy a transfer minimum.
+Changing the payout wallet does not move old accrued balances: the app retains
+access to the old coldkey's claim history and identifies the wallet needed to
+authorize any permit. These app requirements do not resolve the missed-epoch
+allocation and root-admission issues identified in the meta review.
+
 ### 12. Migration
 
 Switch epoch `E_s`: the first epoch whose pool is the v2 pool hotkey. Chosen
@@ -1231,6 +1270,12 @@ Phase A (contracts, ledger, claims) activates when all hold:
    configurations; the `ur-owner` ceremonies recorded.
 5. Runtime: pinned runtime 475 or an admitted successor; any runtime change
    restarts gate 1's rehearsal (`evm/README.md:184-186`).
+6. Miner apps: cumulative reward display and claim flows in §11.1 are
+   implemented and qualified for every supported app. Deterministic fixtures
+   cover ten epochs claimed once, a subsequent claim paying only the new
+   increment, a concurrent claim/root refresh, below-minimum and failed
+   transfers retaining credit, one vault-wide credit shared across operators,
+   and separate v1/v2 balances through migration and wallet changes.
 
 Phase B (measurement) activates on the same approval path with its own
 fixtures (§16) and a recorded eviction transition. Phase C and the Null track
@@ -1320,7 +1365,7 @@ v2 root, a vetoed root, and gas measurement of a paid single claim and a
 | Server | frame snapshot and signed record; indexed assignment and signed unavailable; ledger v2 builder (streaming, chunked, content-addressed, continuity link); evidence chunking aligned with provider chunks; node-array proof service; `GET /sn/ledger/claim` with `claim_schema`, `root_index`, vault per epoch; `/sn/ledger/chunk`; `settlementAt` in the st sync mirror; event-indexed head set; eligibility without `a_min`; `cohort_not_sampled` reason and epoch summary fields now |
 | Validator | `settlementAt` reader; ledger verifier (full and sampled); beacon; `LEDGER_AUDIT` evidence and veto; zero-weight trigger from findings; frame download and checks; VRF draw and proof; apportionment; replacement budget; stratified estimator and scalar EMA; K = 0 eviction transition; head budget; bounds schema v3 (`max_ledger_bytes`, `max_evidence_bytes`, `max_audit_bytes`, `max_chunk_bytes`, head entries) |
 | Protocol / merkle | `ledger-tree-v2` builder, proofs, multiproofs, vectors; rao allocation with largest remainder; frame and apportionment algorithms; permit encoding |
-| Provider tooling | claim daemon v2 (schema switch, threshold, permit, batch via relayer, v1 withdraw retained); `snclaim` v2 |
+| Provider tooling and miner apps | claim daemon v2 (schema switch, threshold, permit, batch via relayer, v1 withdraw retained); `snclaim` v2; app cumulative reward view, multi-epoch claim, credit withdrawal, fee preview and migration support (§11.1), qualified by §14 gate 6 |
 | crv4 | mode-aware payload admission (Null track) |
 | Approvals | validator production approval for config v3; treasury approval for policy v2; Null track: `maximum_subnet_uids` 2,500 |
 
