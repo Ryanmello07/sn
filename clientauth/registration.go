@@ -280,7 +280,15 @@ func loadOrRegisterClientJwtWithCustody(ctx context.Context, api *sdk.Api, netwo
 	if record == nil && !allowCreate {
 		return "", connect.Id{}, &RegistrationRefusedError{Code: "legacy_identity_requires_explicit_recovery"}
 	}
-	bootstrap, err := readToken(networkPath)
+	// Path custody reads the token and its fingerprint from one file, so a
+	// renewal renamed in between cannot mix two files (network_token.go).
+	// Directory custody never compares fingerprints: any marker blocks.
+	var bootstrap, fingerprint string
+	if directory == nil {
+		bootstrap, fingerprint, err = readNetworkCredential(networkPath)
+	} else {
+		bootstrap, err = readToken(networkPath)
+	}
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", connect.Id{}, &RegistrationRefusedError{Code: "network_authentication_missing"}
@@ -292,7 +300,13 @@ func loadOrRegisterClientJwtWithCustody(ctx context.Context, api *sdk.Api, netwo
 		return "", connect.Id{}, errors.New("registration bootstrap does not name a network principal")
 	}
 	if marker, err := readToken(rejectionPath(clientPath)); err == nil {
-		if directory != nil || marker == "blocked" || marker == networkCredentialFingerprint(networkPath, bootstrap) {
+		blocks := directory != nil
+		if !blocks {
+			if blocks, err = networkCredentialMarkerBlocks(networkPath, fingerprint, marker); err != nil {
+				return "", connect.Id{}, err
+			}
+		}
+		if blocks {
 			return "", connect.Id{}, &RegistrationRefusedError{Code: "client_revoked"}
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -349,7 +363,8 @@ func loadOrRegisterClientJwtWithCustody(ctx context.Context, api *sdk.Api, netwo
 	}
 	result, err := api.RegisterNetworkClientSyncWithContext(ctx, &record.Request)
 	if err != nil {
-		return "", connect.Id{}, err
+		// the request carried the bootstrap: a 401 rejects the network sign-in
+		return "", connect.Id{}, networkCredentialRejection(err)
 	}
 	if result.Error != nil {
 		return "", connect.Id{}, &RegistrationRefusedError{Code: result.Error.Code}

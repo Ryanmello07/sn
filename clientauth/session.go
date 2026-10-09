@@ -7,8 +7,6 @@ package clientauth
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -110,26 +108,26 @@ func rejectionPath(clientJwtPath string) string {
 }
 
 func networkCredentialFingerprint(path string, byJwt string) string {
-	generation := strings.TrimSpace(byJwt)
-	if info, err := os.Stat(path); err == nil {
-		generation += fmt.Sprintf("\n%d", info.ModTime().UnixNano())
+	info, err := os.Stat(path)
+	if err != nil {
+		return networkCredentialFingerprintOf(byJwt, 0, false)
 	}
-	sum := sha256.Sum256([]byte(generation))
-	return hex.EncodeToString(sum[:])
+	return networkCredentialFingerprintOf(byJwt, info.ModTime().UnixNano(), true)
 }
 
 // MarkRejected removes a rejected client credential and records which
 // network-login token was present. Automatic restarts may not use that same
-// powerful bootstrap credential to recreate a revoked client. Running the
-// explicit auth command writes a new network JWT, whose different fingerprint
-// permits a deliberate bootstrap on the next start.
+// powerful bootstrap credential to recreate a revoked client, nor a renewal of
+// it (network_token.go). Running the explicit auth command writes a new
+// network JWT, whose different fingerprint permits a deliberate bootstrap on
+// the next start.
 func MarkRejected(clientJwtPath string, networkJwtPath string) error {
 	if err := RemoveToken(clientJwtPath); err != nil {
 		return err
 	}
 	marker := "blocked"
-	if networkJwt, err := ReadToken(networkJwtPath); err == nil {
-		marker = networkCredentialFingerprint(networkJwtPath, networkJwt)
+	if _, fingerprint, err := readNetworkCredential(networkJwtPath); err == nil {
+		marker = fingerprint
 	}
 	return WriteToken(rejectionPath(clientJwtPath), marker)
 }
@@ -173,7 +171,7 @@ func LoadOrCreateClientJwt(
 		return "", connect.Id{}, err
 	}
 
-	byJwt, err := ReadToken(networkJwtPath)
+	byJwt, fingerprint, err := readNetworkCredential(networkJwtPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", connect.Id{}, fmt.Errorf("network JWT does not exist at %s; run the auth command first", networkJwtPath)
@@ -181,7 +179,11 @@ func LoadOrCreateClientJwt(
 		return "", connect.Id{}, err
 	}
 	if marker, markerErr := ReadToken(rejectionPath(clientJwtPath)); markerErr == nil {
-		if marker == "blocked" || marker == networkCredentialFingerprint(networkJwtPath, byJwt) {
+		blocks, err := networkCredentialMarkerBlocks(networkJwtPath, fingerprint, marker)
+		if err != nil {
+			return "", connect.Id{}, err
+		}
+		if blocks {
 			return "", connect.Id{}, fmt.Errorf("the previous client JWT was rejected; run the auth command before restarting")
 		}
 		if err := clearRejection(clientJwtPath); err != nil {
@@ -196,7 +198,8 @@ func LoadOrCreateClientJwt(
 		DeviceSpec:        "",
 	})
 	if err != nil {
-		return "", connect.Id{}, err
+		// the request carried the network token: a 401 rejects the sign-in
+		return "", connect.Id{}, networkCredentialRejection(err)
 	}
 	if result == nil {
 		return "", connect.Id{}, errors.New("auth network client returned a null result")
