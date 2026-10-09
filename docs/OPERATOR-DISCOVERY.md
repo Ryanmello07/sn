@@ -64,6 +64,11 @@ Owner, in order:
      automatically. The cold wallet signs once; the hot key does the per-operator work.
    - Precedence is per-provider consent, then network consent, then hotkey delegation.
 6. **Root validator.**
+   - **As launched (October 8).** The sole SN25 validator is the SN25 owner hotkey, UID 1
+     (`5CyQFykVpfa9xgZVGgBsiNUpjbo1EihBTSkPvDC1FZbL1wxG`), whose coldkey is `ur-owner`. `ur-mainnet` keeps its root
+     seat, UID 21, through the passive root service. The rest of this item is the October 6–7 design; its SN25
+     validator role for `ur-mainnet`, and the `set_children` that served that role, are superseded
+     ([launch record](../mainnet/LAUNCH.md#as-launched--october-8)).
    - A dedicated validator hotkey, `ur-mainnet`, runs on root (netuid 0) and validates SN25. The SN25 owner hotkey
      doesn't run it, and the owner Ledger signs none of its operations (owner decision). Others may child-hotkey to it
      on SN25, and we keep 18% of what their stake earns through it. Added October 7: `ur-owner` signs one
@@ -601,6 +606,8 @@ netuid 0 if necessary.
   are inventory variables, and nothing secret is committed.
 - **Before starting**, the playbook checks that the config, seed and durable-volume files exist, with mode and owner,
   and refuses to start otherwise.
+- **As launched (October 8):** the validator tree is `/srv/sn25/sn-validator`, and `/etc/sn-validator` holds the pending
+  and final configs and the durable-volumes declaration, on snow's root filesystem.
 
 ## 8. ur.xyz
 

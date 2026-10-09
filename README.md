@@ -83,10 +83,11 @@ pools until pricing is switched on.
 governance value, not per‑validator discretion. If no head fleet exists, the θ share cedes to
 the pools (`empty_channel: cede_to_nonempty`).
 
-> **Mainnet bootstrap plan.** [`mainnet/MAINNET.md`](mainnet/MAINNET.md) records a launch in
-> which provider weights fill **10%** of the native miner allocation and the other **90%** is
-> weighted to recognized owner hotkeys (`owner-recycle`), with existing SN25 miner
-> registrations reset. Read the emission figures above as the steady‑state design.
+> **Mainnet launch.** [`mainnet/MAINNET.md`](mainnet/MAINNET.md) records the SN25 launch.
+> Provider weights fill the **momentum** share of the native miner allocation, **10%** at
+> launch, and the reserve (`ur-reserve`) receives the rest, miner emissions × (1 − momentum),
+> so its share is not fixed. Existing SN25 miner registrations stay and are left to ordinary
+> pruning. Read the emission figures above as the steady‑state design.
 
 #### How validators score
 

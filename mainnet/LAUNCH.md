@@ -10,6 +10,72 @@ prove readiness. At preparation time, activation is `blocked` and all five
 fields below are empty. This document does not authorize new transactions or
 assert that installation, hardware signing or live readiness has succeeded.
 
+The deployment ran on 2026-10-08. [As launched](#as-launched--october-8)
+records what was deployed. Where the launch departed from the plan below, the
+plan stays as written and is marked **As launched** or **Superseded** in place.
+
+## As launched — October 8
+
+- **Validator.** The sole validator is UID 1, the SN25 owner hotkey
+  `5CyQFykVpfa9xgZVGgBsiNUpjbo1EihBTSkPvDC1FZbL1wxG` (`0x2830…c67b`). Its
+  coldkey is `ur-owner`, not `ur-mainnet`. `ur-mainnet` keeps its root seat,
+  UID 21, through the [passive root service](ROOT-PASSIVE-SERVICE.md).
+- **Runtime.** The pinned runtime is 475: source `d1718c99`, code
+  `0x557634c8…d3a0`, metadata `0x983cfdab…95ff`
+  ([review](../docs/spec/runtime-475-audit.md)). The validator config opts into
+  runtime successors with
+  `runtime_successor_profile: urnetwork-validator-producer-interface-v1`
+  ([successor admission](VALIDATOR-PRODUCTION-RUNTIME.md#signed-successor-admission)).
+- **Policy.** Hash
+  `0x6b188830b47e3b7dbfafc2839d7e1f460125115c9fbded053fa46293c79130a2`. Epoch 0
+  was a short 7,200-block epoch. `schedulePolicy` then switched to weekly
+  50,400-block epochs from epoch 1, effective block 9,247,228.
+- **Contracts.** On chain 964 the deployer `0xA9D4…C090` ran all eight actions
+  in one plan, `sha256:e93e7b90…ff83`, start block 9,239,923:
+
+  | Order | Action | Block | Contract |
+  | --- | --- | --- | --- |
+  | 0 | `reserve-create` | 9,239,983 | Reserve sink `0x134a70Cbe45eA14324536feca4d6F08FDDee9245` |
+  | 1 | `vault-create` | 9,239,994 | Settlement vault `0x98BF47ba01828676855B5ED10F2f22a867F0cB59` |
+  | 2 | `coordinator-create` | 9,240,004 | Coordinator implementation `0x5177268c0a22154866c7a6a79df3deab77c1e509` |
+  | 3 | `escrow-register` | 9,240,015 | Escrow registered |
+  | 4 | `proxy-create` | 9,240,028 | Coordinator proxy `0xC18925925E2B7bb9059b7d696b8c92762AE86406`; epoch 0 starts |
+  | 5 | `reserve-link` | 9,240,039 | |
+  | 6 | `vault-link` | 9,240,049 | |
+  | 7 | `evidence-create` | 9,240,067 | Validator evidence `0x170617750c98968185b2f40540e60b49adaf7448` |
+
+- **Governance Safe.** The 1-of-1 Safe
+  `0x56F4Dad575576CC0B679FEf52899630f9F605418` made three calls:
+  - `registerOperator` at block 9,240,168: `no_id` 1, pool hotkey `5H9Cnf…`,
+    which is SN25 UID 169;
+  - `fixValidatorEvidence` at block 9,240,171;
+  - `schedulePolicy` at block 9,240,407.
+
+  All three were direct Safe `execTransaction` calls from the owner, not the
+  successor-execution ceremony. The plain `validator activate` path needs only
+  the on-chain evidence anchor.
+  `sn-mainnet activate-validators admit-current|start` and the installation
+  readback were not used.
+- **Validator activation.** A relayer transaction at block 9,240,402 published
+  the validator's activation for epoch 1.
+- **Reserve.** Providers receive momentum, 10% at launch, and `ur-reserve` the
+  rest, miner emissions × (1 − momentum). `ur-reserve`, the 2-of-3 multisig,
+  registered its recipient hotkeys through its own multisig as SN25 UIDs 170 and
+  250.
+- **Custody.** Snow keeps custody on its root filesystem, after the USB data
+  disk at `/mnt/data` was retired:
+  - bootstrap custody `/srv/sn25/mainnet/sn25`, owned by `by`;
+  - the validator tree `/srv/sn25/sn-validator`;
+  - `/etc/sn-validator` for the pending and final validator configs and the
+    durable-volumes declaration.
+
+  Daemon durable custody on `/` is allowed since Connect `e9388b83`.
+- **Operator server.** `vault/main/st.yml` carries the mainnet values, the
+  signed operator gas policy (digest `e2de5acf…`, 30 gwei fee cap) and the
+  launch readiness digest `10541276…1924`. `config/main/sn.yml` activation is
+  `reviewed`. The operator's enablement and the reserved validator-upload block
+  follow the validator's epoch-1 start.
+
 ## The five fields, in plain language
 
 | Field | Meaning | How to obtain it |
@@ -75,7 +141,8 @@ the restricted management and LAN networks.
 Use the official Finney endpoint only as the independent reference.
 The previous LAN testnet endpoint is not a mainnet fallback. A fresh runtime
 number or an RPC response alone does not approve runtime signing authority. The
-v470 artifact exception was planning-only.
+v470 artifact exception was planning-only. The launch validator pins runtime
+475 and opts into runtime successors ([as launched](#as-launched--october-8)).
 
 Collect these inputs before requesting signatures:
 
@@ -114,13 +181,18 @@ messages and reviewed pins, never seed phrases or copied keys.
 
 | Authority | Request | Result |
 | --- | --- | --- |
-| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | One call: a `set_children` on SN25 naming `ur-mainnet` as the SN25 owner hotkey's child at 100% ([root validator](#root-validator-on-netuid-0)). No ownership or alpha moves. There is no owner trim (step 2 of the [execution order](#execution-order-and-parallel-work)) and no coldkey swap ([hard rule](#hard-rule-sn25-ownership-stays-with-ur-owner)). If a trim is ever selected, two signatories sign it through the [native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner) path | Finalized native multisig call |
+| SN25 owner: the `ur-owner` 2-of-3 native multisig (brien-ur-owner on Brien's Ledger account 1, jack-ur, keith-ur) | One call, superseded at launch because the SN25 owner hotkey is itself the validator ([as launched](#as-launched--october-8)): a `set_children` on SN25 naming `ur-mainnet` as the SN25 owner hotkey's child at 100% ([root validator](#root-validator-on-netuid-0)). No ownership or alpha moves. There is no owner trim (step 2 of the [execution order](#execution-order-and-parallel-work)) and no coldkey swap ([hard rule](#hard-rule-sn25-ownership-stays-with-ur-owner)). If a trim is ever selected, two signatories sign it through the [native multisig owner](OWNER-SIGNING.md#native-multisig-owner-ur-owner) path | Finalized native multisig call |
 | Ed25519 approval key: one operator-held key in `root/subtensor/approval/` (owner decision, October 7: approvals of plans that don't touch the chain need no multiparty sign-off) | Exact bytes emitted by plan previews for the specified approval domain | Approval envelope binding the exact plan, not transaction custody |
 | EVM deployer `0xA9D4A6a331F59942BD7389a5402120D69047C090` (Brien's Ledger, Ethereum app) | Exact approved EIP-1559 creation/link transaction | Binary signed chain-964 transaction |
 | Coordinator governance Safe owner: `0x16C372dbBb24cd8473345ab13971E40814C8658F` (Brien's Ledger, Ethereum app), the only owner of the 1-of-1 Safe | Exact evidence-anchor Safe EIP-712 transaction | One accepted 65-byte Safe signature |
 | Safe relayer `0x81E925DAEC15cb334d4b9FD90e9c4f10025eB666` (Brien's Ledger, Ethereum app) | Exact outer EIP-1559 `execTransaction` transaction | Binary signed relayer transaction |
 | Operator signers | Their separately approved deposit and payout-root operations | Role-specific EVM signatures |
-| `ur-mainnet` 2-of-3 multisig (Brien's Ledger account 10, Jack, Keith), which owns the validator hotkey | SN25 and root registration, root stake, auto parent opt-out and the 18% takes ([root validator](#root-validator-on-netuid-0)) | Finalized native multisig calls |
+| `ur-mainnet` 2-of-3 multisig (Brien's Ledger account 10, Jack, Keith), which owns the `ur-mainnet` hotkey: planned as the validator, it holds root seat UID 21 at launch ([as launched](#as-launched--october-8)) | SN25 and root registration, root stake, auto parent opt-out and the 18% takes ([root validator](#root-validator-on-netuid-0)) | Finalized native multisig calls |
+
+**As launched.** The Safe owner sent `registerOperator`, `fixValidatorEvidence`
+and `schedulePolicy` as direct `execTransaction` calls. The Safe-signature and
+relayer rows above describe the successor-execution ceremony, which the launch
+did not use ([as launched](#as-launched--october-8)).
 
 `ur-owner` is `5HTeZ5168DjjGWZgbvzGfysEAj9fnexF24gYFKJHENU5cc8a`, the chain's
 `SubnetOwner(25)`. brien-ur-owner is `5HnhcDkB7fQcbabDsmQXeP6N4fDKnciKjMkKCScUwkJYHH3u`
@@ -184,7 +256,9 @@ until installation readback has completed.
    owner-trim tooling remains available if the owner ever selects it.
    Register our zero-emission keys close to launch, within their 21,600-block
    immunity, so UR's weights reach them before ordinary pruning could: the two
-   reserve recipients and the `ur-mainnet` validator hotkey.
+   reserve recipients and the `ur-mainnet` validator hotkey. **Superseded:** the
+   launch validator is the SN25 owner hotkey, UID 1, and `ur-mainnet` holds root
+   seat UID 21 ([as launched](#as-launched--october-8)).
 3. Install the eight-action contract graph sequentially, retaining every receipt.
 4. Perform the separately approved Safe evidence-anchor successor and complete
    pristine installation readback **before operator/service population**.
@@ -193,6 +267,13 @@ until installation readback has completed.
    routing, database earning-boundary preparation and service dependencies.
 6. Assemble the final receipt, obtain review, hash it, publish matching public and
    operator identity fields, then verify actual service adoption.
+
+**As launched.** Step 4 is superseded. The owner sent `fixValidatorEvidence` as
+a direct Safe `execTransaction` at block 9,240,171, with no successor ceremony
+and no installation readback, and `registerOperator` had already landed at block
+9,240,168. The [launch record](#as-launched--october-8) has the contract, Safe,
+activation and operator-server results. The operator's enablement and the
+reserved validator-upload block follow the validator's epoch-1 start.
 
 Treasury setup uses `ur-reserve`'s own multisig. Two signatories approve
 `register_limit` for each of the two recipients, so there is no coldkey swap and no
@@ -328,6 +409,8 @@ Review plan output and the exact typed fields in
 | 7 | `evidence-create` | Create validator evidence contract, still unanchored |
 
 All eight use the approved deployer and consecutive nonces starting at `n`.
+As launched, all eight ran in one plan, `sha256:e93e7b90…ff83`; the
+[launch record](#as-launched--october-8) lists their blocks and addresses.
 For one action at a time, after its predecessors are canonically complete:
 
 ```bash
@@ -364,6 +447,13 @@ Never repeat completed CREATEs or change accepted graph/nonces to escape an
 ambiguous outcome.
 
 ### Safe evidence anchor and installation readback
+
+**Superseded at launch.** The launch did not use this procedure. The owner sent
+`fixValidatorEvidence` at block 9,240,171 as a direct Safe `execTransaction`
+call, as it did `registerOperator` and `schedulePolicy`. The plain
+`validator activate` path needs only that on-chain anchor. The installation
+readback below was not used. The procedure is kept as the reviewed successor
+path ([as launched](#as-launched--october-8)).
 
 `evidence-anchor` is **not** an accepted `bootstrap-contracts --action`. It is a
 separate approved successor calling `fixValidatorEvidence(evidence)` through the
@@ -424,7 +514,8 @@ The owner approved the mainnet policy on October 7:
 [`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml), hash
 `0x6b188830b47e3b7dbfafc2839d7e1f460125115c9fbded053fa46293c79130a2`. It has one
 operator and one validator, the treasury's 32768 weight cap, the zero-price launch
-and 12-epoch fleet bindings. It is not installed yet.
+and 12-epoch fleet bindings. It is the deployed policy
+([as launched](#as-launched--october-8)).
 
 Its first epoch is accelerated (`after_accelerated_epochs: 1`) so the validator can
 start a day after the contracts deploy rather than a week. `validator activate`
@@ -440,6 +531,11 @@ vault's immutable minimum claim window comes from epoch 0: 8 × 7,200 blocks,
 about 8 days. Policy claims still stay open 8 epochs plus 1 of grace. The owner
 accepted that floor on October 7. The earlier all-weekly policy, hash
 `0xca3274895fa7423e1a49d686dbaeea8f970ee1e4b28c268eb624723d4108011c`, is superseded.
+
+As launched, epoch 0 ran 7,200 blocks from the proxy's creation at block
+9,240,028. The validator's activation for epoch 1 was published at block
+9,240,402, and `schedulePolicy` landed at block 9,240,407. Weekly 50,400-block
+epochs start with epoch 1 at block 9,247,228.
 
 There is no dedicated `policy-hash` CLI. Save this helper outside repository
 package directories, for example `$REVIEW_DIR/policyhash.go`, then run it from
@@ -490,16 +586,22 @@ original compact bytes.
 
 ## Native reserve and service prerequisites
 
-The selected launch economics are **10% of native miner allocation to providers
-and 90% to the native reserve**, with equal weight for paid/free completed
-traffic. This supersedes the earlier owner-recycling proposal.
+The selected launch economics pay providers **momentum**, the share of the
+native miner allocation paid to providers now, which is 10% at launch. The
+native reserve, `ur-reserve`, receives the rest, miner emissions ×
+(1 − momentum), so its share is not fixed. Paid and free completed traffic carry
+equal weight. The signed treasury policy pins providers `1/10`, momentum's
+launch value, and treasury `9/10`, 1 − momentum at launch; changing momentum
+requires a newly signed treasury policy and approval. This supersedes the
+earlier owner-recycling proposal.
 
 At least two ordinary registered recipient hotkeys must be owned by the reserve
 coldkey, outside the subnet-owner hotkey set and provider roles. Retain observed
 UID/hotkey/coldkey/registration generations; initially split the reserve row
-approximately 45% each because of the native per-weight cap. In an epoch with no
-provider weight, the validator submits the treasury's reserve-only row instead:
-half to each recipient and nothing to providers, marked
+approximately 45% each because of the native per-weight cap. `ur-reserve`
+registered its two recipients through its own multisig as SN25 UIDs 170 and
+250. In an epoch with no provider weight, the validator submits the treasury's
+reserve-only row instead: half to each recipient and nothing to providers, marked
 `reserve_only_empty_provider_allocation`, which every verifier rederives
 ([treasury production](../validator/TREASURY-PRODUCTION.md)). An empty recipient
 list identifies a destination but cannot establish routing readiness.
@@ -544,6 +646,13 @@ and focused-test receipts. Existing code-only evidence is not a mainnet capture.
 
 ## Root validator on netuid 0
 
+**As launched.** The sole SN25 validator is the SN25 owner hotkey, UID 1, whose
+coldkey is `ur-owner`; it is not `ur-mainnet`. `ur-mainnet` keeps its root seat,
+UID 21, through the [passive root service](ROOT-PASSIVE-SERVICE.md). The
+October 6 and 7 decisions below are kept as written; each statement that
+`ur-mainnet` validates SN25 is marked superseded
+([as launched](#as-launched--october-8)).
+
 The owner decided on October 6 ([operator discovery design](../docs/OPERATOR-DISCOVERY.md),
 sections 1.6 and 7):
 
@@ -551,7 +660,9 @@ sections 1.6 and 7):
   `root/subtensor/wallets/ur-mainnet`, hotkey `default`), not the SN25 owner hotkey.
   It is the `hotkey_seed_file` of the signed UR validator config, sits on root
   (netuid 0) and validates SN25
-  ([current root participation](ROOT-CURRENT-PARTICIPANT.md)).
+  ([current root participation](ROOT-CURRENT-PARTICIPANT.md)). **Superseded:**
+  the launch validator is the SN25 owner hotkey, and `ur-mainnet` keeps the
+  root seat.
 - Its coldkey is the **`ur-mainnet` 2-of-3 native multisig**
   `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are:
   - `brien-ur-mainnet`, `5Fy6EbewyBPJi565JP1P5zgFsiGXfwSs8ZYpMWNJA8gpfNit`, on
@@ -592,14 +703,16 @@ so they are not used for this multisig-owned hotkey.
 On October 7 the owner decided that the launch has one operator and one validator:
 
 - `ur-mainnet` is the launch's only UR validator, and UR is the only operator.
-  The approved policy's minimums are one live validator and one healthy
-  operator. The config has `controlled_no_ids: []`, so the validator scores UR's
-  own pool; nothing independent cross-checks it.
+  **Superseded** in its identity: the only UR validator is the SN25 owner
+  hotkey, UID 1. The approved policy's minimums are one live validator and one
+  healthy operator. The config has `controlled_no_ids: []`, so the validator
+  scores UR's own pool; nothing independent cross-checks it.
 - It steers SN25 only while it holds more than kappa (50%) of validator stake.
   The SN25 owner, the `ur-owner` multisig, signs one call for this, separate from
   the `ur-mainnet` steps: a `set_children` on SN25 naming `ur-mainnet` as the
   SN25 owner hotkey's child at 100%, so the owner hotkey's stake weight counts
   for our validator. No ownership or alpha moves, and there is no coldkey swap.
+  **Superseded:** the SN25 owner hotkey is itself the launch validator.
 
 ### Register the hotkey on root
 
@@ -613,7 +726,9 @@ then makes the hotkey the full-weight parent of every subnet owner hotkey, SN25'
 included. The runtime skips only a subnet where the hotkey already has current or
 pending children, or is itself the owner hotkey. We own SN25, but the SN25 owner
 hotkey doesn't run this validator. Left on, our validator's SN25 weight would move
-to the owner hotkey, and so would the stake of everyone keyed to us.
+to the owner hotkey, and so would the stake of everyone keyed to us. This
+reasoning predates the launch, where the SN25 owner hotkey is the validator
+([as launched](#as-launched--october-8)).
 
 With btcli (bittensor 11) through the multisig:
 
@@ -713,6 +828,11 @@ The paths and hash are inventory variables; nothing secret is committed. The
 playbook refuses to start unless the config, seed and durable-volume files exist
 with the expected mode and owner. The coldkey seed never goes to snow.
 
+As launched, the validator tree is `/srv/sn25/sn-validator`, and
+`/etc/sn-validator` holds the pending and final validator configs and the
+durable-volumes declaration, all on snow's root filesystem
+([as launched](#as-launched--october-8)).
+
 For the readiness receipt, retain the finalized root registration, the take
 journal entries, the `take status` output and the service's progress file.
 
@@ -733,7 +853,8 @@ Include:
   policy, links, governance and role readbacks; installation identity hash.
 - Selected Safe assurance policy and its precise limitations.
 - Runtime/metadata/network authority and approved submission-route evidence.
-- Actual native roles and reserve recipient census; signed 10/90 treasury policy.
+- Actual native roles and reserve recipient census; the signed treasury policy
+  (providers `1/10` and treasury `9/10` at launch).
 - Operator/validator public configuration projections, dependencies, schema and
   earning-boundary preparation, monitoring and recovery evidence.
 - Explicit unresolved blockers/exceptions and independent reviewer decision.
@@ -794,6 +915,10 @@ This is not the full operator config: its existing enable/profile/network,
 operator ID, deployment block, signers and other required settings still apply.
 Do not print the secrets file into logs or the handoff. Validate public
 projections and signed validator/operator configurations separately.
+
+As launched, `vault/main/st.yml` carries the mainnet values and the launch
+readiness digest `10541276…1924`, and `config/main/sn.yml` activation is
+`reviewed` ([as launched](#as-launched--october-8)).
 
 Run `bringyourctl sn-transition-status` with the selected main environment; it
 reports configuration/declaration matching, not proof of running services or

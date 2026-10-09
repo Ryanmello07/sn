@@ -1,9 +1,50 @@
 # Mainnet launch and operations plan
 
+## As launched — October 8
+
+The SN25 launch deployment ran on 2026-10-08. This record supersedes earlier current-state statements, including
+`activation: blocked` and `ur-mainnet` as the validator. [LAUNCH.md](LAUNCH.md#as-launched--october-8) marks the runbook
+steps that the launch replaced.
+- **Sole validator.** UID 1, the SN25 owner hotkey `5CyQFykVpfa9xgZVGgBsiNUpjbo1EihBTSkPvDC1FZbL1wxG` (`0x2830…c67b`),
+  coldkey `ur-owner`, not `ur-mainnet`. `ur-mainnet` keeps its root seat, UID 21, through the
+  [passive root service](ROOT-PASSIVE-SERVICE.md).
+- **Runtime.** The pinned runtime is 475: source `d1718c99`, code `0x557634c8…d3a0`, metadata `0x983cfdab…95ff`
+  ([review](../docs/spec/runtime-475-audit.md)). The validator config opts into runtime successors with
+  `runtime_successor_profile: urnetwork-validator-producer-interface-v1`
+  ([successor admission](VALIDATOR-PRODUCTION-RUNTIME.md#signed-successor-admission)).
+- **Policy.** Hash `0x6b188830b47e3b7dbfafc2839d7e1f460125115c9fbded053fa46293c79130a2`. Epoch 0 was a short 7,200-block
+  epoch. `schedulePolicy` then switched to weekly 50,400-block epochs from epoch 1, effective block 9,247,228.
+- **Contracts.** Chain 964, deployer `0xA9D4…C090`, all eight actions in one plan (`sha256:e93e7b90…ff83`, start block
+  9,239,923):
+  - reserve sink `0x134a70Cbe45eA14324536feca4d6F08FDDee9245`, block 9,239,983;
+  - settlement vault `0x98BF47ba01828676855B5ED10F2f22a867F0cB59`, block 9,239,994;
+  - coordinator implementation `0x5177268c0a22154866c7a6a79df3deab77c1e509`, block 9,240,004;
+  - escrow registered, block 9,240,015;
+  - coordinator proxy `0xC18925925E2B7bb9059b7d696b8c92762AE86406`, block 9,240,028, where epoch 0 starts;
+  - reserve-link at block 9,240,039 and vault-link at block 9,240,049;
+  - validator evidence `0x170617750c98968185b2f40540e60b49adaf7448`, block 9,240,067.
+- **Governance Safe.** `0x56F4Dad575576CC0B679FEf52899630f9F605418` (1-of-1) called `registerOperator` at block 9,240,168
+  (`no_id` 1, pool hotkey `5H9Cnf…`, SN25 UID 169), `fixValidatorEvidence` at block 9,240,171 and `schedulePolicy` at
+  block 9,240,407. These were direct Safe `execTransaction` calls from the owner, not the
+  [successor-execution](BOOTSTRAP-SUCCESSOR-EXECUTION.md) ceremony. The plain `validator activate` path needs only the
+  on-chain evidence anchor. `sn-mainnet activate-validators admit-current|start` and the installation readback were not
+  used.
+- **Validator activation.** A relayer transaction at block 9,240,402 published the validator's activation for epoch 1.
+- **Reserve.** Providers receive momentum, 10% at launch, and `ur-reserve` the rest, miner emissions × (1 − momentum).
+  `ur-reserve`, the 2-of-3 multisig, registered its recipient hotkeys through its own multisig as SN25 UIDs 170 and 250.
+- **Custody.** Snow keeps custody on its root filesystem, after the USB data disk at `/mnt/data` was retired; the
+  `/mnt/data` paths in older sections name that disk. Bootstrap custody is `/srv/sn25/mainnet/sn25`, owned by `by`. The
+  validator tree is `/srv/sn25/sn-validator`, and `/etc/sn-validator` holds the pending and final validator configs and
+  the durable-volumes declaration. Daemon durable custody on `/` is allowed since Connect `e9388b83`.
+- **Operator server.** `vault/main/st.yml` carries the mainnet values, the signed operator gas policy (digest
+  `e2de5acf…`, 30 gwei fee cap) and the launch readiness digest `10541276…1924`. `config/main/sn.yml` activation is
+  `reviewed`. The operator's enablement and the reserved validator-upload block follow the validator's epoch-1 start.
+
 ## One operator and one validator — October 7
 
 The owner decided that SN25 launches with **one network operator (UR) and one validator (`ur-mainnet`)**, and that the
-coordinator's governance Safe starts with one owner. The code still supports the two-operator, two-validator and 2-of-3
+coordinator's governance Safe starts with one owner. At launch the validator is the SN25 owner hotkey instead
+([as launched](#as-launched--october-8)). The code still supports the two-operator, two-validator and 2-of-3
 forms with unchanged behavior and bytes; the launch uses the new one-operator, one-validator and 1-of-1 forms:
 - **Policy.** The approved [`deploy/mainnet/policy-v1.yml`](../deploy/mainnet/policy-v1.yml), hash
   `0x6b188830b47e3b7dbfafc2839d7e1f460125115c9fbded053fa46293c79130a2`, sets `minimum_healthy_no_count` and
@@ -16,6 +57,7 @@ forms with unchanged behavior and bytes; the launch uses the new one-operator, o
 - **Stake.** A validator steers SN25 only while it holds more than kappa (50%) of validator stake. `ur-owner` signs one
   launch call: a `set_children` on SN25 that names `ur-mainnet` as the SN25 owner hotkey's child at 100%, so the owner
   hotkey's stake weight counts for `ur-mainnet`. No ownership or alpha moves, and there is still no coldkey swap.
+  Superseded at launch: the SN25 owner hotkey is itself the validator.
   `bootstrap-chain readiness` keeps `EFFECTIVE_STAKE_MAJORITY_UNVERIFIED` on the sole validator.
 - **Evidence.** With one configured operator, that operator's own server holds the only release V2 evidence replica.
 - **Reserve-only row.** On the mainnet schema-3 treasury path, an epoch whose provider allocation is genuinely empty
@@ -30,7 +72,8 @@ forms with unchanged behavior and bytes; the launch uses the new one-operator, o
   `0x16C372dbBb24cd8473345ab13971E40814C8658F`, threshold 1, created by the relayer in block 9,229,341. Only the
   execution request schema `urnetwork-mainnet-successor-execution-single-owner-request-v1` selects this profile, with one
   65-byte EIP-712 signature ([successor execution](BOOTSTRAP-SUCCESSOR-EXECUTION.md)). Owners can be added and the
-  threshold raised later by a Safe transaction.
+  threshold raised later by a Safe transaction. At launch the Safe's three calls were direct `execTransaction` calls
+  from the owner, not successor executions ([as launched](#as-launched--october-8)).
 - **EVM roles.** Brien's Ledger (Ethereum app) holds the deployer `0xA9D4A6a331F59942BD7389a5402120D69047C090`, the Safe
   owner, the guardian `0x450C14EA62F76F11630780e194E01F9f524BAbFd` and the Safe relayer
   `0x81E925DAEC15cb334d4b9FD90e9c4f10025eB666`. The commitment oracle `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a
@@ -59,11 +102,14 @@ The bootstrap preparation still carries its census and protection set. Its trim-
 recorded in the readiness receipt. Our zero-emission keys are registered close to launch, inside their 21,600-block
 immunity, so UR's weights reach them before ordinary pruning could:
 - the two `ur-reserve` recipients;
-- the `ur-mainnet` validator hotkey.
+- the `ur-mainnet` validator hotkey. Superseded at launch: the validator is the SN25 owner hotkey, UID 1, and
+  `ur-mainnet` holds root seat UID 21.
 
 The multisig owner-trim tooling (`OWNER-SIGNING.md`) remains available if a trim is ever selected.
 
 ## Root validator decision and take checkpoint — October 6
+
+**As launched (October 8):** the SN25 validator is the owner hotkey, UID 1, under `ur-owner`, and `ur-mainnet` keeps its root seat, UID 21, through the passive root service. Statements below that make `ur-mainnet` the SN25 validator are superseded ([as launched](#as-launched--october-8)).
 
 The owner set the root validator's terms ([operator discovery design](../docs/OPERATOR-DISCOVERY.md), sections 1.6 and 7). For our own hotkey this supersedes the passive, observation-only root strategy in [Root validator on netuid 0](#root-validator-on-netuid-0); the reviewed `root-register` workflow and its custody rules keep their scope.
 
@@ -72,10 +118,10 @@ The owner set the root validator's terms ([operator discovery design](../docs/OP
 - **Deployment.** The validator runs on snow as a systemd service installed by `xops/main/ansible/run-validator.sh`, which builds the binary locally the way `run-edges.sh` builds `warpctl`. The unit runs `validator run --config=<path> --progress-file=<path> --durable-volumes=<path> --durable-volumes-sha256=<hash> --operators-refresh=1h`.
 - **Weights.** The validator weights only the operators pinned in its signed release config. `--operators-refresh` reports drift between `ur.xyz/operators.yml` and the pinned operators; it never changes weights, evidence or protocol state.
 
-- **Dedicated hotkey** (owner decision, October 6). The validator hotkey is the dedicated `ur-mainnet` hotkey, not the SN25 owner hotkey, and the SN25 owner Ledger signs none of its operations.
+- **Dedicated hotkey** (owner decision, October 6; superseded at launch). The validator hotkey is the dedicated `ur-mainnet` hotkey, not the SN25 owner hotkey, and the SN25 owner Ledger signs none of its operations. At launch the validator is the SN25 owner hotkey, and `ur-mainnet` holds root seat UID 21.
 - **Multisig coldkey.** Its coldkey is the `ur-mainnet` 2-of-3 native multisig `5C9z2rXL1WFLVF78EVg7LZJ8zSi4FheXmbj8omrVhRZCxnQ3`. The signatories are `brien-ur-mainnet` (Brien's Ledger, `m/44'/354'/10'/0'/0'`), `jack-ur` and `keith-ur`, the same pattern as the other `ur-*` multisigs. Registration, stake and take changes are multisig calls; `validator take status` reads them back.
 
-One runtime consequence needs its own step. Unless auto parent delegation is disabled first, `root_register` makes the hotkey the full-weight parent of every subnet owner hotkey, SN25's included. Our SN25 stake weight would then go to the SN25 owner hotkey, which is ours but doesn't run this validator. The validator's coldkey disables it with `set_auto_parent_delegation_enabled(hotkey, false)` before root registration. [LAUNCH.md](LAUNCH.md#root-validator-on-netuid-0) has the sequence.
+One runtime consequence needs its own step. Unless auto parent delegation is disabled first, `root_register` makes the hotkey the full-weight parent of every subnet owner hotkey, SN25's included. Our SN25 stake weight would then go to the SN25 owner hotkey, which is ours but doesn't run this validator; this predates the launch, where the SN25 owner hotkey is the validator. The validator's coldkey disables it with `set_auto_parent_delegation_enabled(hotkey, false)` before root registration. [LAUNCH.md](LAUNCH.md#root-validator-on-netuid-0) has the sequence.
 
 **Code checkpoint.** `validator take status`, `take set` and `take childkey` (`validator/take.go`) sign `decrease_take`, `increase_take` and `set_childkey_take` with the coldkey seed on the `validator stake add` path. That path covers:
 - authentication of the pinned runtime, with the live take, bounds and last change read at the finalized block;
@@ -113,19 +159,19 @@ The final builds consumed SN `ff1ba7d2`, Server `875fbca2` and Connect `501c172d
 
 The earlier paired package builds, fixture4 and storage tests use SN `bc3c20d0`, Server `a4da14a5` and Connect `501c172d`. The later local cancellation, DB and economic-progress tests use SN `9a21e156` with the same Server and Connect revisions. Treasury7 and miner4 use SN `ff1ba7d2`, again with Server `a4da14a5` and Connect `501c172d`; the later paired builds and Server operator checks retain their separate receipts. Deadline22 retains Server `948f12a7` / Connect `a5dfb3c7`; taxonomy14 retains its separate earlier tuple and umask. Earlier builds, interop2 and direct tests remain pinned in the initial index. Each result retains its source and selection, with no blanket test qualification for later upstream changes. Earlier retention20 and raw-version scope3 passes remain retained alongside the original Rust11 10 PASS / 1 FAIL record.
 
-The selected economics remain **10% for providers and 90% received by `ur-reserve`**, which sends no funds. Earlier recycle routing and mandatory reserve-signing statements retain historical scope only. Live mainnet capture, production database migration, deployment and activation were outside this code/test task. The original capture-v2 failure and its unretained raw RPC reply remain in the [operational evidence](/home/by/sn-testnet-root-fallback-20261005/original-epoch9218962-v2/run/evidence/closed-owner-readback-v1.json); they are not reclassified by these code results. `activation: blocked` is unchanged.
+The selected economics pay providers **momentum**, the share of the native miner allocation paid to providers now (10% at launch), and `ur-reserve` the rest, miner emissions × (1 − momentum); `ur-reserve` signs only to register its own recipient hotkeys. Earlier recycle routing and mandatory reserve-signing statements retain historical scope only. Live mainnet capture, production database migration, deployment and activation were outside this code/test task. The original capture-v2 failure and its unretained raw RPC reply remain in the [operational evidence](/home/by/sn-testnet-root-fallback-20261005/original-epoch9218962-v2/run/evidence/closed-owner-readback-v1.json); they are not reclassified by these code results. `activation: blocked` is unchanged.
 
 The selected deployment fields `deployment_id`, `coordinator`, `settlement_vault`, `policy_hash` and `readiness_sha256` remain empty. Owner/root/operator custody and roles, registered recipient setup, runtime authority and activation remain operational work outside this code/test scope. Historical pending statements keep their dated scope; the current qualification above records implementation and test status.
 
 ## Current reserve and economic decision — October 5
 
-The user selected **10% of the native miner allocation for providers and 90% received by `ur-reserve` for future network improvements**. `ur-reserve` only receives funds and does not send funds, including registration charges or setup fees. Use the supplied native address and public recipient hotkeys; reserve receiving does not require multisig reconstruction, signatory identities, Ledger device configuration or general spending/signing qualification. Fund recipient setup separately and use the runtime-supported receiving-only ownership-transfer path described in [recipient setup](TREASURY-RECEIVE-SETUP.md); its observed delay remains a launch constraint. This supersedes the earlier mandatory reserve-signing workflow and the owner-recycle economic choice. The treasury remains separate from provider claim collateral and the immutable, one-way `STReserveSink`.
+The user selected **10% of the native miner allocation for providers and 90% received by `ur-reserve` for future network improvements**. In current terms, providers receive **momentum**, the share of the native miner allocation paid to providers now, 10% at launch; `ur-reserve` receives the rest, miner emissions × (1 − momentum), so its share is not fixed. The signed treasury policy pins providers `1/10`, momentum's launch value, and treasury `9/10`, 1 − momentum at launch; changing momentum requires a newly signed treasury policy and approval. `ur-reserve` is the 2-of-3 native multisig: it signs only to register its own recipient hotkeys, and it registered SN25 UIDs 170 and 250 that way. Use the supplied native address and public recipient hotkeys; receiving requires no reserve signature or general spending/signing qualification. The separately funded ownership-transfer setup chosen here, with its transfer delay, was replaced on October 6 by registration through `ur-reserve`'s multisig ([recipient setup](TREASURY-RECEIVE-SETUP.md)). This supersedes the earlier mandatory reserve-signing workflow and the owner-recycle economic choice. The treasury remains separate from provider claim collateral and the immutable, one-way `STReserveSink`.
 
-The receive-only destination is `5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR` (native AccountId32 `0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`). Its prefix-42 SS58 checksum and round trip are valid. The [public destination descriptor](TREASURY-EMISSIONS.md#public-configuration-contract), schema `urnetwork-native-treasury-destination-v1`, contains `profile`, `netuid`, `genesis_hash`, `account_id` and public `recipient_hotkeys`. Its explicit file must contain only that descriptor. If `vault/main/sn.yml` also contains root keys or other secrets, prepare a separate public-only snapshot and pin that snapshot; never supply the combined vault file to the treasury CLI. The strict earnings schedule in `config/main/sn.yml` remains separate. Use `treasury describe --destination FILE --destination-sha256 HASH`; the same destination flags select receive-only `observe` and `policy-plan` with their explicit `--input`.
+The reserve destination is `5CcHGEqKK3RXeEA2sVycHQAQGrqsyhWaYu9FjGtDVN6nwMwR` (native AccountId32 `0x1815103f41a8d1e24c55d380c6f843fb36d715b4322a4e4f02bff36dfe74a410`). Its prefix-42 SS58 checksum and round trip are valid. The [public destination descriptor](TREASURY-EMISSIONS.md#public-configuration-contract), schema `urnetwork-native-treasury-destination-v1`, contains `profile`, `netuid`, `genesis_hash`, `account_id` and public `recipient_hotkeys`. Its explicit file must contain only that descriptor. If `vault/main/sn.yml` also contains root keys or other secrets, prepare a separate public-only snapshot and pin that snapshot; never supply the combined vault file to the treasury CLI. The strict earnings schedule in `config/main/sn.yml` remains separate. Use `treasury describe --destination FILE --destination-sha256 HASH`; the same destination flags select `observe` and `policy-plan` in destination mode, with their explicit `--input`.
 
-Describe accepts the known address with an empty recipient list. Routing still requires at least two actual registered SN25 recipient hotkeys under the existing cap, authenticated `Owner`/UID/registration generations, owner-set exclusion, and an independently signed runtime and economic policy. No recipient hotkeys or registered generations have been supplied here. If they are missing on chain, one-time external registration and fresh readback are required. The receive-only path does not register keys or authorize reserve spending. The earlier confirmed **2-of-3 multisig** information applies only to the optional, unselected sending-custody workflow; its strict derivation and Ledger requirements remain intact for that workflow.
+Describe accepts the known address with an empty recipient list. Routing still requires at least two actual registered SN25 recipient hotkeys under the existing cap, authenticated `Owner`/UID/registration generations, owner-set exclusion, and an independently signed runtime and economic policy. `ur-reserve` registered its recipients through its own multisig as SN25 UIDs 170 and 250; a fresh readback binds their generations. The `--destination` path does not register keys or authorize reserve spending. `ur-reserve` is the confirmed **2-of-3 multisig**; the optional sending-custody workflow stays unselected, and its strict derivation and Ledger requirements remain intact for that workflow.
 
-The [receive-only treasury successor](TREASURY-EMISSIONS.md) still needs focused execution qualification and deployment. Existing recycle and multisig qualification retain their original scopes. Preserve the 38 original requirements, their counts and all retained evidence; earlier economic or mandatory reserve-custody statements below are historical. Owner, root and contract actions retain their own signing and authority requirements. The October 6 inclusive new-earnings boundary, pre-cutoff USDC obligations and `activation: blocked` remain unchanged. No keys, transactions or deployment are supplied by this decision.
+The [treasury successor](TREASURY-EMISSIONS.md) still needs focused execution qualification and deployment. Existing recycle and multisig qualification retain their original scopes. Preserve the 38 original requirements, their counts and all retained evidence; earlier economic or mandatory reserve-custody statements below are historical. Owner, root and contract actions retain their own signing and authority requirements. The October 6 inclusive new-earnings boundary, pre-cutoff USDC obligations and `activation: blocked` remain unchanged. No keys, transactions or deployment are supplied by this decision.
 
 ## Runtime migration and focused qualification — October 5, 19:45 UTC
 
@@ -2094,8 +2140,8 @@ receipts as explicitly retained observations, not fresh chain audits; these
 | Coordinator owner | Actual Safe with its approved owners and threshold. The launch Safe is SafeL2 1.4.1 `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` on Brien's Ledger (owner decision, October 7); owners can be added and the threshold raised later by a Safe transaction. The tooling also keeps the 2-of-3, three-owner profile. |
 | Guardian | Separate limited operational authority. `0x450C14EA62F76F11630780e194E01F9f524BAbFd` on Brien's Ledger (Ethereum app). |
 | Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. Its key `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a service key in `vault/main/sn.yml`; no mainnet oracle service exists yet. |
-| Root validator coldkey/hotkey | Existing root hotkey hardware custody and the actual root-owning/staker coldkeys or allowed proxies must be identified independently. The passive observer uses public identity and independent config/host approvals, without a native signer. Reviewed v470 accumulation needs no periodic hotkey signature; registration, claims, stake and basket actions use their specific coldkey/proxy authority. Neither root key role inherits the subnet owners' Ledger or approval. Actual device/API and live participation remain unverified. |
-| UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. |
+| Root validator coldkey/hotkey | Existing root hotkey hardware custody and the actual root-owning/staker coldkeys or allowed proxies must be identified independently. The passive observer uses public identity and independent config/host approvals, without a native signer. Reviewed v470 accumulation needs no periodic hotkey signature; registration, claims, stake and basket actions use their specific coldkey/proxy authority. Neither root key role inherits the subnet owners' Ledger or approval. Actual device/API and live participation remain unverified. At launch: the `ur-mainnet` hotkey under the `ur-mainnet` multisig, root seat UID 21, through the passive root service. |
+| UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. At launch: the SN25 owner hotkey, UID 1, coldkey `ur-owner`. |
 | Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. The [qualified worker custody check](evidence/operator-deposit-custody-qualification-20260930.md) still needs real wallet and coordinator verification. |
 | Vault mapped coldkey | Immutable tail-pool and escrow custody. No human holds its private key. |
 | Reserve mapped coldkey | Permanent reserve stake under the immutable sink. |
@@ -2126,9 +2172,11 @@ The escrow registration deliberately consumes a nonce before proxy creation. Pre
 
 The first eight actions through `n+7` have an offline executable path with complete scoped normal and race qualification; no live authority or installation is established. Anchor [STValidatorEvidence](../evm/src/STValidatorEvidence.sol) as a separately planned subsequent action with its genesis/deployment domain and coordinator/vault identities. The current release uses the coordinator's one-shot `fixValidatorEvidence`; an existing foreign anchor is a hard conflict. The Safe's inner nonce and a relayer's outer EVM nonce are distinct from the deployer CREATE graph and each need independently retained custody and canonical postconditions. Use the fresh mainnet nonce graph, not the sim-testnet graph's extra upgrade, fleet-helper or adversarial contracts. Mainnet artifacts must not include those test fixtures by default. [Evidence deployment reference](../sim-testnet/evidence_deployment.go), [readback reference](../sim-testnet/evidence_deployment_runtime.go)
 
+As launched on October 8, all eight actions ran in one plan. The owner sent `fixValidatorEvidence` as a direct Safe `execTransaction` at block 9,240,171, and `registerOperator` at block 9,240,168 the same way; no installation readback was used ([as launched](#as-launched--october-8)).
+
 Only then register the approved operator pool hotkeys under vault custody, establish reserve-target eligibility, activate evidence identities and future bindings, and fund reviewed stake/deposit positions. Provider-owned head miners register through their own authorized identities; bootstrap cannot sign for unrelated miners. Every registration is present in the spend/count plan. Reconcile pool/escrow collateral and minimum-transfer semantics before the first production capture; immutable custody must not become stranded by an unqualified runtime change.
 
-Use the actual [mainnet policy validation](../protocol/policy.go): a UR settlement epoch is **50,400 native blocks**, with the reviewed production root-commit/finalization/close windows and claim retention. The deploy script's mainnet reference windows are 1,200 / 14,400 / 120 blocks and 8 claim epochs plus 1 grace epoch. Encode all fields explicitly in the signed mainnet policy; do not inherit accelerated 300- or 360-block testnet settings. Mainnet economic caps, deposit tiers, theta, minimum operator/validator counts and binding horizons need independent review.
+Use the actual [mainnet policy validation](../protocol/policy.go): a UR settlement epoch is **50,400 native blocks**, with the reviewed production root-commit/finalization/close windows and claim retention. The deploy script's mainnet reference windows are 1,200 / 14,400 / 120 blocks and 8 claim epochs plus 1 grace epoch. Encode all fields explicitly in the signed mainnet policy; do not inherit accelerated 300- or 360-block testnet settings. Mainnet economic caps, deposit tiers, theta, minimum operator/validator counts and binding horizons need independent review. As launched, epoch 0 was a 7,200-block epoch, and `schedulePolicy` set weekly 50,400-block epochs from epoch 1 at block 9,247,228 ([as launched](#as-launched--october-8)).
 
 The [steady cadence candidate](evidence/mainnet-steady-cadence-candidate-20260928.md)
 represents mainnet from epoch zero with `after_accelerated_epochs: 0` and identical
@@ -2151,10 +2199,16 @@ Preserve the current guarantees: the coordinator owns neither custody position, 
 
 ## Running the validators
 
-**October 7 decision:** SN25 launches with one UR validator, `ur-mainnet`, whose hotkey also holds the root seat
-([decision](#one-operator-and-one-validator--october-7)). Its preparation is a one-role bootstrap v5, and it runs as
-`validator run` through xops on snow ([LAUNCH.md](LAUNCH.md#run-it-on-snow)). The two-unit `activate-validators`
-component below refuses v5 and is not the launch path; it remains for two-validator deployments.
+**As launched (October 8):** the sole validator is the SN25 owner hotkey, UID 1, under `ur-owner`. `ur-mainnet` keeps
+its root seat, UID 21, through the passive root service. A relayer transaction at block 9,240,402 published the
+validator's activation for epoch 1. The plain `validator activate` path needs only the on-chain evidence anchor;
+`activate-validators admit-current|start` below was not used ([as launched](#as-launched--october-8)).
+
+**October 7 decision**, superseded at launch in its validator identity: SN25 launches with one UR validator,
+`ur-mainnet`, whose hotkey also holds the root seat ([decision](#one-operator-and-one-validator--october-7)). Its
+preparation is a one-role bootstrap v5, and it runs as `validator run` through xops on snow
+([LAUNCH.md](LAUNCH.md#run-it-on-snow)). The two-unit `activate-validators` component below refuses v5 and is not the
+launch path; it remains for two-validator deployments.
 
 The [initial two-UR installation component](VALIDATOR-ACTIVATION.md) now provides
 a concrete `activate-validators` command for exact static-unit installation,
@@ -2223,6 +2277,8 @@ Nonempty intent graphs, historical provider bindings and the other launch gates
 remain open.
 
 ### Root validator on netuid 0
+
+**As launched (October 8):** `ur-mainnet` keeps its root seat, UID 21, through the passive root service described below, and the SN25 validator is the owner hotkey, UID 1 ([as launched](#as-launched--october-8)). This supersedes the October 6 decision that follows where it has our root hotkey validate SN25.
 
 **October 6 decision:** our validator hotkey runs on root and validates SN25 at an 18% delegate take and an 18% SN25 childkey take, and accepts child hotkeys from anyone; see [the decision record](#root-validator-decision-and-take-checkpoint--october-6). The passive observation path below remains the record of the earlier strategy.
 
@@ -2323,7 +2379,7 @@ Run the production [validator entry point](../cli/validator/main.go), using comp
 
 Observe effective alpha/root-stake contribution, child attribution, `TaoWeight`, stake threshold, permits, activity, CRv4 version, reveal schedule and mechanism state. Do not transplant the testnet stake target or an old 0.18/0.018 TAO multiplier. The inspected production epoch path gives the owner UID special eligibility treatment; another owned hotkey still needs its own proper eligibility. A configured process being alive does not prove it has a permit or that its weight row was revealed and applied. [Permit calculation][subtensor-epoch]
 
-The root seat does **not** count as a UR validator: a seat on netuid 0 alone does not validate the UR subnet, even when the same hotkey holds both, as at the SN25 launch. The approved mainnet policy requires at least one live validator and one healthy operator. By owner decision (October 7) the launch has exactly one of each, and its validator scores UR's own pool with no independent cross-check ([decision](#one-operator-and-one-validator--october-7)). Do not generate synthetic peers to satisfy the count.
+The root seat does **not** count as a UR validator: a seat on netuid 0 alone does not validate the UR subnet, even when the same hotkey holds both. At the SN25 launch they are separate hotkeys: the validator is the SN25 owner hotkey, UID 1, and `ur-mainnet` holds root seat UID 21. The approved mainnet policy requires at least one live validator and one healthy operator. By owner decision (October 7) the launch has exactly one of each, and its validator scores UR's own pool with no independent cross-check ([decision](#one-operator-and-one-validator--october-7)). Do not generate synthetic peers to satisfy the count.
 
 Capacity is computed from the union of actual UR hotkeys: head miners, one pool per operator, distinct UR validator identities, escrow and owner/other protected identities. Root-only membership consumes no UR slot. A validator-permit limit is not a reserved partition of UID space. Keep the release's one-mechanism requirement and approximately 200-head target only if the live capacity and all additional identities fit. Do not assume “200 miners + 56 validators” leaves space for pools and escrow.
 
@@ -3112,12 +3168,13 @@ The current [JSON schemas](PLAN.md) are `urnetwork-mainnet-plan-config-v2` and
 `treasury_destination` with the public destination schema, native account,
 genesis and any supplied recipient hotkeys; it carries no reserve signing
 fields. The default outline and current bound review use
-`urnetwork-mainnet-blocked-plan-v3`, with the `1/10` provider and `9/10`
-ordinary-native-treasury target and a `treasury-policy` requirement. Reserve
-signing custody and an owner Recycle-mode transition are not gates for this
-receive-only plan. Actual registered generations and independent signed
-economic/runtime authority remain required. Explicit historical v1 config and
-release schemas retain the original owner-recycle v2 review output.
+`urnetwork-mainnet-blocked-plan-v3`, with the `1/10` provider target (momentum's
+launch value), the `9/10` ordinary-native-treasury target (1 − momentum at
+launch) and a `treasury-policy` requirement. Reserve signing custody and an
+owner Recycle-mode transition are not gates for this plan. Actual registered
+generations and independent signed economic/runtime authority remain required.
+Explicit historical v1 config and release schemas retain the original
+owner-recycle v2 review output.
 
 The resulting blocked-plan hash cannot be passed as executable apply authority.
 Current review preserves the separation of action preconditions from produced
@@ -3253,7 +3310,7 @@ The complete schema also requires action-level value/gas/fee bounds, collateral 
 | Phase | Admission and work | Completion evidence |
 | --- | --- | --- |
 | 0. Evidence and production qualification | Preserve failed R48 and known exceptions; compose the launch release and close applicable MG-02 through MG-07 pre-activation checks on a controlled production-path rehearsal. Read-only identity discovery may proceed independently. | Exact release/qualification/exception manifests; no fabricated testnet pass or provisional authority carried into mainnet. |
-| 1. Mainnet inspect and review | Verify node/runtime, complete census, owner authority, capabilities, keys, artifacts, the no-trim decision (October 7), the receive-only treasury mechanism that superseded owner recycle, and budgets. | Canonical feasible plan and exact operator authorization; any expected retained old miners have an explicit launch disposition. |
+| 1. Mainnet inspect and review | Verify node/runtime, complete census, owner authority, capabilities, keys, artifacts, the no-trim decision (October 7), the `ur-reserve` treasury routing that superseded owner recycle, and budgets. | Canonical feasible plan and exact operator authorization; any expected retained old miners have an explicit launch disposition. |
 | 2. Cutover | No owner trim for the SN25 launch (owner decision, October 7): old registrations stay for ordinary pruning. Apply configuration changes within their native windows and register UR's zero-emission keys within their immunity. | Census and protection set recording the protected identities and the no-trim decision; retained old miners are reported, never labelled a reset. |
 | 3. Contracts and registration | Deploy exact custody graph, anchor evidence, register approved pool/escrow/head/validator identities. | Canonical finalized receipts, code/getter proofs and registration ownership. |
 | 4. Stake and service readiness | Apply bounded stake/deposit plans; admit both services, the policy's UR validator/operator safety set (one of each at the SN25 launch), independent monitor and on-call. | Current root membership, UR eligibility, authenticated runtime configs, single service ownership, delivered test alerts and qualified repair/rollout policy. |
@@ -3812,7 +3869,7 @@ The future mainnet acceptance bundle contains:
 | --- | --- |
 | Reset | No owner trim (October 7): the census and protection set, the owner's recorded no-trim decision, the actual retained registrations and unchanged required custody/validator ownership; no removal is claimed. |
 | Contracts | Source/toolchain/artifact hashes, predicted/actual addresses and nonces, creation receipts, runtime bytecode and immutable getters, Safe authority, one-shot links and evidence anchor, preserved custody invariants. |
-| 10% miner rewards | Explicit denominator and activation boundary; exact native interval accounting; finalized incentive outcomes including collateral; direct-head and tail entitlement reconciliation; verified 90% ordinary native treasury credit to the `ur-reserve` recipients (the whole tranche in a reserve-only epoch), with no deliberate owner recycle; runtime-derived quantization tolerance and actual target result; proof of a stronger hard cap only if that assurance was selected. |
+| Miner rewards at 10% momentum | Explicit denominator and activation boundary; exact native interval accounting; finalized incentive outcomes including collateral; direct-head and tail entitlement reconciliation; verified ordinary native treasury credit of the remainder, 1 − momentum (90% at launch), to the `ur-reserve` recipients (the whole tranche in a reserve-only epoch), with no deliberate owner recycle; runtime-derived quantization tolerance and actual target result; proof of a stronger hard cap only if that assurance was selected. |
 | Root validator | Real netuid-0 membership and owner mapping, bounded admission receipt, stake/retention observation, child policy, actual basket strategy, live owned service and runtime identity. |
 | UR validator | Real UR eligibility and live applied/revealed CRv4 rows, authenticated evidence/usage, service signer, the policy's validator and operator safety minima (one each at the SN25 launch) and more than kappa (50%) of validator stake. |
 | Financial/finality closure | Actual spend including failures, remaining allowance, all transaction owners joined, native/EVM finality mapping, open liabilities and future operations clearly reported. |
