@@ -420,7 +420,10 @@ the trim policy. Every approval's production census includes every declared UR
 hotkey. Two approvals must also agree on their initial policy, runtime, census,
 activation window and contract declarations; a v5 approval has no peer.
 Distinct role custody namespaces cannot overlap other roles or bootstrap
-inputs, journals or lock markers.
+inputs, journals or lock markers. A v5 activation-pending config's declared
+custody paths are checked only for canonical spelling, distinctness and that
+overlap; they are never stat'd or opened, so bootstrap may run as an account
+other than the validator after the validator creates its private directories.
 
 The accepted plan retains these public signed facts under
 `ur_validator_config_inspections`. The result reports

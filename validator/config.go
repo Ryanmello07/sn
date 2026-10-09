@@ -95,6 +95,12 @@ type ReleaseConfig struct {
 	// Server staging's pinned config directory, a last retained-copy location.
 	// Unexported, so neither the YAML/JSON schema nor any config hash sees it.
 	stagingConfigDirectory string
+	// Only the pre-activation bootstrap inspection sets this, before normalizing.
+	// It runs as another account than the validator, so declared custody paths
+	// are admitted by spelling and overlap alone, never stat'd or opened. Every
+	// validator loader leaves it unset and keeps the physical checks. Unexported
+	// like stagingConfigDirectory, so no schema or config hash sees it.
+	declaredPathsOnly bool
 }
 
 func LoadReleaseConfig(path string) (*ReleaseConfig, error) {
@@ -181,6 +187,12 @@ func decodeReleaseConfigBytes(abs string, b []byte) (*ReleaseConfig, error) {
 // Parse the exact borrowed document once, preserving the regular loader's
 // strict grammar and normalization without loading any approval or key.
 func decodeReleaseConfigDocument(abs string, b []byte) (*ReleaseConfig, error) {
+	return decodeReleaseConfigDocumentPaths(abs, b, false)
+}
+
+// The same decoder; declaredPathsOnly is fixed before normalization, which
+// would otherwise walk the declared custody paths as the calling account.
+func decodeReleaseConfigDocumentPaths(abs string, b []byte, declaredPathsOnly bool) (*ReleaseConfig, error) {
 	if len(b) == 0 || len(b) > maximumReleaseConfigBytes {
 		return nil, errors.New("validator config is empty or exceeds its byte bound")
 	}
@@ -203,6 +215,7 @@ func decodeReleaseConfigDocument(abs string, b []byte) (*ReleaseConfig, error) {
 	if err := validateProductionCapacityDocument(b); err != nil {
 		return nil, fmt.Errorf("decode validator capacity revision %s: %w", abs, err)
 	}
+	cfg.declaredPathsOnly = declaredPathsOnly
 	if err := cfg.normalize(filepath.Dir(abs)); err != nil {
 		return nil, err
 	}
@@ -302,19 +315,24 @@ func configPath(base, value string) (string, error) {
 
 func (c *ReleaseConfig) normalize(base string) error {
 	// New evidence authority cannot acquire legitimacy through legacy cleaning.
+	// Bootstrap inspection checks the same spelling without walking ancestors.
 	if c.EvidenceV2.Schema != "" {
+		admitPath := ValidateReleaseEvidenceV2Path
+		if c.declaredPathsOnly {
+			admitPath = validateReleaseEvidenceV2PathSpelling
+		}
 		for _, path := range []string{c.StateDir, c.HotkeySeedFile} {
-			if err := ValidateReleaseEvidenceV2Path(path); err != nil {
+			if err := admitPath(path); err != nil {
 				return err
 			}
 		}
 		for _, operator := range c.Operators {
-			if err := ValidateReleaseEvidenceV2Path(operator.StateDir); err != nil {
+			if err := admitPath(operator.StateDir); err != nil {
 				return err
 			}
 			for _, path := range []string{operator.NetworkJWTFile, operator.ClientJWTFile, operator.ClientKeySeedFile} {
 				if path != "" {
-					if err := ValidateReleaseEvidenceV2Path(path); err != nil {
+					if err := admitPath(path); err != nil {
 						return err
 					}
 				}
@@ -630,8 +648,6 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 			return fmt.Errorf("source role predecessor: %w", err)
 		}
 	}
-	if preActivation {
-		return c.EvidenceV2.ValidatePreActivation(c.Operators, c.StateDir, c.HotkeySeedFile)
-	}
-	return c.EvidenceV2.Validate(c.Operators, c.StateDir, c.HotkeySeedFile)
+	// Validate or ValidatePreActivation, declared-only for bootstrap inspection.
+	return c.EvidenceV2.validate(c.Operators, c.StateDir, c.HotkeySeedFile, preActivation, c.declaredPathsOnly)
 }
