@@ -58,6 +58,10 @@ plan stays as written and is marked **As launched** or **Superseded** in place.
   readback were not used.
 - **Validator activation.** A relayer transaction at block 9,240,402 published
   the validator's activation for epoch 1.
+- **Reserve.** Providers receive momentum, 10% at launch, and `ur-reserve` the
+  rest, miner emissions × (1 − momentum). `ur-reserve`, the 2-of-3 multisig,
+  registered its recipient hotkeys through its own multisig as SN25 UIDs 170 and
+  250.
 - **Custody.** Snow keeps custody on its root filesystem, after the USB data
   disk at `/mnt/data` was retired:
   - bootstrap custody `/srv/sn25/mainnet/sn25`, owned by `by`;
@@ -582,16 +586,22 @@ original compact bytes.
 
 ## Native reserve and service prerequisites
 
-The selected launch economics are **10% of native miner allocation to providers
-and 90% to the native reserve**, with equal weight for paid/free completed
-traffic. This supersedes the earlier owner-recycling proposal.
+The selected launch economics pay providers **momentum**, the share of the
+native miner allocation paid to providers now, which is 10% at launch. The
+native reserve, `ur-reserve`, receives the rest, miner emissions ×
+(1 − momentum), so its share is not fixed. Paid and free completed traffic carry
+equal weight. The signed treasury policy pins providers `1/10`, momentum's
+launch value, and treasury `9/10`, 1 − momentum at launch; changing momentum
+requires a newly signed treasury policy and approval. This supersedes the
+earlier owner-recycling proposal.
 
 At least two ordinary registered recipient hotkeys must be owned by the reserve
 coldkey, outside the subnet-owner hotkey set and provider roles. Retain observed
 UID/hotkey/coldkey/registration generations; initially split the reserve row
-approximately 45% each because of the native per-weight cap. In an epoch with no
-provider weight, the validator submits the treasury's reserve-only row instead:
-half to each recipient and nothing to providers, marked
+approximately 45% each because of the native per-weight cap. `ur-reserve`
+registered its two recipients through its own multisig as SN25 UIDs 170 and
+250. In an epoch with no provider weight, the validator submits the treasury's
+reserve-only row instead: half to each recipient and nothing to providers, marked
 `reserve_only_empty_provider_allocation`, which every verifier rederives
 ([treasury production](../validator/TREASURY-PRODUCTION.md)). An empty recipient
 list identifies a destination but cannot establish routing readiness.
@@ -843,7 +853,8 @@ Include:
   policy, links, governance and role readbacks; installation identity hash.
 - Selected Safe assurance policy and its precise limitations.
 - Runtime/metadata/network authority and approved submission-route evidence.
-- Actual native roles and reserve recipient census; signed 10/90 treasury policy.
+- Actual native roles and reserve recipient census; the signed treasury policy
+  (providers `1/10` and treasury `9/10` at launch).
 - Operator/validator public configuration projections, dependencies, schema and
   earning-boundary preparation, monitoring and recovery evidence.
 - Explicit unresolved blockers/exceptions and independent reviewer decision.
