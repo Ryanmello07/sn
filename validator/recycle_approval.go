@@ -165,11 +165,13 @@ func validateOwnerRecycleApprovalScope(cfg *ReleaseConfig) error {
 
 // Custody and observation additionally need exact bytes selected by the config.
 // Neither the scope nor the selection inherits provisional runtime/history.
+// The signed source may lie in custody this account cannot search; readers
+// then use the retained copy, and bootstrap's strict read still refuses.
 func validateOwnerRecycleApprovalSelection(cfg *ReleaseConfig) error {
 	if err := validateOwnerRecycleApprovalScope(cfg); err != nil {
 		return err
 	}
-	return productionEconomicSelection(cfg).Approval.Validate(maximumOwnerRecycleApprovalBytes)
+	return validateRetainedSourceReference(productionEconomicSelection(cfg).Approval, maximumOwnerRecycleApprovalBytes)
 }
 
 // Signature admission precedes all storage observations and durable mutation.

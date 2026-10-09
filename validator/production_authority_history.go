@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/urfoundation/sn/crv4"
 
@@ -57,7 +58,7 @@ type releaseProductionAuthorityEntry struct {
 // File witnesses remain exact when their bytes travel inside another approved
 // document. A hash, count or path change never weakens the original byte bound.
 func matchProductionAuthorityBytes(reference ReleaseEvidenceV2File, raw []byte, maximum uint64) error {
-	if err := reference.Validate(maximum); err != nil {
+	if err := validateRetainedSourceReference(reference, maximum); err != nil {
 		return err
 	}
 	if uint64(len(raw)) != reference.Bytes || reference.SHA256 != attemptHex32(sha256.Sum256(raw)) {
@@ -110,6 +111,20 @@ func readRetainedProductionFile(cfg *ReleaseConfig, reference ReleaseEvidenceV2F
 	return nil, errors.Join(sourceErr, err)
 }
 
+// A signed source path below a directory this account cannot search, such as
+// bootstrap custody owned by another account, is unusable here exactly as an
+// absent one is: its retained copy is read instead, still only at the signed
+// size and digest. Only that EACCES is excused; every other error stays fatal.
+func validateRetainedSourceReference(reference ReleaseEvidenceV2File, maximum uint64) error {
+	return reference.validate(maximum, func(path string) error {
+		err := ValidateReleaseEvidenceV2Path(path)
+		if errors.Is(err, syscall.EACCES) {
+			return nil
+		}
+		return err
+	})
+}
+
 // Each original config must select exactly the already approved prefix. The
 // current signature therefore commits the complete finite authority lineage.
 func loadReleaseProductionAuthorityHistory(cfg *ReleaseConfig) error {
@@ -128,7 +143,7 @@ func loadReleaseProductionAuthorityHistory(cfg *ReleaseConfig) error {
 	}
 	remaining := uint64(maximumProductionAuthorityHistoryBytes)
 	for _, reference := range cfg.ProductionAuthorityHistory {
-		if err := reference.Validate(maximumProductionAuthorityBundleBytes); err != nil {
+		if err := validateRetainedSourceReference(reference, maximumProductionAuthorityBundleBytes); err != nil {
 			return err
 		}
 		if reference.Bytes > remaining {
