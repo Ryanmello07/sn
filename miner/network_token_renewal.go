@@ -136,6 +136,11 @@ type networkTokenRenewer struct {
 	jitter  func(time.Duration) time.Duration
 	// tests observe each completed pass and its wait
 	afterPass func(wait time.Duration)
+	// set a token the renewal call rejects (401) aside instead of stopping,
+	// for an operator child whose supervisor signs in again with the hotkey
+	// (--quarantine-rejected-sign-in); onQuarantined then ends the child
+	quarantineRejected bool
+	onQuarantined      func(clientauth.NetworkTokenQuarantine)
 
 	// owned by run
 	// the token the schedule was read for, and its renewal time
@@ -153,6 +158,8 @@ type networkTokenRenewer struct {
 	// owner lock was held), and the token it renews
 	pending    string
 	pendingFor string
+	// a rejected token whose move aside waits for the owner lock
+	pendingQuarantine string
 }
 
 func newNetworkTokenRenewer(path string, refresh func(context.Context, string) (*sdk.RefreshJwtResult, error), output *providerDiagnostics) *networkTokenRenewer {
@@ -208,6 +215,7 @@ func (self *networkTokenRenewer) pass(ctx context.Context) time.Duration {
 		self.scheduledTime = now.Add(networkTokenRenewalTimeout(token, now))
 		self.failures, self.anomalies, self.notBefore = 0, 0, time.Time{}
 		self.pending, self.pendingFor = "", ""
+		self.pendingQuarantine = ""
 		if !clientauth.NetworkJwtRenewable(token) {
 			// an API key does not expire, and nothing else is renewed
 			return self.stop(token, providerNetworkTokenRenewalStopped, nil)
@@ -223,6 +231,36 @@ func (self *networkTokenRenewer) pass(ctx context.Context) time.Duration {
 	return self.renew(ctx, token, now)
 }
 
+// quarantine sets a token the renewal call rejected aside, so the supervisor
+// signs in again with the hotkey (clientauth.QuarantineNetworkToken). A sign-in
+// that replaced the token first is never set aside.
+func (self *networkTokenRenewer) quarantine(token string, now time.Time, rejection error) time.Duration {
+	quarantined, ok, err := clientauth.QuarantineNetworkToken(self.path, token, now)
+	switch {
+	case errors.Is(err, clientauth.ErrNetworkTokenBusy):
+		// a sign-in or a registration holds the owner lock: only the move is
+		// retried, and a sign-in that lands first wins
+		self.pendingQuarantine = token
+		self.failures += 1
+		return self.retryAt(now, networkTokenRenewalRetryTimeout(self.failures, self.jitter), err)
+	case err != nil:
+		// the custody refuses the move: renewal stops, as without quarantine
+		self.pendingQuarantine = ""
+		return self.stop(token, providerNetworkSignInRejected, rejection)
+	case !ok:
+		// a sign-in replaced the token first; the next pass reads it
+		self.pendingQuarantine = ""
+		return time.Second
+	}
+	self.pendingQuarantine = ""
+	self.stoppedToken = token
+	self.output.observeFile(providerNetworkSignInQuarantined, 0, false, rejection, 0, nil, quarantined.Path)
+	if self.onQuarantined != nil {
+		self.onQuarantined(quarantined)
+	}
+	return networkTokenRenewalRecheck
+}
+
 func (self *networkTokenRenewer) stop(token string, event providerDiagnosticEvent, err error) time.Duration {
 	self.stoppedToken = token
 	self.output.observe(event, 0, false, err, 0, nil)
@@ -236,6 +274,10 @@ func (self *networkTokenRenewer) retryAt(now time.Time, timeout time.Duration, e
 }
 
 func (self *networkTokenRenewer) renew(ctx context.Context, token string, now time.Time) time.Duration {
+	if self.pendingQuarantine == token {
+		// the server already rejected it; only the move is left
+		return self.quarantine(token, now, nil)
+	}
 	renewed := ""
 	if self.pending != "" && self.pendingFor == token {
 		// the server already answered; only the write is left
@@ -250,6 +292,9 @@ func (self *networkTokenRenewer) renew(ctx context.Context, token string, now ti
 		case err != nil && sdk.ConfirmedClientRefreshRejection(err):
 			// rotated credentials, a removed network, or an expiration the
 			// server enforces: only a new sign-in resolves it
+			if self.quarantineRejected {
+				return self.quarantine(token, now, err)
+			}
 			return self.stop(token, providerNetworkSignInRejected, err)
 		case err != nil && networkTokenRenewalRefused(err):
 			self.failures = 0
@@ -313,7 +358,7 @@ type networkTokenRenewalHooksKey struct{}
 // direct one or the first proxy, so the renewal reaches the API the way that
 // provider's registration does. The returned stop joins the renewer and its
 // API.
-func startNetworkTokenRenewal(ctx context.Context, apiUrl string, proxySettings *connect.ProxySettings, dialer *connect.DialContextSettings, networkJwtPath string, output *providerDiagnostics) (stop func() error) {
+func startNetworkTokenRenewal(ctx context.Context, apiUrl string, proxySettings *connect.ProxySettings, dialer *connect.DialContextSettings, networkJwtPath string, output *providerDiagnostics, quarantineRejected bool, onQuarantined func(clientauth.NetworkTokenQuarantine)) (stop func() error) {
 	renewalCtx, cancel := context.WithCancel(ctx)
 	strategySettings := connect.DefaultClientStrategySettings()
 	strategySettings.ProxySettings = proxySettings
@@ -321,6 +366,8 @@ func startNetworkTokenRenewal(ctx context.Context, apiUrl string, proxySettings 
 	strategy := connect.NewClientStrategy(renewalCtx, strategySettings)
 	api := sdk.NewApi(renewalCtx, strategy, apiUrl)
 	renewer := newNetworkTokenRenewer(networkJwtPath, api.NetworkRefreshSyncWithContextAndJwt, output)
+	renewer.quarantineRejected = quarantineRejected
+	renewer.onQuarantined = onQuarantined
 	if hooks, ok := ctx.Value(networkTokenRenewalHooksKey{}).(networkTokenRenewalHooks); ok && hooks.afterStart != nil {
 		hooks.afterStart(renewer)
 	}

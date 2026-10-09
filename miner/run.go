@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -91,6 +92,7 @@ Usage:
 		[--original-contract-capture=<path> --original-contract-capture-sha256=<hash>]
 		[--require-original-contract-capture]
 		[--allow-client-registration | --adopt-legacy-provider-key]
+		[--quarantine-rejected-sign-in]
         [--api_url=<api_url>]
         [--connect_url=<connect_url>]
         [--wallet=<coldkey_ss58> [--provider-jwt=<path>] [--wallet-from-epoch=<epoch> --wallet-through-epoch=<epoch>] [--coldkey_seed_file=<path> | --message=<text> --signature=<hex>]]
@@ -582,12 +584,14 @@ func provide(opts docopt.Opts) {
 
 	allowClientRegistration, _ := opts.Bool("--allow-client-registration")
 	adoptLegacyProviderKey, _ := opts.Bool("--adopt-legacy-provider-key")
+	// internal: an operator child of provide --all-operators --auto-register
+	quarantineRejectedSignIn, _ := opts.Bool("--quarantine-rejected-sign-in")
 	domainPath, _ := opts.String("--close-report-domain")
 	domainHash, domainErr := ReadProviderCloseReportDomain(domainPath)
 	if domainErr != nil {
 		fmt.Fprintf(os.Stderr, "signed close evidence unavailable: %v\n", domainErr)
 	}
-	settings := providerRunSettings{apiUrl: apiUrl, connectUrl: connectUrl, port: port, proxySettings: allProxySettings, memoryPlan: memoryPlan, testEgressDialer: testEgressDialer, allowClientRegistration: allowClientRegistration, adoptLegacyProviderKey: adoptLegacyProviderKey}
+	settings := providerRunSettings{apiUrl: apiUrl, connectUrl: connectUrl, port: port, proxySettings: allProxySettings, memoryPlan: memoryPlan, testEgressDialer: testEgressDialer, allowClientRegistration: allowClientRegistration, adoptLegacyProviderKey: adoptLegacyProviderKey, quarantineRejectedSignIn: quarantineRejectedSignIn}
 	settings.wallet, _ = opts.String("--wallet")
 	if settings.wallet != "" {
 		settings.walletProof, err = snWalletProofFromOpts(opts)
@@ -605,9 +609,15 @@ func provide(opts docopt.Opts) {
 	settings.contractCapturePath, _ = opts.String("--original-contract-capture")
 	settings.contractCaptureSha256, _ = opts.String("--original-contract-capture-sha256")
 	settings.requireContractCapture, _ = opts.Bool("--require-original-contract-capture")
-	// A complete-profile launch must report refusal to its supervisor. The
-	// owned run has joined every child before this process-level exit decision.
-	if err := settings.run(ctx, os.Stdout); err != nil && ctx.Err() == nil && (settings.requireWorkCapture || settings.workCapturePath != "" || settings.workCaptureSha256 != "" || settings.requireContractCapture || settings.contractCapturePath != "" || settings.contractCaptureSha256 != "") {
+	// A complete-profile launch must report refusal to its supervisor, and a
+	// child that set its rejected network sign-in aside says so by its exit
+	// code. The owned run has joined every child before this exit decision.
+	err = settings.run(ctx, os.Stdout)
+	if code, ok := providerRunExitCode(err); ok {
+		stopSignals()
+		os.Exit(code)
+	}
+	if err != nil && ctx.Err() == nil && (settings.requireWorkCapture || settings.workCapturePath != "" || settings.workCaptureSha256 != "" || settings.requireContractCapture || settings.contractCapturePath != "" || settings.contractCaptureSha256 != "") {
 		stopSignals()
 		fmt.Fprintln(os.Stderr, "provider original capture launch refused; restore approved profiles, retained identity and prepared custody")
 		os.Exit(1)
@@ -708,7 +718,12 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		output.observe(providerStartupRecoveryRequired, 0, false, err, 0, nil)
 		return err
 	}
-	stopRenewal := startNetworkTokenRenewal(ctx, self.apiUrl, providers[0], self.testEgressDialer, networkJwtPath, output)
+	var quarantined atomic.Bool
+	stopRenewal := startNetworkTokenRenewal(ctx, self.apiUrl, providers[0], self.testEgressDialer, networkJwtPath, output, self.quarantineRejectedSignIn, func(clientauth.NetworkTokenQuarantine) {
+		// the supervisor signs in again once this child has exited
+		quarantined.Store(true)
+		cancel()
+	})
 	defer func() { returnErr = errors.Join(returnErr, stopRenewal()) }()
 
 	provideWithProxy := func(index uint64, proxySettings *connect.ProxySettings) (returnErr error) {
@@ -900,7 +915,27 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 	for result := range results {
 		returnErr = errors.Join(returnErr, result)
 	}
+	if quarantined.Load() {
+		returnErr = errors.Join(returnErr, errProviderNetworkSignInQuarantined)
+	}
 	return returnErr
+}
+
+// errProviderNetworkSignInQuarantined ends a run whose rejected network
+// sign-in was set aside (--quarantine-rejected-sign-in).
+var errProviderNetworkSignInQuarantined = errors.New("the rejected network sign-in was set aside")
+
+// providerQuarantinedExitCode tells the supervisor that this child set its
+// rejected network sign-in aside (EX_TEMPFAIL): it signs in again and starts
+// the child, without the crash backoff.
+const providerQuarantinedExitCode = 75
+
+// providerRunExitCode is the process exit code a run's error asks for, if any.
+func providerRunExitCode(err error) (int, bool) {
+	if errors.Is(err, errProviderNetworkSignInQuarantined) {
+		return providerQuarantinedExitCode, true
+	}
+	return 0, false
 }
 
 // Resolves the shared auth, network, proxy and provider state directory.

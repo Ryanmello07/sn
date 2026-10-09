@@ -52,6 +52,14 @@ const operatorRestartMinimumDelay = 30 * time.Second
 const operatorRestartMaximumDelay = 10 * time.Minute
 const operatorStopGrace = 60 * time.Second
 const operatorAuthRecheckInterval = 5 * time.Minute
+
+// After a child set a rejected network sign-in aside, the next automatic
+// sign-in is at once for the first rejection in a while, then waits this long
+// after the latest rejection, doubling with each one in a row up to the
+// maximum. The set-aside files carry the times and the count, so the limit
+// survives a supervisor restart (clientauth.QuarantineNetworkToken).
+const operatorAutomaticSignInMinimumDelay = time.Hour
+const operatorAutomaticSignInMaximumDelay = 24 * time.Hour
 const operatorWalletUpkeepInterval = time.Hour
 
 // The supervisor's command line, read by newOperatorSupervisorSettings.
@@ -131,13 +139,15 @@ type operatorState struct {
 	signingIn    bool
 	// while awaiting auth, when the jwt is checked again
 	authCheckAt time.Time
-	child       operatorChildProcess
-	spec        operatorChildSpec
-	startedAt   time.Time
-	stopping    bool
-	killAt      time.Time
-	killed      bool
-	restartAt   time.Time
+	// the automatic sign-in limit last logged, so each change logs once
+	signInLimitedUntil time.Time
+	child              operatorChildProcess
+	spec               operatorChildSpec
+	startedAt          time.Time
+	stopping           bool
+	killAt             time.Time
+	killed             bool
+	restartAt          time.Time
 	// consecutive runs shorter than the maximum backoff
 	failures int
 }
@@ -431,10 +441,36 @@ func (self *operatorSupervisor) checkCredentials(requestCtx context.Context, dom
 		state.authCheckAt = now.Add(operatorAuthRecheckInterval)
 		return
 	}
+	quarantine, quarantined, err := clientauth.LatestNetworkTokenQuarantine(jwtPath)
+	if err != nil {
+		// unknown rejections are never a reason to sign in at once
+		fmt.Fprintf(self.log, "operator %s: its set-aside network sign-ins cannot be read: %v; checking again in %s\n", domain, err, operatorAuthRecheckInterval)
+		state.authCheckAt = now.Add(operatorAuthRecheckInterval)
+		return
+	}
+	if quarantined {
+		if allowedAt := operatorAutomaticSignInAt(quarantine); now.Before(allowedAt) {
+			if !state.signInLimitedUntil.Equal(allowedAt) {
+				state.signInLimitedUntil = allowedAt
+				fmt.Fprintf(self.log, "operator %s: automatic sign-in is limited after %d rejected network sign-ins in a row; the next is at %s. Run `provider auth --operator=%s` to sign in now\n", domain, quarantine.Consecutive, allowedAt.UTC().Format(time.RFC3339), domain)
+			}
+			// a manual sign-in is still noticed at the usual recheck
+			state.authCheckAt = now.Add(operatorAuthRecheckInterval)
+			if allowedAt.Before(state.authCheckAt) {
+				state.authCheckAt = allowedAt
+			}
+			return
+		}
+	}
+	state.signInLimitedUntil = time.Time{}
 	state.signingIn = true
 	self.signInCount++
 	apiUrl := state.operator.ApiUrl
-	fmt.Fprintf(self.log, "operator %s: signing in with the hotkey\n", domain)
+	if quarantined {
+		fmt.Fprintf(self.log, "operator %s: signing in again with the hotkey after %d rejected network sign-ins in a row\n", domain, quarantine.Consecutive)
+	} else {
+		fmt.Fprintf(self.log, "operator %s: signing in with the hotkey\n", domain)
+	}
 	go func() {
 		result := operatorSignIn{domain: domain}
 		network, err := self.hooks.signIn(requestCtx, hotkeyauth.Settings{ApiUrl: apiUrl, Hotkey: self.settings.hotkey})
@@ -523,6 +559,11 @@ func (self *operatorSupervisor) childArgs(spec operatorChildSpec) []string {
 	if self.settings.allowClientRegistration || self.settings.autoRegister {
 		args = append(args, "--allow-client-registration")
 	}
+	if self.settings.autoRegister {
+		// a rejected network sign-in is set aside and the child exits, so
+		// this supervisor signs in again with the hotkey
+		args = append(args, "--quarantine-rejected-sign-in")
+	}
 	if 0 < self.settings.verbosity {
 		args = append(args, "-"+strings.Repeat("v", self.settings.verbosity))
 	}
@@ -596,6 +637,20 @@ func (self *operatorSupervisor) childExited(exit operatorChildExit) {
 		fmt.Fprintf(self.log, "operator %s: provider (pid %d) stopped\n", exit.domain, exit.child.Pid())
 		return
 	}
+	if _, err := os.Stat(operatorJwtPath(self.settings.baseStateDir, exit.domain)); errors.Is(err, os.ErrNotExist) {
+		// the child set a rejected network sign-in aside, or the jwt went
+		// away: the credential check decides at once, without the crash
+		// backoff, and signs in again with --auto-register
+		state.credentialed = false
+		state.restartAt = time.Time{}
+		state.authCheckAt = time.Time{}
+		if operatorChildQuarantined(exit.err) {
+			fmt.Fprintf(self.log, "operator %s: provider (pid %d) set its rejected network sign-in aside; checking its credentials\n", exit.domain, exit.child.Pid())
+		} else {
+			fmt.Fprintf(self.log, "operator %s: provider (pid %d) exited without a network sign-in; checking its credentials\n", exit.domain, exit.child.Pid())
+		}
+		return
+	}
 	now := self.hooks.now()
 	delay := self.backoff(state, now.Sub(state.startedAt))
 	state.restartAt = now.Add(delay)
@@ -604,6 +659,25 @@ func (self *operatorSupervisor) childExited(exit operatorChildExit) {
 		cause = fmt.Sprintf("exited: %v", exit.err)
 	}
 	fmt.Fprintf(self.log, "operator %s: provider (pid %d) %s; restarting in %s\n", exit.domain, exit.child.Pid(), cause, delay)
+}
+
+// operatorChildQuarantined reports a child that exited because it set its
+// rejected network sign-in aside (providerQuarantinedExitCode).
+func operatorChildQuarantined(err error) bool {
+	var exited interface{ ExitCode() int }
+	return errors.As(err, &exited) && exited.ExitCode() == providerQuarantinedExitCode
+}
+
+// operatorAutomaticSignInAt is the earliest automatic sign-in after the
+// latest set-aside network sign-in: at once after the first rejection in a
+// while, else operatorAutomaticSignInMinimumDelay after the latest, doubling
+// with each rejection in a row up to operatorAutomaticSignInMaximumDelay.
+func operatorAutomaticSignInAt(quarantine clientauth.NetworkTokenQuarantine) time.Time {
+	if quarantine.Consecutive <= 1 {
+		return quarantine.Time
+	}
+	delay := operatorAutomaticSignInMinimumDelay << min(quarantine.Consecutive-2, 5)
+	return quarantine.Time.Add(min(delay, operatorAutomaticSignInMaximumDelay))
 }
 
 // Forwards a stop signal to every child and starts nothing after it.

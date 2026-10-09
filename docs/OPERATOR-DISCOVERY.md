@@ -252,7 +252,21 @@ provider operators [--operators-url=<url>] [-v...]
   (`POST /auth/network-refresh`, miner/PROVIDER-REGISTRATION.md "Network sign-in renewal"); the supervisor never renews.
   The hourly hotkey wallet upkeep reads the renewed file. An operator that answers the upkeep with 401 logs
   `operator <domain>: the network sign-in was rejected or has expired; run `provider auth --operator=<domain>` to sign in
-  again`. `--auto-register` signs in only for a missing JWT, so a present but rejected one waits for that command.
+  again`.
+- **A rejected network JWT with `--auto-register`.** Each child then gets the internal `--quarantine-rejected-sign-in`.
+  When the child's renewal call itself is rejected (401), the child sets the JWT aside under its owner lock (only while
+  the file still holds that token, so a sign-in that landed first is never set aside) as `jwt.rejected-<unixnano>-<n>`,
+  `n` counting rejections less than 25 h apart, keeps the newest 3 such files, reports `network_sign_in_quarantined`
+  naming the file, and exits with status 75. Nothing else sets the JWT aside, and without `--auto-register` renewal
+  stops as before.
+- **Prompt sign-in after a child exits without its JWT.** The supervisor skips the crash backoff and checks the
+  credentials at once; with `--auto-register` it signs in with the hotkey (through the owner lock, as an explicit sign-in)
+  and starts the child. The automatic sign-in after a set-aside JWT is at once for the first rejection in a while, then
+  1 h after the latest rejection, doubling with each one in a row up to 24 h. The limit comes from the set-aside files, so
+  it survives a supervisor restart; while it holds the supervisor logs, once per change, the next allowed time and
+  `provider auth --operator=<domain>` as the manual path, and still notices a manual sign-in every 5 minutes.
+- **Revoked clients stay revoked.** Provider custody blocks a rejected client on any rejection marker, whatever network
+  JWT follows, so an automatic sign-in never recreates a revoked provider client.
 - **The proxy file** in the base directory, if present, is copied into each operator directory before its child starts.
 - **`provider auth --operator`** writes `DomainStateDir(base, domain)/jwt`. With `--hotkey_seed_file` it uses
   `hotkeyauth.SignIn`.

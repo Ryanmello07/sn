@@ -14,11 +14,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -114,6 +116,13 @@ func (self *testOperatorJournal) waitMatch(t *testing.T, from int, what string, 
 			t.Fatalf("no %q after entry %d; journal:\n%s", what, from, strings.Join(entries, "\n"))
 		}
 	}
+}
+
+// The entries from one index on, copied.
+func (self *testOperatorJournal) entriesFrom(from int) []string {
+	self.stateLock.Lock()
+	defer self.stateLock.Unlock()
+	return slices.Clone(self.entries[from:])
 }
 
 func (self *testOperatorJournal) length() int {
@@ -439,7 +448,7 @@ func TestOperatorSupervisorAutoRegisterAllowsClientRegistration(t *testing.T) {
 	fixture.publish(testListedOperator("alpha.example"))
 	fixture.run()
 	alpha := fixture.nextStart()
-	if !slices.Contains(alpha.command.args, "--allow-client-registration") {
+	if !slices.Contains(alpha.command.args, "--allow-client-registration") || !slices.Contains(alpha.command.args, "--quarantine-rejected-sign-in") {
 		t.Fatalf("auto mode child args = %v", alpha.command.args)
 	}
 	fixture.stop(syscall.SIGTERM, alpha)
@@ -814,5 +823,161 @@ func TestHotkeyWalletSignInRejectedReadsOnlyA401(t *testing.T) {
 	status := &hotkeyWalletStatusError{method: "GET", path: "/sn/wallets", status: "401 Unauthorized", statusCode: 401, answer: "the network JWT is required"}
 	if status.Error() != "GET /sn/wallets: 401 Unauthorized: the network JWT is required" {
 		t.Fatalf("message = %q", status.Error())
+	}
+}
+
+// The exit of a child that set its rejected network sign-in aside.
+type testOperatorExit struct{ code int }
+
+func (self testOperatorExit) Error() string { return fmt.Sprintf("exit status %d", self.code) }
+
+func (self testOperatorExit) ExitCode() int { return self.code }
+
+// Sets the operator's network sign-in aside as its child does when the
+// renewal call rejects it.
+func testOperatorQuarantine(t *testing.T, base string, domain string, at time.Time) clientauth.NetworkTokenQuarantine {
+	t.Helper()
+	jwtPath := operatorJwtPath(base, domain)
+	token, err := clientauth.ReadToken(jwtPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quarantine, ok, err := clientauth.QuarantineNetworkToken(jwtPath, token, at)
+	if err != nil || !ok {
+		t.Fatalf("quarantine: ok=%t err=%v", ok, err)
+	}
+	return quarantine
+}
+
+// A child that set its rejected sign-in aside is followed at once, without
+// the crash backoff, by an automatic sign-in with the hotkey and a new child.
+func TestOperatorSupervisorSignsInAgainAfterAQuarantine(t *testing.T) {
+	fixture := newTestOperatorFixture(t)
+	fixture.settings.autoRegister = true
+	fixture.settings.hotkey = testHotkey(t, 7)
+	var signIns atomic.Int64
+	fixture.signIn = func(context.Context, hotkeyauth.Settings) (*hotkeyauth.Network, error) {
+		signIns.Add(1)
+		return &hotkeyauth.Network{ByJwt: "jwt:after-quarantine"}, nil
+	}
+	fixture.authenticate("alpha.example")
+	fixture.publish(testListedOperator("alpha.example"))
+	fixture.run()
+	first := fixture.nextStart()
+	if !slices.Contains(first.command.args, "--quarantine-rejected-sign-in") {
+		t.Fatalf("auto mode child args = %v", first.command.args)
+	}
+	testOperatorQuarantine(t, fixture.base, "alpha.example", testOperatorEpoch)
+	from := fixture.journal.length()
+	first.exit <- testOperatorExit{code: providerQuarantinedExitCode}
+	at := fixture.journal.wait(t, from, "log operator alpha.example: provider (pid 1) set its rejected network sign-in aside; checking its credentials")
+	at = fixture.journal.wait(t, at, "log operator alpha.example: signing in again with the hotkey after 1 rejected network sign-ins in a row")
+	fixture.journal.wait(t, at, "log operator alpha.example: signed in with the hotkey")
+	second := fixture.nextStart()
+	if signIns.Load() != 1 {
+		t.Fatalf("sign-ins = %d", signIns.Load())
+	}
+	if jwt, err := clientauth.ReadToken(operatorJwtPath(fixture.base, "alpha.example")); err != nil || jwt != "jwt:after-quarantine" {
+		t.Fatalf("operator jwt = %q, %v", jwt, err)
+	}
+	fixture.stop(syscall.SIGTERM, second)
+}
+
+// Without --auto-register a child that exits with its jwt gone awaits a
+// manual sign-in, as before; nothing signs in by itself.
+func TestOperatorSupervisorWithoutAutoRegisterAwaitsAuthWithoutAJwt(t *testing.T) {
+	fixture := newTestOperatorFixture(t)
+	fixture.authenticate("alpha.example")
+	fixture.publish(testListedOperator("alpha.example"))
+	fixture.run()
+	first := fixture.nextStart()
+	if slices.Contains(first.command.args, "--quarantine-rejected-sign-in") {
+		t.Fatalf("a child without auto mode may quarantine: %v", first.command.args)
+	}
+	if err := os.Remove(operatorJwtPath(fixture.base, "alpha.example")); err != nil {
+		t.Fatal(err)
+	}
+	from := fixture.journal.length()
+	first.exit <- errors.New("exit status 1")
+	at := fixture.journal.wait(t, from, "log operator alpha.example: provider (pid 1) exited without a network sign-in; checking its credentials")
+	fixture.journal.wait(t, at, "log operator alpha.example is awaiting auth: provider auth --operator=alpha.example")
+	fixture.noStart()
+	fixture.stop(syscall.SIGTERM)
+}
+
+// Rejections in a row limit automatic sign-ins: the limit is logged once per
+// change with the manual command, a restarted supervisor reads the same limit
+// from the set-aside files, and the sign-in runs when the limit ends.
+func TestOperatorSupervisorLimitsAutomaticSignInsAfterRejectionsInARow(t *testing.T) {
+	fixture := newTestOperatorFixture(t)
+	jwtPath := operatorJwtPath(fixture.base, "alpha.example")
+	for i, at := range []time.Time{testOperatorEpoch.Add(-30 * time.Minute), testOperatorEpoch.Add(-5 * time.Minute)} {
+		token := fmt.Sprintf("rejected-%d", i)
+		if err := clientauth.WriteNetworkToken(jwtPath, token); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, err := clientauth.QuarantineNetworkToken(jwtPath, token, at); err != nil || !ok {
+			t.Fatalf("quarantine %d: ok=%t err=%v", i, ok, err)
+		}
+	}
+	allowedAt := testOperatorEpoch.Add(55 * time.Minute)
+	limited := "log operator alpha.example: automatic sign-in is limited after 2 rejected network sign-ins in a row; the next is at " + allowedAt.UTC().Format(time.RFC3339) + ". Run `provider auth --operator=alpha.example` to sign in now"
+	var signIns atomic.Int64
+	signIn := func(context.Context, hotkeyauth.Settings) (*hotkeyauth.Network, error) {
+		signIns.Add(1)
+		return &hotkeyauth.Network{ByJwt: "jwt:after-limit"}, nil
+	}
+	fixture.settings.autoRegister = true
+	fixture.settings.hotkey = testHotkey(t, 9)
+	fixture.signIn = signIn
+	fixture.publish(testListedOperator("alpha.example"))
+	fixture.run()
+	at := fixture.journal.wait(t, 0, limited)
+	at = fixture.journal.wait(t, at, "idle 5m0s")
+	fixture.clock.set(operatorAuthRecheckInterval)
+	at = fixture.journal.wait(t, at, "idle 10m0s")
+	if count := strings.Count(strings.Join(fixture.journal.entriesFrom(0), "\n"), "automatic sign-in is limited"); count != 1 || signIns.Load() != 0 {
+		t.Fatalf("limit logged %d times, %d sign-ins", count, signIns.Load())
+	}
+	fixture.stop(syscall.SIGTERM)
+
+	restarted := newTestOperatorFixture(t)
+	restarted.base = fixture.base
+	restarted.settings = fixture.settings
+	restarted.signIn = signIn
+	restarted.clock.set(10 * time.Minute)
+	restarted.publish(testListedOperator("alpha.example"))
+	restarted.run()
+	at = restarted.journal.wait(t, 0, limited)
+	restarted.noStart()
+	restarted.clock.set(55 * time.Minute)
+	at = restarted.journal.wait(t, at, "log operator alpha.example: signing in again with the hotkey after 2 rejected network sign-ins in a row")
+	restarted.journal.wait(t, at, "log operator alpha.example: signed in with the hotkey")
+	child := restarted.nextStart()
+	if signIns.Load() != 1 {
+		t.Fatalf("sign-ins = %d", signIns.Load())
+	}
+	restarted.stop(syscall.SIGTERM, child)
+}
+
+func TestOperatorAutomaticSignInDoublesUpToADay(t *testing.T) {
+	for consecutive, want := range map[int]time.Duration{1: 0, 2: time.Hour, 3: 2 * time.Hour, 4: 4 * time.Hour, 6: 16 * time.Hour, 7: 24 * time.Hour, 40: 24 * time.Hour} {
+		quarantine := clientauth.NetworkTokenQuarantine{Time: testOperatorEpoch, Consecutive: consecutive}
+		if got := operatorAutomaticSignInAt(quarantine).Sub(testOperatorEpoch); got != want {
+			t.Errorf("%d in a row: wait %s, want %s", consecutive, got, want)
+		}
+	}
+}
+
+// A real child process's exit status carries the quarantine.
+func TestOperatorChildQuarantinedReadsTheExitStatus(t *testing.T) {
+	err := exec.Command("sh", "-c", fmt.Sprintf("exit %d", providerQuarantinedExitCode)).Run()
+	if !operatorChildQuarantined(err) {
+		t.Fatalf("exit %d was not a quarantine: %v", providerQuarantinedExitCode, err)
+	}
+	for _, other := range []error{nil, errors.New("exit status 75"), exec.Command("sh", "-c", "exit 1").Run()} {
+		if operatorChildQuarantined(other) {
+			t.Fatalf("%v read as a quarantine", other)
+		}
 	}
 }

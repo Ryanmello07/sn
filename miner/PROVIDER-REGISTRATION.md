@@ -130,6 +130,15 @@ upkeep. So every `provide` process renews its state directory's network JWT
   refuses (`network_sign_in_renewal_stopped`). Both diagnostics name the command
   that signs in again. A provider slot whose registration gets a 401 reports
   `network_sign_in_rejected` instead of `startup_recovery_required`.
+- **Quarantine** (only an operator child of `provide --all-operators --auto-register`,
+  which passes the internal `--quarantine-rejected-sign-in`): a 401 from the renewal
+  call itself sets the token aside instead (`clientauth.QuarantineNetworkToken`),
+  under the owner lock and only while the file still holds that token, as
+  `jwt.rejected-<unixnano>-<n>` with its mode and content; the newest 3 are kept.
+  The child reports `network_sign_in_quarantined` with the file and exits with
+  status 75, and the supervisor signs in again with the hotkey, rate limited
+  (docs/OPERATOR-DISCOVERY.md). The lineage stays until that sign-in replaces it.
+  Revoked provider clients stay blocked: provider custody blocks on any marker.
 
 **Rejection markers across renewals.** A rejected client's `.rejected` marker
 names the network JWT file by fingerprint (token and modification time), so that

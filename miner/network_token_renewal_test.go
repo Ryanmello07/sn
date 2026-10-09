@@ -580,7 +580,7 @@ func TestStartNetworkTokenRenewalRenewsOverTheApi(t *testing.T) {
 	output := newProviderDiagnosticTestOwner(t, sink)
 	started := make(chan *networkTokenRenewer, 1)
 	ctx := context.WithValue(t.Context(), networkTokenRenewalHooksKey{}, networkTokenRenewalHooks{afterStart: func(renewer *networkTokenRenewer) { started <- renewer }})
-	stop := startNetworkTokenRenewal(ctx, server.URL, nil, nil, path, output)
+	stop := startNetworkTokenRenewal(ctx, server.URL, nil, nil, path, output, false, nil)
 	if renewer := <-started; renewer.path != path {
 		t.Fatalf("renewer path %s", renewer.path)
 	}
@@ -627,6 +627,204 @@ func TestProviderAuthenticationRecoveryEventNamesARejectedSignIn(t *testing.T) {
 		hasGuidance := bytes.Contains(raw, []byte(`"guidance"`))
 		if wantGuidance := event == providerNetworkSignInRejected || event == providerNetworkTokenRenewalStopped; hasGuidance != wantGuidance {
 			t.Fatalf("event %s guidance present=%t", code, hasGuidance)
+		}
+	}
+}
+
+// An operator child of provide --all-operators --auto-register sets a sign-in
+// the renewal call rejects aside, names the file, and ends: the supervisor
+// signs in again. The rejected token is never sent again.
+func TestNetworkTokenRenewerQuarantinesARejectedSignIn(t *testing.T) {
+	day := 24 * time.Hour
+	signIn := renewalTestJwt(t, renewalTestBase.Add(-40*day), renewalTestBase.Add(-10*day), "expired")
+	fixture := newRenewalTestFixture(t, signIn)
+	var quarantines []clientauth.NetworkTokenQuarantine
+	fixture.renewer.quarantineRejected = true
+	fixture.renewer.onQuarantined = func(quarantine clientauth.NetworkTokenQuarantine) {
+		quarantines = append(quarantines, quarantine)
+	}
+	fixture.refresh.answer = func(string) (*sdk.RefreshJwtResult, error) {
+		return nil, &connect.HttpStatusError{StatusCode: http.StatusUnauthorized}
+	}
+	fixture.renewer.pass(t.Context())
+	if len(quarantines) != 1 {
+		t.Fatalf("quarantines = %d", len(quarantines))
+	}
+	raw := bytes.TrimSpace(fixture.sink.next(t))
+	var record struct {
+		Event    string `json:"event"`
+		Guidance string `json:"guidance"`
+		File     string `json:"file"`
+	}
+	if err := json.Unmarshal(raw, &record); err != nil {
+		t.Fatal(err)
+	}
+	if record.Event != "network_sign_in_quarantined" || record.File != quarantines[0].Path || !strings.Contains(record.Guidance, quarantines[0].Path) || !strings.Contains(record.Guidance, "signs in again with the hotkey") || bytes.Contains(raw, []byte(signIn)) {
+		t.Fatalf("diagnostic %s", raw)
+	}
+	if _, err := os.Stat(fixture.path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the rejected sign-in is still in place: %v", err)
+	}
+	if token, _ := clientauth.ReadToken(quarantines[0].Path); token != signIn {
+		t.Fatal("the set-aside file does not hold the rejected sign-in")
+	}
+	for range 3 {
+		fixture.clock.now = fixture.clock.now.Add(time.Hour)
+		fixture.renewer.pass(t.Context())
+	}
+	if fixture.refresh.count() != 1 || len(quarantines) != 1 {
+		t.Fatalf("after the quarantine: %d calls, %d quarantines", fixture.refresh.count(), len(quarantines))
+	}
+	fixture.noEvent(t)
+}
+
+// Only a confirmed rejection of the renewal call sets the sign-in aside;
+// transient failures, other statuses, refusals and another identity keep
+// their own handling, and without the flag a rejection stops as before.
+func TestNetworkTokenRenewerQuarantinesOnlyARejection(t *testing.T) {
+	day := 24 * time.Hour
+	for name, c := range map[string]struct {
+		quarantine bool
+		answer     func(string) (*sdk.RefreshJwtResult, error)
+		event      string
+	}{
+		"unavailable": {true, func(string) (*sdk.RefreshJwtResult, error) { return nil, &sdk.ClientControlUnavailableError{} }, "network_sign_in_renewal_retry"},
+		"not found": {true, func(string) (*sdk.RefreshJwtResult, error) {
+			return nil, &connect.HttpStatusError{StatusCode: http.StatusNotFound}
+		}, "network_sign_in_renewal_retry"},
+		"forbidden": {true, func(string) (*sdk.RefreshJwtResult, error) {
+			return nil, &connect.HttpStatusError{StatusCode: http.StatusForbidden}
+		}, "network_sign_in_renewal_retry"},
+		"refusal": {true, func(string) (*sdk.RefreshJwtResult, error) {
+			return &sdk.RefreshJwtResult{Error: &sdk.RefreshJwtResultError{Message: "refused"}}, nil
+		}, "network_sign_in_renewal_stopped"},
+		"another identity": {true, func(string) (*sdk.RefreshJwtResult, error) {
+			token, _ := gojwt.NewWithClaims(gojwt.SigningMethodNone, gojwt.MapClaims{"network_id": "00000000-0000-0000-0000-000000000302", "user_id": renewalTestUserId}).SignedString(gojwt.UnsafeAllowNoneSignatureType)
+			return &sdk.RefreshJwtResult{ByJwt: token}, nil
+		}, "network_sign_in_renewal_stopped"},
+		"rejected without the flag": {false, func(string) (*sdk.RefreshJwtResult, error) {
+			return nil, &connect.HttpStatusError{StatusCode: http.StatusUnauthorized}
+		}, "network_sign_in_rejected"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			signIn := renewalTestJwt(t, renewalTestBase.Add(-40*day), renewalTestBase.Add(-10*day), "expired")
+			fixture := newRenewalTestFixture(t, signIn)
+			fixture.renewer.quarantineRejected = c.quarantine
+			fixture.renewer.onQuarantined = func(clientauth.NetworkTokenQuarantine) {
+				t.Error("set aside a sign-in that was not rejected under the flag")
+			}
+			fixture.refresh.answer = c.answer
+			fixture.renewer.pass(t.Context())
+			if code, _ := fixture.event(t); code != c.event {
+				t.Fatalf("event %s, want %s", code, c.event)
+			}
+			if token, err := clientauth.ReadToken(fixture.path); err != nil || token != signIn {
+				t.Fatalf("the sign-in moved: %v", err)
+			}
+			if _, ok, err := clientauth.LatestNetworkTokenQuarantine(fixture.path); err != nil || ok {
+				t.Fatalf("a set-aside file appeared: ok=%t err=%v", ok, err)
+			}
+		})
+	}
+}
+
+// A held owner lock defers only the move; a sign-in that lands meanwhile wins
+// and is never set aside.
+func TestNetworkTokenRenewerQuarantineWaitsForTheOwnerLock(t *testing.T) {
+	day := 24 * time.Hour
+	for _, signInMeanwhile := range []bool{false, true} {
+		t.Run(fmt.Sprintf("sign-in meanwhile %t", signInMeanwhile), func(t *testing.T) {
+			signIn := renewalTestJwt(t, renewalTestBase.Add(-40*day), renewalTestBase.Add(-10*day), "expired")
+			fixture := newRenewalTestFixture(t, signIn)
+			quarantined := 0
+			fixture.renewer.quarantineRejected = true
+			fixture.renewer.onQuarantined = func(clientauth.NetworkTokenQuarantine) { quarantined++ }
+			fixture.refresh.answer = func(string) (*sdk.RefreshJwtResult, error) {
+				return nil, &connect.HttpStatusError{StatusCode: http.StatusUnauthorized}
+			}
+			lock, err := os.OpenFile(fixture.path+".registration.lock", os.O_RDWR|os.O_CREATE, 0600)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+				t.Fatal(err)
+			}
+			wait := fixture.renewer.pass(t.Context())
+			if code, _ := fixture.event(t); code != "network_sign_in_renewal_retry" || quarantined != 0 {
+				t.Fatalf("busy quarantine: event %s, quarantined %d", code, quarantined)
+			}
+			if err := lock.Close(); err != nil {
+				t.Fatal(err)
+			}
+			newSignIn := renewalTestJwt(t, renewalTestBase, renewalTestBase.Add(30*day), "new sign-in")
+			if signInMeanwhile {
+				if err := clientauth.WriteNetworkToken(fixture.path, newSignIn); err != nil {
+					t.Fatal(err)
+				}
+			}
+			fixture.clock.now = fixture.clock.now.Add(wait)
+			fixture.renewer.pass(t.Context())
+			if fixture.refresh.count() != 1 {
+				t.Fatalf("the rejected sign-in was sent again (%d calls)", fixture.refresh.count())
+			}
+			_, set, _ := clientauth.LatestNetworkTokenQuarantine(fixture.path)
+			token, _ := clientauth.ReadToken(fixture.path)
+			if signInMeanwhile {
+				if set || quarantined != 0 || token != newSignIn {
+					t.Fatalf("a newer sign-in was set aside: set=%t quarantined=%d", set, quarantined)
+				}
+			} else if !set || quarantined != 1 || token != "" {
+				t.Fatalf("the deferred move: set=%t quarantined=%d", set, quarantined)
+			}
+		})
+	}
+}
+
+// The run's renewer, under the flag, sets the sign-in a real API rejects
+// aside and tells the run.
+func TestStartNetworkTokenRenewalQuarantinesOverTheApi(t *testing.T) {
+	day := 24 * time.Hour
+	now := time.Now()
+	signIn := renewalTestJwt(t, now.Add(-40*day), now.Add(-10*day), "expired")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/hello":
+			w.WriteHeader(http.StatusOK)
+		case "/auth/network-refresh":
+			w.WriteHeader(http.StatusUnauthorized)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	dir := renewalTestStateDir(t)
+	path := filepath.Join(dir, "jwt")
+	if err := clientauth.WriteNetworkToken(path, signIn); err != nil {
+		t.Fatal(err)
+	}
+	output := newProviderDiagnosticTestOwner(t, &providerDiagnosticRecorder{records: make(chan []byte, 16)})
+	quarantined := make(chan clientauth.NetworkTokenQuarantine, 1)
+	stop := startNetworkTokenRenewal(t.Context(), server.URL, nil, nil, path, output, true, func(quarantine clientauth.NetworkTokenQuarantine) { quarantined <- quarantine })
+	select {
+	case quarantine := <-quarantined:
+		if token, _ := clientauth.ReadToken(quarantine.Path); token != signIn {
+			t.Fatal("the set-aside file does not hold the rejected sign-in")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the rejected sign-in was not set aside")
+	}
+	if err := stop(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProviderRunExitCodeNamesAQuarantine(t *testing.T) {
+	if code, ok := providerRunExitCode(errors.Join(errors.New("worker"), errProviderNetworkSignInQuarantined)); !ok || code != providerQuarantinedExitCode {
+		t.Fatalf("quarantine exit = %d %t", code, ok)
+	}
+	for _, err := range []error{nil, errors.New("worker"), context.Canceled} {
+		if _, ok := providerRunExitCode(err); ok {
+			t.Fatalf("%v asked for an exit code", err)
 		}
 	}
 }
