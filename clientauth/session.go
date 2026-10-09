@@ -107,14 +107,6 @@ func rejectionPath(clientJwtPath string) string {
 	return clientJwtPath + ".rejected"
 }
 
-func networkCredentialFingerprint(path string, byJwt string) string {
-	info, err := os.Stat(path)
-	if err != nil {
-		return networkCredentialFingerprintOf(byJwt, 0, false)
-	}
-	return networkCredentialFingerprintOf(byJwt, info.ModTime().UnixNano(), true)
-}
-
 // MarkRejected removes a rejected client credential and records which
 // network-login token was present. Automatic restarts may not use that same
 // powerful bootstrap credential to recreate a revoked client, nor a renewal of

@@ -18,6 +18,17 @@ import (
 	gojwt "github.com/golang-jwt/jwt/v5"
 )
 
+// networkCredentialFingerprint is the path fingerprint that markers written
+// before readNetworkCredential hold: the token and the modification time of
+// a separate stat of the path.
+func networkCredentialFingerprint(path string, byJwt string) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return networkCredentialFingerprintOf(byJwt, 0, false)
+	}
+	return networkCredentialFingerprintOf(byJwt, info.ModTime().UnixNano(), true)
+}
+
 func networkTokenTestJwt(t *testing.T, claims gojwt.MapClaims) string {
 	t.Helper()
 	token, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, claims).SignedString(gojwt.UnsafeAllowNoneSignatureType)
