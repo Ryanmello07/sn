@@ -36,7 +36,15 @@ const (
 	providerStartupRecoveryRequired
 	providerWorkCaptureRequired
 	providerContractCaptureRequired
+	providerNetworkSignInRejected
+	providerNetworkTokenRenewed
+	providerNetworkTokenRenewalWait
+	providerNetworkTokenRenewalStopped
 )
+
+// The guidance of a rejected or no longer renewable network sign-in. The
+// operator form is the one a provide --all-operators child needs.
+const providerNetworkSignInGuidance = "Run `provider auth` to sign in again (for an operator of provide --all-operators: `provider auth --operator=<domain>`)."
 
 // Immutable scalar status can be compared without formatting SDK error strings.
 type providerExtenderObservation struct {
@@ -161,6 +169,14 @@ func (self *providerDiagnostics) observe(event providerDiagnosticEvent, provider
 		code = "whole_work_capture_required"
 	case providerContractCaptureRequired:
 		code = "original_contract_capture_required"
+	case providerNetworkSignInRejected:
+		domain, code = "authentication", "network_sign_in_rejected"
+	case providerNetworkTokenRenewed:
+		domain, code = "authentication", "network_sign_in_renewed"
+	case providerNetworkTokenRenewalWait:
+		domain, code = "authentication", "network_sign_in_renewal_retry"
+	case providerNetworkTokenRenewalStopped:
+		domain, code = "authentication", "network_sign_in_renewal_stopped"
 	}
 	if event != providerExtenderObserved {
 		extender = nil
@@ -174,6 +190,12 @@ func (self *providerDiagnostics) observe(event providerDiagnosticEvent, provider
 	}
 	if event == providerWorkCaptureRequired {
 		guidance = "Restore the reviewed whole-work profile, original provider identity and private outbox. Supply --whole-work-capture and --whole-work-capture-sha256. See miner/PROVIDER-WHOLE-WORK.md."
+	}
+	if event == providerNetworkSignInRejected {
+		guidance = "The network sign-in in the state directory's jwt was rejected or has expired. " + providerNetworkSignInGuidance + " A provider slot that could not register starts after a restart."
+	}
+	if event == providerNetworkTokenRenewalStopped {
+		guidance = "Renewal of the network sign-in in the state directory's jwt stopped; it keeps working until it expires. " + providerNetworkSignInGuidance
 	}
 	if event == providerContractCaptureRequired {
 		guidance = "Restore the approved original contract profile, provider key and prepared source custody. Supply --original-contract-capture and --original-contract-capture-sha256. See miner/PROVIDER-WHOLE-WORK.md."

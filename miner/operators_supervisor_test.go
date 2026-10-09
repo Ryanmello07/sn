@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -22,11 +23,13 @@ import (
 	"testing"
 	"time"
 
+	gojwt "github.com/golang-jwt/jwt/v5"
 	"github.com/urnetwork/connect"
 
 	"github.com/urfoundation/sn/clientauth"
 	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/hotkeyauth"
+	"github.com/urfoundation/sn/hotkeywallet"
 	"github.com/urfoundation/sn/operatorlist"
 	"github.com/urfoundation/sn/protocol"
 )
@@ -766,4 +769,50 @@ func TestOperatorSupervisorKeepsTheHotkeyWalletDelegated(t *testing.T) {
 		t.Fatalf("the adopted delegation was signed again: %d accepts", accepts)
 	}
 	fixture.stop(syscall.SIGTERM, first, second)
+}
+
+// An operator that rejects the network jwt gets guidance that names the
+// command which signs it in again, not the raw refusal.
+func TestOperatorSupervisorNamesARejectedSignInAtTheWalletUpkeep(t *testing.T) {
+	coldkey, hotkey := testHotkey(t, 0x41), testHotkey(t, 0x31)
+	operator := newTestHotkeyWalletOperator(t, 3, nil)
+	fixture := newTestOperatorFixture(t)
+	fixture.settings.hotkey = hotkey
+	// a jwt the operator no longer accepts, as after an expiry it enforces
+	stale, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, gojwt.MapClaims{"network_id": operator.networkId.String(), "user_id": operator.userId.String(), "marker": "stale"}).SignedString(gojwt.UnsafeAllowNoneSignatureType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := clientauth.WriteNetworkToken(operatorJwtPath(fixture.base, "stale.example"), stale); err != nil {
+		t.Fatal(err)
+	}
+	testHotkeyWalletChain(t, fixture.base, coldkey, hotkey)
+	fixture.publish(operator.listed("stale.example"))
+	fixture.run()
+	child := fixture.nextStart()
+	fixture.journal.wait(t, 0, "log operator stale.example: the network sign-in was rejected or has expired; run `provider auth --operator=stale.example` to sign in again. Hotkey wallet not delegated; trying again in 1h0m0s")
+	fixture.stop(syscall.SIGTERM, child)
+}
+
+func TestHotkeyWalletSignInRejectedReadsOnlyA401(t *testing.T) {
+	for _, c := range []struct {
+		err  error
+		want bool
+	}{
+		{&hotkeywallet.StatusError{StatusCode: http.StatusUnauthorized}, true},
+		{fmt.Errorf("storing the chain: %w", &hotkeywallet.StatusError{StatusCode: http.StatusUnauthorized}), true},
+		{&hotkeyWalletStatusError{statusCode: http.StatusUnauthorized}, true},
+		{fmt.Errorf("delegating: %w", &hotkeyWalletStatusError{statusCode: http.StatusUnauthorized}), true},
+		{&hotkeywallet.StatusError{StatusCode: http.StatusServiceUnavailable}, false},
+		{&hotkeyWalletStatusError{statusCode: http.StatusForbidden}, false},
+		{errors.New("401 Unauthorized"), false},
+	} {
+		if got := hotkeyWalletSignInRejected(c.err); got != c.want {
+			t.Errorf("%v: rejected = %t", c.err, got)
+		}
+	}
+	status := &hotkeyWalletStatusError{method: "GET", path: "/sn/wallets", status: "401 Unauthorized", statusCode: 401, answer: "the network JWT is required"}
+	if status.Error() != "GET /sn/wallets: 401 Unauthorized: the network JWT is required" {
+		t.Fatalf("message = %q", status.Error())
+	}
 }

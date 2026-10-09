@@ -305,6 +305,8 @@ func (self *operatorSupervisor) walletUpkept(upkeep operatorWalletUpkeep) {
 	adopted := 0
 	for _, result := range upkeep.results {
 		switch {
+		case result.err != nil && hotkeyWalletSignInRejected(result.err):
+			fmt.Fprintf(self.log, "operator %s: the network sign-in was rejected or has expired; run `provider auth --operator=%s` to sign in again. Hotkey wallet not delegated; trying again in %s\n", result.domain, result.domain, operatorWalletUpkeepInterval)
 		case result.err != nil:
 			fmt.Fprintf(self.log, "operator %s: hotkey wallet not delegated: %v; trying again in %s\n", result.domain, result.err, operatorWalletUpkeepInterval)
 		case result.outcome.delegated:
@@ -438,7 +440,7 @@ func (self *operatorSupervisor) checkCredentials(requestCtx context.Context, dom
 		network, err := self.hooks.signIn(requestCtx, hotkeyauth.Settings{ApiUrl: apiUrl, Hotkey: self.settings.hotkey})
 		if err == nil {
 			result.created = network.Created
-			err = clientauth.WriteToken(jwtPath, network.ByJwt)
+			err = clientauth.WriteNetworkToken(jwtPath, network.ByJwt)
 		}
 		result.err = err
 		self.signIns <- result

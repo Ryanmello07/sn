@@ -99,6 +99,49 @@ Live refresh checks stable principal, roles and client/device identity before
 persisting. SDK integrity notices cancel only their still-current credential
 generation, including protection against stale equal-byte replacement logins.
 
+## Network sign-in renewal
+
+The network JWT in the state directory's `jwt` (written by `provider auth`, or
+by the hotkey sign-in of `provide --all-operators --auto-register`) expires 30
+days after its sign-in. Providers run on their own client JWTs, which refresh
+themselves; the network JWT is read again only to register a client (a new
+slot, an interrupted registration) and by the supervisor's hourly hotkey wallet
+upkeep. So every `provide` process renews its state directory's network JWT
+(`miner/network_token_renewal.go`):
+
+- **When:** at the token's half-life, never sooner than 5 minutes after the
+  schedule is read. A token without an expiration, or an expired one, is
+  renewed at once while the server still accepts it.
+- **How:** `POST /auth/network-refresh` with the network JWT, over the first
+  provider's transport (direct, or the first proxy). The renewal must name the
+  same network, user, roles and principal, and no client.
+- **Write:** `clientauth.RenewNetworkToken`, under the token's registration owner
+  lock (`jwt.registration.lock`, the lock a measurement registration takes to
+  borrow it), and only while the file still holds the token it renewed. A
+  sign-in that replaced the file first wins. The file must be a private regular
+  file (mode 0600, one link) in a directory without symlinked components.
+- **Failures:** a transient failure retries after 10 s plus jitter doubling to
+  15 minutes; another 4xx (a server without the route answers 404) retries after
+  a day; a held owner lock retries only the write. A renewal that answers a
+  token itself due at once is spaced from 5 minutes, doubling to 7 days.
+- **Stops**, until a new sign-in replaces the file: a 401 (`network_sign_in_rejected`),
+  a refusal or an answer of another identity, an API key, or a file the custody
+  refuses (`network_sign_in_renewal_stopped`). Both diagnostics name the command
+  that signs in again. A provider slot whose registration gets a 401 reports
+  `network_sign_in_rejected` instead of `startup_recovery_required`.
+
+**Rejection markers across renewals.** A rejected client's `.rejected` marker
+names the network JWT file by fingerprint (token and modification time), so that
+only an explicit sign-in permits recreating the client. A renewal continues the
+same sign-in, so it records the fingerprints of the file it replaces and of the
+file it writes in the token's lineage, `jwt.lineage`, before renaming the
+renewed file into place. A fingerprint marker blocks while the current file and
+the marker belong to the lineage; a crash at any step leaves a state that still
+blocks. An explicit sign-in (`clientauth.WriteNetworkToken`) writes a file
+outside any lineage, and removes the old lineage, so it unblocks exactly as
+before. `"blocked"` markers, and every marker in provider directory custody,
+block regardless, as before.
+
 ## Qualification and remaining scope
 
 Deterministic fixtures use private temporary files, real local HTTP and the real

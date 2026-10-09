@@ -197,6 +197,16 @@ func networkCredentialMarkerBlocks(networkPath, fingerprint, marker string) (boo
 	return slices.Contains(members, fingerprint) && slices.Contains(members, marker), nil
 }
 
+// NetworkJwtRenewable reports whether a token is a network token the server
+// renews at /auth/network-refresh: a JWT that names a network and a user and
+// no client. An API key does not expire and is not renewed, and a client token
+// refreshes as a client.
+func NetworkJwtRenewable(token string) bool {
+	identity, err := registrationIdentity(token)
+	return err == nil && identity.clientId == "" && identity.deviceId == "" &&
+		validRegistrationIdentityId(identity.NetworkId) && validRegistrationIdentityId(identity.UserId)
+}
+
 // ValidateRenewedNetworkJwt checks that a renewal is a network token of the
 // same network, user, roles and principal as the network token it renews.
 // The server signed it; this keeps an answer from replacing the sign-in with

@@ -248,6 +248,11 @@ provider operators [--operators-url=<url>] [-v...]
   - with `--auto-register`, `hotkeyauth.SignIn` runs and writes it;
   - otherwise the supervisor logs `operator <domain> is awaiting auth: provider auth --operator=<domain>`, checks again at
     least every 5 minutes, and does not start that child.
+- **Network JWT renewal.** Each child renews its operator directory's `jwt` at its half-life
+  (`POST /auth/network-refresh`, miner/PROVIDER-REGISTRATION.md "Network sign-in renewal"); the supervisor never renews.
+  The hourly hotkey wallet upkeep reads the renewed file. An operator that answers the upkeep with 401 logs
+  `operator <domain>: the network sign-in was rejected or has expired; run `provider auth --operator=<domain>` to sign in
+  again`. `--auto-register` signs in only for a missing JWT, so a present but rejected one waits for that command.
 - **The proxy file** in the base directory, if present, is copied into each operator directory before its child starts.
 - **`provider auth --operator`** writes `DomainStateDir(base, domain)/jwt`. With `--hotkey_seed_file` it uses
   `hotkeyauth.SignIn`.

@@ -97,6 +97,15 @@ func providerRegistrationRetryCause(err error, depth int, budget *minerReadCause
 	return false
 }
 
+// A registration the server refused for its network sign-in (a 401 on the
+// request that carried the token) needs a new sign-in, not custody recovery.
+func providerAuthenticationRecoveryEvent(err error) providerDiagnosticEvent {
+	if clientauth.IsNetworkCredentialRejected(err) {
+		return providerNetworkSignInRejected
+	}
+	return providerStartupRecoveryRequired
+}
+
 // Each attempt is finite. Later attempts replay the same durably retained
 // operation and never fall back to the legacy allocating endpoint.
 func authenticateProvider(ctx context.Context, api *sdk.Api, networkPath, clientPath string, keyOwner *clientauth.ProviderClientKeyOwner, slot string, allowCreate bool, output *providerDiagnostics, index uint64) (string, connect.Id, error) {

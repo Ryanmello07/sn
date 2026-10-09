@@ -94,6 +94,28 @@ func hotkeyWalletTargets(snapshot *operatorlist.Snapshot, base string) ([]hotkey
 // One request the way hotkeywallet calls an operator: the network jwt as
 // bearer, no redirects, a bounded JSON answer, and any status but 200 an
 // error. The list already holds the api url to https or loopback http.
+// hotkeyWalletStatusError is an operator's answer with a status other than
+// 200 to hotkeyWalletCall.
+type hotkeyWalletStatusError struct {
+	method, path, status, answer string
+	statusCode                   int
+}
+
+func (self *hotkeyWalletStatusError) Error() string {
+	return fmt.Sprintf("%s %s: %s: %s", self.method, self.path, self.status, self.answer)
+}
+
+// hotkeyWalletSignInRejected reports an operator's 401 to a hotkey wallet
+// request: the operator rejected the network JWT the request carried.
+func hotkeyWalletSignInRejected(err error) bool {
+	var walletStatus *hotkeywallet.StatusError
+	if errors.As(err, &walletStatus) && walletStatus.StatusCode == http.StatusUnauthorized {
+		return true
+	}
+	var callStatus *hotkeyWalletStatusError
+	return errors.As(err, &callStatus) && callStatus.statusCode == http.StatusUnauthorized
+}
+
 func hotkeyWalletCall(ctx context.Context, target hotkeyWalletTarget, method string, path string, body any, result any) error {
 	var reader io.Reader
 	if body != nil {
@@ -128,7 +150,7 @@ func hotkeyWalletCall(ctx context.Context, target hotkeyWalletTarget, method str
 		return fmt.Errorf("%s %s answer exceeds %d bytes", method, path, hotkeyWalletAnswerBytes)
 	}
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s %s: %s: %s", method, path, response.Status, strings.TrimSpace(string(answer[:min(len(answer), 512)])))
+		return &hotkeyWalletStatusError{method: method, path: path, status: response.Status, statusCode: response.StatusCode, answer: strings.TrimSpace(string(answer[:min(len(answer), 512)]))}
 	}
 	if err := json.Unmarshal(answer, result); err != nil {
 		return fmt.Errorf("%s %s answer is not JSON: %w", method, path, err)

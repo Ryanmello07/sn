@@ -407,7 +407,7 @@ func auth(opts docopt.Opts) {
 		panic(err)
 	}
 	if byJwt != "" {
-		if err := clientauth.WriteToken(jwtPath, byJwt); err != nil {
+		if err := clientauth.WriteNetworkToken(jwtPath, byJwt); err != nil {
 			panic(err)
 		}
 		fmt.Printf("Jwt written to %s\n", jwtPath)
@@ -703,6 +703,13 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		return err
 	}
 	defer func() { returnErr = errors.Join(returnErr, keyOwner.Close()) }()
+	networkJwtPath, err := providerStatePath("jwt")
+	if err != nil {
+		output.observe(providerStartupRecoveryRequired, 0, false, err, 0, nil)
+		return err
+	}
+	stopRenewal := startNetworkTokenRenewal(ctx, self.apiUrl, providers[0], self.testEgressDialer, networkJwtPath, output)
+	defer func() { returnErr = errors.Join(returnErr, stopRenewal()) }()
 
 	provideWithProxy := func(index uint64, proxySettings *connect.ProxySettings) (returnErr error) {
 		defer func() {
@@ -747,7 +754,7 @@ func (self providerRunSettings) run(parent context.Context, writer io.Writer) (r
 		byClientJwt, clientId, err := authenticateProvider(proxyCtx, api, networkJwtPath, clientJwtPath, keyOwner, providerRegistrationSlot(proxySettings), self.allowClientRegistration, output, index)
 		if err != nil {
 			if proxyCtx.Err() == nil {
-				output.observe(providerStartupRecoveryRequired, index, true, err, 0, nil)
+				output.observe(providerAuthenticationRecoveryEvent(err), index, true, err, 0, nil)
 			}
 			return err
 		}

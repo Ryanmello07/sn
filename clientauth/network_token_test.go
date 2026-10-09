@@ -409,6 +409,25 @@ func TestValidateRenewedNetworkJwt(t *testing.T) {
 	}
 }
 
+func TestNetworkJwtRenewable(t *testing.T) {
+	network := gojwt.MapClaims{"network_id": "00000000-0000-0000-0000-000000000301", "user_id": "00000000-0000-0000-0000-000000000401"}
+	if !NetworkJwtRenewable(networkTokenTestJwt(t, network)) {
+		t.Fatal("a network token was not renewable")
+	}
+	for name, token := range map[string]string{
+		"an api key":       "urn_" + strings.Repeat("a", 52),
+		"a client token":   networkTokenTestJwt(t, gojwt.MapClaims{"network_id": network["network_id"], "user_id": network["user_id"], "client_id": testClientId, "device_id": testDeviceId}),
+		"no network":       networkTokenTestJwt(t, gojwt.MapClaims{"user_id": network["user_id"]}),
+		"no user":          networkTokenTestJwt(t, gojwt.MapClaims{"network_id": network["network_id"]}),
+		"not a jwt":        "network-jwt",
+		"an invalid claim": networkTokenTestJwt(t, gojwt.MapClaims{"network_id": 7, "user_id": network["user_id"]}),
+	} {
+		if NetworkJwtRenewable(token) {
+			t.Errorf("%s was renewable", name)
+		}
+	}
+}
+
 // A confirmed 401 on the request that carried the network token is a typed
 // rejection of the sign-in, on both bootstrap paths.
 func TestNetworkTokenRejectionIsTyped(t *testing.T) {
