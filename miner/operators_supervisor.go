@@ -440,7 +440,7 @@ func (self *operatorSupervisor) checkCredentials(requestCtx context.Context, dom
 		network, err := self.hooks.signIn(requestCtx, hotkeyauth.Settings{ApiUrl: apiUrl, Hotkey: self.settings.hotkey})
 		if err == nil {
 			result.created = network.Created
-			err = clientauth.WriteNetworkToken(jwtPath, network.ByJwt)
+			err = clientauth.WriteNetworkTokenWithContext(requestCtx, jwtPath, network.ByJwt)
 		}
 		result.err = err
 		self.signIns <- result

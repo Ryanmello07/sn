@@ -247,7 +247,7 @@ func (self *operatorSupervisor) prepare(ctx context.Context, operator operatorli
 		if err != nil {
 			return false, fmt.Errorf("hotkey sign-in: %w", err)
 		}
-		if err := clientauth.WriteNetworkToken(settings.networkPath, byJwt); err != nil {
+		if err := clientauth.WriteNetworkTokenWithContext(ctx, settings.networkPath, byJwt); err != nil {
 			return false, err
 		}
 		self.hooks.log(fmt.Sprintf("operator %s signed in with the hotkey; wrote %s", operator.Domain, settings.networkPath))

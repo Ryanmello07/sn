@@ -138,10 +138,16 @@ same sign-in, so it records the fingerprints of the file it replaces and of the
 file it writes in the token's lineage, `jwt.lineage`, before renaming the
 renewed file into place. A fingerprint marker blocks while the current file and
 the marker belong to the lineage; a crash at any step leaves a state that still
-blocks. An explicit sign-in (`clientauth.WriteNetworkToken`) writes a file
-outside any lineage, and removes the old lineage, so it unblocks exactly as
-before. `"blocked"` markers, and every marker in provider directory custody,
-block regardless, as before.
+blocks. An explicit sign-in (`provider auth`, `provider auth --operator` and
+the hotkey sign-in, through `clientauth.WriteNetworkTokenWithContext`) writes a
+file outside any lineage and removes the old lineage, which unblocks on purpose.
+It does so under the same owner lock as renewal: an unserialized sign-in landing
+between a renewal's lineage write and its rename would leave the renewal of the
+old sign-in current with no lineage, losing the sign-in and unblocking a revoked
+client. It waits up to 45 s for a held lock, then fails with "a running miner or
+validator is using <path>; stop it or try again" and writes nothing.
+`"blocked"` markers, and every marker in provider directory custody, block
+regardless, as before.
 
 ## Qualification and remaining scope
 

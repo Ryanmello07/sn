@@ -269,7 +269,7 @@ func operatorAuth(ctx context.Context, opts docopt.Opts, prompts loginPrompts, o
 	if byJwt == "" {
 		return fmt.Errorf("operator %s returned no jwt", operator.Domain)
 	}
-	if err := clientauth.WriteNetworkToken(jwtPath, byJwt); err != nil {
+	if err := clientauth.WriteNetworkTokenWithContext(ctx, jwtPath, byJwt); err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "Jwt written to %s\n", jwtPath)

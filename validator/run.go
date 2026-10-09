@@ -388,7 +388,7 @@ func writeAuthJwt(ctx context.Context, opts docopt.Opts, target authTarget, outp
 	if byJwt == "" {
 		return errors.New("the operator's answer has no network JWT")
 	}
-	if err := clientauth.WriteNetworkToken(target.jwtPath, byJwt); err != nil {
+	if err := clientauth.WriteNetworkTokenWithContext(ctx, target.jwtPath, byJwt); err != nil {
 		return err
 	}
 	fmt.Fprintf(output, "Jwt written to %s\n", target.jwtPath)

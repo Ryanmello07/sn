@@ -996,7 +996,10 @@ validator run --config=<path> ... [--operators-refresh=<duration> [--operators-u
   the fresh network JWT to that operator's `network_jwt_file`, and restart. The measurement
   runner reports `the network sign-in at <path> was rejected or has expired; run
   `validator auth` to sign in again`, naming `validator auth --operator=<domain>` under
-  `--all-operators`. The validator never renews its own network JWTs.
+  `--all-operators`. The validator never renews its own network JWTs. `validator auth` and
+  the hotkey sign-in write a network JWT under its registration owner lock, the lock a
+  miner's renewal and a measurement registration hold; a held lock is waited for up to
+  45 s, then reported as "a running miner or validator is using <path>".
 - Pinned operators keep their configured `network_jwt_file`. A missing one is reported as
   before and never created.
 

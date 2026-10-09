@@ -12,15 +12,23 @@ package clientauth
 // Each renewal therefore records, in the token's lineage file
 // (<token>.lineage), the fingerprint of the file it replaces and of the file
 // it writes. A marker blocks while the current file's fingerprint and the
-// marker both belong to the lineage. An explicit sign-in writes a file whose
-// fingerprint is in no lineage, so it unblocks exactly as before, whether or
-// not it removes the lineage file. The lineage is written before the renewed
+// marker both belong to the lineage. The lineage is written before the renewed
 // file is renamed into place, so a crash at any point leaves a state that
 // still blocks: the old file with the old lineage, the old file with the
 // extended lineage, or the renewed file with the extended lineage.
+//
+// An explicit sign-in writes a file whose fingerprint is in no lineage and
+// removes the lineage, which unblocks on purpose. That holds only because the
+// sign-in and the renewal are serialized: both hold the token's registration
+// owner lock (<token>.registration.lock). An unserialized sign-in landing
+// between a renewal's lineage write and its rename would leave the renewal of
+// the old sign-in with no lineage: the sign-in lost, and a revoked client
+// unblocked. So an explicit sign-in waits, bounded, for the lock and never
+// writes without it (WriteNetworkTokenWithContext).
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -223,13 +231,17 @@ func ValidateRenewedNetworkJwt(original, renewed string) error {
 	return nil
 }
 
-// WriteNetworkToken persists a network token from an explicit sign-in: an
-// auth command or a hotkey sign-in. The new sign-in begins a new lineage, so
-// it removes the old lineage file too; the old one could not match the new
-// file anyway. Renewal writes with RenewNetworkToken instead.
+// WriteNetworkToken is WriteNetworkTokenWithContext without a context: the
+// bounded wait for the owner lock still applies.
 func WriteNetworkToken(path string, token string) error {
-	if err := WriteToken(path, token); err != nil {
-		return err
-	}
-	return RemoveToken(networkCredentialLineagePath(path))
+	return WriteNetworkTokenWithContext(context.Background(), path, token)
+}
+
+// ErrNetworkTokenInUse is an explicit sign-in that waited its bound for the
+// token's owner lock: a running miner or validator holds it (a renewal, or a
+// registration that borrows the token). Nothing was written.
+var ErrNetworkTokenInUse = errors.New("the network token is in use by a running miner or validator")
+
+func networkTokenInUse(path string) error {
+	return fmt.Errorf("%w: a running miner or validator is using %s; stop it or try again", ErrNetworkTokenInUse, path)
 }

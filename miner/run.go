@@ -407,7 +407,7 @@ func auth(opts docopt.Opts) {
 		panic(err)
 	}
 	if byJwt != "" {
-		if err := clientauth.WriteNetworkToken(jwtPath, byJwt); err != nil {
+		if err := clientauth.WriteNetworkTokenWithContext(ctx, jwtPath, byJwt); err != nil {
 			panic(err)
 		}
 		fmt.Printf("Jwt written to %s\n", jwtPath)

@@ -3,6 +3,7 @@
 package clientauth
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
 )
@@ -475,5 +477,174 @@ func TestNetworkTokenRejectionIsTyped(t *testing.T) {
 	defer closeApi()
 	if _, _, err := LoadOrCreateClientJwt(context.Background(), api, networkPath, filepath.Join(dir, "client.jwt"), "test"); !IsNetworkCredentialRejected(err) {
 		t.Fatalf("bootstrap 401 err = %v, want a network credential rejection", err)
+	}
+}
+
+// An explicit sign-in that starts while a renewal sits between its read and
+// its rename waits for the renewal's owner lock, then wins: its file is
+// current, the lineage is gone, and the old sign-in's marker no longer blocks
+// because of that deliberate sign-in. The renewal of the old sign-in never
+// survives without its lineage, and the sign-in is never lost.
+func TestExplicitSignInWaitsForARenewalAndWins(t *testing.T) {
+	dir := networkTokenTestDir(t)
+	networkPath := filepath.Join(dir, "jwt")
+	clientPath := filepath.Join(dir, "client.jwt")
+	if err := WriteNetworkToken(networkPath, "old-sign-in"); err != nil {
+		t.Fatal(err)
+	}
+	if err := MarkRejected(clientPath, networkPath); err != nil {
+		t.Fatal(err)
+	}
+	marker, err := ReadToken(rejectionPath(clientPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	paused, release := make(chan struct{}), make(chan struct{})
+	networkRenewalTestHooks.beforeRename = func() {
+		close(paused)
+		<-release
+	}
+	defer func() { networkRenewalTestHooks.beforeRename = nil }()
+	renewal := make(chan error, 1)
+	go func() {
+		ok, err := RenewNetworkToken(networkPath, "old-sign-in", "old-sign-in-renewed")
+		if err == nil && !ok {
+			err = errors.New("the renewal was discarded")
+		}
+		renewal <- err
+	}()
+	select {
+	case <-paused:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the renewal did not reach its rename")
+	}
+
+	// watch every state the file passes through for the one that must never
+	// exist: the renewed file without its lineage
+	stopWatch := make(chan struct{})
+	watched := make(chan bool, 1)
+	go func() {
+		unprotected := false
+		for {
+			token, _ := ReadToken(networkPath)
+			_, lineageErr := os.Stat(networkPath + ".lineage")
+			if token == "old-sign-in-renewed" && errors.Is(lineageErr, os.ErrNotExist) {
+				unprotected = true
+			}
+			select {
+			case <-stopWatch:
+				watched <- unprotected
+				return
+			default:
+			}
+		}
+	}()
+
+	explicit := make(chan error, 1)
+	go func() { explicit <- WriteNetworkToken(networkPath, "new-sign-in") }()
+	select {
+	case err := <-explicit:
+		t.Errorf("the explicit sign-in did not wait for the renewal's owner lock (err=%v)", err)
+		explicit <- err
+	case <-time.After(300 * time.Millisecond):
+	}
+	if token, _ := ReadToken(networkPath); token == "new-sign-in" {
+		t.Error("the explicit sign-in wrote while the renewal held the owner lock")
+	}
+	close(release)
+	if err := <-renewal; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-explicit; err != nil {
+		t.Fatal(err)
+	}
+	close(stopWatch)
+	if <-watched {
+		t.Error("the renewed file was current without its lineage")
+	}
+
+	token, fingerprint, err := readNetworkCredential(networkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "new-sign-in" {
+		t.Errorf("the explicit sign-in was lost: the file holds %q", token)
+	}
+	if _, err := os.Stat(networkPath + ".lineage"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the explicit sign-in left the lineage: %v", err)
+	}
+	if token == "old-sign-in-renewed" {
+		if blocks, _ := networkCredentialMarkerBlocks(networkPath, fingerprint, marker); !blocks {
+			t.Error("a renewal of the old sign-in unblocked the revoked client")
+		}
+	} else if blocks, err := networkCredentialMarkerBlocks(networkPath, fingerprint, marker); err != nil || blocks {
+		t.Errorf("the deliberate sign-in did not unblock: blocks=%t err=%v", blocks, err)
+	}
+}
+
+// A sign-in that cannot take the owner lock within its bound says who holds
+// it and writes nothing; it never writes without the lock.
+func TestExplicitSignInGivesUpOnAHeldOwnerLock(t *testing.T) {
+	dir := networkTokenTestDir(t)
+	networkPath := filepath.Join(dir, "jwt")
+	if err := WriteNetworkToken(networkPath, "old-sign-in"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := RenewNetworkToken(networkPath, "old-sign-in", "old-sign-in-renewed"); err != nil || !ok {
+		t.Fatalf("renewal: ok=%t err=%v", ok, err)
+	}
+	lineage, err := os.ReadFile(networkPath + ".lineage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := openRegistrationStore(networkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.close()
+	previous := networkTokenOwnerWait
+	networkTokenOwnerWait = 300 * time.Millisecond
+	defer func() { networkTokenOwnerWait = previous }()
+
+	started := time.Now()
+	err = WriteNetworkToken(networkPath, "new-sign-in")
+	waited := time.Since(started)
+	if !errors.Is(err, ErrNetworkTokenInUse) || !strings.Contains(err.Error(), "a running miner or validator is using "+networkPath+"; stop it or try again") {
+		t.Fatalf("err = %v", err)
+	}
+	if waited < 300*time.Millisecond || waited > 5*time.Second {
+		t.Fatalf("waited %s for a 300ms bound", waited)
+	}
+	if token, _ := ReadToken(networkPath); token != "old-sign-in-renewed" {
+		t.Fatalf("a refused sign-in wrote %q", token)
+	}
+	if after, err := os.ReadFile(networkPath + ".lineage"); err != nil || !bytes.Equal(after, lineage) {
+		t.Fatalf("a refused sign-in changed the lineage: %v", err)
+	}
+}
+
+// The wait for the owner lock ends with the caller's context.
+func TestExplicitSignInStopsWithItsContext(t *testing.T) {
+	dir := networkTokenTestDir(t)
+	networkPath := filepath.Join(dir, "jwt")
+	if err := WriteNetworkToken(networkPath, "old-sign-in"); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := openRegistrationStore(networkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.close()
+	ctx, cancel := context.WithCancel(t.Context())
+	time.AfterFunc(100*time.Millisecond, cancel)
+	if err := WriteNetworkTokenWithContext(ctx, networkPath, "new-sign-in"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v", err)
+	}
+	if token, _ := ReadToken(networkPath); token != "old-sign-in" {
+		t.Fatalf("a canceled sign-in wrote %q", token)
+	}
+	if err := WriteNetworkTokenWithContext(t.Context(), networkPath, " "); err == nil {
+		t.Fatal("an empty token was written")
 	}
 }

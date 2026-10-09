@@ -3,22 +3,92 @@
 package clientauth
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
 
+// How long an explicit sign-in waits for the token's owner lock. A renewal
+// holds it for a moment; a registration that borrows the token can hold it
+// for minutes, and then the operator is told to stop it or try again.
+var networkTokenOwnerWait = 45 * time.Second
+
+const (
+	networkTokenOwnerFirstPoll   = 50 * time.Millisecond
+	networkTokenOwnerLongestPoll = 2 * time.Second
+)
+
+// WriteNetworkTokenWithContext persists a network token from an explicit
+// sign-in (an auth command or a hotkey sign-in) and removes the token's
+// renewal lineage, both under the token's registration owner lock, so a
+// renewal can neither overwrite the sign-in nor be left without its lineage
+// (network_token.go). It waits for the lock up to networkTokenOwnerWait, then
+// answers ErrNetworkTokenInUse and writes nothing. It never writes without the
+// lock.
+func WriteNetworkTokenWithContext(ctx context.Context, path string, token string) (returnErr error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("refusing to persist an empty token")
+	}
+	store, err := openNetworkTokenOwner(ctx, path)
+	if err != nil {
+		return err
+	}
+	defer func() { returnErr = errors.Join(returnErr, store.close()) }()
+	name := filepath.Base(path)
+	if err := store.write(name, []byte(token)); err != nil {
+		return err
+	}
+	return store.remove(name + ".lineage")
+}
+
+// openNetworkTokenOwner takes the token's registration owner lock, polling a
+// held lock with a growing interval until networkTokenOwnerWait.
+func openNetworkTokenOwner(ctx context.Context, path string) (*registrationStore, error) {
+	deadline := time.Now().Add(networkTokenOwnerWait)
+	poll := networkTokenOwnerFirstPoll
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		store, err := openRegistrationStore(path)
+		if err == nil {
+			return store, nil
+		}
+		if !errors.Is(err, errRegistrationOwnerActive) {
+			return nil, err
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, networkTokenInUse(path)
+		}
+		timer := time.NewTimer(min(poll, remaining))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+		poll = min(poll*2, networkTokenOwnerLongestPoll)
+	}
+}
+
 // RenewNetworkToken replaces the network token at path with its renewal,
 // while the file still holds previous. It answers false, without an error,
 // when the file holds another token: an explicit sign-in or another renewer
-// wrote it first, and the renewal is discarded.
+// wrote it first, and the renewal is discarded. Explicit sign-ins hold the
+// same owner lock (WriteNetworkTokenWithContext), so none lands between this
+// renewal's read and its rename.
 //
 // The renewal holds the token's registration owner lock (the lock a
 // measurement registration takes to borrow the token), and is published in
@@ -104,6 +174,9 @@ func RenewNetworkToken(path string, previous string, renewed string) (_ bool, re
 		cleanup = false
 		return false, errNetworkRenewalTestStop
 	}
+	if hook := networkRenewalTestHooks.beforeRename; hook != nil {
+		hook()
+	}
 	if err := store.check(); err != nil {
 		return false, err
 	}
@@ -120,6 +193,9 @@ func RenewNetworkToken(path string, previous string, renewed string) (_ bool, re
 var networkRenewalTestHooks struct {
 	afterTemporary func() bool
 	afterLineage   func() bool
+	// runs with the owner lock held, after the lineage and before the
+	// rename; it may block to hold a renewal in that window
+	beforeRename func()
 }
 
 var errNetworkRenewalTestStop = errors.New("network renewal stopped by its test hook")
