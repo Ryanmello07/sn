@@ -44,8 +44,12 @@ func InspectProductionBootstrapConfig(ctx context.Context, path string, raw []by
 
 // Additionally admits a config whose complete evidence_v2 census is
 // activation-pending: every entry unrendered with all paths pre-declared. Such
-// a config is signed before its coordinator and operators exist; every other
-// check is the strict inspection's, and the result says the census is pending.
+// a config is signed before its coordinator and operators exist, and bootstrap
+// inspects it as another account than the validator. Its declared custody
+// paths are therefore checked only for spelling, distinctness and overlap, and
+// are never stat'd or opened: the validator's private directories may already
+// exist. Every other check is the strict inspection's, and the result says the
+// census is pending.
 func InspectProductionBootstrapConfigPreActivation(ctx context.Context, path string, raw []byte) (*ProductionBootstrapInspection, error) {
 	return inspectProductionBootstrapConfig(ctx, path, raw, true)
 }
@@ -60,7 +64,9 @@ func inspectProductionBootstrapConfig(ctx context.Context, path string, raw []by
 	if err := ValidateReleaseEvidenceV2Path(path); err != nil {
 		return nil, err
 	}
-	cfg, err := decodeReleaseConfigDocument(path, raw)
+	// The config itself and its approval remain bootstrap inputs, read as the
+	// caller. Only the pre-activation inspector stops at declared path shapes.
+	cfg, err := decodeReleaseConfigDocumentPaths(path, raw, admitPending)
 	if err != nil {
 		return nil, err
 	}
