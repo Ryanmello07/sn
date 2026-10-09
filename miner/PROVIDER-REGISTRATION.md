@@ -118,8 +118,9 @@ upkeep. So every `provide` process renews its state directory's network JWT
 - **Write:** `clientauth.RenewNetworkToken`, under the token's registration owner
   lock (`jwt.registration.lock`, the lock a measurement registration takes to
   borrow it), and only while the file still holds the token it renewed. A
-  sign-in that replaced the file first wins. The file must be a private regular
-  file (mode 0600, one link) in a directory without symlinked components.
+  sign-in that replaced the file first wins. The file must be a regular file
+  with owner-only permissions and one link, in a directory without symlinked
+  components.
 - **Failures:** a transient failure retries after 10 s plus jitter doubling to
   15 minutes; another 4xx (a server without the route answers 404) retries after
   a day; a held owner lock retries only the write. A renewal that answers a
