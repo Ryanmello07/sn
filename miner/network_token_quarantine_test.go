@@ -124,3 +124,60 @@ func TestAutomaticSignInKeepsARevokedSlotBlocked(t *testing.T) {
 	}
 	supervisor.stop(syscall.SIGTERM, child)
 }
+
+// A run with --quarantine-rejected-sign-in whose renewal call is rejected
+// sets the sign-in aside and ends with the quarantine, which provide turns
+// into exit status 75 for the supervisor. Without the flag the same run keeps
+// its sign-in in place.
+func TestProviderRunEndsWithAQuarantinedSignIn(t *testing.T) {
+	for _, quarantine := range []bool{true, false} {
+		t.Run(map[bool]string{true: "flag", false: "no flag"}[quarantine], func(t *testing.T) {
+			fixture := newProviderRegistrationFixture(t)
+			jwtPath := filepath.Join(fixture.dir, "jwt")
+			expired, err := gojwt.NewWithClaims(gojwt.SigningMethodNone, gojwt.MapClaims{"network_id": "00000000-0000-0000-0000-000000000301", "user_id": "00000000-0000-0000-0000-000000000401", "roles": []string{"provider"}, "principal": "synthetic-provider-owner", "exp": time.Now().Add(-10 * 24 * time.Hour).Unix()}).SignedString(gojwt.UnsafeAllowNoneSignatureType)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := clientauth.WriteNetworkToken(jwtPath, expired); err != nil {
+				t.Fatal(err)
+			}
+			settings := fixture.settings(true)
+			settings.quarantineRejectedSignIn = quarantine
+			handoff := errors.New("synthetic handoff")
+			hooks := providerRegistrationHooks{afterAuthenticated: func(string, connect.Id, []byte) error {
+				// hold the worker until the renewal call was answered
+				deadline := time.Now().Add(10 * time.Second)
+				for time.Now().Before(deadline) {
+					fixture.stateLock.Lock()
+					answered := fixture.networkRefreshes > 0
+					fixture.stateLock.Unlock()
+					if answered {
+						return handoff
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
+				return errors.New("the renewal call was never made")
+			}}
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			defer cancel()
+			err = settings.run(context.WithValue(ctx, providerRegistrationHooksKey{}, hooks), &providerRefusedWriter{})
+			code, exits := providerRunExitCode(err)
+			_, set, _ := clientauth.LatestNetworkTokenQuarantine(jwtPath)
+			if quarantine {
+				if !errors.Is(err, errProviderNetworkSignInQuarantined) || !exits || code != providerQuarantinedExitCode || !set {
+					t.Fatalf("run err = %v, exit %d %t, set aside %t", err, code, exits, set)
+				}
+				if _, err := os.Stat(jwtPath); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("the rejected sign-in is still in place: %v", err)
+				}
+				return
+			}
+			if errors.Is(err, errProviderNetworkSignInQuarantined) || exits || set {
+				t.Fatalf("without the flag: err = %v, exit %t, set aside %t", err, exits, set)
+			}
+			if token, err := clientauth.ReadToken(jwtPath); err != nil || token != expired {
+				t.Fatalf("without the flag the sign-in moved: %v", err)
+			}
+		})
+	}
+}
