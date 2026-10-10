@@ -922,11 +922,14 @@ readiness digest `10541276…1924`, and `config/main/sn.yml` activation is
 
 Run `bringyourctl sn-transition-status` with the selected main environment; it
 reports configuration/declaration matching, not proof of running services or
-chain readiness. Pin the actual schedule file SHA-256 for the approved database
-migration (`bringyourctl db migrate --sn-schedule-sha256=HEX`, or the all-in-one
-operator's `all db migrate` equivalent). Retain migration results and verify
-actual worker/service adoption; publishing config alone does not perform these
-steps. Follow the operator guide for Warp layout and `WARP_ENV=main`.
+chain readiness. Apply database migrations with plain `bringyourctl db migrate`
+(or the all-in-one operator's `all db migrate`). The `--sn-schedule-sha256` pin
+option was removed once sn went live: migrate keeps an existing earning boundary
+unchanged and prints a one-line confirmation, and on a database without one it
+prepares the boundary from the installed `sn.yml` with no digest check. Retain
+migration results and verify actual worker/service adoption; publishing config
+alone does not perform these steps. Follow the operator guide for Warp layout
+and `WARP_ENV=main`.
 
 The October 6 00:00 UTC cutoff attributes **new earnings** to mainnet. It is not
 the last USDC transfer date: pre-cutoff obligations can finish paying later.
