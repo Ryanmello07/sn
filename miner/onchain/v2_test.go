@@ -635,13 +635,17 @@ func (c *v2TestChain) checkArgv(flags ...string) []string {
 }
 
 // run parses argv with the real usage and runs the v2 command, returning
-// what it printed. A read retry fails at once instead of waiting.
+// what it printed. A read retry fails at once instead of waiting. Taking the
+// lock before and after orders the test's setup before the handlers and
+// their writes before the test's reads.
 func (c *v2TestChain) run(argv []string) (string, error) {
 	c.t.Helper()
 	opts, err := parseArgv(c.t, argv)
 	if err != nil {
 		c.t.Fatalf("usage refused %q: %v", argv, err)
 	}
+	c.do(func() {})
+	defer c.do(func() {})
 	parent, cancel := context.WithTimeout(c.t.Context(), 120*time.Second)
 	defer cancel()
 	ctx, _ := onchainReadTestContext(c.t, parent, func(context.Context, time.Duration) error {

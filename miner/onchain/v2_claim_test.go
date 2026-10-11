@@ -559,6 +559,7 @@ func TestV2RunChild(t *testing.T) {
 // prints the accounts and exits 0; a refused claim exits 1.
 func TestV2RunReports(t *testing.T) {
 	s := newV2ClaimScenario(t)
+	s.c.do(func() {}) // orders the setup before the handlers
 	for _, c := range []struct {
 		argv []string
 		exit int
