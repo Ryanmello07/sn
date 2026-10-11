@@ -57,13 +57,15 @@ cd "$evm_repo"
 # and runtime-precompile interfaces. The fleet batcher, disposable precompile
 # probe, hostile governance-drill implementation, immutable validator evidence
 # journal, and immutable settlement v2 vault are separate deployment roots
-# analyzed independently.
+# analyzed independently. The settlement v2 ledger sum tree library is analyzed
+# as a root of its own.
 contracts=(
   src/STCoordinator.sol
   src/STFleetBatcher.sol
   src/STValidatorEvidence.sol
   src/probe/STSubnetProbe.sol
   src/testnet/STCoordinatorAdversary.sol
+  src/LedgerTree.sol
   src/STSettlementVault2.sol
 )
 for contract in "${contracts[@]}"; do
