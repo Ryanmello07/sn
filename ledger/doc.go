@@ -9,15 +9,18 @@
 //
 // A root's ledger is a set of content-addressed objects named by Ref, the
 // sha256 of their bytes, written "sha256:" followed by 64 lowercase hex
-// digits (ParseRef, Ref.String, RefOf):
+// digits (ParseRef, Ref.String, RefOf). The header is canonical JSON of at
+// most MaxHeaderBytes, and the ledgerHash committed on chain is its sha256:
 //
-//   - the header, canonical JSON of at most MaxHeaderBytes, whose sha256 is
-//     the ledgerHash committed on chain:
-//     {"schema":"urnetwork-payout-ledger-v2","no_id":N,"epoch":E,
-//     "epochs":[{"epoch":K,"providers":["sha256:…",…]|null},…],
-//     "accounts":["sha256:…",…]}
-//     It covers the epochs p+1 … e, at most MaxCoveredEpochs of them, where
-//     p is the latest finalized root's epoch or firstEpoch − 1;
+//	{"schema":"urnetwork-payout-ledger-v2","no_id":N,"epoch":E,
+//	 "epochs":[{"epoch":K,"providers":["sha256:…",…]|null},…],
+//	 "accounts":["sha256:…",…]}
+//
+// It covers the epochs p+1 … e, at most MaxCoveredEpochs of them, where p is
+// the latest finalized root's epoch or firstEpoch − 1. "providers": [] is an
+// epoch without rows; "providers": null is an epoch the operator declared
+// unrecoverable. The header lists chunks:
+//
 //   - provider chunks: ProviderRowBytes-byte rows (protocol.LedgerUsageRow),
 //     client_id(16) ‖ coldkey(32) ‖ usage_bytes(8) ‖ head_excluded(1),
 //     big-endian, sorted by client id;
@@ -25,8 +28,7 @@
 //     coldkey(32) ‖ cumulative(16), in account position order.
 //
 // A chunk list has ChunkRows rows in every chunk except a non-empty last
-// one; an empty list has no chunks. "providers": [] is an epoch without
-// rows; "providers": null is an epoch the operator declared unrecoverable.
+// one; an empty list has no chunks.
 //
 // EncodeHeader and DecodeHeader convert a Header. DecodeHeader accepts only
 // the canonical bytes: it decodes with unknown fields refused, refuses
@@ -45,7 +47,10 @@
 //     accounts in position order, or nil for the pool's first root. Build
 //     refuses accounts that do not rebuild it (ErrPrevious);
 //   - Epochs: one EpochInput per covered epoch p+1 … e, in order. Rows are
-//     the epoch's provider rows, sorted by client id. Null declares the epoch
+//     the epoch's provider rows (§6.2): sorted by client id and unique, with
+//     nonzero client ids and positive usage, the zero coldkey for a provider
+//     without a paying wallet, and HeadExcluded exactly for providers with an
+//     active fleet binding at either boundary. Null declares the epoch
 //     unrecoverable, only on an explicit operator command naming it. For an
 //     epoch built by an earlier root, Chunks holds the references it was
 //     first built with and Rows its rows (DecodeProviderChunks of those
@@ -75,10 +80,11 @@
 // Build refuses with ErrTotalNotIncreased when fundedThrough[e] does not
 // exceed the previous total, and with ErrEpochNotAllocated when epoch e
 // itself does not allocate; in both cases the operator commits nothing for
-// e, and the next root covers it. Other refusals: ErrCoveredEpochs,
-// ErrTooManyEpochs, ErrFunding, ErrEpochInput, the row errors
-// (ErrRowZeroClientID, ErrRowZeroUsage, ErrRowsUnsorted, ErrRowDuplicate,
-// ErrUsageOverflow) and ErrHeaderTooLarge.
+// e, and the next root covers it. Other refusals: ErrInput (a nil
+// context), ErrCoveredEpochs, ErrTooManyEpochs, ErrPrevious, ErrFunding,
+// ErrEpochInput, ErrFixedInputs, the row errors (ErrRowZeroClientID,
+// ErrRowZeroUsage, ErrRowsUnsorted, ErrRowDuplicate, ErrUsageOverflow) and
+// ErrHeaderTooLarge.
 //
 // # Auditing a root (validator, snclaim)
 //
@@ -90,7 +96,9 @@
 //   - Fetcher, which opens published objects (GET /sn/ledger/object).
 //     Objects implements it over a map. Verify reads at most MaxFetchBytes
 //     (DefaultMaxFetchBytes, 2 GiB, is the --ledger_max_bytes default) for
-//     objects not in custody, and checks each against its reference;
+//     objects not in custody, and checks each against its reference. The
+//     budget is per root: when retrying an audit, pass what earlier
+//     attempts left of it (Result.FetchedBytes counts each attempt);
 //   - Custody, durable: objects held (held objects are trusted and cost no
 //     budget), and per pool epoch the chunks of rows found valid and the
 //     null declarations recorded. Verify keeps every object it fetches,
@@ -104,9 +112,10 @@
 //     tools without archive state.
 //
 // Verify returns an error only for its own inputs (ErrInput, ErrFunding),
-// its context, or an error of Custody or Heads; fix or retry those. Otherwise the
-// Result holds the outcome. Check is the first check that failed and Err
-// its error, which wraps exactly one of the error values of that check:
+// its context, or an error of Custody or Heads; fix or retry those.
+// Otherwise the Result holds the outcome. Check is the first check that
+// failed and Err its error, which wraps exactly one of the error values of
+// that check (check 2's ErrPreviousRebuild also wraps its cause):
 //
 //	1 CheckHeader         ErrLedgerHash, the DecodeHeader errors, ErrHeaderNoID,
 //	                      ErrHeaderEpoch, ErrCoveredEpochs, ErrTooManyEpochs
@@ -133,9 +142,10 @@
 // the finalized root's verified tree and accounts. Accounts and Tree are the
 // pending root's published accounts and their tree, and Reproduced reports
 // that Tree is exactly the pending root. Faults lists each previous account
-// whose published row is lower, names another coldkey, or is missing,
-// with the merkle.LedgerFault checkPath finds at its leaf. Missing lists the
-// objects that were unavailable or did not match their reference.
+// whose published row is lower (merkle.LedgerFaultLowerValue), names another
+// coldkey or is missing (merkle.LedgerFaultWrongLeaf): when Reproduced, that
+// is what checkPath finds at the leaf. Missing lists the objects that were
+// unavailable or did not match their reference.
 // FetchedBytes counts the bytes fetched. Result.Action applies §9.3:
 // ActionApprove when every check passed; ActionChallenge when Reproduced
 // and Faults is not empty (send checkPath with PreviousAccounts[i],

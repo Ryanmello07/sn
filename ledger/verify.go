@@ -207,6 +207,7 @@ type VerifyInput struct {
 	// state; a validator always sets it.
 	Heads HeadOracle
 	// MaxFetchBytes bounds the bytes fetched for objects not in custody.
+	// The budget is per root: a retry passes what earlier attempts left.
 	MaxFetchBytes uint64
 }
 
