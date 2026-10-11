@@ -81,6 +81,18 @@ contract V2VaultRegistrationTest is V2VaultBase {
         new STSettlementVault2(NETUID, ESCROW, SELF, address(this), 0);
     }
 
+    // V-1 (A5): the runtime truncates native value below a rao, so the fee is
+    // a whole number of rao.
+    function test_V1_constructorRefusesADemandFeeThatIsNotWholeRao() public {
+        vm.expectRevert(ISTSettlementVault2.InvalidConfiguration.selector);
+        new STSettlementVault2(NETUID, ESCROW, SELF, address(this), 1e9 + 1);
+    }
+
+    // V-1 (A5)
+    function test_V1_constructorAcceptsADemandFeeOfOneRao() public {
+        assertEq(new STSettlementVault2(NETUID, ESCROW, SELF, address(this), 1e9).demandFeeWei(), 1e9);
+    }
+
     // V-1
     function test_V1_bootstrapFixesTheCoordinator() public {
         STSettlementVault2 fresh = _fresh(address(this));

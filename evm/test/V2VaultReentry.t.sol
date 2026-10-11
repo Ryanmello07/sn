@@ -66,7 +66,7 @@ contract V2VaultReentryTest is V2VaultBase {
         calls[4] = abi.encodeCall(ISTSettlementVault2.captureEmission, (vault.lastFundedEpoch(NO1) + 1, NO1));
         calls[5] = abi.encodeCall(ISTSettlementVault2.deferEmission, (vault.lastFundedEpoch(NO1) + 1, NO1));
         calls[6] = abi.encodeCall(ISTSettlementVault2.commitPending, (FIRST_EPOCH, NO1, 0, commitment));
-        calls[7] = abi.encodeCall(ISTSettlementVault2.demandPath, (NO1, 0));
+        calls[7] = abi.encodeCall(ISTSettlementVault2.demandPath, (NO1, account, proof));
         calls[8] = abi.encodeCall(ISTSettlementVault2.checkPath, (NO1, account, proof, path));
         calls[9] = abi.encodeCall(ISTSettlementVault2.finalizePending, (NO1));
         calls[10] = abi.encodeCall(ISTSettlementVault2.claim, (NO1, 0, account, proof));

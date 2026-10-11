@@ -5,6 +5,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {ISTSettlementVault2} from "./interfaces/ISTSettlementVault2.sol";
 import {IStaking, ISTAKING_ADDRESS} from "./interfaces/stakingV2.sol";
+import {IStakingCollateral} from "./interfaces/stakingCollateral.sol";
 import {INeuron, INeuron_ADDRESS} from "./interfaces/neuron.sol";
 import {LedgerTree} from "./LedgerTree.sol";
 import {NativeBalance} from "./NativeBalance.sol";
@@ -26,14 +27,8 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     // whole position" (§7.3); every amount passed to it stays below this.
     uint256 private constant WHOLE_POSITION = type(uint64).max;
 
-    // A demand is recorded once per (seq, index). It stays open until an
-    // opening with no fault answers it, and an answered index cannot be
-    // demanded again under the same seq.
-    enum Demand {
-        None,
-        Open,
-        Answered
-    }
+    // One rao in wei. The runtime truncates native value below a rao.
+    uint256 private constant RAO_WEI = 1e9;
 
     uint16 public immutable netuid;
     bytes32 public immutable escrowHotkey;
@@ -55,7 +50,8 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     mapping(uint256 noId => Pending root) private _pending;
     mapping(uint256 noId => uint64 seq) public commitSeq;
     mapping(uint256 noId => uint64 blockNumber) public lastCommitBlock;
-    mapping(uint256 noId => mapping(uint64 seq => mapping(uint256 index => Demand state))) private _demands;
+    mapping(uint256 noId => mapping(uint64 seq => mapping(uint256 index => DemandState state))) public
+        demanded;
     mapping(uint256 noId => mapping(uint256 index => uint256 amount)) public claimed;
 
     uint256 public totalCaptured;
@@ -90,7 +86,7 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     ) {
         if (
             netuid_ == 0 || escrowHotkey_ == bytes32(0) || selfColdkey_ == bytes32(0)
-                || bootstrap_ == address(0) || demandFeeWei_ == 0
+                || bootstrap_ == address(0) || demandFeeWei_ == 0 || demandFeeWei_ % RAO_WEI != 0
         ) revert InvalidConfiguration();
         netuid = netuid_;
         escrowHotkey = escrowHotkey_;
@@ -160,10 +156,10 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         emit PoolUidRegistered(noId, hotkey, uid, msg.sender);
     }
 
-    /// @notice Funds epoch `epoch` with the whole stake this vault holds on the
-    /// pool hotkey, moved into escrow. Zero stake funds zero without a runtime
-    /// call. Effects follow the move because the amount is escrow's gain; the
-    /// shared guard keeps them atomic with it.
+    /// @notice Funds epoch `epoch` with all the stake this vault can move off
+    /// the pool hotkey, moved into escrow. Nothing movable funds zero without a
+    /// runtime call. Effects follow the move because the amount is escrow's
+    /// gain; the shared guard keeps them atomic with it.
     function captureEmission(uint256 epoch, uint256 noId)
         external
         onlyCoordinator
@@ -171,7 +167,7 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         returns (uint256 amount)
     {
         bytes32 hotkey = _requireNextEpoch(epoch, noId);
-        uint256 observed = _stake(hotkey, selfColdkey);
+        uint256 observed = _movable(hotkey);
         if (observed != 0) {
             amount = _moveToEscrow(hotkey, observed);
             capturedTotal[noId] += amount;
@@ -218,7 +214,7 @@ contract STSettlementVault2 is ISTSettlementVault2 {
             commitment.leafCount == 0 || commitment.leafCount > LedgerTree.MAX_LEAF_COUNT
                 || commitment.leafCount < previous.leafCount
         ) revert InvalidLeafCount();
-        if (commitment.root == bytes32(0)) revert InvalidRoot();
+        if (commitment.root == bytes32(0) || commitment.ledgerHash == bytes32(0)) revert InvalidRoot();
 
         uint64 replacedSeq = _pending[noId].seq;
         seq = ++commitSeq[noId];
@@ -247,21 +243,26 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         );
     }
 
-    /// @notice Demands, during the challenge window, the on-chain opening of
-    /// account `index` of the latest finalized root in the pending root. The
-    /// pending root cannot finalize until checkPath answers it, so a withheld
-    /// or garbage tree blocks itself (§2.2). The fee stays in this vault.
-    function demandPath(uint256 noId, uint256 index) external payable nonReentrant {
+    /// @notice Demands, during the challenge window, the on-chain opening in
+    /// the pending root of an account proven against the latest finalized
+    /// root. The pending root cannot finalize until checkPath answers it, so a
+    /// withheld or garbage tree blocks itself (§2.2); only a provable account
+    /// can be demanded, so an honest successor can always answer. The fee
+    /// stays in this vault.
+    function demandPath(
+        uint256 noId,
+        LedgerTree.Account calldata account,
+        LedgerTree.ProofNode[] calldata oldProof
+    ) external payable nonReentrant {
         if (msg.value != demandFeeWei) revert InvalidDemandFee();
-        Pending storage next = _pending[noId];
-        uint64 seq = next.seq;
-        if (seq == 0) revert NoPendingRoot();
-        Root storage previous = _latestRoot(noId);
+        (Pending storage next, Root storage previous) = _disputedRoots(noId);
         if (block.number >= uint256(next.committedBlock) + CHALLENGE_BLOCKS) revert ChallengeWindowClosed();
-        if (index >= previous.leafCount) revert IndexOutOfRange();
-        mapping(uint256 => Demand) storage demands = _demands[noId][seq];
-        if (demands[index] != Demand.None) revert AlreadyDemanded();
-        demands[index] = Demand.Open;
+        _requireProven(previous, account, oldProof);
+        uint64 seq = next.seq;
+        uint256 index = account.index;
+        mapping(uint256 => DemandState) storage demands = demanded[noId][seq];
+        if (demands[index] != DemandState.None) revert AlreadyDemanded();
+        demands[index] = DemandState.Open;
         next.openDemands++;
         emit PathDemanded(noId, seq, index, msg.sender);
     }
@@ -277,15 +278,10 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         LedgerTree.ProofNode[] calldata oldProof,
         LedgerTree.PathNode[] calldata newPath
     ) external nonReentrant returns (LedgerTree.Fault fault) {
-        Pending storage next = _pending[noId];
+        (Pending storage next, Root storage previous) = _disputedRoots(noId);
+        _requireProven(previous, account, oldProof);
         uint64 seq = next.seq;
-        if (seq == 0) revert NoPendingRoot();
-        Root storage previous = _latestRoot(noId);
         uint256 index = account.index;
-        if (index >= previous.leafCount) revert IndexOutOfRange();
-        if (!LedgerTree.verifyLeaf(previous.root, previous.total, previous.leafCount, account, oldProof)) {
-            revert InvalidProof();
-        }
         // The pending root holds at least as many accounts as the finalized
         // one (commitPending), so `index` is inside it.
         uint256 level;
@@ -295,9 +291,9 @@ contract STSettlementVault2 is ISTSettlementVault2 {
             emit DistributionDeleted(noId, seq, index, fault, level, msg.sender);
             return fault;
         }
-        mapping(uint256 => Demand) storage demands = _demands[noId][seq];
-        if (demands[index] != Demand.Open) revert NoFault();
-        demands[index] = Demand.Answered;
+        mapping(uint256 => DemandState) storage demands = demanded[noId][seq];
+        if (demands[index] != DemandState.Open) revert NoFault();
+        demands[index] = DemandState.Answered;
         next.openDemands--;
         emit PathAnswered(noId, seq, index, msg.sender);
     }
@@ -360,12 +356,12 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         emit Claimed(noId, rootIndex, account.index, coldkey, account.cumulative, amount, msg.sender);
     }
 
-    /// @notice Moves all stake this vault's coldkey holds on a foreign hotkey,
-    /// such as the v1 escrow, into escrow. Nothing is accounted: the stake
-    /// becomes surplus that the coordinator may assign to a pool.
+    /// @notice Moves all the stake this vault's coldkey can move off a foreign
+    /// hotkey, such as the v1 escrow, into escrow. Nothing is accounted: the
+    /// stake becomes surplus that the coordinator may assign to a pool.
     function absorbStake(bytes32 hotkey) external nonReentrant returns (uint256 amount) {
         if (hotkey == bytes32(0) || hotkey == escrowHotkey || poolHotkeyUsed[hotkey]) revert InvalidHotkey();
-        uint256 observed = _stake(hotkey, selfColdkey);
+        uint256 observed = _movable(hotkey);
         if (observed == 0) revert NothingToAbsorb();
         amount = _moveToEscrow(hotkey, observed);
         _requireBacking();
@@ -406,10 +402,6 @@ contract STSettlementVault2 is ISTSettlementVault2 {
 
     function pending(uint256 noId) external view returns (Pending memory) {
         return _pending[noId];
-    }
-
-    function demanded(uint256 noId, uint64 seq, uint256 index) external view returns (bool) {
-        return _demands[noId][seq][index] == Demand.Open;
     }
 
     /// @notice Executable conservation identity (§4.2 G1).
@@ -456,17 +448,18 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         lastFundedEpoch[noId] = epoch;
     }
 
-    // Moves the vault's whole stake `observed` on `hotkey` into escrow and
-    // returns escrow's gain. The runtime moves exactly the requested amount
-    // out of the source, so the source must end empty, and escrow's share-pool
-    // read can be one rao short (§7.3). Anything else reverts.
+    // Moves `observed` of the vault's stake on `hotkey` into escrow and returns
+    // escrow's gain. The runtime moves exactly the requested amount out of the
+    // source, and escrow's share-pool read can be one rao short (§7.3).
+    // Anything else reverts. The deltas compare whole positions, locks included.
     function _moveToEscrow(bytes32 hotkey, uint256 observed) private returns (uint256) {
         if (observed >= WHOLE_POSITION) revert AmountTooLarge();
-        uint256 escrowBefore = _liveEscrowStake();
+        uint256 sourceBefore = _stake(hotkey, selfColdkey);
+        uint256 escrowBefore = _stake(escrowHotkey, selfColdkey);
         IStaking(ISTAKING_ADDRESS).moveStake(hotkey, escrowHotkey, uint256(netuid), uint256(netuid), observed);
-        uint256 escrowAfter = _liveEscrowStake();
+        uint256 escrowAfter = _stake(escrowHotkey, selfColdkey);
         if (
-            _stake(hotkey, selfColdkey) != 0 || escrowAfter > escrowBefore + observed
+            _stake(hotkey, selfColdkey) + observed != sourceBefore || escrowAfter > escrowBefore + observed
                 || escrowAfter + 1 < escrowBefore + observed
         ) revert RuntimeAccountingMismatch();
         return escrowAfter - escrowBefore;
@@ -476,29 +469,59 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     // Escrow must lose exactly `amount`; the destination's read can be one rao
     // short (§7.3). Anything else reverts.
     function _payFromEscrow(bytes32 coldkey, uint256 amount) private {
-        uint256 escrowBefore = _liveEscrowStake();
+        uint256 escrowBefore = _stake(escrowHotkey, selfColdkey);
         uint256 destinationBefore = _stake(escrowHotkey, coldkey);
         IStaking(ISTAKING_ADDRESS)
             .transferStake(coldkey, escrowHotkey, uint256(netuid), uint256(netuid), amount);
         uint256 destinationAfter = _stake(escrowHotkey, coldkey);
         if (
-            _liveEscrowStake() + amount != escrowBefore || destinationAfter > destinationBefore + amount
+            _stake(escrowHotkey, selfColdkey) + amount != escrowBefore
+                || destinationAfter > destinationBefore + amount
                 || destinationAfter + 1 < destinationBefore + amount
         ) revert RuntimeAccountingMismatch();
     }
 
-    function _latestRoot(uint256 noId) private view returns (Root storage) {
+    // The pool's pending root and the latest finalized root it must extend:
+    // the two roots every demand and path check is about.
+    function _disputedRoots(uint256 noId) private view returns (Pending storage next, Root storage previous) {
+        next = _pending[noId];
+        if (next.seq == 0) revert NoPendingRoot();
         Root[] storage history = _roots[noId];
         if (history.length == 0) revert NoFinalizedRoot();
-        return history[history.length - 1];
+        previous = history[history.length - 1];
+    }
+
+    // Requires `account` to be an account of the finalized root `previous`.
+    function _requireProven(
+        Root storage previous,
+        LedgerTree.Account calldata account,
+        LedgerTree.ProofNode[] calldata proof
+    ) private view {
+        if (account.index >= previous.leafCount) {
+            revert IndexOutOfRange();
+        }
+        if (!LedgerTree.verifyLeaf(previous.root, previous.total, previous.leafCount, account, proof)) {
+            revert InvalidProof();
+        }
     }
 
     function _stake(bytes32 hotkey, bytes32 coldkey) private view returns (uint256) {
         return IStaking(ISTAKING_ADDRESS).getStake(hotkey, coldkey, uint256(netuid));
     }
 
+    // The stake this vault can move off `hotkey`: its position less the
+    // registration collateral that runtime 475 locks on it. getStake includes
+    // the lock, and a move that digs into it fails StakeUnavailable.
+    function _movable(bytes32 hotkey) private view returns (uint256) {
+        uint256 staked = _stake(hotkey, selfColdkey);
+        (, uint64 locked,,,) =
+            IStakingCollateral(ISTAKING_ADDRESS).getMinerCollateral(netuid, hotkey, selfColdkey);
+        return staked > locked ? staked - locked : 0;
+    }
+
+    // Escrow's movable stake: the backing of everything the vault accounts for.
     function _liveEscrowStake() private view returns (uint256) {
-        return _stake(escrowHotkey, selfColdkey);
+        return _movable(escrowHotkey);
     }
 
     function _requireBacking() private view {

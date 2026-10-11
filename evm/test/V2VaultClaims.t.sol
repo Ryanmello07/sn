@@ -159,6 +159,21 @@ contract V2VaultClaimsTest is V2VaultBase {
         _assertConserved();
     }
 
+    // V-12 (A3): the escrow's own registration collateral stays locked and
+    // outside every account; claims pay out exactly the accounted stake.
+    function test_V12_claimsLeaveEscrowCollateralInPlace() public {
+        staking.setStake(ESCROW, SELF, 100);
+        staking.setCollateral(ESCROW, SELF, 100);
+        V2TreeHelper.Node[][] memory levels = _root0();
+        assertEq(vault.liveEscrowStake(), 1_000);
+        assertEq(_claim(NO1, 0, levels, 0, ALICE, 600), 600);
+        assertEq(_claim(NO1, 0, levels, 1, BOB, 400), 400);
+        assertEq(staking.stakes(ESCROW, SELF), 100);
+        assertEq(vault.liveEscrowStake(), 0);
+        assertEq(vault.escrowAccounted(), 0);
+        _assertConserved();
+    }
+
     // ------------------------------------------------------------------
     // V-13, V-14: cumulative claims across roots
     // ------------------------------------------------------------------

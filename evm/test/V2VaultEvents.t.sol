@@ -76,15 +76,15 @@ contract V2VaultEventsTest is V2VaultBase {
         );
         vault.commitPending(FIRST_EPOCH + 2, NO1, 1, second);
 
+        LedgerTree.Account memory alice = _account(0, ALICE, 600);
+        LedgerTree.ProofNode[] memory aliceProof = V2TreeHelper.proof(f, 0);
+        LedgerTree.PathNode[] memory alicePath = V2TreeHelper.path(p, 0);
         vm.deal(stranger, DEMAND_FEE);
         vm.expectEmit(address(vault));
         emit ISTSettlementVault2.PathDemanded(NO1, 2, 0, stranger);
         vm.prank(stranger);
-        vault.demandPath{value: DEMAND_FEE}(NO1, 0);
+        vault.demandPath{value: DEMAND_FEE}(NO1, alice, aliceProof);
 
-        LedgerTree.Account memory alice = _account(0, ALICE, 600);
-        LedgerTree.ProofNode[] memory aliceProof = V2TreeHelper.proof(f, 0);
-        LedgerTree.PathNode[] memory alicePath = V2TreeHelper.path(p, 0);
         vm.expectEmit(address(vault));
         emit ISTSettlementVault2.PathAnswered(NO1, 2, 0, address(this));
         vault.checkPath(NO1, alice, aliceProof, alicePath);

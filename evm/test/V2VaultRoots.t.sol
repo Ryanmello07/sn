@@ -105,10 +105,38 @@ contract V2VaultRootsTest is V2VaultBase {
         return _check(f, p, CAROL_INDEX, CAROL, 30);
     }
 
+    // F's account at `index` and its proof; the roots tests finalize F as root 0.
+    function _fAccount(uint256 index) internal pure returns (LedgerTree.Account memory) {
+        return _account(index, _oldKeys()[index], _oldValues()[index]);
+    }
+
+    function _fProof(uint256 index) internal pure returns (LedgerTree.ProofNode[] memory) {
+        return V2TreeHelper.proof(V2TreeHelper.build(_oldKeys(), _oldValues()), index);
+    }
+
+    // A stranger pays the fee and demands F's account at `index`.
     function _demand(uint256 index) internal {
+        LedgerTree.Account memory account = _fAccount(index);
+        LedgerTree.ProofNode[] memory proof = _fProof(index);
         vm.deal(stranger, DEMAND_FEE);
         vm.prank(stranger);
-        vault.demandPath{value: DEMAND_FEE}(NO1, index);
+        vault.demandPath{value: DEMAND_FEE}(NO1, account, proof);
+    }
+
+    function _expectDemandRefused(
+        LedgerTree.Account memory account,
+        LedgerTree.ProofNode[] memory proof,
+        uint256 fee,
+        bytes4 refusal
+    ) internal {
+        vm.deal(stranger, fee);
+        vm.prank(stranger);
+        vm.expectRevert(refusal);
+        vault.demandPath{value: fee}(NO1, account, proof);
+    }
+
+    function _demandState(uint64 seq, uint256 index) internal view returns (uint8) {
+        return uint8(vault.demanded(NO1, seq, index));
     }
 
     function _raw(bytes32 root, uint256 total, uint64 leafCount)
@@ -354,6 +382,16 @@ contract V2VaultRootsTest is V2VaultBase {
         vault.commitPending(FIRST_EPOCH, NO1, 0, commitment);
     }
 
+    // V-7 (A5)
+    function test_V7_commitRefusesAZeroLedgerHash() public {
+        _capture(NO1, 100);
+        ISTSettlementVault2.Commitment memory commitment = ISTSettlementVault2.Commitment({
+            root: keccak256("root"), total: 100, leafCount: 1, ledgerHash: bytes32(0)
+        });
+        vm.expectRevert(ISTSettlementVault2.InvalidRoot.selector);
+        vault.commitPending(FIRST_EPOCH, NO1, 0, commitment);
+    }
+
     // V-7, V-EV: a replacement takes the next seq, names the seq it replaced,
     // and starts with no demand; the replaced root's demands no longer block.
     function test_V7_aReplacementBumpsSeqAndDiscardsDemands() public {
@@ -374,7 +412,7 @@ contract V2VaultRootsTest is V2VaultBase {
 
         assertEq(seq, replaced + 1);
         assertEq(vault.pending(NO1).openDemands, 0);
-        assertFalse(vault.demanded(NO1, seq, CAROL_INDEX));
+        assertEq(_demandState(seq, CAROL_INDEX), uint8(ISTSettlementVault2.DemandState.None));
         _finalize(NO1);
         assertEq(vault.rootCount(NO1), 2);
     }
@@ -605,14 +643,17 @@ contract V2VaultRootsTest is V2VaultBase {
     function test_V10_aDemandIsRecordedAndItsFeeKept() public {
         _publishF();
         uint64 seq = _propose(NO1, _honestP(), 6);
+        LedgerTree.Account memory carol = _fAccount(CAROL_INDEX);
+        LedgerTree.ProofNode[] memory proof = _fProof(CAROL_INDEX);
         vm.deal(stranger, DEMAND_FEE);
 
         vm.expectEmit(address(vault));
         emit ISTSettlementVault2.PathDemanded(NO1, seq, CAROL_INDEX, stranger);
         vm.prank(stranger);
-        vault.demandPath{value: DEMAND_FEE}(NO1, CAROL_INDEX);
+        vault.demandPath{value: DEMAND_FEE}(NO1, carol, proof);
 
-        assertTrue(vault.demanded(NO1, seq, CAROL_INDEX));
+        assertEq(_demandState(seq, CAROL_INDEX), uint8(ISTSettlementVault2.DemandState.Open));
+        assertEq(_demandState(seq, 0), uint8(ISTSettlementVault2.DemandState.None));
         assertEq(vault.pending(NO1).openDemands, 1);
         assertEq(address(vault).balance, DEMAND_FEE);
         assertEq(stranger.balance, 0);
@@ -635,10 +676,34 @@ contract V2VaultRootsTest is V2VaultBase {
         vm.prank(answerer);
         assertEq(uint8(vault.checkPath(NO1, carol, oldProof, newPath)), uint8(LedgerTree.Fault.None));
 
-        assertFalse(vault.demanded(NO1, seq, CAROL_INDEX));
-        assertTrue(vault.demanded(NO1, seq, 0));
+        assertEq(_demandState(seq, CAROL_INDEX), uint8(ISTSettlementVault2.DemandState.Answered));
+        assertEq(_demandState(seq, 0), uint8(ISTSettlementVault2.DemandState.Open));
         assertEq(vault.pending(NO1).openDemands, 1);
         assertEq(vault.pending(NO1).seq, seq);
+    }
+
+    // V-10 (A1): an answer counts once. Opening the answered index again
+    // reverts NoFault and leaves the other open demand in place.
+    function test_V10_aRepeatedCleanAnswerRevertsNoFault() public {
+        V2TreeHelper.Node[][] memory f = _publishF();
+        V2TreeHelper.Node[][] memory p = _honestP();
+        uint64 seq = _propose(NO1, p, 6);
+        _demand(CAROL_INDEX);
+        _demand(0);
+        _checkCarol(f, p);
+        LedgerTree.Account memory carol = _account(CAROL_INDEX, CAROL, 30);
+        LedgerTree.ProofNode[] memory oldProof = V2TreeHelper.proof(f, CAROL_INDEX);
+        LedgerTree.PathNode[] memory newPath = V2TreeHelper.path(p, CAROL_INDEX);
+
+        vm.expectRevert(ISTSettlementVault2.NoFault.selector);
+        vault.checkPath(NO1, carol, oldProof, newPath);
+
+        assertEq(vault.pending(NO1).openDemands, 1);
+        assertEq(_demandState(seq, CAROL_INDEX), uint8(ISTSettlementVault2.DemandState.Answered));
+        assertEq(_demandState(seq, 0), uint8(ISTSettlementVault2.DemandState.Open));
+        vm.roll(block.number + WINDOW);
+        vm.expectRevert(ISTSettlementVault2.DemandOpen.selector);
+        vault.finalizePending(NO1);
     }
 
     // V-10
@@ -646,10 +711,12 @@ contract V2VaultRootsTest is V2VaultBase {
         _publishF();
         _propose(NO1, _honestP(), 6);
         _demand(CAROL_INDEX);
-        vm.deal(stranger, DEMAND_FEE);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.AlreadyDemanded.selector);
-        vault.demandPath{value: DEMAND_FEE}(NO1, CAROL_INDEX);
+        _expectDemandRefused(
+            _fAccount(CAROL_INDEX),
+            _fProof(CAROL_INDEX),
+            DEMAND_FEE,
+            ISTSettlementVault2.AlreadyDemanded.selector
+        );
     }
 
     // V-10: once answered, an index cannot be demanded again under the same seq.
@@ -659,22 +726,25 @@ contract V2VaultRootsTest is V2VaultBase {
         _propose(NO1, p, 6);
         _demand(CAROL_INDEX);
         _checkCarol(f, p);
-        vm.deal(stranger, DEMAND_FEE);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.AlreadyDemanded.selector);
-        vault.demandPath{value: DEMAND_FEE}(NO1, CAROL_INDEX);
+        _expectDemandRefused(
+            _fAccount(CAROL_INDEX),
+            _fProof(CAROL_INDEX),
+            DEMAND_FEE,
+            ISTSettlementVault2.AlreadyDemanded.selector
+        );
     }
 
-    // V-10: an opening with no fault and no open demand changes nothing.
+    // V-10 (A1): an opening with no fault and no open demand changes nothing.
     function test_V10_checkPathRefusesACleanOpeningWithNoOpenDemand() public {
         V2TreeHelper.Node[][] memory f = _publishF();
         V2TreeHelper.Node[][] memory p = _honestP();
-        _propose(NO1, p, 6);
+        uint64 seq = _propose(NO1, p, 6);
         LedgerTree.Account memory carol = _account(CAROL_INDEX, CAROL, 30);
         LedgerTree.ProofNode[] memory oldProof = V2TreeHelper.proof(f, CAROL_INDEX);
         LedgerTree.PathNode[] memory newPath = V2TreeHelper.path(p, CAROL_INDEX);
         vm.expectRevert(ISTSettlementVault2.NoFault.selector);
         vault.checkPath(NO1, carol, oldProof, newPath);
+        assertEq(_demandState(seq, CAROL_INDEX), uint8(ISTSettlementVault2.DemandState.None));
     }
 
     // V-10
@@ -682,10 +752,12 @@ contract V2VaultRootsTest is V2VaultBase {
         _publishF();
         _propose(NO1, _honestP(), 6);
         vm.roll(block.number + WINDOW);
-        vm.deal(stranger, DEMAND_FEE);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.ChallengeWindowClosed.selector);
-        vault.demandPath{value: DEMAND_FEE}(NO1, CAROL_INDEX);
+        _expectDemandRefused(
+            _fAccount(CAROL_INDEX),
+            _fProof(CAROL_INDEX),
+            DEMAND_FEE,
+            ISTSettlementVault2.ChallengeWindowClosed.selector
+        );
     }
 
     // V-10, V-11: a demand in the window's last block blocks finalization
@@ -743,58 +815,86 @@ contract V2VaultRootsTest is V2VaultBase {
     // V-10
     function test_V10_demandRefusesAnIndexOutsideTheFinalizedRoot() public {
         _publishF();
+        V2TreeHelper.Node[][] memory p = _honestP();
+        _propose(NO1, p, 6);
+        _expectDemandRefused(
+            _account(5, FRANK, 30),
+            V2TreeHelper.proof(p, 5),
+            DEMAND_FEE,
+            ISTSettlementVault2.IndexOutOfRange.selector
+        );
+    }
+
+    // V-10 (A2)
+    function test_V10_demandRefusesAnAccountNotProvenAgainstTheFinalizedRoot() public {
+        _publishF();
         _propose(NO1, _honestP(), 6);
-        vm.deal(stranger, DEMAND_FEE);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.IndexOutOfRange.selector);
-        vault.demandPath{value: DEMAND_FEE}(NO1, 5);
+        _expectDemandRefused(
+            _account(CAROL_INDEX, CAROL, 31),
+            _fProof(CAROL_INDEX),
+            DEMAND_FEE,
+            ISTSettlementVault2.InvalidProof.selector
+        );
+    }
+
+    // V-10 (A2): a position of the finalized root that no proof reaches (here
+    // a garbage leaf) cannot be demanded, so it cannot block every later root.
+    function test_V10_anUnprovablePositionCannotBlockLaterRoots() public {
+        _capture(NO1, F_TOTAL);
+        V2TreeHelper.Node[][] memory f = V2TreeHelper.build(_oldKeys(), _oldValues());
+        f[0][3].hash = keccak256("garbage-finalized-leaf");
+        V2TreeHelper.rehash(f, 0);
+        _commit(NO1, f, 5);
+        _finalize(NO1);
+        _propose(NO1, _honestP(), 6);
+
+        _expectDemandRefused(
+            _account(3, DAVE, 40),
+            V2TreeHelper.proof(f, 3),
+            DEMAND_FEE,
+            ISTSettlementVault2.InvalidProof.selector
+        );
+        vm.roll(block.number + WINDOW);
+        assertEq(vault.finalizePending(NO1), 1);
     }
 
     // V-10
     function test_V10_demandRefusesWithNoPendingRoot() public {
         _publishF();
-        vm.deal(stranger, DEMAND_FEE);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.NoPendingRoot.selector);
-        vault.demandPath{value: DEMAND_FEE}(NO1, 0);
+        _expectDemandRefused(_fAccount(0), _fProof(0), DEMAND_FEE, ISTSettlementVault2.NoPendingRoot.selector);
     }
 
     // V-10
     function test_V10_demandRefusesWithNoFinalizedRoot() public {
         _propose(NO1, V2TreeHelper.build(_oldKeys(), _oldValues()), 5);
-        vm.deal(stranger, DEMAND_FEE);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.NoFinalizedRoot.selector);
-        vault.demandPath{value: DEMAND_FEE}(NO1, 0);
+        _expectDemandRefused(
+            _fAccount(0), _fProof(0), DEMAND_FEE, ISTSettlementVault2.NoFinalizedRoot.selector
+        );
     }
 
     // V-10
     function test_V10_demandRefusesALowerFee() public {
         _publishF();
         _propose(NO1, _honestP(), 6);
-        vm.deal(stranger, DEMAND_FEE);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.InvalidDemandFee.selector);
-        vault.demandPath{value: DEMAND_FEE - 1}(NO1, 0);
+        _expectDemandRefused(
+            _fAccount(0), _fProof(0), DEMAND_FEE - 1, ISTSettlementVault2.InvalidDemandFee.selector
+        );
     }
 
     // V-10
     function test_V10_demandRefusesAHigherFee() public {
         _publishF();
         _propose(NO1, _honestP(), 6);
-        vm.deal(stranger, DEMAND_FEE + 1);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.InvalidDemandFee.selector);
-        vault.demandPath{value: DEMAND_FEE + 1}(NO1, 0);
+        _expectDemandRefused(
+            _fAccount(0), _fProof(0), DEMAND_FEE + 1, ISTSettlementVault2.InvalidDemandFee.selector
+        );
     }
 
     // V-10
     function test_V10_demandRefusesNoFee() public {
         _publishF();
         _propose(NO1, _honestP(), 6);
-        vm.prank(stranger);
-        vm.expectRevert(ISTSettlementVault2.InvalidDemandFee.selector);
-        vault.demandPath(NO1, 0);
+        _expectDemandRefused(_fAccount(0), _fProof(0), 0, ISTSettlementVault2.InvalidDemandFee.selector);
     }
 
     // ------------------------------------------------------------------

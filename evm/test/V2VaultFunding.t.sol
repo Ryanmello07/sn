@@ -206,6 +206,67 @@ contract V2VaultFundingTest is V2VaultBase {
         _assertConserved();
     }
 
+    // V-5 (A3): registration collateral locks part of the pool's position.
+    // Moving the whole position would dig into it, which the runtime refuses;
+    // capture moves exactly the movable stake and leaves the lock in place.
+    function test_V5_captureMovesOnlyTheMovableStake() public {
+        _accrue(1_000);
+        staking.setCollateral(POOL1, SELF, 300);
+        vm.prank(address(vault));
+        vm.expectRevert(bytes("mock: StakeUnavailable"));
+        staking.moveStake(POOL1, ESCROW, NETUID, NETUID, 1_000);
+
+        vm.expectCall(
+            ISTAKING_ADDRESS,
+            abi.encodeCall(IStaking.moveStake, (POOL1, ESCROW, uint256(NETUID), uint256(NETUID), 700)),
+            1
+        );
+        vm.expectEmit(address(vault));
+        emit ISTSettlementVault2.EmissionCaptured(FIRST_EPOCH, NO1, 700, 700, 700);
+        assertEq(vault.captureEmission(FIRST_EPOCH, NO1), 700);
+        assertEq(staking.stakes(POOL1, SELF), 300);
+        assertEq(vault.liveEscrowStake(), 700);
+        _assertConserved();
+    }
+
+    // V-5 (A3): the delta checks compare whole positions, locks included.
+    function test_V5_captureWithCollateralAcceptsAnEscrowGainOneRaoShort() public {
+        _accrue(1_000);
+        staking.setCollateral(POOL1, SELF, 300);
+        staking.setMoveStakeShortfall(1);
+        assertEq(vault.captureEmission(FIRST_EPOCH, NO1), 699);
+        assertEq(staking.stakes(POOL1, SELF), 300);
+        _assertConserved();
+    }
+
+    // V-5 (A3)
+    function test_V5_captureWithCollateralRefusesAPoolThatLosesLess() public {
+        _accrue(1_000);
+        staking.setCollateral(POOL1, SELF, 300);
+        staking.setMoveStakeSourceResidue(1);
+        vm.expectRevert(ISTSettlementVault2.RuntimeAccountingMismatch.selector);
+        vault.captureEmission(FIRST_EPOCH, NO1);
+    }
+
+    // V-5 (A3): a pool holding only its lock funds zero without a runtime call.
+    function test_V5_aPoolHoldingOnlyCollateralFundsZero() public {
+        _accrue(300);
+        staking.setCollateral(POOL1, SELF, 300);
+        vm.expectCall(ISTAKING_ADDRESS, abi.encodeWithSelector(IStaking.moveStake.selector), 0);
+        vm.expectEmit(address(vault));
+        emit ISTSettlementVault2.EmissionCaptured(FIRST_EPOCH, NO1, 0, 0, 0);
+        assertEq(vault.captureEmission(FIRST_EPOCH, NO1), 0);
+        assertEq(staking.stakes(POOL1, SELF), 300);
+    }
+
+    // V-5 (A3): a position read below its lock saturates at nothing movable.
+    function test_V5_aLockAboveThePositionFundsZero() public {
+        _accrue(100);
+        staking.setCollateral(POOL1, SELF, 150);
+        vm.expectCall(ISTAKING_ADDRESS, abi.encodeWithSelector(IStaking.moveStake.selector), 0);
+        assertEq(vault.captureEmission(FIRST_EPOCH, NO1), 0);
+    }
+
     // ------------------------------------------------------------------
     // V-6: funding snapshots
     // ------------------------------------------------------------------
@@ -331,6 +392,25 @@ contract V2VaultFundingTest is V2VaultBase {
         vault.absorbStake(FOREIGN);
     }
 
+    // V-18 (A3)
+    function test_V18_absorbMovesOnlyTheMovableStake() public {
+        staking.setStake(FOREIGN, SELF, 500);
+        staking.setCollateral(FOREIGN, SELF, 200);
+        vm.expectEmit(address(vault));
+        emit ISTSettlementVault2.StakeAbsorbed(FOREIGN, 300, 300, address(this));
+        assertEq(vault.absorbStake(FOREIGN), 300);
+        assertEq(staking.stakes(FOREIGN, SELF), 200);
+        assertEq(vault.liveEscrowStake(), 300);
+    }
+
+    // V-18 (A3)
+    function test_V18_absorbRefusesStakeThatIsAllCollateral() public {
+        staking.setStake(FOREIGN, SELF, 200);
+        staking.setCollateral(FOREIGN, SELF, 200);
+        vm.expectRevert(ISTSettlementVault2.NothingToAbsorb.selector);
+        vault.absorbStake(FOREIGN);
+    }
+
     // V-18
     function test_V18_absorbRefusesTheWholePositionSentinel() public {
         staking.setStake(FOREIGN, SELF, WHOLE_POSITION);
@@ -396,9 +476,47 @@ contract V2VaultFundingTest is V2VaultBase {
         vault.assignSurplus(NO2, 300);
     }
 
+    // Registration locked collateral on the escrow position itself.
+    function _lockEscrowCollateral(uint64 locked) internal {
+        staking.setStake(ESCROW, SELF, staking.stakes(ESCROW, SELF) + locked);
+        staking.setCollateral(ESCROW, SELF, locked);
+    }
+
+    // V-19 (A3): escrow collateral is never surplus.
+    function test_V19_escrowCollateralIsNotSurplus() public {
+        _lockEscrowCollateral(100);
+        _capture(NO1, 1_000);
+        assertEq(staking.stakes(ESCROW, SELF), 1_100);
+        vm.expectRevert(ISTSettlementVault2.InvalidSurplus.selector);
+        vault.assignSurplus(NO1, 1);
+
+        staking.setStake(FOREIGN, SELF, 40);
+        vault.absorbStake(FOREIGN);
+        vm.expectRevert(ISTSettlementVault2.InvalidSurplus.selector);
+        vault.assignSurplus(NO1, 41);
+        vault.assignSurplus(NO1, 40);
+        _assertConserved();
+    }
+
     // ------------------------------------------------------------------
     // V-22: backing
     // ------------------------------------------------------------------
+
+    // V-22 (A3): escrow collateral backs nothing. liveEscrowStake and the
+    // backing check count only movable stake, so a shortfall of movable stake
+    // is caught even while the whole position would cover the accounts.
+    function test_V22_escrowCollateralIsNotBacking() public {
+        _lockEscrowCollateral(100);
+        assertEq(vault.liveEscrowStake(), 0);
+        _capture(NO1, 1_000);
+        assertEq(vault.liveEscrowStake(), 1_000);
+        _assertConserved();
+
+        staking.setStake(ESCROW, SELF, 1_050);
+        assertFalse(vault.conservationHolds());
+        vm.expectRevert(ISTSettlementVault2.Underfunded.selector);
+        vault.captureEmission(FIRST_EPOCH + 1, NO1);
+    }
 
     // Escrow stake falls `deficit` below what the vault accounts for.
     function _underfund(uint256 deficit) internal {
@@ -462,13 +580,13 @@ contract V2VaultFundingTest is V2VaultBase {
         uint64 seq = _propose(NO1, next, 3);
         _underfund(1);
 
+        LedgerTree.Account memory alice = _account(0, ALICE, 600);
+        LedgerTree.ProofNode[] memory aliceProof = V2TreeHelper.proof(finalized, 0);
         vm.deal(stranger, DEMAND_FEE);
         vm.prank(stranger);
-        vault.demandPath{value: DEMAND_FEE}(NO1, 0);
-        vault.checkPath(
-            NO1, _account(0, ALICE, 600), V2TreeHelper.proof(finalized, 0), V2TreeHelper.path(next, 0)
-        );
-        assertFalse(vault.demanded(NO1, seq, 0));
+        vault.demandPath{value: DEMAND_FEE}(NO1, alice, aliceProof);
+        vault.checkPath(NO1, alice, aliceProof, V2TreeHelper.path(next, 0));
+        assertEq(uint8(vault.demanded(NO1, seq, 0)), uint8(ISTSettlementVault2.DemandState.Answered));
 
         LedgerTree.Fault fault = vault.checkPath(
             NO1, _account(1, BOB, 400), V2TreeHelper.proof(finalized, 1), V2TreeHelper.path(next, 1)

@@ -12,10 +12,13 @@ import {Vm} from "forge-std/Vm.sol";
 
 /// @dev Mock of IStaking (0x805, stakingV2). Tracks per-(hotkey, coldkey)
 ///      stake. The caller's coldkey (the EVM mirror the runtime would derive)
-///      must be registered with setColdkey.
+///      must be registered with setColdkey. Runtime 475's registration
+///      collateral (IStakingCollateral) locks part of a position: getStake
+///      includes it, and a move or transfer that digs into it is refused.
 contract MockStakingV2 {
     Vm private constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
     mapping(bytes32 => mapping(bytes32 => uint256)) public stakes; // hotkey -> coldkey -> rao
+    mapping(bytes32 => mapping(bytes32 => uint64)) public collateral; // hotkey -> coldkey -> locked rao
     mapping(address => bytes32) public callerColdkey;
     bool public failMoveStake;
     bool public failTransferStake;
@@ -40,6 +43,10 @@ contract MockStakingV2 {
 
     function setStake(bytes32 hotkey, bytes32 coldkey, uint256 amount) external {
         stakes[hotkey][coldkey] = amount;
+    }
+
+    function setCollateral(bytes32 hotkey, bytes32 coldkey, uint64 locked) external {
+        collateral[hotkey][coldkey] = locked;
     }
 
     function setFailMoveStake(bool fail) external {
@@ -122,6 +129,15 @@ contract MockStakingV2 {
         return nominatorMinimum;
     }
 
+    function getMinerCollateral(uint16, bytes32 hotkey, bytes32 coldkey)
+        external
+        view
+        returns (bool exists, uint64 locked, uint128 drainRatio, uint64 minLocked, uint64 earned)
+    {
+        locked = collateral[hotkey][coldkey];
+        return (locked != 0, locked, 0, 0, 0);
+    }
+
     /// @dev SP-1 probe support: TAO->α at 1:1 (the mock has no AMM slippage;
     ///      it exists to test the probe's harness logic, not economics). The
     ///      runtime withdraws native funds from the caller's mapped account;
@@ -148,6 +164,7 @@ contract MockStakingV2 {
         bytes32 ck = callerColdkey[msg.sender];
         require(ck != bytes32(0), "mock: unknown caller");
         require(stakes[originHotkey][ck] >= amount, "mock: insufficient");
+        require(stakes[originHotkey][ck] - amount >= collateral[originHotkey][ck], "mock: StakeUnavailable");
         _attemptReentry();
         stakes[originHotkey][ck] -= amount - moveStakeSourceResidue;
         stakes[destinationHotkey][ck] += amount - moveStakeShortfall;
@@ -164,6 +181,7 @@ contract MockStakingV2 {
         require(amount > transferStakeShortfall, "mock: transfer shortfall");
         require(amount > transferStakeSourceResidue, "mock: transfer source residue");
         require(stakes[hotkey][ck] >= amount, "mock: insufficient");
+        require(stakes[hotkey][ck] - amount >= collateral[hotkey][ck], "mock: StakeUnavailable");
         _attemptReentry();
         stakes[hotkey][ck] -= amount - transferStakeSourceResidue;
         stakes[hotkey][ck] -= transferStakeSourceExtraDebit;
