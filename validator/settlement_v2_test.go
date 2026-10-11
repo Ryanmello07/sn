@@ -23,9 +23,10 @@ import (
 // The block every settlement v2 fixture adopts.
 var settlementV2TestBlock = ReleaseSettlementV2Config{Settlement: "0x5e77000000000000000000000000000000000001", Vault: "0x5e77000000000000000000000000000000000002"}
 
-// Computed by the binary before settlement_v2 existed, when it signed the
-// fixture in testdata/settlement-v2-today: the owner-recycle original inside
-// the history bundle, and today's treasury successor that retains it.
+// Computed by the binary before settlement_v2 existed (f92aec6e), when it
+// signed the fixture in testdata/settlement-v2-today: the owner-recycle
+// original inside the history bundle, and today's treasury successor that
+// retains it. Never regenerate these with a later binary.
 const (
 	settlementV2TodayConfigHash         = "0xbaaaef11cada1538e70bcfef4a4746813bfbf4a864ebd27393bc76dd0e088b78"
 	settlementV2TodayOriginalConfigHash = "0x8b430b102c5f689f259c62afd6d6676cdf2fead245611c0f840bf9631d971d22"

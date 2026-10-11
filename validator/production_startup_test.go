@@ -28,6 +28,7 @@ func TestProductionStartupRunReleaseReconcilesWithSettlementV2(t *testing.T) {
 	productionStartupTestReconcile(t, newProductionStartupSettlementV2TestFixture(t))
 }
 
+// Recovery of the lost original acknowledgement up to the preparation barrier.
 func productionStartupTestReconcile(t *testing.T, fixture *productionStartupTestFixture) {
 	t.Helper()
 	continuation := fixture.continuation
@@ -109,6 +110,7 @@ func TestProductionStartupRunReleaseInitialDeploymentWithSettlementV2(t *testing
 	productionStartupTestInitialDeployment(t, newProductionStartupSettlementV2TestFixture(t))
 }
 
+// A fresh deployment up to its first trail seed request.
 func productionStartupTestInitialDeployment(t *testing.T, fixture *productionStartupTestFixture) {
 	t.Helper()
 	fixture.selectEmptyDeployment(t)
