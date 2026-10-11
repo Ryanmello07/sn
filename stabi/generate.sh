@@ -100,6 +100,13 @@ jq -c .abi "$artifact_root/STCoordinator.sol/STCoordinator.json" > "$temporary_d
 jq -c .abi "$artifact_root/STSettlementVault.sol/STSettlementVault.json" > "$temporary_dir/STSettlementVault.abi.json"
 jq -c .abi "$artifact_root/STReserveSink.sol/STReserveSink.json" > "$temporary_dir/STReserveSink.abi.json"
 jq -c .abi "$artifact_root/STValidatorEvidence.sol/STValidatorEvidence.json" > "$temporary_dir/STValidatorEvidence.abi.json"
+jq -c .abi "$artifact_root/STSettlementVault2.sol/STSettlementVault2.json" > "$temporary_dir/STSettlementVault2.abi.json"
+jq -c .abi "$artifact_root/STSettlement2.sol/STSettlement2.json" > "$temporary_dir/STSettlement2.abi.json"
+# The two settlement v2 contracts share struct types, so one combined pass
+# binds both without duplicate type declarations.
+jq -n --slurpfile settlement "$temporary_dir/STSettlement2.abi.json" --slurpfile vault "$temporary_dir/STSettlementVault2.abi.json" \
+    '{contracts: {"STSettlement2.sol:STSettlement2": {abi: $settlement[0]}, "STSettlementVault2.sol:STSettlementVault2": {abi: $vault[0]}}}' \
+    > "$temporary_dir/stsettlement2.combined.json"
 
 "$abigen" --v2 \
     --abi "$temporary_dir/STSubnet.abi.json" \
@@ -131,17 +138,25 @@ jq -c .abi "$artifact_root/STValidatorEvidence.sol/STValidatorEvidence.json" > "
     --type STValidatorEvidence \
     --out "$temporary_dir/stvalidatorevidence.go"
 
+"$abigen" --v2 \
+    --combined-json "$temporary_dir/stsettlement2.combined.json" \
+    --pkg stabi \
+    --out "$temporary_dir/stsettlement2.go"
+
 generated=(
     "STSubnet.abi.json:../evm/abi/STSubnet.abi.json"
     "STCoordinator.abi.json:../evm/abi/STCoordinator.abi.json"
     "STSettlementVault.abi.json:../evm/abi/STSettlementVault.abi.json"
     "STReserveSink.abi.json:../evm/abi/STReserveSink.abi.json"
     "STValidatorEvidence.abi.json:../evm/abi/STValidatorEvidence.abi.json"
+    "STSettlementVault2.abi.json:../evm/abi/STSettlementVault2.abi.json"
+    "STSettlement2.abi.json:../evm/abi/STSettlement2.abi.json"
     "stsubnet.go:stsubnet.go"
     "stcoordinator.go:stcoordinator.go"
     "stsettlementvault.go:stsettlementvault.go"
     "streservesink.go:streservesink.go"
     "stvalidatorevidence.go:stvalidatorevidence.go"
+    "stsettlement2.go:stsettlement2.go"
     "STSubnet.abi.json:../stctl/st_abi.json"
 )
 
