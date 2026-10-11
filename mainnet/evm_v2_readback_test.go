@@ -132,6 +132,10 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 			{Data: call(contract.PackCHALLENGEBLOCKS()), Expected: word(14_400)},
 			{Data: call(contract.PackCoordinator()), Expected: addressWord(coordinator)},
 			{Data: call(contract.PackEscrowRegistered()), Expected: word(registered)},
+			{Data: call(contract.PackTotalCaptured()), Expected: word(0)},
+			{Data: call(contract.PackTotalPaid()), Expected: word(0)},
+			{Data: call(contract.PackEscrowAccounted()), Expected: word(0)},
+			{Data: call(contract.PackConservationHolds()), Expected: word(1)},
 		}
 		if registered == 1 {
 			getters = append(getters, contractGetter{To: "0x0000000000000000000000000000000000000805", Data: "0x" + hex.EncodeToString(crypto.Keccak256([]byte("getMinerCollateral(uint16,bytes32,bytes32)"))[:4]) + strings.TrimPrefix(word(25), "0x") + strings.TrimPrefix(common.Hash(evmV2TestHotkey).Hex(), "0x") + strings.TrimPrefix(common.Hash(ss58.EvmMirrorPubkey(vault)).Hex(), "0x"), Expected: "0x" + strings.Repeat("0", 320)})
@@ -199,6 +203,45 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 	}
 }
 
+// SV-8: every readback calls each argument-free view of the release ABI,
+// except vault2's liveEscrowStake, which anyone can raise by transferring
+// stake to the escrow position, and the proxy's proxiableUUID, which UUPS
+// refuses through a proxy and the implementation's readback calls instead.
+func TestEvmV2ReadbackCoversEveryArgumentFreeView(t *testing.T) {
+	f := newEvmV2Fixture(t)
+	graph := f.v2Graph()
+	release := evmV2TestRelease(t)
+	for index, check := range []struct {
+		artifact string
+		plan     *evmCreatePlan
+		skipped  string
+	}{{"SettlementVault2", graph[0], "liveEscrowStake"}, {"SettlementVault2", graph[1], "liveEscrowStake"}, {"SettlementVault2", graph[4], "liveEscrowStake"}, {"Settlement2", graph[2], ""}, {"Settlement2", graph[3], "proxiableUUID"}} {
+		parsed, err := abi.JSON(strings.NewReader(evmV2TestArtifactNamed(t, release, check.artifact).Abi))
+		if err != nil {
+			t.Fatal(err)
+		}
+		read := map[string]bool{}
+		for _, getter := range check.plan.Getters {
+			if getter.To == "" {
+				read[getter.Data] = true
+			}
+		}
+		views := 0
+		for name, method := range parsed.Methods {
+			if !method.IsConstant() || len(method.Inputs) != 0 || name == check.skipped {
+				continue
+			}
+			views++
+			if !read["0x"+hex.EncodeToString(method.ID)] {
+				t.Fatalf("readback %d omits %s.%s", index, check.artifact, name)
+			}
+		}
+		if views != len(read) || check.skipped != "" && read["0x"+hex.EncodeToString(parsed.Methods[check.skipped].ID)] {
+			t.Fatalf("readback %d calls %d of %d views", index, len(read), views)
+		}
+	}
+}
+
 // SV-8: completion readback of vault2, the proxy and the implementation at
 // one canonical selector passes only on exact facts; each mismatch is refused.
 func TestEvmV2ReadbackRefusesEachMismatch(t *testing.T) {
@@ -237,7 +280,7 @@ func TestEvmV2ReadbackRefusesEachMismatch(t *testing.T) {
 			cases++
 		}
 	}
-	if cases != 1+9+5+1+7+11+1+8+7 {
+	if cases != 1+13+5+1+7+11+1+8+7 {
 		t.Fatalf("readback covered %d facts", cases)
 	}
 	for _, method := range []string{"eth_getCode", "eth_call", "eth_getStorageAt"} {
@@ -269,6 +312,7 @@ func TestEvmV2BindingAdmissionReadsBothSelectors(t *testing.T) {
 		t.Fatalf("admission selectors: %v", stub.selectors)
 	}
 	coordinator := "0x" + hex.EncodeToString(stabi.NewSTSettlementVault2().PackCoordinator())
+	collateral := graph[1].Getters[len(graph[1].Getters)-1]
 	for _, fault := range []struct {
 		name, key, expected string
 		pending             bool
@@ -278,7 +322,7 @@ func TestEvmV2BindingAdmissionReadsBothSelectors(t *testing.T) {
 		{"pending-bound", evmV2ReadbackKey("eth_call", link.Address, coordinator), "vault2 escrow registration readback getter " + coordinator + " differs", true, common.BytesToHash(graph[3].Address[:]).Hex()},
 		{"pending-proxy", evmV2ReadbackKey("eth_getCode", graph[3].Address, ""), "initialized settlement2 proxy readback runtime differs", true, "0x"},
 		{"pending-implementation", evmV2ReadbackKey("eth_getStorageAt", graph[2].Address, contractInitializableSlot), "settlement2 implementation readback storage slot " + contractInitializableSlot + " differs", true, (common.Hash{}).Hex()},
-		{"pending-collateral", evmV2ReadbackKey("eth_call", common.HexToAddress(contractStakingPrecompile), graph[1].Getters[8].Data), "vault2 escrow registration readback getter " + graph[1].Getters[8].Data + " differs", true, "0x" + strings.Repeat("0", 63) + "1" + strings.Repeat("0", 256)},
+		{"pending-collateral", evmV2ReadbackKey("eth_call", common.HexToAddress(contractStakingPrecompile), collateral.Data), "vault2 escrow registration readback getter " + collateral.Data + " differs", true, "0x" + strings.Repeat("0", 63) + "1" + strings.Repeat("0", 256)},
 	} {
 		stub.fault = func(key string, selector any, _ string) any {
 			if key == fault.key && (selector == "pending") == fault.pending {

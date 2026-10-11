@@ -29,19 +29,27 @@ import (
 )
 
 // State is retained at every inclusion. The fake precompiles register the
-// escrow hotkey at UID 7 under vault2's mapped coldkey and report no
-// collateral, and the v1 coordinator address carries code, as initialize needs.
+// escrow hotkey at UID 7 under vault2's mapped coldkey and report no stake
+// and no collateral, and the v1 coordinator address carries code, as
+// initialize needs.
 func newEvmV2ChainFixture(t *testing.T) *evmCreateFixture {
 	t.Helper()
 	f := newEvmV2Fixture(t)
 	f.history = &evmCreateHistory{receipts: map[string]map[string]any{}, transactions: map[string]*types.Transaction{}, states: map[string]*state.StateDB{}, storage: map[string]map[string]string{}}
 	sender := f.config.Plan.Actions[0].Sender
 	f.installRegistrationPrecompiles(7, evmV2TestHotkey, ss58.EvmMirrorPubkey(crypto.CreateAddress(sender, 0)))
-	collateral, jump := evmTestPrecompileDispatch(nil, "getMinerCollateral(uint16,bytes32,bytes32)")
-	collateral = append(collateral, 0x60, 0x00, 0x60, 0x00, 0xfd)
-	collateral[jump] = byte(len(collateral))
-	collateral = append(collateral, 0x5b, 0x60, 0xa0, 0x60, 0x00, 0xf3)
-	f.state.SetCode(common.HexToAddress(contractStakingPrecompile), collateral, tracing.CodeChangeUnspecified)
+	staking, collateralJump := evmTestPrecompileDispatch(nil, "getMinerCollateral(uint16,bytes32,bytes32)")
+	staking, stakeJump := evmTestPrecompileDispatch(staking, "getStake(bytes32,bytes32,uint256)")
+	staking = append(staking, 0x60, 0x00, 0x60, 0x00, 0xfd)
+	// Zeroed memory answers five collateral words or one stake word.
+	for _, branch := range []struct {
+		jump int
+		size byte
+	}{{jump: collateralJump, size: 0xa0}, {jump: stakeJump, size: 0x20}} {
+		staking[branch.jump] = byte(len(staking))
+		staking = append(staking, 0x5b, 0x60, branch.size, 0x60, 0x00, 0xf3)
+	}
+	f.state.SetCode(common.HexToAddress(contractStakingPrecompile), staking, tracing.CodeChangeUnspecified)
 	f.state.SetCode(evmV2TestV1, []byte{0x00}, tracing.CodeChangeUnspecified)
 	f.state.SetBalance(sender, uint256.NewInt(10_000_000_000_000_000), tracing.BalanceChangeUnspecified)
 	f.refreshV2History()

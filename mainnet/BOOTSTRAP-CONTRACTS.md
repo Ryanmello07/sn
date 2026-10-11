@@ -754,11 +754,16 @@ the authenticated canonical inclusion:
 
 - `vault2-create`: the exact runtime and the getters `netuid`, `escrowHotkey`,
   `selfColdkey`, `bootstrap`, `demandFeeWei`, `CHALLENGE_BLOCKS` (14,400),
-  `coordinator` (zero) and `escrowRegistered` (false), and five storage words
-  of the reviewed layout: slot zero packs `coordinator` in its low 20 bytes
-  with `escrowRegistered` at byte offset 20, the reentrancy flag in slot one
-  and `totalCaptured`, `totalPaid` and `escrowAccounted` in slots 14 to 16 stay
-  zero. The generator pins these coordinates to the compiler layout.
+  `coordinator` (zero), `escrowRegistered` (false), `totalCaptured`,
+  `totalPaid` and `escrowAccounted` (zero) and `conservationHolds` (true),
+  and five storage words of the reviewed layout: slot zero packs
+  `coordinator` in its low 20 bytes with `escrowRegistered` at byte offset 20,
+  the reentrancy flag in slot one and `totalCaptured`, `totalPaid` and
+  `escrowAccounted` in slots 14 to 16 stay zero. The generator pins these
+  slots to the compiler layout. That is every argument-free view except
+  `liveEscrowStake`, which anyone can raise by transferring stake to vault2's
+  escrow position; `conservationHolds` evaluates it through the staking
+  precompile.
 - `escrow2-register`: the original escrow checks (one `EscrowRegistered` event
   and the `getUid`/`getHotkey`/`getColdkey` mapping), the vault2 getters and
   slot zero with `escrowRegistered` true, and the escrow position's

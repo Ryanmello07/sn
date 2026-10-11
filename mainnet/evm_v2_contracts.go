@@ -93,7 +93,10 @@ func contractVault2Payload(artifact contractReleaseArtifact, p evmPhasePlan) (co
 }
 
 // Vault2's immutable identity plus its one-shot escrow registration and
-// coordinator binding, which are the only getters the installation changes.
+// coordinator binding, which are the only getters the installation changes,
+// and its empty accounting, under which conservation holds. liveEscrowStake
+// alone is not read back: anyone may transfer stake to vault2's escrow
+// position, and conservationHolds already evaluates it through the precompile.
 // Once registered, the escrow position's collateral is read back as well.
 // Reviewed STSettlementVault2 layout: coordinator in the low 20 bytes of slot
 // zero with escrowRegistered at byte offset 20, the reentrancy flag in slot
@@ -118,6 +121,10 @@ func contractVault2State(vault evmCreatePlan, coordinator common.Address, regist
 		{data: contract.PackCHALLENGEBLOCKS(), word: common.BigToHash(big.NewInt(contractVault2ChallengeBlocks))},
 		{data: contract.PackCoordinator(), word: common.BytesToHash(coordinator[:])},
 		{data: contract.PackEscrowRegistered(), word: flag},
+		{data: contract.PackTotalCaptured(), word: common.Hash{}},
+		{data: contract.PackTotalPaid(), word: common.Hash{}},
+		{data: contract.PackEscrowAccounted(), word: common.Hash{}},
+		{data: contract.PackConservationHolds(), word: common.BigToHash(big.NewInt(1))},
 	} {
 		getters = append(getters, contractGetter{Data: "0x" + hex.EncodeToString(getter.data), Expected: getter.word.Hex()})
 	}
