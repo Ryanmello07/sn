@@ -640,7 +640,10 @@ func queryClaimedFinalizedObserved(ctx context.Context, cfg *ClaimDaemonConfig, 
 
 // The caller already authenticated the exact signed transaction. Replaying
 // those bytes needs finalized chain authority, not a retained historical API.
-func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *types.Transaction, from common.Address, store *claimQueueStore) (bool, error) {
+// The v1 and v2 queues each prove that the bytes are in acknowledged custody.
+func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *types.Transaction, from common.Address, store interface {
+	requireSigned(context.Context, *types.Transaction) error
+}) (bool, error) {
 	if err := store.requireSigned(ctx, tx); err != nil {
 		return false, err
 	}
