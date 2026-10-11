@@ -239,6 +239,17 @@ func (t *ledgerTestTree) breakSum(index uint64, level int, leftExceeds bool) {
 	}
 }
 
+// wrapSums states the node above index at level with child sums that add up
+// to its own only modulo 2^256: the left one exceeds it by one and the right
+// one is 2^256 − 1.
+func (t *ledgerTestTree) wrapSums(index uint64, level int) {
+	j := index >> level
+	below := t.levels[level-1]
+	below[2*j].Sum.AddUint64(&t.levels[level][j].Sum, 1)
+	below[2*j+1].Sum.SetAllOne()
+	t.relink(level-1, 2*j)
+}
+
 // ledgerProofFromPath is the claim proof an opening implies, and the leaf
 // node it ends at: (root, total) when the path is empty.
 func ledgerProofFromPath(index uint64, root [32]byte, total uint256.Int, path []LedgerPathNode) ([]LedgerNode, LedgerNode) {
@@ -443,6 +454,18 @@ func ledgerProofCases() []ledgerProofCase {
 		add("sum_overflow_level_0", false, "ArithmeticOverflow", func(c *ledgerProofCase) { c.proof[0].Sum.SetAllOne() })
 		add("sum_overflow_level_1", false, "ArithmeticOverflow", func(c *ledgerProofCase) { c.proof[1].Sum.SetAllOne() })
 	}
+	// Two values whose sum wraps around 2^256 to the stated total: the fold
+	// reproduces the root and, modulo 2^256, the total, so only the overflow
+	// check refuses it.
+	wrapped := ledgerDerivedAccounts("wrap", 2)
+	wrapped[0].Cumulative.Lsh(uint256.NewInt(1), 255)
+	wrapped[1].Cumulative.AddUint64(&wrapped[0].Cumulative, 5)
+	tree := naiveLedgerTree(wrapped)
+	root, total := tree.root()
+	cases = append(cases, ledgerProofCase{
+		name: "wrapping_values", root: root, total: total, leafCount: 2, index: 0,
+		account: wrapped[0], proof: tree.proof(0), err: "ArithmeticOverflow",
+	})
 	return cases
 }
 
@@ -462,6 +485,13 @@ func TestLedgerProofCases(t *testing.T) {
 			}
 			if !overflows {
 				t.Fatalf("%s: the fold does not overflow", c.name)
+			}
+		}
+		if c.name == "wrapping_values" {
+			h, s := LedgerLeafHash(c.account.Coldkey, &c.account.Cumulative), c.account.Cumulative
+			h = LedgerNodeHash(h, &s, c.proof[0].Hash, &c.proof[0].Sum)
+			if s.Add(&s, &c.proof[0].Sum); h != c.root || s != c.total {
+				t.Fatalf("%s: the fold modulo 2^256 does not reproduce the root and total", c.name)
 			}
 		}
 	}
@@ -625,6 +655,11 @@ func ledgerFaultCases() []ledgerFaultCase {
 			add(name, p, a, i, p.path(i), LedgerFaultInconsistentNode, level, nil)
 		}
 	}
+	for level := d; level >= 1; level-- {
+		p := honest.clone()
+		p.wrapSums(i, level)
+		add(fmt.Sprintf("inconsistent_level_%d_sums_wrap", level), p, a, i, p.path(i), LedgerFaultInconsistentNode, level, nil)
+	}
 	for _, name := range []string{"root_sums_above_total", "root_sums_below_total"} {
 		p := honest.clone()
 		if name == "root_sums_above_total" {
@@ -713,6 +748,9 @@ func TestLedgerPathFaultAtEveryIndexAndLevel(t *testing.T) {
 				p.breakSum(index, level, leftExceeds)
 				expect(p, i, fmt.Sprintf("inconsistent at %d (left exceeds %v)", level, leftExceeds), LedgerFaultInconsistentNode, level)
 			}
+			p := honest.clone()
+			p.wrapSums(index, level)
+			expect(p, i, fmt.Sprintf("sums wrap at %d", level), LedgerFaultInconsistentNode, level)
 		}
 		lowered := f[i].Cumulative
 		lowered.SubUint64(&lowered, 1)
@@ -845,8 +883,9 @@ func ledgerLie(r *rand.Rand, s *uint256.Int) {
 
 // adversarialLedgerTree states n accounts the way a dishonest operator
 // could: garbage hashes, stated sums that disagree with what they cover,
-// filled padding and repeated leaves, each at a per-tree rate, rate 0 being
-// an honest tree. leaves[j] is the account behind level-0 position j.
+// filled padding, repeated leaves and values of any width, each at a
+// per-tree rate, rate 0 being an honest tree. leaves[j] is the account
+// behind level-0 position j.
 func adversarialLedgerTree(r *rand.Rand, n uint64) (t *ledgerTestTree, leaves []*LedgerAccount, honest bool) {
 	d := bits.Len64(n - 1)
 	rate := r.IntN(4)
@@ -865,6 +904,10 @@ func adversarialLedgerTree(r *rand.Rand, n uint64) (t *ledgerTestTree, leaves []
 			leaves[j], *node = leaves[j-1], t.levels[0][j-1]
 		default:
 			a := randomLedgerAccount(r)
+			if mutate() {
+				// Any uint256, so that sums wrap.
+				a.Cumulative[2], a.Cumulative[3] = r.Uint64(), r.Uint64()
+			}
 			leaves[j], *node = &a, ledgerLeaf(a.Coldkey, a.Cumulative)
 		}
 		if mutate() {

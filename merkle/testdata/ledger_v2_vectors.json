@@ -626,6 +626,166 @@
       "fault": 1,
       "leafCount": 9,
       "level": 4,
+      "name": "inconsistent_level_4_sums_wrap",
+      "path": [
+        {
+          "leftHash": "0xf41bfa849e26454cdf70ecafbf977ee3dbe9af68b9c2e821c1c55ec35b5adc60",
+          "leftSum": "17206328839411844835334074796012498078",
+          "rightHash": "0x46bb3fea1116c07fbc3c3d3bc14f6cd20a5a0b3463ceafeac577f0d3cfbc0590",
+          "rightSum": "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        },
+        {
+          "leftHash": "0x82fa3668a32c54c2ae90e58fdc692162d0f04b311d000295f62c3160805b8f94",
+          "leftSum": "17206318250340000910030772430772576319",
+          "rightHash": "0xe82c3effd3c466f35e7b454ba1e4c5005792baea2387249898f233449a66facd",
+          "rightSum": "5895066290270462354"
+        },
+        {
+          "leftHash": "0x64953492498d43ba166d1c3e587966036aedc514f2fa00638f5887c5bfdd6d87",
+          "leftSum": "60332755863062407010443641161",
+          "rightHash": "0x8408bb1f8a31cd60f278d35339e2dd3f59c1e0e4b10bcc0063ec0b7d6bb9ee51",
+          "rightSum": "17206318190007245046968365420328935158"
+        },
+        {
+          "leftHash": "0xe89ce8aeb6e6ead8f43da311939709357bdc30f9e210cc0a8637d971b7033f01",
+          "leftSum": "4931897288683214987668245899050",
+          "rightHash": "0x37e43fcc63558f0008d752b467b04f646fda1d43030f1ee0ca60a9b1168437e8",
+          "rightSum": "17206313258109956363753377752083036108"
+        }
+      ],
+      "root": "0x7664e771c1aa90bf45ad6efbf00cd313c34c9d7102d3e7404c69dfd0460c3324",
+      "total": "17206328839411844835334074796012498077"
+    },
+    {
+      "account": {
+        "coldkey": "0xed57307d8d454615cf32187c6b0d3696f91ff72a8a04df66eda817a29de9e383",
+        "cumulative": "4931897288683214987668245899048",
+        "index": "2"
+      },
+      "error": "",
+      "fault": 1,
+      "leafCount": 9,
+      "level": 3,
+      "name": "inconsistent_level_3_sums_wrap",
+      "path": [
+        {
+          "leftHash": "0xcd63da659aacb0d7a6d14d96e61c06325573c17ca74886140bf2192e88c4a139",
+          "leftSum": "17206318250340000915925838721043038673",
+          "rightHash": "0x46bb3fea1116c07fbc3c3d3bc14f6cd20a5a0b3463ceafeac577f0d3cfbc0590",
+          "rightSum": "10589071843919408236074969459404"
+        },
+        {
+          "leftHash": "0x82fa3668a32c54c2ae90e58fdc692162d0f04b311d000295f62c3160805b8f94",
+          "leftSum": "17206318250340000915925838721043038674",
+          "rightHash": "0xe82c3effd3c466f35e7b454ba1e4c5005792baea2387249898f233449a66facd",
+          "rightSum": "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        },
+        {
+          "leftHash": "0x64953492498d43ba166d1c3e587966036aedc514f2fa00638f5887c5bfdd6d87",
+          "leftSum": "60332755863062407010443641161",
+          "rightHash": "0x8408bb1f8a31cd60f278d35339e2dd3f59c1e0e4b10bcc0063ec0b7d6bb9ee51",
+          "rightSum": "17206318190007245046968365420328935158"
+        },
+        {
+          "leftHash": "0xe89ce8aeb6e6ead8f43da311939709357bdc30f9e210cc0a8637d971b7033f01",
+          "leftSum": "4931897288683214987668245899050",
+          "rightHash": "0x37e43fcc63558f0008d752b467b04f646fda1d43030f1ee0ca60a9b1168437e8",
+          "rightSum": "17206313258109956363753377752083036108"
+        }
+      ],
+      "root": "0x233cadfafb62932028eb53b423b776c038d91b91145a394bf6483a6190951194",
+      "total": "17206328839411844835334074796012498077"
+    },
+    {
+      "account": {
+        "coldkey": "0xed57307d8d454615cf32187c6b0d3696f91ff72a8a04df66eda817a29de9e383",
+        "cumulative": "4931897288683214987668245899048",
+        "index": "2"
+      },
+      "error": "",
+      "fault": 1,
+      "leafCount": 9,
+      "level": 2,
+      "name": "inconsistent_level_2_sums_wrap",
+      "path": [
+        {
+          "leftHash": "0x07e2053e01bb2cf0580933b65f02a13300a3e44430e78366e5edc03a9c80306f",
+          "leftSum": "17206318250340000915925838721043038673",
+          "rightHash": "0x46bb3fea1116c07fbc3c3d3bc14f6cd20a5a0b3463ceafeac577f0d3cfbc0590",
+          "rightSum": "10589071843919408236074969459404"
+        },
+        {
+          "leftHash": "0x30be5a4d94c696bf003041c9a1a0ed2ec1311e5ec5b5519bb2e982479773e74a",
+          "leftSum": "17206318250340000910030772430772576319",
+          "rightHash": "0xe82c3effd3c466f35e7b454ba1e4c5005792baea2387249898f233449a66facd",
+          "rightSum": "5895066290270462354"
+        },
+        {
+          "leftHash": "0x64953492498d43ba166d1c3e587966036aedc514f2fa00638f5887c5bfdd6d87",
+          "leftSum": "17206318250340000910030772430772576320",
+          "rightHash": "0x8408bb1f8a31cd60f278d35339e2dd3f59c1e0e4b10bcc0063ec0b7d6bb9ee51",
+          "rightSum": "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        },
+        {
+          "leftHash": "0xe89ce8aeb6e6ead8f43da311939709357bdc30f9e210cc0a8637d971b7033f01",
+          "leftSum": "4931897288683214987668245899050",
+          "rightHash": "0x37e43fcc63558f0008d752b467b04f646fda1d43030f1ee0ca60a9b1168437e8",
+          "rightSum": "17206313258109956363753377752083036108"
+        }
+      ],
+      "root": "0xf85f72d41ca8932b03f8e8adbf805a69e01521cd3392cbbe7e104f9d2c49be5b",
+      "total": "17206328839411844835334074796012498077"
+    },
+    {
+      "account": {
+        "coldkey": "0xed57307d8d454615cf32187c6b0d3696f91ff72a8a04df66eda817a29de9e383",
+        "cumulative": "4931897288683214987668245899048",
+        "index": "2"
+      },
+      "error": "",
+      "fault": 1,
+      "leafCount": 9,
+      "level": 1,
+      "name": "inconsistent_level_1_sums_wrap",
+      "path": [
+        {
+          "leftHash": "0x864905060b0c9542479b3f5283178d9582f3634c6f18da398bc273e1f069e97e",
+          "leftSum": "17206318250340000915925838721043038673",
+          "rightHash": "0x46bb3fea1116c07fbc3c3d3bc14f6cd20a5a0b3463ceafeac577f0d3cfbc0590",
+          "rightSum": "10589071843919408236074969459404"
+        },
+        {
+          "leftHash": "0xbf77193905e18387db4c855b3e1e8c4233ad7cee78523074d250d8659943b416",
+          "leftSum": "17206318250340000910030772430772576319",
+          "rightHash": "0xe82c3effd3c466f35e7b454ba1e4c5005792baea2387249898f233449a66facd",
+          "rightSum": "5895066290270462354"
+        },
+        {
+          "leftHash": "0x64953492498d43ba166d1c3e587966036aedc514f2fa00638f5887c5bfdd6d87",
+          "leftSum": "60332755863062407010443641161",
+          "rightHash": "0xff2030e9fd9a1891dd2e749fb7684dc5a62ee663719d42ff979ff545827e032f",
+          "rightSum": "17206318190007245046968365420328935158"
+        },
+        {
+          "leftHash": "0xe89ce8aeb6e6ead8f43da311939709357bdc30f9e210cc0a8637d971b7033f01",
+          "leftSum": "17206318190007245046968365420328935159",
+          "rightHash": "0x37e43fcc63558f0008d752b467b04f646fda1d43030f1ee0ca60a9b1168437e8",
+          "rightSum": "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        }
+      ],
+      "root": "0xbb8384373f7942224f10cd0d673764578bb755811bc6ca4d0ab1daa5517cf09c",
+      "total": "17206328839411844835334074796012498077"
+    },
+    {
+      "account": {
+        "coldkey": "0xed57307d8d454615cf32187c6b0d3696f91ff72a8a04df66eda817a29de9e383",
+        "cumulative": "4931897288683214987668245899048",
+        "index": "2"
+      },
+      "error": "",
+      "fault": 1,
+      "leafCount": 9,
+      "level": 4,
       "name": "root_sums_above_total",
       "path": [
         {
@@ -2125,6 +2285,25 @@
       "proof": [],
       "root": "0x05f34c6095831ccabd4046d07578163e1ae33133c46c4093a66fda9506df756d",
       "total": "221297086425932692309089269564985997122",
+      "valid": false
+    },
+    {
+      "account": {
+        "coldkey": "0x8849852d33193d37ec06c40776d709379623ce25d43c81777fb162d36a733396",
+        "cumulative": "57896044618658097711785492504343953926634992332820282019728792003956564819968",
+        "index": "0"
+      },
+      "error": "ArithmeticOverflow",
+      "leafCount": 2,
+      "name": "wrapping_values",
+      "proof": [
+        {
+          "hash": "0x5677893d5e896b62f4f8045f7b271beeaad57f2e4f1273b9a3c1bac29a5da634",
+          "sum": "57896044618658097711785492504343953926634992332820282019728792003956564819973"
+        }
+      ],
+      "root": "0xbe82a6dac5cdf500149e596094463705e818ba1da4be5421551e07241569b292",
+      "total": "5",
       "valid": false
     }
   ],
