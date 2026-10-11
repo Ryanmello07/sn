@@ -220,7 +220,9 @@ STSettlement2 needs: the v1 reserve sink, vault and coordinator proxy (in
 then vault2, its escrow registration on the next nonce (SPEC A7), the
 STSettlement2 proxy with one auditor and quorum 1, and the pool through
 `registerOperatorPool`. R-1, the deployment through §8.5's phase with
-readback, is not done here. Epoch 0 holds the deployment (300 blocks);
+readback, runs from `mainnet/` as `TestR1SettlementV2Phase`, with the same
+`runtime_rehearsal` tag and `RUNTIME_REHEARSAL_NODE`
+(`mainnet/BOOTSTRAP-CONTRACTS.md`). Epoch 0 holds the deployment (300 blocks);
 epoch 1, every pool's first epoch, has the shortest cadence STSettlement2
 accepts, a 10-block commit window plus `CHALLENGE_BLOCKS`, 14,410 blocks.
 Tests that close many epochs continue with 100-block epochs (R-2, R-3 and R-4
