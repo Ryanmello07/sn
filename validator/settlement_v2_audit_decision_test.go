@@ -297,6 +297,25 @@ func TestSettlementV2AuditDemandSampleDoublesAfterFailedRoot(t *testing.T) {
 	requireSettlementV2AuditDemands(t, sender, f, 0, want)
 }
 
+// settlementV2AuditTestDemandSet is the demand set the audit draws with its
+// random stream: again and the value-weighted sample over all of accounts,
+// as ledger.DemandSet returns them, then each faulted index the sample did
+// not draw, in order.
+func settlementV2AuditTestDemandSet(t *testing.T, accounts []merkle.LedgerAccount, doublings uint, again []uint64, faults ...uint64) []uint64 {
+	t.Helper()
+	set, err := ledger.DemandSet(accounts, nil, doublings, again, settlementV2AuditTestRandom())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sample := slices.Clone(set)
+	for _, index := range faults {
+		if !slices.Contains(sample, index) {
+			set = append(set, index)
+		}
+	}
+	return set
+}
+
 // VA-4: rows that show a fault are always demanded, whatever the sample
 // draws: here a lowered account and a withheld one, under a commitment the
 // published rows do not reproduce.
@@ -315,17 +334,54 @@ func TestSettlementV2AuditDemandsFaultRows(t *testing.T) {
 	commit := pub.seal(t)
 	fixture.useScenario(t, f, commit, pub.objects, true, 610)
 	fixture.mustPass(t)
-	faults := []ledger.Fault{{Index: 598, Kind: merkle.LedgerFaultLowerValue}, {Index: 599, Kind: merkle.LedgerFaultWrongLeaf}}
-	want, err := ledger.DemandSet(f.Accounts, faults, 0, nil, settlementV2AuditTestRandom())
-	if err != nil {
-		t.Fatal(err)
-	}
+	want := settlementV2AuditTestDemandSet(t, f.Accounts, 0, nil, 598, 599)
 	record := fixture.record(t, 2)
-	if record.Decision != settlementV2DecisionDemand || !slices.Equal(record.Demands, want) || !slices.Contains(want, 598) || !slices.Contains(want, 599) || len(want) != ledger.DemandSample+2 ||
+	if record.Decision != settlementV2DecisionDemand || !slices.Equal(record.Demands, want) || !slices.Contains(want, 598) || !slices.Contains(want, 599) || len(want) < ledger.DemandSample ||
 		len(record.Faults) != 2 || record.Faults[1] != (settlementV2AuditFault{Index: 599, Kind: merkle.LedgerFaultWrongLeaf.String()}) {
 		t.Fatalf("record faults %v, %d demanded", record.Faults, len(record.Demands))
 	}
 	requireSettlementV2AuditDemands(t, sender, f, 0, want)
+}
+
+// VA-4, G2: published rows that fault every account of F neither shrink nor
+// order the sample: the first demands are exactly the value-weighted sample
+// over all of F's accounts, which always draws the account holding half of
+// F's value, and every other account follows in index order. The demands
+// sent before the challenge window closes are a sample even when the whole
+// set cannot be sent.
+func TestSettlementV2AuditDemandSampleLeadsRowsFaultingEveryAccount(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f, p, sender := fixture.useLargeScenario(t, 600)
+	pub := settlementV2AuditTestPublish(t, p)
+	accounts := slices.Clone(p.Accounts)
+	for i := range accounts {
+		accounts[i].Coldkey = settlementV2AuditTestColdkey(10_000 + i)
+	}
+	chunks, err := ledger.EncodeAccountChunks(accounts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub.header.Accounts = pub.put(chunks)
+	commit := pub.seal(t)
+	fixture.useScenario(t, f, commit, pub.objects, true, 610)
+	fixture.mustPass(t)
+	sample, err := ledger.DemandSet(f.Accounts, nil, 0, nil, settlementV2AuditTestRandom())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := fixture.record(t, 2)
+	if record.Decision != settlementV2DecisionDemand || len(record.Faults) != len(f.Accounts) || len(sample) != ledger.DemandSample || !slices.Contains(sample, 0) ||
+		len(record.Demands) != len(f.Accounts) || !slices.Equal(record.Demands[:len(sample)], sample) {
+		t.Fatalf("%d faults, %d demanded", len(record.Faults), len(record.Demands))
+	}
+	rest := record.Demands[len(sample):]
+	for k, index := range rest {
+		if slices.Contains(sample, index) || k > 0 && index <= rest[k-1] {
+			t.Fatalf("demand %d after the sample is account %d", len(sample)+k, index)
+		}
+	}
+	requireSettlementV2AuditDemands(t, sender, f, 0, record.Demands)
 }
 
 // VA-4: the demand set is drawn once. A pass whose sends fail keeps the
@@ -863,10 +919,9 @@ func TestSettlementV2AuditChallengesAgainstOlderRoot(t *testing.T) {
 
 // G2, VA-4: published accounts that do not reproduce the pending root are
 // compared with the older protected root too, and the rows they fault, here
-// two lowered and a missing one, are always demanded against it. They are
-// sent after the sample, so that rows faulting every account cannot hold the
-// sample back past the window. The pending root's objects, kept when read,
-// are not fetched again.
+// two lowered and a missing one, are always demanded against it: each one
+// the sample over the older root's accounts did not draw follows it. The
+// pending root's objects, kept when read, are not fetched again.
 func TestSettlementV2AuditDemandsFaultRowsAgainstOlderRoot(t *testing.T) {
 	t.Parallel()
 	fixture := newSettlementV2AuditTestFixture(t)
@@ -891,14 +946,10 @@ func TestSettlementV2AuditDemandsFaultRowsAgainstOlderRoot(t *testing.T) {
 	delete(fixture.chain.failures, "eth_getLogs")
 	fixture.chain.lock.Unlock()
 	fixture.mustPass(t)
-	faults := []ledger.Fault{{Index: 1, Kind: merkle.LedgerFaultLowerValue}, {Index: 2, Kind: merkle.LedgerFaultLowerValue}, {Index: 599, Kind: merkle.LedgerFaultWrongLeaf}}
-	sample, err := ledger.DemandSet(r.Accounts, faults, 0, nil, settlementV2AuditTestRandom())
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := append(slices.DeleteFunc(slices.Clone(sample), func(index uint64) bool { return index == 1 || index == 2 || index == 599 }), 1, 2, 599)
+	want := settlementV2AuditTestDemandSet(t, r.Accounts, 0, nil, 1, 2, 599)
 	record := fixture.record(t, 3)
-	if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || !record.Done || len(want) != ledger.DemandSample+3 || want[0] != 0 || !slices.Equal(record.Demands, want) ||
+	if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || !record.Done || len(want) < ledger.DemandSample || want[0] != 0 || !slices.Equal(record.Demands, want) ||
+		!slices.Contains(want, 1) || !slices.Contains(want, 2) || !slices.Contains(want, 599) ||
 		!slices.Equal(record.Faults, []settlementV2AuditFault{{Index: 1, Kind: merkle.LedgerFaultLowerValue.String()}, {Index: 2, Kind: merkle.LedgerFaultLowerValue.String()}, {Index: 599, Kind: merkle.LedgerFaultWrongLeaf.String()}}) {
 		t.Fatalf("record %+v", record)
 	}

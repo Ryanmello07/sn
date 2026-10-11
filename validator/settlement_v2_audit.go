@@ -280,10 +280,12 @@ func (self *settlementV2Audit) remainingBytes(record *settlementV2AuditRecord) u
 }
 
 // decide records the audit's finding and, unless the audit waits for its
-// objects, its decision. A demand draws its set now, over the protected
-// root's accounts. The earlier roots' unanswered indexes and the sample are
-// sent before the other faults, so that published rows faulting every
-// account cannot hold the sample back past the challenge window.
+// objects, its decision. A demand draws its set now: the earlier roots'
+// unanswered indexes and a value-weighted sample over all of the protected
+// root's accounts, sent first, then every other account the published rows
+// fault. Rows the operator publishes therefore cannot shrink the sample or
+// order it, even when they fault every account and fewer demands than the
+// set can be sent before the challenge window closes.
 func (self *settlementV2Audit) decide(ctx context.Context, pool settlementV2AuditPool, state *settlementV2PoolState, record *settlementV2AuditRecord, res *ledger.Result) error {
 	record.observe(state.block, res)
 	action := res.Action()
@@ -314,26 +316,17 @@ func (self *settlementV2Audit) decide(ctx context.Context, pool settlementV2Audi
 		}
 		// An older protected root holds fewer accounts than F.
 		again = slices.DeleteFunc(again, func(index uint64) bool { return index >= uint64(len(anchor.accounts)) })
-		demands, err := ledger.DemandSet(anchor.accounts, faults, doublings, again, self.random)
+		demands, err := ledger.DemandSet(anchor.accounts, nil, doublings, again, self.random)
 		if err != nil {
 			return fmt.Errorf("settlement v2 demand set of pool %d seq %d: %w", state.noID, state.pending.Seq, err)
 		}
-		late := map[uint64]bool{}
+		// DemandSet sorts its set, and faults come in index order.
+		sampled := len(demands)
 		for _, fault := range faults {
-			late[fault.Index] = true
-		}
-		for _, index := range again {
-			delete(late, index)
-		}
-		slices.SortStableFunc(demands, func(a, b uint64) int {
-			switch {
-			case !late[a] && late[b]:
-				return -1
-			case late[a] && !late[b]:
-				return 1
+			if _, found := slices.BinarySearch(demands[:sampled], fault.Index); !found {
+				demands = append(demands, fault.Index)
 			}
-			return 0
-		})
+		}
 		record.RootIndex, record.Doublings, record.Demands = anchor.index, doublings, demands
 	}
 	if err := self.custody.keepAuditRecord(record); err != nil {
