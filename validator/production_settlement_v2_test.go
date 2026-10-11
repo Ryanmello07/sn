@@ -245,3 +245,69 @@ func TestProductionRenderedSuccessorKeepsSettlementV2(t *testing.T) {
 		t.Fatal("rendering lost the settlement_v2 block")
 	}
 }
+
+// VA-6: an adopted block stays fixed through a capacity revision. The
+// revision that keeps it loads; with the block removed or re-pointed the same
+// signed revision is refused by the continuity rule that keeps the block.
+func TestProductionSettlementV2CapacityRevisionKeepsTheBlock(t *testing.T) {
+	predecessor := newSettlementV2TestPredecessor(t, false)
+	path, approval := predecessor.successor(t, settlementV2TestAdopt)
+	adopted, err := LoadReleaseConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := settlementV2TestBlock
+	for name, block := range map[string]*ReleaseSettlementV2Config{
+		"kept":       &kept,
+		"removed":    nil,
+		"re-pointed": {Settlement: settlementV2TestBlock.Settlement, Vault: "0x5e77000000000000000000000000000000000003"},
+	} {
+		cfg, next := productionCapacityTestDraft(t, adopted, approval)
+		cfg.SettlementV2 = block
+		_, err := LoadReleaseConfig(productionCapacityTestSign(t, cfg, next, predecessor.private).path)
+		if name == "kept" {
+			if err != nil {
+				t.Fatal("capacity revision of an adopted config refused", err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), "continuity changes policy, identity, transport or custody") {
+			t.Errorf("%s: signed capacity revision admitted or refused for another cause: %v", name, err)
+		}
+	}
+}
+
+// VA-6: rendering a pending config that carries the block keeps it. The
+// rendering that keeps it loads; one that removes or re-points it is refused
+// by the rendering class's exact projection.
+func TestProductionSettlementV2RenderingKeepsTheBlock(t *testing.T) {
+	runtime := newProductionRuntimeTestFixture(t, false)
+	cfg, approval := productionPendingTestClone(t, *runtime.cfg), productionPendingTestClone(t, runtime.approval)
+	cfg.EvidenceV2.Operators = productionPendingTestEvidence(cfg.EvidenceV2.Operators)
+	productionPendingTestTreasury(&cfg, &approval)
+	settlementV2TestAdopt(&cfg, &approval)
+	path, approved := productionPendingTestSign(t, cfg, approval, runtime.private)
+	pending, err := LoadReleaseProductionConfigPreActivation(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := productionPendingTestRender(t, pending)
+	predecessor := settlementV2TestPredecessor{cfg: pending, approval: approved, private: runtime.private}
+	kept := settlementV2TestBlock
+	for name, block := range map[string]*ReleaseSettlementV2Config{
+		"kept":       &kept,
+		"removed":    nil,
+		"re-pointed": {Settlement: "0x5e77000000000000000000000000000000000003", Vault: settlementV2TestBlock.Vault},
+	} {
+		path, _ := predecessor.successor(t, func(cfg *ReleaseConfig, _ *OwnerRecycleApproval) {
+			cfg.EvidenceV2.Operators = rendered
+			cfg.SettlementV2 = block
+		})
+		_, err := LoadReleaseConfig(path)
+		if name == "kept" {
+			if err != nil {
+				t.Fatal("rendering that keeps the block refused", err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), "evidence rendering changes signed configuration beyond its rendered references") {
+			t.Errorf("%s: signed rendering admitted or refused for another cause: %v", name, err)
+		}
+	}
+}

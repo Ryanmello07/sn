@@ -19,6 +19,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/protocol"
 	"github.com/urfoundation/sn/stabi"
 	"gopkg.in/yaml.v3"
 )
@@ -266,6 +267,17 @@ func TestSettlementV2IdentityCheckRefusesEachMismatch(t *testing.T) {
 	}
 }
 
+// VA-6: the V2 steerer that both runtime paths construct takes the block's
+// addresses from its config through releaseSettlementV2Addresses, the helper
+// replay and the production row also call.
+func TestSettlementV2SteererTakesConfiguredAddresses(t *testing.T) {
+	block := settlementV2TestBlock
+	_, steerer := newReleaseStartupOwnerV2TestFixture(t, func(cfg *ReleaseConfig) { cfg.SettlementV2 = &block })
+	if steerer.settlementV2 != (SettlementV2Addresses{Settlement: common.HexToAddress(block.Settlement), Vault: common.HexToAddress(block.Vault)}) {
+		t.Fatal("the steerer did not take the configured settlement v2 addresses", steerer.settlementV2)
+	}
+}
+
 // Replaces the settlement v2 views the runtime fixture's chain serves.
 func (self *releaseRuntimeV2ChainTestFixture) serveSettlementV2(views map[string][]byte) {
 	self.settlementV2Lock.Lock()
@@ -316,5 +328,48 @@ func TestSettlementV2RuntimeConfirmsIdentityBeforeClosing(t *testing.T) {
 	fixture.evm.serveSettlementV2(other)
 	if err := fixture.runtime.advance(t.Context(), snapshot); err != nil || fixture.evm.settlementV2ReadCount() != 4 {
 		t.Fatal("a confirmed runtime checked its identity again", err)
+	}
+}
+
+// VA-9: CLOSED_CENSUS continues across adoption. Epoch 7 closes and publishes
+// under the predecessor; the runtime restarts on the same disk with the block,
+// confirms it, closes epoch 8 and publishes it, and both censuses read back
+// under the original activations. Production runs this same census path.
+func TestSettlementV2ClosedCensusContinuesAcrossAdoption(t *testing.T) {
+	fixture := newReleaseRuntimeV2TestFixture(t)
+	closed := map[uint64]uint64{7: 1501, 8: 2001}
+	advance := func(epoch uint64) {
+		t.Helper()
+		block := closed[epoch]
+		if err := fixture.runtime.advance(t.Context(), &ReleaseSnapshot{Epoch: new(big.Int).SetUint64(epoch + 1), BlockNumber: block, BlockHash: fixture.startup.blocks[block]}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	advance(7)
+	fixture.startup.reopen(t)
+	block := settlementV2TestBlock
+	fixture.startup.cfg.SettlementV2 = &block
+	fixture.evm.serveSettlementV2(settlementV2TestAnswers(fixture.startup.cfg.Coordinator))
+	fixture.start(t)
+	advance(8)
+	if fixture.evm.settlementV2ReadCount() != 3 {
+		t.Fatal("the adopted runtime did not confirm its block once", fixture.evm.settlementV2ReadCount())
+	}
+	for epoch, finalized := range closed {
+		path, err := ValidatorEvidencePublicationV2ManifestPath(fixture.startup.cfg.StateDir, epoch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifest, err := ReadValidatorEvidencePublicationV2Manifest(t.Context(), path, fixture.startup.cfg.EvidenceV2.Bounds.MaxClosureBytes, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		options := ValidatorEvidencePublicationV2ReadOptions{Origins: fixture.origins, Bounds: fixture.startup.cfg.EvidenceV2.Bounds, Window: protocol.ValidatorEvidenceWindow{Epoch: epoch, StartBlock: 1001 + 500*(epoch-7), EndBlock: 1501 + 500*(epoch-7), FinalizedBlock: finalized}}
+		for _, input := range fixture.startup.inputs {
+			options.Activations = append(options.Activations, input.Context.Activation)
+		}
+		if publication, err := ReadValidatorEvidencePublicationV2(t.Context(), manifest, options); err != nil || len(publication.Members) != 2 {
+			t.Fatalf("epoch %d closed census across adoption: %v", epoch, err)
+		}
 	}
 }

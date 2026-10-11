@@ -97,8 +97,10 @@ func TestProductionStartupRunReleaseInitialDeploymentBecomesReady(t *testing.T) 
 	productionStartupTestInitialDeployment(t, newProductionStartupTestFixture(t))
 }
 
-// VA-9: activation, the closed census publication and readiness run
-// unchanged under a config carrying settlement_v2, after its identity check.
+// VA-9: the signed activation authenticates against the evidence journal and
+// the initial settlement publication reaches readiness unchanged under a
+// production config carrying settlement_v2, after its identity check. The
+// census of a closed epoch is TestSettlementV2ClosedCensusContinuesAcrossAdoption.
 func TestProductionStartupRunReleaseInitialDeploymentWithSettlementV2(t *testing.T) {
 	productionStartupTestInitialDeployment(t, newProductionStartupSettlementV2TestFixture(t))
 }
