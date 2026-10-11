@@ -55,14 +55,19 @@ cd "$evm_repo"
 # STSubnet.sol is the retained pre-1.0 monolith and is not installed by
 # sim-testnet. The coordinator root traverses immutable custody, proxy libraries,
 # and runtime-precompile interfaces. The fleet batcher, disposable precompile
-# probe, hostile governance-drill implementation, and immutable validator
-# evidence journal are separate deployment roots analyzed independently.
+# probe, hostile governance-drill implementation, immutable validator evidence
+# journal, settlement v2 coordinator, and immutable settlement v2 vault are
+# separate deployment roots analyzed independently. The settlement v2 ledger
+# sum tree library is analyzed as a root of its own.
 contracts=(
   src/STCoordinator.sol
   src/STFleetBatcher.sol
   src/STValidatorEvidence.sol
   src/probe/STSubnetProbe.sol
   src/testnet/STCoordinatorAdversary.sol
+  src/LedgerTree.sol
+  src/STSettlement2.sol
+  src/STSettlementVault2.sol
 )
 for contract in "${contracts[@]}"; do
   rm -f -- "$report"
@@ -85,4 +90,14 @@ for contract in "${contracts[@]}"; do
   fi
 done
 
-echo "release Solidity static gate passed for all ${#contracts[@]} deployable roots (Slither 0.11.6; no high/medium findings)"
+# The settlement v2 coordinator is upgradeable, so its storage layout is pinned
+# (VERSION2-FINAL.md §15.4, S-9). The snapshot drops only compiler AST ids.
+# Like Slither, the check compiles in the Slither tree, never the release one.
+if ! FOUNDRY_OUT="$slither_foundry_out" FOUNDRY_CACHE_PATH="$slither_foundry_cache" \
+  forge inspect STSettlement2 storageLayout --json | jq -S 'del(.storage[].astId)' |
+  diff -u layout/STSettlement2.json -; then
+  echo "STSettlement2 storage layout differs from layout/STSettlement2.json" >&2
+  exit 1
+fi
+
+echo "release Solidity static gate passed for all ${#contracts[@]} deployable roots (Slither 0.11.6; no high/medium findings; STSettlement2 storage layout pinned)"
