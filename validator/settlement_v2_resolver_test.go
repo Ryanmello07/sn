@@ -394,8 +394,8 @@ func TestSettlementV2ResolverRefusesUnreadableViews(t *testing.T) {
 	}
 }
 
-// The view reader refuses an unparsable ABI or arguments it cannot encode
-// before any RPC.
+// VA-1: the view reader refuses an unparsable ABI or arguments it cannot
+// encode before any RPC.
 func TestSettlementV2ViewReaderRefusesBadRequest(t *testing.T) {
 	t.Parallel()
 	fixture := newSettlementV2ResolverTestFixture(t)
