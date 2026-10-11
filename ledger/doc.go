@@ -155,4 +155,22 @@
 // accounts, each demand with PreviousAccounts[i] and Previous.Proof(i));
 // ActionRefuse otherwise. A budget too small to read the pending accounts
 // also leads to ActionDemand.
+//
+// # Demands (validator, snclaim)
+//
+// DemandSet selects the §9.3 demand set for ActionDemand from
+// Result.PreviousAccounts and Result.Faults, the doubling count and again,
+// the earlier unanswered indexes. Both come from vault2's events since the
+// latest finalized root was finalized: each earlier pending root over it
+// that was replaced (DistributionCommitted.replacedSeq) or deleted
+// (DistributionDeleted) while a demand was open, PathDemanded without
+// PathAnswered, adds one doubling and its unanswered indexes. The set is
+// every fault's index, every index in again, and a sample of DemandSample
+// (256) << doublings of the remaining accounts, drawn by value without
+// replacement and never more than there are, with randomness read from a
+// CSPRNG after the commit was seen. Each demand pays exactly demandFeeWei
+// and carries PreviousAccounts[i] with Previous.Proof(i) (demandPath
+// proves the account against the finalized root). DemandSet refuses an
+// index outside the previous root (ErrDemandIndex) and returns the random
+// source's error.
 package ledger
