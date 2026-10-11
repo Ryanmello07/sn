@@ -152,10 +152,12 @@ func TestSettlementV2E2ESweepPath(t *testing.T) {
 		t.Fatalf("absorbed surplus %s, want %s", surplus, swept)
 	}
 
-	// The test coordinator upgrade assigns it: only through the owner, and
-	// never more than the surplus.
-	upgrade := f.deploy(f.deployer, e2eForgeArtifact(t, "STSettlement2SurplusUpgrade.sol", "STSettlement2SurplusUpgrade"), nil)
-	upgradeABI := e2eForgeArtifact(t, "STSettlement2SurplusUpgrade.sol", "STSettlement2SurplusUpgrade").abi
+	// The test coordinator upgrade, the I suite's STSettlement2Surplus with
+	// the phase C wrapper, assigns it: only through the owner, and never more
+	// than the surplus.
+	wrapper := e2eForgeArtifact(t, "V2LifecycleHandler.sol", "STSettlement2Surplus")
+	upgrade := f.deploy(f.deployer, wrapper, nil)
+	upgradeABI := wrapper.abi
 	pack := func(method string, args ...any) []byte {
 		data, err := upgradeABI.Pack(method, args...)
 		if err != nil {
