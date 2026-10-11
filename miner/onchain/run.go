@@ -9,10 +9,12 @@
 // always goes to the coldkey committed in the Merkle leaf. Head-tier fleet
 // registration and bindings are `provider fleet` (register_limit on the native
 // chain, then the coordinator's dual-signed fleet bindings); snclaim has no
-// head-binding commands.
+// head-binding commands. `snclaim withdraw --vault v1` retries a coldkey's
+// accepted but unpaid v1 claim credit (VERSION2-FINAL.md §10.2).
 package onchain
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -28,6 +30,7 @@ Usage:
     snclaim submit --calldata=<hex> --contract=<addr> --rpc=<url>... --key_file=<path> [--chain_id=<id>] [--gas_limit=<n>] [--dry-run]
     snclaim submit --epoch=<e> --no_id=<n> --coldkey=<key> --share_bps=<n> --proof=<nodes> --contract=<addr> --rpc=<url>... --key_file=<path> [--chain_id=<id>] [--dry-run]
     snclaim status --epoch=<e> --no_id=<n> [--coldkey=<key>] --contract=<addr> --rpc=<url>...
+    snclaim withdraw --vault=<vault> --coldkey=<key> --contract=<addr> --rpc=<url>... --key_file=<path> [--chain_id=<id>] [--gas_limit=<n>] [--dry-run]
     snclaim -h | --help
     snclaim --version
 
@@ -47,6 +50,9 @@ Options:
     --contract=<addr>  STSettlementVault address (0x...), printed by
                        'provider claim' as 'contract' and served by the
                        operator at GET /sn/epoch as settlement_vault_address.
+    --vault=<vault>    Vault whose claim credit 'withdraw' pays to --coldkey.
+                       Only v1 (the STSettlementVault at --contract) keeps
+                       accepted but unpaid credit.
     --rpc=<url>        EVM JSON-RPC endpoint; repeatable, tried in order
                        until one answers (failover).
     --key_file=<path>  File holding the hex-encoded 32-byte secp256k1 EVM
@@ -79,6 +85,8 @@ func Run(args []string) {
 		cmdErr = cmdSubmit(opts)
 	case boolOpt(opts, "status"):
 		cmdErr = cmdStatus(opts)
+	case boolOpt(opts, "withdraw"):
+		cmdErr = cmdWithdraw(context.Background(), opts)
 	default:
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(64)
