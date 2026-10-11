@@ -56,9 +56,9 @@ cd "$evm_repo"
 # sim-testnet. The coordinator root traverses immutable custody, proxy libraries,
 # and runtime-precompile interfaces. The fleet batcher, disposable precompile
 # probe, hostile governance-drill implementation, immutable validator evidence
-# journal, and settlement v2 coordinator are separate deployment roots analyzed
-# independently. The settlement v2 ledger sum tree library is analyzed as a
-# root of its own.
+# journal, settlement v2 coordinator, and immutable settlement v2 vault are
+# separate deployment roots analyzed independently. The settlement v2 ledger
+# sum tree library is analyzed as a root of its own.
 contracts=(
   src/STCoordinator.sol
   src/STFleetBatcher.sol
@@ -67,6 +67,7 @@ contracts=(
   src/testnet/STCoordinatorAdversary.sol
   src/LedgerTree.sol
   src/STSettlement2.sol
+  src/STSettlementVault2.sol
 )
 for contract in "${contracts[@]}"; do
   rm -f -- "$report"
