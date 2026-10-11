@@ -417,16 +417,16 @@ func readV2History(ctx context.Context, s *v2Sender, noID uint64, state *v2State
 	}
 
 	history := &v2History{demanded: map[uint64]bool{}, ours: map[uint64]bool{}}
-	var gone []uint64
+	gone := map[uint64]bool{}
 	open := map[uint64]map[uint64]bool{}
 	for _, ev := range events {
 		switch ev.name {
 		case "DistributionCommitted":
 			if ev.replacedSeq != 0 {
-				gone = append(gone, ev.replacedSeq)
+				gone[ev.replacedSeq] = true
 			}
 		case "DistributionDeleted":
-			gone = append(gone, ev.seq)
+			gone[ev.seq] = true
 		case "PathDemanded":
 			if open[ev.seq] == nil {
 				open[ev.seq] = map[uint64]bool{}
@@ -442,7 +442,7 @@ func readV2History(ctx context.Context, s *v2Sender, noID uint64, state *v2State
 			delete(open[ev.seq], ev.index)
 		}
 	}
-	for _, seq := range gone {
+	for seq := range gone {
 		if len(open[seq]) > 0 {
 			history.doublings++
 			for index := range open[seq] {
@@ -467,6 +467,8 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, res
 	for _, fault := range res.Faults {
 		forced = append(forced, fault.Index)
 	}
+	slices.Sort(forced)
+	forced = slices.Compact(forced)
 	sampled := 0
 	for index := range history.ours {
 		if !slices.Contains(forced, index) {

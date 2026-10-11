@@ -836,7 +836,9 @@ func TestV2CheckDemandDoubling(t *testing.T) {
 			s.c.committed(150_000, 4, earlier, 3)
 			s.demands(151_000, 4, other, false, 11, 7)
 			s.c.addLog(160_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(11), uint8(2), big.NewInt(0), other))
-		}, 600, []uint64{7, 11}, "demand set: 600 accounts (2 doublings, 3 forced), 0 already demanded\n"},
+			// A repeated log does not count a root twice.
+			s.c.addLog(160_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(11), uint8(2), big.NewInt(0), other))
+		}, 600, []uint64{7, 11}, "demand set: 600 accounts (2 doublings, 2 forced), 0 already demanded\n"},
 		{"answered demands and history before F", func(s *v2SampleScenario) {
 			s.demands(100_000, 1, other, false, 5)
 			s.c.committed(101_000, 6, earlier, 1)
