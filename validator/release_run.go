@@ -1129,8 +1129,8 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	})
 }
 
-func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference) {
-	ctx := context.Background()
+func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference, ledger SettlementV2RuntimeOptions) {
+	ctx := WithSettlementV2RuntimeOptions(context.Background(), ledger)
 	if reference.Path != "" || reference.Sha256 != "" {
 		ctx = durablevolume.WithReference(ctx, reference)
 	}
