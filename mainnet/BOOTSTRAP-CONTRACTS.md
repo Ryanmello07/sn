@@ -841,3 +841,18 @@ sn-mainnet bootstrap-contracts resume --action escrow2-register --config /secure
 Then repeat `apply`, signed-byte import, `resume --online --submit` and
 `resume --online` for `settlement2-create`, `proxy2-create` and `vault2-link`,
 in that order, each after the previous action's completed status.
+
+**Runtime rehearsal (R-1).** The rehearsal drives exactly these commands, in
+the order above, against the runtime-475 node of
+`scripts/runtime-rehearsal/README.md`, with the binary built by
+`go build -o sn-mainnet ./mainnet` and its global `--durable-volumes` and
+`--durable-volumes-sha256` arguments naming the run directory's declaration. Its config
+needs that node's identity: `system_chain`, its genesis hash, EVM chain 964,
+runtime source `d1718c99c34cf96abbf2bf09c0e9e48b945c76f5` with the node's
+runtime version, code hash and metadata hash, a finalized start block, and the
+route `http://127.0.0.1:<port>` with no TLS pin. The phase is pinned to netuid
+25, so the dev chain needs subnet 25, and the initializer's v1 coordinator must
+already have code there. The five journal snapshots are prepared with
+`storage-prepare` as `mainnet-evm-action`. Each action's unsigned transaction
+from `apply` is signed outside the command, and blocks are sealed between a
+send and its completion.
