@@ -192,8 +192,12 @@ contract MockAlpha {
     }
 }
 
-/// @dev Mock of INeuron (0x804).
+/// @dev Mock of INeuron (0x804). registerLimit can be refused, burns from
+///      the registrant's native balance as the runtime burns from its mapped
+///      account, and can call a reentry target before it records anything.
+///      The burn is a cheatcode balance write, which a revert does not undo.
 contract MockNeuron {
+    Vm private constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
     uint256 public registerCount;
     bytes32 public lastHotkey;
     uint16 public lastNetuid;
@@ -203,6 +207,47 @@ contract MockNeuron {
     mapping(uint16 => mapping(bytes32 => address)) public registrants;
     mapping(uint16 => mapping(bytes32 => uint16)) public uids;
     mapping(uint16 => mapping(bytes32 => bool)) public uidExists;
+    bool public failRegistration;
+    uint256 public registrationBurnWei;
+    address public reentryTarget;
+    bytes public reentryData;
+    bool public reentrySucceeded;
+    bytes4 public reentryFailureSelector;
+
+    function setFailRegistration(bool fail) external {
+        failRegistration = fail;
+    }
+
+    function setRegistrationBurn(uint256 burnWei) external {
+        registrationBurnWei = burnWei;
+    }
+
+    function setReentry(address target, bytes calldata data) external {
+        reentryTarget = target;
+        reentryData = data;
+        reentrySucceeded = false;
+        reentryFailureSelector = bytes4(0);
+    }
+
+    function clearReentry() external {
+        delete reentryTarget;
+        delete reentryData;
+        reentrySucceeded = false;
+        reentryFailureSelector = bytes4(0);
+    }
+
+    function _attemptReentry() private {
+        if (reentryTarget == address(0)) return;
+        (bool ok, bytes memory result) = reentryTarget.call(reentryData);
+        reentrySucceeded = ok;
+        if (!ok && result.length >= 4) {
+            bytes4 selector;
+            assembly {
+                selector := mload(add(result, 32))
+            }
+            reentryFailureSelector = selector;
+        }
+    }
 
     function setUid(uint16 netuid, bytes32 hotkey, uint16 uid) external {
         uids[netuid][hotkey] = uid;
@@ -230,6 +275,12 @@ contract MockNeuron {
 
     function registerLimit(uint16 netuid, bytes32 hotkey, uint64 limitPrice) external payable {
         require(address(this) == address(0x804), "runtime453: foreign neuron frame");
+        require(!failRegistration, "mock: registration refused");
+        if (registrationBurnWei != 0) {
+            require(msg.sender.balance >= registrationBurnWei, "mock: burn exceeds balance");
+            VM.deal(msg.sender, msg.sender.balance - registrationBurnWei);
+        }
+        _attemptReentry();
         registerCount++;
         lastNetuid = netuid;
         lastHotkey = hotkey;
