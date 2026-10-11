@@ -34,7 +34,10 @@ import (
 	"github.com/urfoundation/sn/stabi"
 )
 
-const claimV2TestChainID = 945
+const (
+	claimV2TestChainID = 945
+	claimV2TestVault   = "0x00000000000000000000000000000000000a2a2a"
+)
 
 var (
 	claimV2TestColdkey = [32]byte{0xc0, 0x1d, 0x01}
@@ -72,7 +75,8 @@ func claimV2TestRevert(name string) *claimV2TestRPCError {
 
 // One pool of one vault. Every mined block is final at once; the knobs model
 // a lost broadcast, a runtime refusal at preflight or after it, a third
-// party's claim landing first and a lagging nonce view. All fields are
+// party's claim landing first, a lagging nonce view, a failing method, a
+// moved finalized head and a receipt without its event. All fields are
 // guarded by stateLock.
 type claimV2TestChain struct {
 	t               *testing.T
@@ -90,15 +94,22 @@ type claimV2TestChain struct {
 	sendFailures    int
 	revertMined     bool
 	refuseClaims    bool
+	dropLogs        bool
+	estimate        uint64
+	calls           []string
+	accountStatus   int
+	failMethod      string
+	finalized       *uint64
 	beforePreflight func()
 	beforeMine      func()
+	afterView       func()
 	account         func(map[string]any)
 	server          *httptest.Server
 }
 
 func newClaimV2TestChain(t *testing.T) *claimV2TestChain {
 	t.Helper()
-	chain := &claimV2TestChain{t: t, vault: common.HexToAddress("0x00000000000000000000000000000000000a2a2a"), noID: 7, claimed: map[uint64]uint256.Int{}, head: 100, receipts: map[common.Hash]*types.Receipt{}}
+	chain := &claimV2TestChain{t: t, vault: common.HexToAddress(claimV2TestVault), noID: 7, claimed: map[uint64]uint256.Int{}, head: 100, receipts: map[common.Hash]*types.Receipt{}}
 	chain.server = httptest.NewServer(chain)
 	t.Cleanup(chain.server.Close)
 	return chain
@@ -164,6 +175,10 @@ func (self *claimV2TestChain) ServeHTTP(writer http.ResponseWriter, request *htt
 func (self *claimV2TestChain) serveAccounts(writer http.ResponseWriter, request *http.Request) {
 	self.stateLock.Lock()
 	defer self.stateLock.Unlock()
+	if self.accountStatus != 0 {
+		http.Error(writer, "synthetic account refusal", self.accountStatus)
+		return
+	}
 	coldkey := request.URL.Query().Get("coldkey")
 	accounts := []map[string]any{}
 	if last := len(self.trees) - 1; last >= 0 {
@@ -196,6 +211,9 @@ func (self *claimV2TestChain) serveAccounts(writer http.ResponseWriter, request 
 func (self *claimV2TestChain) rpc(method string, params []json.RawMessage) (any, *claimV2TestRPCError) {
 	self.stateLock.Lock()
 	defer self.stateLock.Unlock()
+	if method == self.failMethod {
+		return nil, &claimV2TestRPCError{Code: -32601, Message: "synthetic " + method + " refusal"}
+	}
 	switch method {
 	case "eth_chainId":
 		return hexutil.EncodeUint64(claimV2TestChainID), nil
@@ -212,6 +230,9 @@ func (self *claimV2TestChain) rpc(method string, params []json.RawMessage) (any,
 			self.t.Error(err)
 		}
 		number := self.head
+		if selector == "finalized" && self.finalized != nil {
+			number = *self.finalized
+		}
 		if selector != "finalized" && selector != "latest" {
 			value, err := hexutil.DecodeUint64(selector)
 			if err != nil || value > self.head {
@@ -233,10 +254,11 @@ func (self *claimV2TestChain) rpc(method string, params []json.RawMessage) (any,
 			data = message.Data
 		}
 		if method == "eth_estimateGas" {
+			self.calls = append(self.calls, "estimate")
 			if _, _, err := self.execute(data); err != nil {
 				return nil, err
 			}
-			return "0x30d40", nil
+			return hexutil.EncodeUint64(max(self.estimate, 200_000)), nil
 		}
 		return self.view(data)
 	case "eth_sendRawTransaction":
@@ -278,6 +300,7 @@ func (self *claimV2TestChain) view(data []byte) (any, *claimV2TestRPCError) {
 		claimed := self.claimed[word(1)]
 		out, err = method.Outputs.Pack(claimed.ToBig())
 	case "claim":
+		self.calls = append(self.calls, "preflight")
 		if self.beforePreflight != nil {
 			self.beforePreflight()
 		}
@@ -291,6 +314,9 @@ func (self *claimV2TestChain) view(data []byte) (any, *claimV2TestRPCError) {
 	}
 	if err != nil {
 		self.t.Error(err)
+	}
+	if self.afterView != nil {
+		self.afterView()
 	}
 	return hexutil.Encode(out), nil
 }
@@ -337,7 +363,7 @@ func (self *claimV2TestChain) mine(param json.RawMessage) (any, *claimV2TestRPCE
 	if err != nil {
 		self.t.Error(err)
 	}
-	self.sends = append(self.sends, hexutil.Encode(encoded))
+	self.sends, self.calls = append(self.sends, hexutil.Encode(encoded)), append(self.calls, "send")
 	if self.sendFailures > 0 {
 		self.sendFailures--
 		return nil, &claimV2TestRPCError{Code: -32000, Message: "synthetic send outage"}
@@ -363,7 +389,9 @@ func (self *claimV2TestChain) mine(param json.RawMessage) (any, *claimV2TestRPCE
 	if refusal == nil && !self.revertMined {
 		self.claimed[intent.Account.Index.Uint64()] = *uint256.MustFromBig(intent.Account.Cumulative)
 		receipt.Status = types.ReceiptStatusSuccessful
-		receipt.Logs = append(receipt.Logs, claimV2TestClaimedLog(*tx.To(), intent, amount, from, receipt))
+		if !self.dropLogs {
+			receipt.Logs = append(receipt.Logs, claimV2TestClaimedLog(*tx.To(), intent, amount, from, receipt))
+		}
 	}
 	self.receipts[tx.Hash()] = receipt
 	return tx.Hash().Hex(), nil
@@ -389,7 +417,6 @@ type claimV2TestDaemon struct {
 	ctx      context.Context
 	clock    time.Time
 	key      *ecdsa.PrivateKey
-	path     string
 	strategy *connect.ClientStrategy
 }
 
@@ -441,7 +468,7 @@ func newClaimV2TestDaemon(t *testing.T, chain *claimV2TestChain, threshold uint6
 	}
 	strategy := connect.NewClientStrategy(t.Context(), defaultClaimReadStrategySettings())
 	t.Cleanup(strategy.Close)
-	daemon := &claimV2TestDaemon{t: t, chain: chain, ctx: claimQueueTestContext(t, t.Context(), cfg.StateDir), clock: time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC), key: key, path: path, strategy: strategy}
+	daemon := &claimV2TestDaemon{t: t, chain: chain, ctx: claimQueueTestContext(t, t.Context(), cfg.StateDir), clock: time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC), key: key, strategy: strategy}
 	daemon.open(cfg, &claimAdmission{}, threshold)
 	return daemon
 }
@@ -512,6 +539,16 @@ func (self *claimV2TestDaemon) durable(index uint64) ClaimUnitV2 {
 	return *unit
 }
 
+// A unit of noId 7 in the v2 queue file a running daemon last published.
+func claimV2TestQueued(stateDir string, index uint64) *ClaimUnitV2 {
+	var queue ClaimQueueV2
+	raw, err := os.ReadFile(filepath.Join(stateDir, "claim-queue.json"))
+	if err != nil || json.Unmarshal(raw, &queue) != nil || queue.Schema != ClaimQueueV2Schema {
+		return nil
+	}
+	return queue.Units[claimUnitV2Key(claimV2TestVault, 7, index)]
+}
+
 func claimV2TestNonce(t *testing.T, raw string) uint64 {
 	t.Helper()
 	encoded, err := hexutil.Decode(raw)
@@ -525,14 +562,19 @@ func claimV2TestNonce(t *testing.T, raw string) uint64 {
 // Signs a claim of the account's current proof as the relayer would.
 func (self *claimV2TestDaemon) sign(account *claimAccountV2, nonce uint64) (string, string) {
 	self.t.Helper()
-	vault := common.HexToAddress(self.cfg.Vault)
-	tx, err := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: nonce, GasPrice: big.NewInt(1), Gas: 240_000, To: &vault, Value: big.NewInt(0), Data: claimV2Calldata(account)}), types.LatestSignerForChainID(big.NewInt(claimV2TestChainID)), self.key)
+	return claimV2TestSign(self.t, self.key, claimV2TestChainID, common.HexToAddress(self.cfg.Vault), 0, nonce, claimV2Calldata(account))
+}
+
+// Any legacy transaction, signed as the relayer signs its claims.
+func claimV2TestSign(t *testing.T, key *ecdsa.PrivateKey, chainID int64, to common.Address, value int64, nonce uint64, data []byte) (string, string) {
+	t.Helper()
+	tx, err := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: nonce, GasPrice: big.NewInt(1), Gas: 240_000, To: &to, Value: big.NewInt(value), Data: data}), types.LatestSignerForChainID(big.NewInt(chainID)), key)
 	if err != nil {
-		self.t.Fatal(err)
+		t.Fatal(err)
 	}
 	raw, err := tx.MarshalBinary()
 	if err != nil {
-		self.t.Fatal(err)
+		t.Fatal(err)
 	}
 	return strings.ToLower(tx.Hash().Hex()), hexutil.Encode(raw)
 }

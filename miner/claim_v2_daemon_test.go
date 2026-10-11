@@ -223,16 +223,12 @@ func TestClaimV2RunsBesideV1(t *testing.T) {
 	if err := os.WriteFile(v1Path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	read := func(dir string, value any) bool {
-		raw, err := os.ReadFile(filepath.Join(dir, "claim-queue.json"))
-		return err == nil && json.Unmarshal(raw, value) == nil
-	}
 	done := make(chan error, 1)
 	go func() { done <- RunClaimDaemonV2(ctx, v2Path, v1Path, ClaimV2DefaultThresholdRao, false) }()
 	var v1Queue ClaimQueue
-	var v2Queue ClaimQueueV2
 	for {
-		if read(v1.StateDir, &v1Queue) && v1Queue.Entries["70"].Status == "finalized" && read(v2Dir, &v2Queue) && v2Queue.Units[claimUnitV2Key(strings.ToLower(chain.vault.Hex()), chain.noID, 1)].Status == "idle" {
+		raw, err := os.ReadFile(filepath.Join(v1.StateDir, "claim-queue.json"))
+		if unit := claimV2TestQueued(v2Dir, 1); err == nil && json.Unmarshal(raw, &v1Queue) == nil && v1Queue.Entries["70"].Status == "finalized" && unit != nil && unit.Status == "idle" {
 			break
 		}
 		if ctx.Err() != nil {
@@ -244,9 +240,8 @@ func TestClaimV2RunsBesideV1(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	sends := chain.sent()
-	unit := v2Queue.Units[claimUnitV2Key(strings.ToLower(chain.vault.Hex()), chain.noID, 1)]
-	if len(sends) != 1 || claimV2TestNonce(t, sends[0]) != 24 || unit.Claimed != claimV2TestDec(5) || v2Queue.Schema != ClaimQueueV2Schema {
+	sends, unit := chain.sent(), claimV2TestQueued(v2Dir, 1)
+	if len(sends) != 1 || claimV2TestNonce(t, sends[0]) != 24 || unit.Claimed != claimV2TestDec(5) {
 		t.Fatalf("v2 beside v1: sends=%d unit=%+v", len(sends), unit)
 	}
 	if entry := v1Queue.Entries["70"]; v1Queue.Schema != "urnetwork-provider-claim-queue-v1" || entry.TxHash != signed.TxHash || entry.RawTxHex != signed.RawTxHex {

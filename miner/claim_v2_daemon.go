@@ -35,9 +35,11 @@ import (
 )
 
 const (
-	// §3 planning figures: at 250k gas, a 5 gwei base fee and 0.006587 TAO/α a
-	// claim costs about 0.19 α, so a 1.9 α threshold keeps gas at most 10% of a
-	// claim. R-6's measured claim gas replaces the 250k planning figure.
+	// §3 planning figures: a claim that uses 250k gas at a 5 gwei base fee and
+	// 0.006587 TAO/α costs about 0.19 α, so a 1.9 α threshold keeps gas at most
+	// 10% of a claim. The cost is gas used; the much higher limit the staking
+	// precompile needs comes from eth_estimateGas after the preflight and
+	// never sets the threshold. R-6's measured gas replaces the 250k figure.
 	ClaimV2DefaultThresholdRao uint64 = 1_900_000_000
 	// The runtime refuses a transfer below 100,000 rao of TAO, about 0.0152 α
 	// at the planning price (§3). A lower threshold only sends doomed claims.
@@ -144,7 +146,9 @@ func (self *claimDaemonV2) stamp() string { return self.now().UTC().Format(time.
 
 func (self *claimDaemonV2) observe(snapshot map[string]*claimAccountV2, demand bool) error {
 	self.accounts = snapshot
-	self.queue.merge(snapshot, self.threshold, demand, self.stamp())
+	if !self.queue.merge(snapshot, self.threshold, demand, self.stamp()) {
+		return nil
+	}
 	return self.store.save(self.queue)
 }
 

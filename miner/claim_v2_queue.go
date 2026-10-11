@@ -4,7 +4,6 @@
 package miner
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -66,21 +65,23 @@ func claimV2Due(cumulative, claimed, threshold *uint256.Int, demand bool) bool {
 // Discovery only opens a unit from the endpoint's figures; only a verified
 // finalized read closes one, so a stale or false figure cannot skip a claim.
 // A demand marks every unit with anything claimable until it is idle again.
-func (self *ClaimQueueV2) merge(accounts map[string]*claimAccountV2, threshold *uint256.Int, demand bool, now string) {
+// Reports whether the queue changed.
+func (self *ClaimQueueV2) merge(accounts map[string]*claimAccountV2, threshold *uint256.Int, demand bool, now string) bool {
+	changed := false
 	for key, account := range accounts {
 		unit := self.Units[key]
 		if unit == nil {
-			unit = &ClaimUnitV2{Vault: account.Vault, NoID: account.NoID, Index: account.Index, Status: "idle", Cumulative: "0", Claimed: "0", UpdatedAt: now}
-			self.Units[key] = unit
+			unit = &ClaimUnitV2{Vault: account.Vault, NoID: account.NoID, Index: account.Index, Coldkey: "0x" + hex.EncodeToString(account.Coldkey[:]), Status: "idle", Cumulative: "0", Claimed: "0", UpdatedAt: now}
+			self.Units[key], changed = unit, true
 		}
-		unit.Coldkey = "0x" + hex.EncodeToString(account.Coldkey[:])
-		if demand && claimV2Due(&account.Cumulative, &account.Claimed, threshold, true) {
-			unit.Demand = true
+		if demand && !unit.Demand && claimV2Due(&account.Cumulative, &account.Claimed, threshold, true) {
+			unit.Demand, changed = true, true
 		}
 		if unit.Status == "idle" && claimV2Due(&account.Cumulative, &account.Claimed, threshold, unit.Demand) {
-			unit.Status, unit.UpdatedAt = "open", now
+			unit.Status, unit.UpdatedAt, changed = "open", now, true
 		}
 	}
+	return changed
 }
 
 // Units past their retry deadline, oldest deadline first so that a unit that
@@ -153,7 +154,8 @@ func (self *claimQueueV2Store) load() (*ClaimQueueV2, error) {
 	return &queue, nil
 }
 
-// Unchanged bytes are compared only after physical head admission, as in v1.
+// Write admission gates every publication, as in v1. An uncertain one refuses
+// later saves until a new owner reconciles it.
 func (self *claimQueueV2Store) save(queue *ClaimQueueV2) error {
 	owner := self.owner
 	if err := owner.requireWrite(owner.ctx); err != nil {
@@ -163,23 +165,9 @@ func (self *claimQueueV2Store) save(queue *ClaimQueueV2) error {
 	if err != nil {
 		return err
 	}
-	raw = append(raw, '\n')
-	prior, present, err := owner.head.Read()
-	if err != nil {
-		return err
-	}
-	if present && bytes.Equal(prior, raw) {
-		return nil
-	}
-	if err := owner.head.Publish(raw, owner.afterSync); err != nil {
-		owner.uncertain = errors.Is(err, durablehead.ErrUncertain)
-		return err
-	}
-	if err := owner.requireWrite(owner.ctx); err != nil {
-		owner.uncertain = true
-		return errors.Join(durablehead.ErrUncertain, err)
-	}
-	return nil
+	err = owner.head.Publish(append(raw, '\n'), owner.afterSync)
+	owner.uncertain = errors.Is(err, durablehead.ErrUncertain)
+	return err
 }
 
 // A physical writer alone cannot authorize unrelated bytes: the exact signed
