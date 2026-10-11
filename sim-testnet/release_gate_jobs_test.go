@@ -317,6 +317,21 @@ release_gate_complete
 	self.join(t, 0)
 }
 
+// Portable-mode fixtures, the settlement v2 claim daemon's among them, need
+// every phase at umask 022, whether the gate itself runs at a shared-group
+// 0002 or a private 077.
+func TestReleaseGateJobsRunEveryPhaseAtUmask022(t *testing.T) {
+	self := newReleaseGateJobsFixture(t, `
+phase_mask() { [[ "$(umask)" == 0022 ]]; }
+umask 0002
+release_gate_start shared-group phase_mask
+umask 0077
+release_gate_start private phase_mask
+release_gate_complete
+`)
+	self.join(t, 0)
+}
+
 func TestReleaseGateJobsTwoForegroundOwnersHaveDisjointMutableRoots(t *testing.T) {
 	body := `
 phase_hold() { printf '%s\n' "$release_gate_root" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; }

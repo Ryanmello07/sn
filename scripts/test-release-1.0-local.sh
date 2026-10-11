@@ -166,6 +166,22 @@ release_gate_start sn-simulator-supplements-race release_phase_sn_simulator_supp
 release_gate_start sn-simulator-final-race release_phase_sn_simulator_final_race
 release_gate_start sn-simulator-history-race release_phase_sn_simulator_history_race
 
+# GL-10 (VERSION2-FINAL.md §15): the scale-tagged tests, which ./... never
+# compiles, build and verify ledgers of a million providers, assert the commit
+# and challenge windows' budgets, and log time, peak memory and bytes fetched.
+# On 2026-10-11 the package took 170 seconds on four CPUs and peaked at 2.7 GiB.
+# The runtime rehearsal (activation gate 2, runtime_rehearsal tag) needs a node
+# built from runtime 475's source, so it runs beside this gate, on the same
+# checkout (scripts/runtime-rehearsal/README.md):
+#   scripts/runtime-rehearsal/build.sh /path/to/subtensor-checkout
+#   RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
+#     go test -tags runtime_rehearsal ./rehearsal/ -v -timeout 60m
+release_phase_sn_scale() {
+  cd "$sn_repo"
+  go test -tags scale -v -timeout 90m ./ledger -count=1
+}
+release_gate_start sn-scale release_phase_sn_scale
+
 echo "[release-1.0] deployable Solidity static analysis"
 release_phase_solidity_static() {
   "$sn_repo/scripts/test-solidity-static.sh"
@@ -189,8 +205,32 @@ release_phase_solidity() {
   go run ./sim-testnet/gencontracts --check "$FOUNDRY_OUT" sim-testnet/contracts_gen.go
   echo "[release-1.0] generated ABI and Go binding freshness"
   "$sn_repo/stabi/generate.sh" --check --artifacts "$FOUNDRY_OUT"
+
+  # I-1 to I-6 (VERSION2-FINAL.md §15.5): the plain suite above ran the
+  # settlement v2 lifecycle campaign short; its own profile runs it deep, with
+  # metrics, on the same build.
+  echo "[release-1.0] settlement v2 lifecycle invariants, deep campaign"
+  cd "$sn_repo/evm"
+  FOUNDRY_PROFILE=v2_invariant forge test --match-path test/V2Invariant.t.sol
 }
 release_gate_start solidity release_phase_solidity
+
+echo "[release-1.0] settlement v2 Solidity coverage"
+# Activation gate 1 (VERSION2-FINAL.md §14, §15) pins this coverage command:
+# the default mode stops on a stack-too-deep in STCoordinator and
+# --ir-minimum fails on the v1 evidence library. Its build stays in this job's
+# private directory; contract sizes come from the release build above. Forge
+# writes the report even when a test fails, so the settlement v2 bar is checked
+# either way, and a failing test still fails this phase.
+release_phase_solidity_coverage() {
+  cd "$sn_repo/evm"
+  coverage_status=0
+  FOUNDRY_OUT="$TMPDIR/coverage-out" FOUNDRY_CACHE_PATH="$TMPDIR/coverage-cache" forge coverage --ir-minimum --report lcov --skip STValidatorEvidence.sol --skip ValidatorEvidenceStorage.t.sol --skip ValidatorEvidenceActivation.t.sol --report-file "$TMPDIR/lcov.info" || coverage_status=$?
+  cd "$sn_repo"
+  go run ./scripts/solidity-coverage evm "$TMPDIR/lcov.info"
+  return "$coverage_status"
+}
+release_gate_start solidity-coverage release_phase_solidity_coverage
 
 echo "[release-1.0] operator pure/unit suites"
 release_phase_server_unit() {
@@ -399,6 +439,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race ./connect -run '^TestConnectionVerifyEgressUsesControllerHashNamespace$' -count=1
     go test . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
     go test -race . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
+    # Settlement v2 (VERSION2-FINAL.md §8, §15.7): config, migration 814, the
+    # mirror, records, objects and the epoch driver, most of them on this
+    # gate's private services.
+    ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2)'
+    go test . ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    go test -race . ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
     # Run the complete operator proxy surface. Its real network/DB roots have a
     # measured lower bound above Go's implicit ten-minute package deadline, so
     # the explicit deadline supplies deterministic headroom without changing
