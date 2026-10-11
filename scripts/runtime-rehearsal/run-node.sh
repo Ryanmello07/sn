@@ -3,7 +3,11 @@
 # node that build.sh produced: the `dev` chain spec (one authority, Alice as
 # sudo, the dev accounts funded), blocks sealed on demand by
 # engine_createBlock and finalized at once, the EVM chain ID set to mainnet's
-# 964 and contract creation open to every account.
+# 964 and contract creation open to every account. The node takes no peers:
+# rehearsal chains share a genesis, and two of them on one host would
+# otherwise find each other and exchange transactions. The single-state
+# transaction pool validates each submission against the newest block; the
+# fork-aware pool can still validate it against the block before.
 #
 # RUNTIME_REHEARSAL_NODE names the node binary. Optional:
 # RUNTIME_REHEARSAL_BASE_PATH (default a new temporary directory),
@@ -33,6 +37,7 @@ echo "rehearsal chain: base path $base_path, RPC ws://127.0.0.1:$rpc_port and ht
 exec "$node" --chain "$spec" --base-path "$base_path" --validator --unsafe-force-node-key-generation \
   --sealing "$sealing" \
   --rpc-port "$rpc_port" --rpc-methods unsafe --rpc-cors all \
-  --listen-addr "/ip4/127.0.0.1/tcp/$p2p_port" \
-  --state-pruning archive --blocks-pruning archive \
+  --listen-addr "/ip4/127.0.0.1/tcp/$p2p_port" --no-mdns --reserved-only --in-peers 0 --out-peers 0 \
+  --state-pruning archive --blocks-pruning archive --offchain-worker never \
+  --pool-type single-state --tx-ban-seconds 0 \
   --no-prometheus --no-telemetry

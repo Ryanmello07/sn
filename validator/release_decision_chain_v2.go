@@ -37,6 +37,8 @@ type releaseDecisionChainV2Query struct {
 	maxOperators    uint64
 	maxProviders    uint64
 	maxControlBytes uint64
+	// The settlement v2 contracts of the decision's configuration (§9.1).
+	settlementV2 SettlementV2Addresses
 }
 
 // Uint256 values retain exact owned integers; no float or candidate audit is
@@ -407,12 +409,16 @@ func (self *ChainClient) readOwnedReleaseDecisionChainV2Context(ctx context.Cont
 		}
 		observed.operators[index] = releaseDecisionChainV2Operator{noID: operator.noID, version: version, deposit: deposit, convictionAdded: added, conviction: conviction, convictionBefore: before}
 		if version.Active {
-			uid, found := observed.hotkeyUIDs[version.PoolHotkey]
+			poolHotkey, err := chain.releasePoolHotkeyContext(ctx, query.settlementV2, finalized, finalizedHash, block, hash, operator.noID, query.boundary.SettlementEpoch, version.PoolHotkey)
+			if err != nil {
+				return nil, err
+			}
+			uid, found := observed.hotkeyUIDs[poolHotkey]
 			if !found || poolUIDs[uid] || version.Coldkey == ([32]byte{}) || version.DepositHotkey == ([32]byte{}) || version.DepositSigner == (common.Address{}) || version.RootSigner == (common.Address{}) {
 				return nil, errors.New("decision active operator identity or unique pool UID is absent")
 			}
 			poolUIDs[uid] = true
-			observed.pools = append(observed.pools, ReleasePoolMeasurement{NoID: operator.noID, UID: uid, PoolHotkey: releaseHex32(version.PoolHotkey)})
+			observed.pools = append(observed.pools, ReleasePoolMeasurement{NoID: operator.noID, UID: uid, PoolHotkey: releaseHex32(poolHotkey)})
 		}
 		ids := make([][16]byte, len(operator.providerIDs))
 		for index, id := range operator.providerIDs {
