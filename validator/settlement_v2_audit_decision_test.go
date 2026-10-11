@@ -7,6 +7,7 @@
 package validator
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"math/big"
@@ -15,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -380,21 +382,62 @@ func TestSettlementV2AuditSendOutcomes(t *testing.T) {
 }
 
 // VA-4: without --ledger_auditor_key_file the audit decides and records,
-// sends nothing and stays undone; a validator restarted with the key sends
-// the recorded decision.
+// sends nothing, stays undone and audits a decided root no more; a validator
+// restarted with the key sends the recorded decision.
 func TestSettlementV2AuditWithoutAuditorKey(t *testing.T) {
 	t.Parallel()
 	fixture := newSettlementV2AuditTestFixture(t)
 	f := settlementV2AuditTestF(t)
 	p := settlementV2AuditTestP(t, f)
-	fixture.useScenario(t, f, p.Commit, p.Objects, true, 610)
+	fixture.useScenario(t, f, p.Commit, ledger.Objects{}, true, 630)
 	fixture.audit.sender = nil
 	fixture.mustPass(t)
-	if record := fixture.record(t, 2); record.Decision != settlementV2DecisionApprove || record.Done || len(fixture.chain.accepted()) != 0 {
+	if record := fixture.record(t, 2); record.Decision != settlementV2DecisionDemand || record.Done || len(fixture.chain.accepted()) != 0 {
 		t.Fatalf("record %+v", record)
+	}
+	fetched := fixture.objects.fetched()
+	fixture.mustPass(t)
+	if fixture.objects.fetched() != fetched {
+		t.Fatal("a decided root was audited again")
 	}
 	fixture.restart(t)
 	fixture.mustPass(t)
+	calls := fixture.sentCalls(t)
+	if len(calls) != 4 {
+		t.Fatalf("%d demands sent", len(calls))
+	}
+	for k, call := range calls {
+		requireSettlementV2AuditOpening(t, call, f, 0, uint64(k))
+	}
+}
+
+// VA-3: through the validator's audit worker: the loop's first pass
+// approves the pending root before its deadline, and the worker stops with
+// its context.
+func TestSettlementV2AuditLoopApproves(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f := settlementV2AuditTestF(t)
+	p := settlementV2AuditTestP(t, f)
+	fixture.useScenario(t, f, p.Commit, p.Objects, true, 610)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- fixture.audit.worker()(ctx) }()
+	path := fixture.audit.custody.path("audits", "1-2.json")
+	for deadline := time.Now().Add(time.Minute); ; time.Sleep(10 * time.Millisecond) {
+		var record settlementV2AuditRecord
+		if ok, _ := fixture.audit.custody.readJSON(path, &record); ok && record.Done {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the worker did not approve")
+		}
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("the worker ended with %v", err)
+	}
 	fixture.requireApproved(t, fixture.sentCalls(t), 2, p.Commit)
 }
 

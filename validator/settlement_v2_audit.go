@@ -201,7 +201,8 @@ func (self *settlementV2Audit) audit(ctx context.Context, pool settlementV2Audit
 		return nil
 	}
 	record, err := self.custody.auditRecord(state.noID, state.pending)
-	if err != nil || record.Done {
+	// Without an auditor key a decision is final as recorded.
+	if err != nil || record.Done || record.Decision != "" && self.sender == nil {
 		return err
 	}
 	var res *ledger.Result
