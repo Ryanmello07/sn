@@ -224,6 +224,7 @@ func releaseGateMigrationSuffixGroup(t *testing.T) releaseEvidenceV2GateGroup {
 	}
 }
 
+// GL-10: the scale shard runs every package of the census.
 func TestReleaseGateSettlementV2RunsEveryScalePackage(t *testing.T) {
 	t.Parallel()
 	packages, err := releaseGateScalePackages("..")
@@ -238,9 +239,9 @@ func TestReleaseGateSettlementV2RunsEveryScalePackage(t *testing.T) {
 	}
 }
 
-// The census reads build constraints as go does: a file every build includes
-// or excludes is not scale-tagged, and testdata, hidden and underscore
-// directories and nested modules are not packages of this module.
+// GL-10: the census reads build constraints as go does: a file every build
+// includes or excludes is not scale-tagged, and testdata, hidden and
+// underscore directories and nested modules are not packages of this module.
 func TestReleaseGateSettlementV2ScaleCensusFollowsBuildConstraints(t *testing.T) {
 	t.Parallel()
 	foreign := "windows"
@@ -281,8 +282,9 @@ func TestReleaseGateSettlementV2ScaleCensusFollowsBuildConstraints(t *testing.T)
 	}
 }
 
-// Each loss of the tag, the log, the deadline, an uncached run, a package or
-// the one unconditional admission fails, as does a tagged command elsewhere.
+// GL-10: each loss of the tag, the log, the deadline, an uncached run, a
+// package or the one unconditional admission fails, as does a tagged command
+// elsewhere.
 func TestReleaseGateSettlementV2ScaleShardRejectsDrift(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
@@ -327,6 +329,7 @@ func TestReleaseGateSettlementV2ScaleShardRejectsDrift(t *testing.T) {
 	}
 }
 
+// Gate 1 (§15 coverage): the coverage phase runs as pinned.
 func TestReleaseGateSettlementV2ChecksTheSolidityCoverageBar(t *testing.T) {
 	t.Parallel()
 	if err := verifyReleaseGateSolidityCoverage(readReleaseGateLocalScript(t)); err != nil {
@@ -334,8 +337,8 @@ func TestReleaseGateSettlementV2ChecksTheSolidityCoverageBar(t *testing.T) {
 	}
 }
 
-// Each change to the pinned command, its private build, the bar's input, the
-// returned status or the admission fails.
+// Gate 1 (§15 coverage): each change to the pinned command, its private build,
+// the bar's input, the returned status or the admission fails.
 func TestReleaseGateSettlementV2CoverageRejectsDrift(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
@@ -380,6 +383,7 @@ func readReleaseGateInvariantSources(t *testing.T) (string, string) {
 	return string(foundry), string(invariant)
 }
 
+// I-1 to I-6: the Solidity phase runs the deep campaign.
 func TestReleaseGateSettlementV2RunsTheDeepInvariantCampaign(t *testing.T) {
 	t.Parallel()
 	foundry, invariant := readReleaseGateInvariantSources(t)
@@ -388,9 +392,9 @@ func TestReleaseGateSettlementV2RunsTheDeepInvariantCampaign(t *testing.T) {
 	}
 }
 
-// A missing profile or campaign size, a profile name Foundry's inline config
-// ignores, a wider or masked run, a second or misplaced run, or a commented
-// one fails.
+// I-1 to I-6: a missing profile or campaign size, a profile name Foundry's
+// inline config ignores, a wider or masked run, a second or misplaced run, or a
+// commented one fails.
 func TestReleaseGateSettlementV2InvariantCampaignRejectsDrift(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
@@ -434,6 +438,7 @@ func TestReleaseGateSettlementV2InvariantCampaignRejectsDrift(t *testing.T) {
 	}
 }
 
+// SV-1 to SV-8 and migration 814: the database phase runs both groups.
 func TestReleaseGateSettlementV2RunsTheOperatorSuites(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
@@ -444,8 +449,9 @@ func TestReleaseGateSettlementV2RunsTheOperatorSuites(t *testing.T) {
 	}
 }
 
-// Removing a family, a mode or the admitted phase fails, as does a root of a
-// v2 or suffix contract test file that escapes its selector.
+// SV-1 to SV-8 and migration 814: removing a family, a mode or the admitted
+// phase fails, as does a root of a v2 or suffix contract test file that escapes
+// its selector.
 func TestReleaseGateSettlementV2OperatorSuitesRejectOmissions(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
