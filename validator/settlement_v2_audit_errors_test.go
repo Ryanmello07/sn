@@ -449,6 +449,79 @@ func TestSettlementV2AuditRunReportsAndContinues(t *testing.T) {
 	}
 }
 
+// settlementV2AuditTestLines delivers each diagnostic record as written.
+type settlementV2AuditTestLines chan string
+
+func (self settlementV2AuditTestLines) Write(raw []byte) (int, error) {
+	return self.WriteContext(context.Background(), raw)
+}
+
+func (self settlementV2AuditTestLines) WriteContext(ctx context.Context, raw []byte) (int, error) {
+	select {
+	case self <- string(raw):
+		return len(raw), nil
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+}
+
+// VA-6, VA-9: the audit runs no pass before the chain confirms the
+// configured contracts. A failed confirmation is reported and reads no pool;
+// once confirmed, the audit never confirms again.
+func TestSettlementV2AuditConfirmsContractsFirst(t *testing.T) {
+	t.Parallel()
+	lines := make(settlementV2AuditTestLines, 8)
+	ctx, owner, err := newReleaseDiagnostics(t.Context(), lines, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	reader := &settlementV2AuditTestReader{seen: make(chan uint64, 4)}
+	audit := newSettlementV2Audit(reader, newSettlementV2CustodyTest(t), nil, []settlementV2AuditPool{{noID: 2}}, DefaultLedgerMaxBytes)
+	refused := errors.New("synthetic identity mismatch")
+	audit.confirm = func(context.Context) error { return refused }
+	done := make(chan error, 1)
+	go func() { done <- audit.run(ctx) }()
+	select {
+	case line := <-lines:
+		if !strings.Contains(line, "domain=runtime code=ledger_audit_retrying") || !strings.Contains(line, "operator_known=false") {
+			t.Fatalf("diagnostic %q", line)
+		}
+	case <-time.After(time.Minute):
+		t.Fatal("a failed confirmation was not reported")
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("run ended with %v", err)
+	}
+	if err := owner.close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case noID := <-reader.seen:
+		t.Fatalf("pool %d was audited before the contracts were confirmed", noID)
+	default:
+	}
+	calls := 0
+	audit.confirm = func(context.Context) error {
+		if calls++; calls == 1 {
+			return refused
+		}
+		return nil
+	}
+	if err := audit.confirmed(t.Context()); !errors.Is(err, refused) || audit.confirm == nil {
+		t.Fatalf("a refused confirmation: %v", err)
+	}
+	for range 2 {
+		if err := audit.confirmed(t.Context()); err != nil || audit.confirm != nil {
+			t.Fatalf("a confirmed audit: %v", err)
+		}
+	}
+	if calls != 2 {
+		t.Fatalf("confirmed %d times", calls)
+	}
+}
+
 // The ledger audit runs as a runtime worker beside steering and is joined on
 // shutdown; a validator without the settlement_v2 block builds none.
 func TestReleaseRuntimeRunsLedgerAudit(t *testing.T) {

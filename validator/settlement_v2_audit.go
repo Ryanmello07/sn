@@ -132,6 +132,9 @@ type settlementV2Audit struct {
 	maxBytes uint64
 	// random is crypto/rand.Reader; tests fix it.
 	random io.Reader
+	// confirm has the chain confirm the configured contracts (§13); the audit
+	// runs no pass before it succeeds once. Nil once confirmed.
+	confirm func(context.Context) error
 }
 
 func newSettlementV2Audit(reader settlementV2AuditReader, custody *settlementV2Custody, sender settlementV2AuditSender, pools []settlementV2AuditPool, maxBytes uint64) *settlementV2Audit {
@@ -178,19 +181,39 @@ func (self *settlementV2Audit) worker() func(context.Context) error {
 	return self.run
 }
 
-// run audits every pool, then waits an interval, until ctx ends. A pool's
+// run audits every pool once the configured contracts are confirmed, then
+// waits an interval, until ctx ends. A failed confirmation or a pool's
 // failure is reported and retried at the next pass.
 func (self *settlementV2Audit) run(ctx context.Context) error {
 	for {
-		for _, pool := range self.pools {
-			if err := self.audit(ctx, pool); err != nil && ctx.Err() == nil {
-				releaseDiagnostic(ctx, "operator", "ledger_audit_retrying", 0, false, 0, releaseDiagnosticFacts{cause: releaseDiagnosticReadCause(err), operatorId: pool.noID, operatorKnown: true})
+		if err := self.confirmed(ctx); err != nil {
+			if ctx.Err() == nil {
+				releaseDiagnostic(ctx, "runtime", "ledger_audit_retrying", 0, false, 0, releaseDiagnosticFacts{cause: releaseDiagnosticReadCause(err)})
+			}
+		} else {
+			for _, pool := range self.pools {
+				if err := self.audit(ctx, pool); err != nil && ctx.Err() == nil {
+					releaseDiagnostic(ctx, "operator", "ledger_audit_retrying", 0, false, 0, releaseDiagnosticFacts{cause: releaseDiagnosticReadCause(err), operatorId: pool.noID, operatorKnown: true})
+				}
 			}
 		}
 		if err := waitReleaseSnapshotRetry(ctx, settlementV2AuditInterval); err != nil {
 			return err
 		}
 	}
+}
+
+// confirmed runs confirm until it succeeds once, so the audit never reads or
+// sends to a contract the chain has not confirmed.
+func (self *settlementV2Audit) confirmed(ctx context.Context) error {
+	if self.confirm == nil {
+		return nil
+	}
+	if err := self.confirm(ctx); err != nil {
+		return err
+	}
+	self.confirm = nil
+	return nil
 }
 
 // audit takes one step on the pool's pending root: it audits the root until
