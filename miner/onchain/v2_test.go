@@ -83,7 +83,7 @@ type v2TestChain struct {
 	pending  stabi.ISTSettlementVault2Pending
 	funded   map[uint64]*big.Int
 	claimed  map[[2]uint64]*big.Int // by pool and index
-	demanded map[[2]uint64]uint8    // by seq and index
+	demanded map[[3]uint64]uint8    // by seq, root and index
 	fee      *big.Int
 	logs     []types.Log
 	sent     []*types.Transaction
@@ -118,7 +118,7 @@ func newV2TestChain(t *testing.T) *v2TestChain {
 		pool:     stabi.ISTSettlementVault2Pool{Hotkey: [32]byte{0x77}, FirstEpoch: 10, Registered: true},
 		funded:   map[uint64]*big.Int{},
 		claimed:  map[[2]uint64]*big.Int{},
-		demanded: map[[2]uint64]uint8{},
+		demanded: map[[3]uint64]uint8{},
 		fee:      big.NewInt(v2TestFee),
 		receipts: map[common.Hash]*types.Receipt{},
 		accounts: map[string]string{},
@@ -376,7 +376,7 @@ func (c *v2TestChain) execute(from common.Address, value *big.Int, input []byte,
 		}
 		return pack(claimed), nil, nil
 	case "demanded":
-		return pack(c.demanded[[2]uint64{args[1].(uint64), args[2].(*big.Int).Uint64()}]), nil, nil
+		return pack(c.demanded[[3]uint64{args[1].(uint64), args[2].(*big.Int).Uint64(), args[3].(*big.Int).Uint64()}]), nil, nil
 	case "demandFeeWei":
 		return pack(c.fee), nil, nil
 	case "claim":
@@ -387,14 +387,14 @@ func (c *v2TestChain) execute(from common.Address, value *big.Int, input []byte,
 		}
 		return c.claim(from, args[1].(*big.Int), account, proof, commit, pack)
 	case "checkPath":
-		account := *abi.ConvertType(args[1], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
-		proof := *abi.ConvertType(args[2], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
-		path := *abi.ConvertType(args[3], new([]stabi.LedgerTreePathNode)).(*[]stabi.LedgerTreePathNode)
-		return c.checkPath(from, account, proof, path, commit, pack)
+		account := *abi.ConvertType(args[2], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
+		proof := *abi.ConvertType(args[3], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
+		path := *abi.ConvertType(args[4], new([]stabi.LedgerTreePathNode)).(*[]stabi.LedgerTreePathNode)
+		return c.checkPath(from, args[1].(*big.Int), account, proof, path, commit, pack)
 	case "demandPath":
-		account := *abi.ConvertType(args[1], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
-		proof := *abi.ConvertType(args[2], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
-		return c.demandPath(from, value, account, proof, commit)
+		account := *abi.ConvertType(args[2], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
+		proof := *abi.ConvertType(args[3], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
+		return c.demandPath(from, value, args[1].(*big.Int), account, proof, commit)
 	}
 	c.t.Errorf("unexpected vault2 call %s", method.Name)
 	return nil, nil, v2TestError("Unknown")
@@ -436,17 +436,32 @@ func (c *v2TestChain) claim(from common.Address, rootIndex *big.Int, account sta
 	return pack(amount), []*types.Log{log}, nil
 }
 
-func (c *v2TestChain) checkPath(from common.Address, account stabi.LedgerTreeAccount, proof []stabi.LedgerTreeProofNode, path []stabi.LedgerTreePathNode, commit bool, pack func(...any) []byte) ([]byte, []*types.Log, []byte) {
+// disputed is vault2's _disputedRoots and _requireProven: a pending root,
+// a finalized root rootIndex, and the account proven against it.
+func (c *v2TestChain) disputed(rootIndex *big.Int, account stabi.LedgerTreeAccount, proof []stabi.LedgerTreeProofNode, window bool) []byte {
 	if c.pending.Seq == 0 {
-		return nil, nil, v2TestError("NoPendingRoot")
+		return v2TestError("NoPendingRoot")
 	}
 	if len(c.roots) == 0 {
-		return nil, nil, v2TestError("NoFinalizedRoot")
+		return v2TestError("NoFinalizedRoot")
 	}
-	if previous := c.roots[len(c.roots)-1]; !account.Index.IsUint64() || account.Index.Uint64() >= previous.LeafCount {
-		return nil, nil, v2TestError("IndexOutOfRange")
-	} else if !v2TestVerify(previous, account, proof) {
-		return nil, nil, v2TestError("InvalidProof")
+	if !rootIndex.IsUint64() || rootIndex.Uint64() >= uint64(len(c.roots)) {
+		return v2TestError("UnknownRoot")
+	}
+	if window && v2TestHead >= c.pending.CommittedBlock+v2TestChallengeBlocks {
+		return v2TestError("ChallengeWindowClosed")
+	}
+	if proven := c.roots[rootIndex.Uint64()]; !account.Index.IsUint64() || account.Index.Uint64() >= proven.LeafCount {
+		return v2TestError("IndexOutOfRange")
+	} else if !v2TestVerify(proven, account, proof) {
+		return v2TestError("InvalidProof")
+	}
+	return nil
+}
+
+func (c *v2TestChain) checkPath(from common.Address, rootIndex *big.Int, account stabi.LedgerTreeAccount, proof []stabi.LedgerTreeProofNode, path []stabi.LedgerTreePathNode, commit bool, pack func(...any) []byte) ([]byte, []*types.Log, []byte) {
+	if revert := c.disputed(rootIndex, account, proof, false); revert != nil {
+		return nil, nil, revert
 	}
 	nodes := make([]merkle.LedgerPathNode, len(path))
 	for k := range path {
@@ -458,43 +473,33 @@ func (c *v2TestChain) checkPath(from common.Address, account stabi.LedgerTreeAcc
 		return nil, nil, v2TestError("MalformedPath")
 	}
 	seq := c.pending.Seq
+	key := [3]uint64{seq, rootIndex.Uint64(), index}
 	switch {
 	case fault != merkle.LedgerFaultNone:
 		if !commit {
 			return pack(uint8(fault)), nil, nil
 		}
 		c.pending = stabi.ISTSettlementVault2Pending{Total: new(big.Int)}
-		return pack(uint8(fault)), []*types.Log{c.event("DistributionDeleted", c.seqTopics(seq), account.Index, uint8(fault), big.NewInt(int64(level)), from)}, nil
-	case c.demanded[[2]uint64{seq, index}] == 1:
+		return pack(uint8(fault)), []*types.Log{c.event("DistributionDeleted", c.seqTopics(seq), rootIndex, account.Index, uint8(fault), big.NewInt(int64(level)), from)}, nil
+	case c.demanded[key] == 1:
 		if !commit {
 			return pack(uint8(0)), nil, nil
 		}
-		c.demanded[[2]uint64{seq, index}] = 2
+		c.demanded[key] = 2
 		c.pending.OpenDemands--
-		return pack(uint8(0)), []*types.Log{c.event("PathAnswered", c.seqTopics(seq), account.Index, from)}, nil
+		return pack(uint8(0)), []*types.Log{c.event("PathAnswered", c.seqTopics(seq), rootIndex, account.Index, from)}, nil
 	}
 	return nil, nil, v2TestError("NoFault")
 }
 
-func (c *v2TestChain) demandPath(from common.Address, value *big.Int, account stabi.LedgerTreeAccount, proof []stabi.LedgerTreeProofNode, commit bool) ([]byte, []*types.Log, []byte) {
+func (c *v2TestChain) demandPath(from common.Address, value *big.Int, rootIndex *big.Int, account stabi.LedgerTreeAccount, proof []stabi.LedgerTreeProofNode, commit bool) ([]byte, []*types.Log, []byte) {
 	if value == nil || value.Cmp(c.fee) != 0 {
 		return nil, nil, v2TestError("InvalidDemandFee")
 	}
-	if c.pending.Seq == 0 {
-		return nil, nil, v2TestError("NoPendingRoot")
+	if revert := c.disputed(rootIndex, account, proof, true); revert != nil {
+		return nil, nil, revert
 	}
-	if len(c.roots) == 0 {
-		return nil, nil, v2TestError("NoFinalizedRoot")
-	}
-	if v2TestHead >= c.pending.CommittedBlock+v2TestChallengeBlocks {
-		return nil, nil, v2TestError("ChallengeWindowClosed")
-	}
-	if previous := c.roots[len(c.roots)-1]; !account.Index.IsUint64() || account.Index.Uint64() >= previous.LeafCount {
-		return nil, nil, v2TestError("IndexOutOfRange")
-	} else if !v2TestVerify(previous, account, proof) {
-		return nil, nil, v2TestError("InvalidProof")
-	}
-	key := [2]uint64{c.pending.Seq, account.Index.Uint64()}
+	key := [3]uint64{c.pending.Seq, rootIndex.Uint64(), account.Index.Uint64()}
 	if c.demanded[key] != 0 {
 		return nil, nil, v2TestError("AlreadyDemanded")
 	}
@@ -503,7 +508,7 @@ func (c *v2TestChain) demandPath(from common.Address, value *big.Int, account st
 	}
 	c.demanded[key] = 1
 	c.pending.OpenDemands++
-	return nil, []*types.Log{c.event("PathDemanded", c.seqTopics(c.pending.Seq), account.Index, from)}, nil
+	return nil, []*types.Log{c.event("PathDemanded", c.seqTopics(c.pending.Seq), rootIndex, account.Index, from)}, nil
 }
 
 func (c *v2TestChain) seqTopics(seq uint64) []common.Hash {
