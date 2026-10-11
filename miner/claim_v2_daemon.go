@@ -291,8 +291,9 @@ func (self *claimDaemonV2) submit(ctx context.Context, unit *ClaimUnitV2, accoun
 
 // The finalized outcome of the exact signed bytes: the matching Claimed event,
 // or the failed receipt of a reverted claim, with the signed intent. Without a
-// finalized receipt the same bytes are rebroadcast under the v1 rules and stay
-// in flight.
+// finalized receipt the same bytes are rebroadcast under the v1 rules, except
+// that a claim already covered is sent without the preflight, and stay in
+// flight.
 func (self *claimDaemonV2) settle(ctx context.Context, unit *ClaimUnitV2) (*claimIntentV2, *stabi.STSettlementVault2Claimed, *types.Receipt, error) {
 	tx, intent, from, err := authenticateSignedClaimV2(self.cfg, unit)
 	if err != nil {
@@ -310,6 +311,17 @@ func (self *claimDaemonV2) settle(ctx context.Context, unit *ClaimUnitV2) (*clai
 		return intent, event, nil, nil
 	}
 	consumed, err := rebroadcastSignedClaim(ctx, self.cfg.relayer(), tx, from, self.store)
+	if err != nil {
+		// Anyone may claim for anyone in v2. Bytes whose claim the finalized
+		// watermark already covers can only revert NothingToClaim inside the
+		// vault, before any precompile call, so the same bytes are sent without
+		// the preflight: their nonce is consumed and later claims are not stuck
+		// behind it. Their reverted receipt then settles the unit.
+		account := intent.account(self.cfg.Vault)
+		if claimed, readErr := readClaimedV2(ctx, self.cfg, account); readErr == nil && !claimed.Lt(&account.Cumulative) {
+			consumed, err = replaySignedClaim(ctx, self.cfg.relayer(), tx, from, self.store, false)
+		}
+	}
 	if err != nil {
 		return nil, nil, nil, &claimSignedOutcomeError{reason: "exact rebroadcast did not reconcile outcome", cause: err}
 	}

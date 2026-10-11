@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 	"gopkg.in/yaml.v3"
 
@@ -380,9 +382,11 @@ func TestClaimV2OneClaimInFlightPerAccount(t *testing.T) {
 	}
 }
 
-// E-5 signed bytes never replaced: a rebroadcast whose finalized preflight now
-// fails, or whose nonce another signer consumed, keeps the exact bytes in
-// flight across polls, demands and a restart, and signs nothing new.
+// E-5 signed bytes never replaced: a rebroadcast whose finalized preflight is
+// refused for any reason but a claim the watermark already covers (here the
+// runtime's refusal) keeps today's behaviour. The exact bytes stay in flight,
+// unsent, across polls, demands and a restart, as do bytes whose nonce
+// another signer consumed. Nothing new is signed.
 func TestClaimV2SignedBytesNeverReplaced(t *testing.T) {
 	chain := newClaimV2TestChain(t)
 	chain.finalize(claimV2TestAccount(claimV2TestOther, 1), claimV2TestAccount(claimV2TestColdkey, 5))
@@ -390,7 +394,7 @@ func TestClaimV2SignedBytesNeverReplaced(t *testing.T) {
 	chain.with(func() { chain.sendFailures = 1 })
 	daemon.step(false)
 	first := daemon.durable(1)
-	chain.with(func() { chain.claimed[1] = claimV2TestRao(5) })
+	chain.with(func() { chain.refuseClaims = true })
 	chain.finalize(claimV2TestAccount(claimV2TestOther, 2), claimV2TestAccount(claimV2TestColdkey, 8))
 	for _, restart := range []bool{false, true, false} {
 		if restart {
@@ -398,15 +402,62 @@ func TestClaimV2SignedBytesNeverReplaced(t *testing.T) {
 		}
 		daemon.advance(time.Minute)
 		daemon.step(true)
-		if unit := daemon.durable(1); unit.Status != "uncertain" || unit.TxHash != first.TxHash || unit.RawTxHex != first.RawTxHex || !strings.Contains(unit.LastError, "exact rebroadcast did not reconcile outcome") {
+		if unit := daemon.durable(1); unit.Status != "uncertain" || unit.TxHash != first.TxHash || unit.RawTxHex != first.RawTxHex || !strings.Contains(unit.LastError, "exact rebroadcast did not reconcile outcome") || !strings.Contains(unit.LastError, "runtime transfer refusal") {
 			t.Fatalf("refused rebroadcast replaced or dropped the signed bytes: %+v", unit)
 		}
+	}
+	if !slices.Equal(chain.sent(), []string{first.RawTxHex}) {
+		t.Fatal("bytes refused at preflight for another reason were sent")
 	}
 	chain.with(func() { chain.nonce = 1 })
 	daemon.advance(time.Minute)
 	daemon.step(false)
 	if unit := daemon.durable(1); !slices.Equal(chain.sent(), []string{first.RawTxHex}) || unit.RawTxHex != first.RawTxHex || !strings.Contains(unit.LastError, "signed nonce is consumed without an authenticated receipt") {
 		t.Fatalf("consumed nonce replaced the signed bytes: %+v", unit)
+	}
+}
+
+// E-5 and A6, a lost broadcast then a third party's claim: the retained bytes
+// fail their preflight only because the finalized watermark covers their
+// claim, so the same bytes are sent without it. They revert inside the vault
+// and consume their nonce; the unit is done for that root once that receipt
+// is final, and the claims behind the nonce gap proceed.
+func TestClaimV2CoveredClaimClosesItsNonceGap(t *testing.T) {
+	chain := newClaimV2TestChain(t)
+	chain.finalize(claimV2TestAccount(claimV2TestOther, 1), claimV2TestAccount(claimV2TestColdkey, 5), claimV2TestAccount(claimV2TestSecond, 6))
+	daemon := newClaimV2TestDaemon(t, chain, ClaimV2DefaultThresholdRao, claimV2TestColdkey, claimV2TestSecond)
+	chain.with(func() { chain.sendFailures = 1 })
+	daemon.step(false)
+	daemon.step(false)
+	first, second := daemon.durable(1), daemon.durable(2)
+	if first.Status != "uncertain" || second.Status != "uncertain" || claimV2TestNonce(t, first.RawTxHex) != 0 || claimV2TestNonce(t, second.RawTxHex) != 1 || !strings.Contains(second.LastError, "nonce too high") {
+		t.Fatalf("the second claim is not queued behind the lost one: %+v %+v", first, second)
+	}
+	chain.with(func() { chain.claimed[1] = claimV2TestRao(5) })
+	daemon.advance(time.Minute)
+	daemon.step(false)
+	sends := chain.sent()
+	var reverted bool
+	chain.with(func() {
+		receipt := chain.receipts[common.HexToHash(first.TxHash)]
+		reverted = receipt != nil && receipt.Status == types.ReceiptStatusFailed && chain.nonce == 1
+	})
+	if unit := daemon.durable(1); !slices.Equal(sends, []string{first.RawTxHex, second.RawTxHex, first.RawTxHex}) || !reverted || unit.Status != "uncertain" || unit.RawTxHex != first.RawTxHex {
+		t.Fatalf("covered bytes were not sent to close their nonce: reverted=%t %+v", reverted, unit)
+	}
+	daemon.step(false)
+	daemon.advance(time.Minute)
+	daemon.step(false)
+	daemon.step(false)
+	if unit, other := daemon.durable(1), daemon.durable(2); unit.Status != "idle" || unit.Claimed != claimV2TestDec(5) || unit.Attempts != 0 || other.Status != "idle" || other.Claimed != claimV2TestDec(6) {
+		t.Fatalf("units after the gap closed: %+v %+v", unit, other)
+	}
+	chain.finalize(claimV2TestAccount(claimV2TestOther, 2), claimV2TestAccount(claimV2TestColdkey, 8), claimV2TestAccount(claimV2TestSecond, 6))
+	daemon.step(false)
+	sends = chain.sent()
+	claimed := chain.claimedOf(1)
+	if len(sends) != 5 || sends[3] != second.RawTxHex || claimV2TestNonce(t, sends[4]) != 2 || claimed.Dec() != claimV2TestDec(8) {
+		t.Fatalf("later claims did not proceed: sends=%d claimed=%s", len(sends), claimed.Dec())
 	}
 }
 
