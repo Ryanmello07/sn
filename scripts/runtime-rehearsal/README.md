@@ -70,7 +70,12 @@ values: the EVM chain ID becomes mainnet's 964 (`EVMChainId.ChainId`), and
 contract creation is open to every account (`EVM.DisableWhitelistCheck`).
 Blocks are sealed on demand, and finalized at once, by the RPC
 `engine_createBlock(true, true, null)`; there is no GRANDPA. Substrate and
-Ethereum JSON-RPC share one port on 127.0.0.1. Optional environment:
+Ethereum JSON-RPC share one port on 127.0.0.1. The node takes no peers
+(`--no-mdns --reserved-only`): rehearsal chains share one genesis, and two on
+one host would otherwise find each other and exchange transactions. It uses
+the single-state transaction pool, which validates a submission against the
+newest block (the fork-aware pool could still use the block before), bans
+nothing, and runs no offchain workers. Optional environment:
 `RUNTIME_REHEARSAL_BASE_PATH` (default a new temporary directory),
 `RUNTIME_REHEARSAL_RPC_PORT` (9944), `RUNTIME_REHEARSAL_P2P_PORT` (30333) and
 `RUNTIME_REHEARSAL_SEALING` (`manual`; `instant`, or a period in milliseconds
@@ -83,7 +88,11 @@ are mainnet's (40,000 weight per gas). The dev genesis has no SN25 state. With
 tempo 10, the default 10-block admin freeze window closes a subnet's admin
 calls in 9 of every 10 blocks; set `AdminUtils.sudo_set_admin_freeze_window(0)`
 first. A second subnet within 7,200 blocks needs
-`AdminUtils.sudo_set_network_rate_limit(0)`.
+`AdminUtils.sudo_set_network_rate_limit(0)`. The activity cutoff is
+`ActivityCutoffFactorMilli × tempo / 1000`: 138 blocks at tempo 10.
+
+eth_call and eth_estimateGas run at the latest block, a transaction in the
+next one; a window-bound call must hold at both.
 
 ## Go harness and smoke test
 
@@ -192,3 +201,100 @@ Measured on 2026-10-11 (the test takes about 18 s):
   epoch without weight-derived emission it pays active permit holders by stake
   (every UID by stake if none is active), so the escrow hotkey stays at share
   price 1 only while validators set weights; R-3 needs one.
+
+## R battery
+
+```sh
+RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
+  go test -tags runtime_rehearsal ./rehearsal/ -v -timeout 60m
+```
+
+The whole package, the smoke test and R-2 to R-6 each on its own node in
+parallel, took 10 minutes 10 seconds on 2026-10-11. Sealing runs at about
+110 to 125 blocks a second whether or not blocks finalize or several callers
+seal at once, so a 14,400-block challenge window takes about 2 minutes.
+
+Each R test deploys directly, from the exact forge artifacts, the stack
+STSettlement2 needs: the v1 reserve sink, vault and coordinator proxy (in
+`Deploy.s.sol`'s order, the v1 escrow registered), one v1 operator per pool,
+then vault2, its escrow registration on the next nonce (SPEC A7), the
+STSettlement2 proxy with one auditor and quorum 1, and the pool through
+`registerOperatorPool`. R-1, the deployment through §8.5's phase with
+readback, is not done here. Epoch 0 holds the deployment (300 blocks);
+epoch 1, every pool's first epoch, has the shortest cadence STSettlement2
+accepts, a 10-block commit window plus `CHALLENGE_BLOCKS`, 14,410 blocks.
+Tests that close many epochs continue with 100-block epochs (R-2, R-3 and R-4
+from epoch 2, R-5 from epoch 3). R-2, R-4 and R-5 stop subnet epochs (tempo
+0) so that no dividend moves a position between two reads; R-3 runs SN25's
+tempo of 360. Measured:
+
+- **R-2 capture.** A pool holding nothing funded 0 without a runtime call
+  (gas 131,987). With 88,974,634,979 rao on the pool, the close moved exactly
+  that and escrow gained exactly that (gas 287,215). A pool registered at a
+  collateral lock share of 2^15/65535 held 1,481,130,231 rao of locked
+  collateral: alone it funded 0, and with stake added the close moved exactly
+  `getStake − locked`, 38,742,541,778 of 40,223,672,009 rao, leaving the
+  lock. Dust: 5,569 alpha rao, transferred to vault2 at a price where it was
+  worth 120,016 rao of TAO, fell to 7,507 rao when the price fell; the close
+  reverted (runtime `AmountTooLow`) and recorded nothing, and the next close
+  deferred that epoch and captured the dust with a top-up.
+- **R-3 claim.** Claims paid with a real `transferStake`: escrow lost exactly
+  the amount and the account gained it or one rao less (one rao less in all
+  three, the escrow having earned dividends). A 4,861 rao claim, below
+  the floor at price 10.284, reverted (`AmountTooLow`); a claim to a coldkey
+  holding 128 staking hotkeys reverted (`TooManyStakingHotkeys`); both stayed
+  claimable, and the second paid once the coldkey freed one entry. Third
+  parties' `add_stake`, `move_stake` off and onto the escrow hotkey,
+  `remove_stake` and a `transfer_stake` to vault2 never lowered vault2's
+  escrow position; a transfer carrying conviction-locked alpha to vault2 was
+  refused (`AccountRejectsLockedAlpha`). Over two tempos without weights the
+  escrow hotkey earned 3,595,812,938 rao (Yuma's fallback pays validator
+  emission by stake to active permit holders); over two tempos while a
+  validator holding most of the stake weighted a miner it earned nothing.
+  Simulated from vault2, `transferStake` with 2^64 − 1 would move the whole
+  escrow position; vault2 never sends it, and no pool can fund 2^64 − 1 rao,
+  so its `AmountTooLarge` guard cannot be reached on a real chain. Third
+  parties could add hotkeys to vault2's own `StakingHotkeys` only until it
+  held 128; `absorbStake` and claims still worked, but a claim then used
+  1,269,881 gas instead of 201,559, and `absorbStake` 1,230,170: the runtime
+  charges a walk of the origin coldkey's list.
+- **R-4 registration.** `registerOperatorPool` registered the pool hotkey
+  under vault2's coldkey, burned 3.80 TAO and refunded the rest of the 100 TAO
+  ceiling to the owner through STSettlement2 (gas 1,598,525); a second
+  registration and a too-short first epoch were refused. With immunity 0 and
+  the subnet full, registrations pruned the oldest UIDs first, the escrow
+  hotkey before the pool hotkey; both kept stake and owner, and the close
+  moved the pruned pool's stake into the pruned escrow. `registerPoolUid`
+  re-registered the pool hotkey for its payer (gas 1,449,743; `UidExists`
+  once registered). `absorbStake` moved 35,094,897,822 rao that vault2 held
+  on the v1 escrow hotkey into escrow as surplus (gas 136,420).
+- **R-5 approval, demand and answer.** Finalize was refused without a quorum
+  (`QuorumNotReached`), then inside the window (`ChallengeWindowOpen`); an
+  approval needed an auditor and the exact pending root (`Unauthorized`,
+  `PendingMismatch`, `AlreadyApproved`). A demand paying 1 rao short of
+  `demandFeeWei` was refused (`InvalidDemandFee`); one paying it raised vault2's
+  account by exactly 1,000,000 rao, blocked finalize (`DemandOpen`) until the
+  operator's answer, and could not be repeated (`AlreadyDemanded`, then
+  `NoFault`).
+- **R-6 gas**, on ledgers of 2^29 accounts (depth 29, the deepest vault2
+  takes), against the SN25 operator gas policy's `maximum_gas` of 1,000,000
+  (`server/local/sn25golive/sn25-mainnet-gas-params.json`):
+
+  | Transaction | Sender | Gas used | Gas limit needed |
+  | --- | --- | ---: | ---: |
+  | close, capturing | operator | 298,927 | 2,634,202 |
+  | close, nothing to capture | operator | 131,479 | 158,120 |
+  | close deferring 1 epoch | operator | 158,174 | 205,242 |
+  | close deferring 144 epochs | operator | 5,459,241 | 7,049,278 |
+  | commit | operator | 297,926 | 334,653 |
+  | answer (checkPath) | operator | 159,665 | 185,590 |
+  | finalize | operator | 179,386 | 239,175 |
+  | approve | auditor | 134,333 | 137,389 |
+  | demand | anyone | 104,867 | 128,806 |
+  | claim | anyone | 235,938 | 2,514,273 |
+
+  Each deferred epoch costs about 37,000 gas, and about 47,900 of limit. A
+  close that captures needs about 2.6 million gas of limit because the
+  runtime admits `moveStake` only if the forwarded gas covers its declared
+  weight; it is above the policy's `maximum_gas`, as is a close deferring
+  more than about 17 epochs.
