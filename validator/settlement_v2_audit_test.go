@@ -111,7 +111,7 @@ func requireSettlementV2AuditOpening(t *testing.T, call settlementV2AuditTestCal
 // validator path, including head exclusion decided by the FleetBound
 // candidates and archive bindingAt at both boundaries. The audit approves
 // exactly the pending root, records its finding and decision, keeps the
-// rows it found valid, and a second pass sends nothing.
+// rows it found valid, and a second pass neither audits nor sends again.
 func TestSettlementV2AuditApprovesHonestRoot(t *testing.T) {
 	t.Parallel()
 	fixture := newSettlementV2AuditTestFixture(t)
@@ -121,7 +121,7 @@ func TestSettlementV2AuditApprovesHonestRoot(t *testing.T) {
 	fixture.mustPass(t)
 	fixture.requireApproved(t, fixture.sentCalls(t), 2, p.Commit)
 	record := fixture.record(t, 2)
-	if record.Decision != settlementV2DecisionApprove || !record.Done || record.Outcome != "sent" || record.Check != "none" || record.Error != "" || record.Missing != nil || record.Faults != nil || record.Block != 610 {
+	if record.Decision != settlementV2DecisionApprove || record.Done || record.Outcome != "" || record.Check != "none" || record.Error != "" || record.Missing != nil || record.Faults != nil || record.Block != 610 {
 		t.Fatalf("record %+v", record)
 	}
 	for i, epoch := range []uint64{4, 5} {
@@ -134,9 +134,10 @@ func TestSettlementV2AuditApprovesHonestRoot(t *testing.T) {
 	if fixture.chain.count("bindingAt") != 10 {
 		t.Fatalf("%d bindingAt reads, want 10", fixture.chain.count("bindingAt"))
 	}
+	fetched := fixture.objects.fetched()
 	fixture.mustPass(t)
-	if len(fixture.chain.accepted()) != 1 {
-		t.Fatal("a decided root was approved again")
+	if len(fixture.chain.accepted()) != 1 || fixture.objects.fetched() != fetched || fixture.chain.count("bindingAt") != 10 {
+		t.Fatal("a decided root was audited or approved again")
 	}
 }
 

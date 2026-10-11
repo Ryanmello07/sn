@@ -482,12 +482,8 @@ func TestSettlementV2AuditLoopApproves(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- fixture.audit.worker()(ctx) }()
-	path := fixture.audit.custody.path("audits", "1-2.json")
-	for deadline := time.Now().Add(time.Minute); ; time.Sleep(10 * time.Millisecond) {
-		var record settlementV2AuditRecord
-		if ok, _ := fixture.audit.custody.readJSON(path, &record); ok && record.Done {
-			break
-		}
+	approval := settlementV2TestApproval{noID: settlementV2AuditTestNoID, seq: 2, version: 1, auditor: fixture.auditor()}
+	for deadline := time.Now().Add(time.Minute); !fixture.chain.current().approved[approval]; time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatal("the worker did not approve")
 		}
@@ -512,7 +508,7 @@ func TestSettlementV2AuditApprovesEachRoot(t *testing.T) {
 	fixture.setPool(settlementV2AuditTestPending(1, f.Commit, 405))
 	fixture.mustPass(t)
 	fixture.requireApproved(t, fixture.sentCalls(t), 1, f.Commit)
-	if record := fixture.record(t, 1); record.Decision != settlementV2DecisionApprove || !record.Done {
+	if record := fixture.record(t, 1); record.Decision != settlementV2DecisionApprove || record.Done {
 		t.Fatalf("record %+v", record)
 	}
 	fixture.chain.advanceTo(459)
@@ -557,13 +553,51 @@ func TestSettlementV2AuditApprovalIdempotentAcrossRestart(t *testing.T) {
 	fixture.restart(t)
 	fixture.mustPass(t)
 	fixture.requireApproved(t, fixture.sentCalls(t), 2, p.Commit)
-	if record := fixture.record(t, 2); !record.Done || record.Outcome != "sent" {
+	if record := fixture.record(t, 2); record.Done || record.Outcome != "" {
 		t.Fatalf("record %+v", record)
 	}
 	fixture.restart(t)
 	fixture.mustPass(t)
 	if len(fixture.chain.accepted()) != 1 {
 		t.Fatal("a restart signed a second approval")
+	}
+}
+
+// VA-3: an approval counts only at the auditor set version it was sent at.
+// After the owner changes the auditor set before end(e+1), the next pass
+// approves the root again, counted at the new version, and later passes send
+// nothing. A change after end(e+1) ends the decision with the approval
+// deadline as its outcome.
+func TestSettlementV2AuditApprovesAgainAfterAuditorSetChange(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f := settlementV2AuditTestF(t)
+	p := settlementV2AuditTestP(t, f)
+	fixture.useScenario(t, f, p.Commit, p.Objects, true, 610)
+	fixture.mustPass(t)
+	fixture.chain.mutate(func(state *settlementV2TestState) { state.version = 2 })
+	fixture.mustPass(t)
+	fixture.mustPass(t)
+	calls := fixture.sentCalls(t)
+	if len(calls) != 2 {
+		t.Fatalf("%d approvals sent, want 2", len(calls))
+	}
+	fixture.requireApproved(t, calls[:1], 2, p.Commit)
+	fixture.requireApproved(t, calls[1:], 2, p.Commit)
+	for _, version := range []uint64{1, 2} {
+		if !fixture.chain.current().approved[settlementV2TestApproval{noID: settlementV2AuditTestNoID, seq: 2, version: version, auditor: fixture.auditor()}] {
+			t.Fatalf("no approval counts at version %d", version)
+		}
+	}
+	if record := fixture.record(t, 2); record.Done {
+		t.Fatalf("record %+v", record)
+	}
+	fixture.chain.advanceTo(698)
+	fixture.chain.mutate(func(state *settlementV2TestState) { state.version = 3 })
+	fixture.mustPass(t)
+	record := fixture.record(t, 2)
+	if !record.Done || record.Outcome != ErrSettlementV2ApprovalClosed.Error() || len(fixture.chain.accepted()) != 2 {
+		t.Fatalf("record %+v, %d sent", record, len(fixture.chain.accepted()))
 	}
 }
 
@@ -621,7 +655,7 @@ func TestSettlementV2AuditApprovalAlreadyCountedSucceeds(t *testing.T) {
 	})
 	fixture.mustPass(t)
 	record := fixture.record(t, 2)
-	if record.Decision != settlementV2DecisionApprove || !record.Done || record.Outcome != "sent" || len(fixture.chain.accepted()) != 0 {
+	if record.Decision != settlementV2DecisionApprove || record.Done || record.Outcome != "" || len(fixture.chain.accepted()) != 0 {
 		t.Fatalf("record %+v, %d sent", record, len(fixture.chain.accepted()))
 	}
 }

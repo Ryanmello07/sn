@@ -288,11 +288,18 @@ func TestSettlementV2AuditCustodyFailures(t *testing.T) {
 		}
 	})
 	t.Run("outcome", func(t *testing.T) {
-		fixture, _, _ := setup(t)
+		fixture := newSettlementV2AuditTestFixture(t)
+		f := settlementV2AuditTestF(t)
+		p := settlementV2AuditTestP(t, f)
+		fixture.useScenario(t, f, p.Commit, ledger.Objects{}, true, 630)
 		sender := &settlementV2AuditTestSender{}
-		sender.before = func() { settlementV2CustodyTestBlock(t, fixture.audit.custody.path("audits", "")) }
+		sender.before = func() {
+			if len(sender.demands) == 0 {
+				settlementV2CustodyTestBlock(t, fixture.audit.custody.path("audits", ""))
+			}
+		}
 		fixture.audit.sender = sender
-		if err := fixture.pass(t); err == nil || len(sender.approvals) != 1 {
+		if err := fixture.pass(t); err == nil || len(sender.demands) != len(f.Accounts) {
 			t.Fatalf("an unrecorded outcome passed: %v", err)
 		}
 	})

@@ -29,9 +29,10 @@
 // The decision and the demand set, drawn once after the commit was seen, are
 // recorded before anything is sent, and sends take their trees from
 // custody; the auditor sender is idempotent, so a restart sends exactly the
-// same transactions. Without an auditor key the audit records its decisions
-// and sends nothing. It never changes a pool's weight (VA-5), and its
-// failures are reported and retried, never fatal.
+// same transactions. An approval is kept counting at the current auditor set
+// while the root is pending. Without an auditor key the audit records its
+// decisions and sends nothing. It never changes a pool's weight (VA-5), and
+// its failures are reported and retried, never fatal.
 package validator
 
 import (
@@ -218,7 +219,9 @@ func (self *settlementV2Audit) confirmed(ctx context.Context) error {
 
 // audit takes one step on the pool's pending root: it audits the root until
 // the audit decides, then sends what the decision calls for until nothing is
-// left to send.
+// left to send. An approval is never left: it counts only at the auditor set
+// version it was sent at, so every pass approves again, sending only when
+// the set changed, until the root leaves the pending slot.
 func (self *settlementV2Audit) audit(ctx context.Context, pool settlementV2AuditPool) error {
 	state, err := self.reader.poolState(ctx, pool.noID)
 	if err != nil {
@@ -245,7 +248,7 @@ func (self *settlementV2Audit) audit(ctx context.Context, pool settlementV2Audit
 		return nil
 	}
 	outcome, err := self.send(ctx, state, record)
-	if err != nil {
+	if err != nil || outcome == "" {
 		return err
 	}
 	record.Done, record.Outcome = true, outcome
@@ -463,9 +466,10 @@ func (self *settlementV2Audit) object(ctx context.Context, pool settlementV2Audi
 }
 
 // send carries out the decision. It returns the outcome once nothing is left
-// to send; an error is retried at the next pass. A root that left the
-// pending slot, an approval past end(e+1), a demand past the challenge
-// window, a finalized root and an answered opening each end the decision.
+// to send, and no outcome for an approval that counts; an error is retried
+// at the next pass. A root that left the pending slot, an approval past
+// end(e+1), a demand past the challenge window, a finalized root and an
+// answered opening each end the decision.
 func (self *settlementV2Audit) send(ctx context.Context, state *settlementV2PoolState, record *settlementV2AuditRecord) (string, error) {
 	noID, pending := state.noID, state.pending
 	var anchor *settlementV2Anchor
@@ -496,7 +500,8 @@ func (self *settlementV2Audit) send(ctx context.Context, state *settlementV2Pool
 		path, _ := tree.Path(index)
 		err = self.sender.Challenge(ctx, noID, pending, anchor.index, settlementV2Account(index, &anchor.accounts[index]), settlementV2ProofNodes(proof), settlementV2PathNodes(path))
 	case settlementV2DecisionDemand:
-		// DemandSet drew every index from the protected root's accounts.
+		// Every index is an account of the protected root: drawn from its
+		// accounts or faulted against them.
 		for _, index := range record.Demands {
 			proof, _ := anchor.tree.Proof(index)
 			if err = self.sender.Demand(ctx, noID, pending, anchor.index, settlementV2Account(index, &anchor.accounts[index]), settlementV2ProofNodes(proof)); err != nil {
@@ -507,6 +512,8 @@ func (self *settlementV2Audit) send(ctx context.Context, state *settlementV2Pool
 		return "refused", nil
 	}
 	switch {
+	case err == nil && record.Decision == settlementV2DecisionApprove:
+		return "", nil
 	case err == nil:
 		return "sent", nil
 	case errors.Is(err, ErrSettlementV2RootNotPending), errors.Is(err, ErrSettlementV2ApprovalClosed), errors.Is(err, ErrSettlementV2ChallengeWindowClosed),
