@@ -105,6 +105,15 @@ func (self *settlementV2AuditChain) poolState(ctx context.Context, noID uint64) 
 	return state, nil
 }
 
+func (self *settlementV2AuditChain) finalizedRoot(ctx context.Context, state *settlementV2PoolState, rootIndex uint64) (stabi.ISTSettlementVault2Root, error) {
+	id, index := new(big.Int).SetUint64(state.noID), new(big.Int).SetUint64(rootIndex)
+	values, err := self.chain.settlementV2ViewAtHashContext(ctx, self.vault, &stabi.STSettlementVault2MetaData, "roots", []any{id, index}, state.block, state.blockHash)
+	if err != nil {
+		return stabi.ISTSettlementVault2Root{}, fmt.Errorf("vault2 roots of pool %d at block %d: %w", state.noID, state.block, err)
+	}
+	return *abi.ConvertType(values[0], new(stabi.ISTSettlementVault2Root)).(*stabi.ISTSettlementVault2Root), nil
+}
+
 func (self *settlementV2AuditChain) headOracle(state *settlementV2PoolState) ledger.HeadOracle {
 	return &settlementV2HeadOracle{reader: self, block: state.block, blockHash: state.blockHash}
 }
@@ -242,11 +251,14 @@ func readSettlementV2Logs(ctx context.Context, chain *ChainClient, address commo
 	return logs, nil
 }
 
-// settlementV2VaultEvent is a vault2 event of the demand history.
+// settlementV2VaultEvent is a vault2 event of the demand history. A demand
+// names the finalized root its account is proven against (rootIndex) and
+// the account's index; a finalization names the root it appended
+// (rootIndex).
 type settlementV2VaultEvent struct {
-	name                    string
-	seq, index, replacedSeq uint64
-	rootIndex               *big.Int
+	name             string
+	seq, replacedSeq uint64
+	rootIndex, index *big.Int
 }
 
 func decodeSettlementV2VaultEvent(log *types.Log) (settlementV2VaultEvent, error) {
@@ -270,12 +282,12 @@ func decodeSettlementV2VaultEvent(log *types.Log) (settlementV2VaultEvent, error
 	case settlementV2VaultABI.Events["PathDemanded"].ID:
 		var e *stabi.STSettlementVault2PathDemanded
 		if e, err = settlementV2Vault.UnpackPathDemandedEvent(log); err == nil {
-			event = settlementV2VaultEvent{name: "PathDemanded", seq: e.Seq, index: e.Index.Uint64()}
+			event = settlementV2VaultEvent{name: "PathDemanded", seq: e.Seq, rootIndex: e.RootIndex, index: e.Index}
 		}
 	case settlementV2VaultABI.Events["PathAnswered"].ID:
 		var e *stabi.STSettlementVault2PathAnswered
 		if e, err = settlementV2Vault.UnpackPathAnsweredEvent(log); err == nil {
-			event = settlementV2VaultEvent{name: "PathAnswered", seq: e.Seq, index: e.Index.Uint64()}
+			event = settlementV2VaultEvent{name: "PathAnswered", seq: e.Seq, rootIndex: e.RootIndex, index: e.Index}
 		}
 	case settlementV2VaultABI.Events["DistributionFinalized"].ID:
 		var e *stabi.STSettlementVault2DistributionFinalized
@@ -295,7 +307,8 @@ func decodeSettlementV2VaultEvent(log *types.Log) (settlementV2VaultEvent, error
 // commit to F's DistributionFinalized, then reads the history after it: each
 // earlier pending root over F that was replaced (DistributionCommitted's
 // replacedSeq) or deleted (DistributionDeleted) while a PathDemanded of it
-// had no PathAnswered adds one doubling, and those indexes are demanded again.
+// had no PathAnswered of the same root index and index adds one doubling,
+// and those indexes are demanded again.
 func (self *settlementV2AuditChain) demandHistory(ctx context.Context, state *settlementV2PoolState) (uint, []uint64, error) {
 	topics := [][]common.Hash{{
 		settlementV2VaultABI.Events["DistributionCommitted"].ID, settlementV2VaultABI.Events["DistributionDeleted"].ID, settlementV2VaultABI.Events["PathDemanded"].ID,
@@ -326,7 +339,8 @@ func (self *settlementV2AuditChain) demandHistory(ctx context.Context, state *se
 		}
 		to = from - 1
 	}
-	gone, open := map[uint64]bool{}, map[uint64]map[uint64]bool{}
+	type demand struct{ rootIndex, index string }
+	gone, open := map[uint64]bool{}, map[uint64]map[demand]uint64{}
 	for _, event := range events {
 		switch event.name {
 		case "DistributionCommitted":
@@ -337,11 +351,11 @@ func (self *settlementV2AuditChain) demandHistory(ctx context.Context, state *se
 			gone[event.seq] = true
 		case "PathDemanded":
 			if open[event.seq] == nil {
-				open[event.seq] = map[uint64]bool{}
+				open[event.seq] = map[demand]uint64{}
 			}
-			open[event.seq][event.index] = true
+			open[event.seq][demand{event.rootIndex.String(), event.index.String()}] = event.index.Uint64()
 		case "PathAnswered":
-			delete(open[event.seq], event.index)
+			delete(open[event.seq], demand{event.rootIndex.String(), event.index.String()})
 		}
 	}
 	var doublings uint
@@ -349,13 +363,13 @@ func (self *settlementV2AuditChain) demandHistory(ctx context.Context, state *se
 	for seq := range gone {
 		if len(open[seq]) > 0 {
 			doublings++
-			for index := range open[seq] {
+			for _, index := range open[seq] {
 				again = append(again, index)
 			}
 		}
 	}
 	slices.Sort(again)
-	return doublings, again, nil
+	return doublings, slices.Compact(again), nil
 }
 
 // settlementV2Objects reads ledger objects from an operator's public

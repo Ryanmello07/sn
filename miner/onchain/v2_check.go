@@ -259,7 +259,7 @@ func v2Challenge(ctx context.Context, s *v2Sender, noID uint64, state *v2State, 
 	proof, _ := res.Previous.Proof(fault.Index)
 	account := &res.PreviousAccounts[fault.Index]
 	seq := state.pending.Seq
-	calldata := vault2.PackCheckPath(new(big.Int).SetUint64(noID), v2LedgerAccount(fault.Index, account), v2ProofNodes(proof), v2PathNodes(path))
+	calldata := vault2.PackCheckPath(new(big.Int).SetUint64(noID), state.previousIndex, v2LedgerAccount(fault.Index, account), v2ProofNodes(proof), v2PathNodes(path))
 	receipt, err := s.send(ctx, "challenge", calldata, nil, func() {
 		fmt.Printf("  pending:     pool %d, seq %d, root 0x%x\n", noID, seq, state.pending.Root)
 		fmt.Printf("  account:     %d of finalized root %s: coldkey 0x%x, cumulative %s\n", fault.Index, state.previousIndex, account.Coldkey, v2Alpha(&account.Cumulative))
@@ -494,7 +494,7 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, res
 		// The set indexes the finalized root's accounts, so each has a proof.
 		proof, _ := res.Previous.Proof(index)
 		account := &res.PreviousAccounts[index]
-		receipt, err := s.send(ctx, "demand", vault2.PackDemandPath(n, v2LedgerAccount(index, account), v2ProofNodes(proof)), fee, func() {
+		receipt, err := s.send(ctx, "demand", vault2.PackDemandPath(n, state.previousIndex, v2LedgerAccount(index, account), v2ProofNodes(proof)), fee, func() {
 			fmt.Printf("  pending:     pool %d, seq %d\n", noID, seq)
 			fmt.Printf("  account:     %d of finalized root %s: coldkey 0x%x, cumulative %s\n", index, state.previousIndex, account.Coldkey, v2Alpha(&account.Cumulative))
 			fmt.Printf("  fee:         %s wei\n", fee)
@@ -511,7 +511,7 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, res
 				fmt.Printf("pending root seq %d is no longer pending (deleted or replaced); no more demands\n", seq)
 				return nil
 			}
-			demanded, rerr := v2View(ctx, &v2Reader{client: s.client, vault: s.vault}, vault2.PackDemanded(n, seq, new(big.Int).SetUint64(index)), vault2.UnpackDemanded)
+			demanded, rerr := v2View(ctx, &v2Reader{client: s.client, vault: s.vault}, vault2.PackDemanded(n, seq, state.previousIndex, new(big.Int).SetUint64(index)), vault2.UnpackDemanded)
 			if rerr != nil {
 				return errors.Join(err, fmt.Errorf("demanded(%d,%d,%d): %w", noID, seq, index, rerr))
 			}

@@ -55,12 +55,18 @@ type settlementV2AuditTestCall struct {
 	data      []byte
 }
 
+// demandPath and checkPath take (noId, rootIndex, account, oldProof[,
+// newPath]).
+func (self settlementV2AuditTestCall) rootIndex() *big.Int {
+	return self.arguments[1].(*big.Int)
+}
+
 func (self settlementV2AuditTestCall) account() stabi.LedgerTreeAccount {
-	return *abi.ConvertType(self.arguments[1], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
+	return *abi.ConvertType(self.arguments[2], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
 }
 
 func (self settlementV2AuditTestCall) proof() []merkle.LedgerNode {
-	nodes := *abi.ConvertType(self.arguments[2], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
+	nodes := *abi.ConvertType(self.arguments[3], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
 	out := make([]merkle.LedgerNode, len(nodes))
 	for k, node := range nodes {
 		out[k] = merkle.LedgerNode{Hash: node.Hash, Sum: *uint256.MustFromBig(node.Sum)}
@@ -69,7 +75,7 @@ func (self settlementV2AuditTestCall) proof() []merkle.LedgerNode {
 }
 
 func (self settlementV2AuditTestCall) path() []merkle.LedgerPathNode {
-	nodes := *abi.ConvertType(self.arguments[3], new([]stabi.LedgerTreePathNode)).(*[]stabi.LedgerTreePathNode)
+	nodes := *abi.ConvertType(self.arguments[4], new([]stabi.LedgerTreePathNode)).(*[]stabi.LedgerTreePathNode)
 	out := make([]merkle.LedgerPathNode, len(nodes))
 	for k, node := range nodes {
 		out[k] = merkle.LedgerPathNode{LeftHash: node.LeftHash, LeftSum: *uint256.MustFromBig(node.LeftSum), RightHash: node.RightHash, RightSum: *uint256.MustFromBig(node.RightSum)}
@@ -88,14 +94,14 @@ func (self *settlementV2AuditTestFixture) requireApproved(t *testing.T, calls []
 }
 
 // requireOpening requires that a demand or challenge carries account index of
-// the finalized root with a proof that verifies against it.
-func requireSettlementV2AuditOpening(t *testing.T, call settlementV2AuditTestCall, f *ledger.Ledger, index uint64) {
+// the finalized root rootIndex, f, with a proof that verifies against it.
+func requireSettlementV2AuditOpening(t *testing.T, call settlementV2AuditTestCall, f *ledger.Ledger, rootIndex, index uint64) {
 	t.Helper()
 	account := call.account()
 	want := f.Accounts[index]
 	cumulative := uint256.MustFromBig(account.Cumulative)
 	root, total := f.Tree.Root()
-	if !account.Index.IsUint64() || account.Index.Uint64() != index || account.Coldkey != want.Coldkey || !cumulative.Eq(&want.Cumulative) ||
+	if call.rootIndex().Cmp(new(big.Int).SetUint64(rootIndex)) != 0 || !account.Index.IsUint64() || account.Index.Uint64() != index || account.Coldkey != want.Coldkey || !cumulative.Eq(&want.Cumulative) ||
 		!merkle.VerifyLedgerProof(root, &total, f.Tree.LeafCount(), index, account.Coldkey, cumulative, call.proof()) {
 		t.Fatalf("%s carries account %s, not account %d of the finalized root with its proof", call.method, account.Index, index)
 	}
@@ -391,7 +397,7 @@ func TestSettlementV2AuditRefusesEachMutation(t *testing.T) {
 				if len(calls) != 1 || record.Outcome != "sent" {
 					t.Fatalf("%d challenges sent, outcome %q", len(calls), record.Outcome)
 				}
-				requireSettlementV2AuditOpening(t, calls[0], f, mutation.faults[0])
+				requireSettlementV2AuditOpening(t, calls[0], f, 0, mutation.faults[0])
 			case settlementV2DecisionDemand:
 				if len(calls) != len(f.Accounts) || record.Outcome != "sent" || !slices.Equal(record.Demands, []uint64{0, 1, 2, 3}) {
 					t.Fatalf("%d demands sent for %v, outcome %q", len(calls), record.Demands, record.Outcome)

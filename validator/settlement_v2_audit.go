@@ -16,7 +16,13 @@
 //     failed any other check; when the rows are missing or do not reproduce
 //     the root and F exists, also demand the §9.3 sample of F's accounts.
 //
-// An audit that could not obtain its objects is retried until that block.
+// Demands and challenges prove accounts against the latest finalized root
+// whose accounts custody holds and verified: F, which check 2 verifies, or
+// when F's objects cannot be obtained or do not rebuild it, the latest older
+// root whose objects custody holds and that they rebuild. Against an older
+// root the audit only demands, since only F's rows are compared with the
+// pending root's. An audit that could not obtain its objects is retried
+// until that block.
 // The decision and the demand set, drawn once after the commit was seen, are
 // recorded before anything is sent; the auditor sender is idempotent, so a
 // restart sends exactly the same transactions. Without an auditor key the
@@ -31,6 +37,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"slices"
 	"time"
 
 	"github.com/holiman/uint256"
@@ -78,11 +85,14 @@ type settlementV2AuditReader interface {
 	// poolState reads the pool at the finalized head; pending and the rest
 	// only when it is registered.
 	poolState(ctx context.Context, noID uint64) (*settlementV2PoolState, error)
+	// finalizedRoot reads the pool's finalized root rootIndex at state's
+	// pinned block.
+	finalizedRoot(ctx context.Context, state *settlementV2PoolState, rootIndex uint64) (stabi.ISTSettlementVault2Root, error)
 	// headOracle decides check 6 at state's pinned block.
 	headOracle(state *settlementV2PoolState) ledger.HeadOracle
 	// demandHistory reads, from vault2's events between F's finalization and
 	// the pending commit, the earlier pending roots over F that were replaced
-	// or deleted while a demand was open, and their unanswered indexes.
+	// or deleted while a demand was open, and the indexes of those demands.
 	demandHistory(ctx context.Context, state *settlementV2PoolState) (doublings uint, again []uint64, err error)
 }
 
@@ -90,8 +100,16 @@ type settlementV2AuditReader interface {
 // *SettlementV2Sender implements it.
 type settlementV2AuditSender interface {
 	Approve(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending) error
-	Challenge(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode, newPath []stabi.LedgerTreePathNode) error
-	Demand(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode) error
+	Challenge(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, rootIndex uint64, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode, newPath []stabi.LedgerTreePathNode) error
+	Demand(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, rootIndex uint64, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode) error
+}
+
+// settlementV2Anchor is the finalized root rootIndex whose accounts the audit
+// demands or challenges, with their tree.
+type settlementV2Anchor struct {
+	index    uint64
+	accounts []merkle.LedgerAccount
+	tree     *merkle.LedgerSumTree
 }
 
 // settlementV2AuditPool is one audited pool and its operator's objects.
@@ -232,33 +250,77 @@ func (self *settlementV2Audit) verify(ctx context.Context, pool settlementV2Audi
 }
 
 // decide records the audit's finding and, unless the audit waits for its
-// objects, its decision; a demand decision draws the demand set now.
+// objects, its decision. A demand draws its set now, over the anchor's
+// accounts: F's, or when F could not be verified, the latest older finalized
+// root's that custody holds.
 func (self *settlementV2Audit) decide(ctx context.Context, state *settlementV2PoolState, record *settlementV2AuditRecord, res *ledger.Result) error {
 	record.observe(state.block, res)
 	action := res.Action()
 	unobtained := len(res.Missing) > 0 || errors.Is(res.Err, ledger.ErrByteBudget)
-	waiting := unobtained && (action == ledger.ActionDemand || action == ledger.ActionRefuse) && state.block < state.pending.CommittedBlock+state.challengeBlocks/2
-	if !waiting {
-		record.Decision = action.String()
+	if unobtained && (action == ledger.ActionDemand || action == ledger.ActionRefuse) && state.block < state.pending.CommittedBlock+state.challengeBlocks/2 {
+		return self.custody.keepAuditRecord(record)
 	}
-	if action == ledger.ActionDemand && !waiting {
+	var anchor *settlementV2Anchor
+	var err error
+	switch {
+	case res.Previous != nil:
+		anchor = &settlementV2Anchor{index: state.previousIndex, accounts: res.PreviousAccounts, tree: res.Previous}
+	case state.previous != nil:
+		for rootIndex := state.previousIndex; anchor == nil && rootIndex > 0; {
+			rootIndex--
+			if anchor, err = self.anchor(ctx, state, res, rootIndex); err != nil {
+				return err
+			}
+		}
+		if anchor != nil {
+			action = ledger.ActionDemand
+		}
+	}
+	record.Decision = action.String()
+	switch action {
+	case ledger.ActionChallenge:
+		record.RootIndex = anchor.index
+	case ledger.ActionDemand:
 		doublings, again, err := self.reader.demandHistory(ctx, state)
 		if err != nil {
 			return err
 		}
-		demands, err := ledger.DemandSet(res.PreviousAccounts, res.Faults, doublings, again, self.random)
+		// An older anchor holds fewer accounts than F, and its rows were not
+		// compared with the pending root's.
+		again = slices.DeleteFunc(again, func(index uint64) bool { return index >= uint64(len(anchor.accounts)) })
+		faults := res.Faults
+		if res.Previous == nil {
+			faults = nil
+		}
+		demands, err := ledger.DemandSet(anchor.accounts, faults, doublings, again, self.random)
 		if err != nil {
 			return fmt.Errorf("settlement v2 demand set of pool %d seq %d: %w", state.noID, state.pending.Seq, err)
 		}
-		record.Doublings, record.Demands = doublings, demands
+		record.RootIndex, record.Doublings, record.Demands = anchor.index, doublings, demands
 	}
 	if err := self.custody.keepAuditRecord(record); err != nil {
 		return err
 	}
-	if record.Decision != "" {
-		releaseDiagnostic(ctx, "operator", "ledger_audit_"+record.Decision, 0, false, 0, releaseDiagnosticFacts{operatorId: state.noID, operatorKnown: true})
-	}
+	releaseDiagnostic(ctx, "operator", "ledger_audit_"+record.Decision, 0, false, 0, releaseDiagnosticFacts{operatorId: state.noID, operatorKnown: true})
 	return nil
+}
+
+// anchor returns the finalized root rootIndex's accounts and tree: from
+// check 2 for F, otherwise from custody alone; nil when custody does not hold
+// objects that rebuild that root.
+func (self *settlementV2Audit) anchor(ctx context.Context, state *settlementV2PoolState, res *ledger.Result, rootIndex uint64) (*settlementV2Anchor, error) {
+	if rootIndex == state.previousIndex && res.Previous != nil {
+		return &settlementV2Anchor{index: rootIndex, accounts: res.PreviousAccounts, tree: res.Previous}, nil
+	}
+	root, err := self.reader.finalizedRoot(ctx, state, rootIndex)
+	if err != nil {
+		return nil, err
+	}
+	accounts, tree, err := self.custody.accounts(ctx, settlementV2LedgerRoot(root.Epoch, root.Root, root.Total, root.LeafCount, root.LedgerHash))
+	if err != nil || tree == nil {
+		return nil, err
+	}
+	return &settlementV2Anchor{index: rootIndex, accounts: accounts, tree: tree}, nil
 }
 
 // send carries out the decision. It returns the outcome once nothing is left
@@ -267,28 +329,31 @@ func (self *settlementV2Audit) decide(ctx context.Context, state *settlementV2Po
 // window, a finalized root and an answered opening each end the decision.
 func (self *settlementV2Audit) send(ctx context.Context, state *settlementV2PoolState, record *settlementV2AuditRecord, res *ledger.Result) (string, error) {
 	noID, pending := state.noID, state.pending
+	var anchor *settlementV2Anchor
 	var err error
+	if record.Decision == settlementV2DecisionChallenge || record.Decision == settlementV2DecisionDemand {
+		if anchor, err = self.anchor(ctx, state, res, record.RootIndex); err != nil {
+			return "", err
+		}
+		if anchor == nil || record.Decision == settlementV2DecisionChallenge && !res.Reproduced {
+			return "", fmt.Errorf("settlement v2 audit of pool %d seq %d no longer rebuilds the trees of its %s against root %d", noID, pending.Seq, record.Decision, record.RootIndex)
+		}
+	}
 	switch record.Decision {
 	case settlementV2DecisionApprove:
 		err = self.sender.Approve(ctx, noID, pending)
 	case settlementV2DecisionChallenge:
-		if res.Previous == nil || !res.Reproduced {
-			return "", fmt.Errorf("settlement v2 audit of pool %d seq %d no longer rebuilds the challenged trees", noID, pending.Seq)
-		}
 		// A fault indexes an account of F, and a tree that reproduces the
 		// root has at least F's leaves, so the opening exists.
 		index := record.Faults[0].Index
-		proof, _ := res.Previous.Proof(index)
+		proof, _ := anchor.tree.Proof(index)
 		path, _ := res.Tree.Path(index)
-		err = self.sender.Challenge(ctx, noID, pending, settlementV2Account(index, &res.PreviousAccounts[index]), settlementV2ProofNodes(proof), settlementV2PathNodes(path))
+		err = self.sender.Challenge(ctx, noID, pending, anchor.index, settlementV2Account(index, &anchor.accounts[index]), settlementV2ProofNodes(proof), settlementV2PathNodes(path))
 	case settlementV2DecisionDemand:
-		if res.Previous == nil {
-			return "", fmt.Errorf("settlement v2 audit of pool %d seq %d no longer rebuilds the finalized root", noID, pending.Seq)
-		}
-		// DemandSet drew every index from F's accounts.
+		// DemandSet drew every index from the anchor's accounts.
 		for _, index := range record.Demands {
-			proof, _ := res.Previous.Proof(index)
-			if err = self.sender.Demand(ctx, noID, pending, settlementV2Account(index, &res.PreviousAccounts[index]), settlementV2ProofNodes(proof)); err != nil {
+			proof, _ := anchor.tree.Proof(index)
+			if err = self.sender.Demand(ctx, noID, pending, anchor.index, settlementV2Account(index, &anchor.accounts[index]), settlementV2ProofNodes(proof)); err != nil {
 				break
 			}
 		}

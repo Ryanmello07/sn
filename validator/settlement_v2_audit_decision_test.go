@@ -7,9 +7,11 @@
 package validator
 
 import (
+	"encoding/hex"
 	"errors"
 	"math/big"
 	"math/rand/v2"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -58,9 +60,9 @@ func (self *settlementV2AuditTestFixture) useLargeScenario(t *testing.T, n int) 
 }
 
 // requireSentDemands requires that the recording sender was asked for exactly
-// the demands of indexes, in order, each with its account of F and a proof
-// that verifies against F.
-func requireSettlementV2AuditDemands(t *testing.T, sender *settlementV2AuditTestSender, f *ledger.Ledger, indexes []uint64) {
+// the demands of indexes, in order, each with its account of the finalized
+// root rootIndex, f, and a proof that verifies against it.
+func requireSettlementV2AuditDemands(t *testing.T, sender *settlementV2AuditTestSender, f *ledger.Ledger, rootIndex uint64, indexes []uint64) {
 	t.Helper()
 	if len(sender.demands) != len(indexes) || len(sender.approvals)+len(sender.challenges) != 0 {
 		t.Fatalf("%d demands, %d approvals and %d challenges sent; want %d demands", len(sender.demands), len(sender.approvals), len(sender.challenges), len(indexes))
@@ -73,7 +75,8 @@ func requireSettlementV2AuditDemands(t *testing.T, sender *settlementV2AuditTest
 			proof[j] = merkle.LedgerNode{Hash: node.Hash, Sum: *uint256.MustFromBig(node.Sum)}
 		}
 		cumulative := uint256.MustFromBig(account.Cumulative)
-		if account.Index.Uint64() != index || account.Coldkey != want.Coldkey || !cumulative.Eq(&want.Cumulative) || !merkle.VerifyLedgerProof(root, &total, f.Tree.LeafCount(), index, account.Coldkey, cumulative, proof) {
+		if sender.rootIndexes[k] != rootIndex || account.Index.Uint64() != index || account.Coldkey != want.Coldkey || !cumulative.Eq(&want.Cumulative) ||
+			!merkle.VerifyLedgerProof(root, &total, f.Tree.LeafCount(), index, account.Coldkey, cumulative, proof) {
 			t.Fatalf("demand %d is account %s, not account %d of F with its proof", k, account.Index, index)
 		}
 	}
@@ -100,7 +103,7 @@ func TestSettlementV2AuditChallengesProvableFault(t *testing.T) {
 	if len(calls) != 1 || calls[0].method != "checkPath" || calls[0].to != settlementV2TestVault || calls[0].value.Sign() != 0 {
 		t.Fatalf("sent %d transactions, want one checkPath", len(calls))
 	}
-	requireSettlementV2AuditOpening(t, calls[0], f, 2)
+	requireSettlementV2AuditOpening(t, calls[0], f, 0, 2)
 	account := calls[0].account()
 	tree, err := merkle.BuildLedgerSumTree(t.Context(), accounts)
 	if err != nil {
@@ -163,7 +166,7 @@ func TestSettlementV2AuditWaitsForMissingObjectsThenDemands(t *testing.T) {
 		if call.method != "demandPath" || call.to != settlementV2TestVault || call.value.Cmp(settlementV2TestFee) != 0 {
 			t.Fatalf("transaction %d is %s with value %s", k, call.method, call.value)
 		}
-		requireSettlementV2AuditOpening(t, call, f, uint64(k))
+		requireSettlementV2AuditOpening(t, call, f, 0, uint64(k))
 	}
 	if fixture.chain.current().pending[settlementV2AuditTestNoID].OpenDemands != 4 {
 		t.Fatal("the demands are not open on chain")
@@ -226,7 +229,7 @@ func TestSettlementV2AuditDemandSampleIsWeightedFloor(t *testing.T) {
 	if len(want) != ledger.DemandSample || !slices.Equal(record.Demands, want) || !slices.Contains(want, 0) || record.Doublings != 0 || !record.Done {
 		t.Fatalf("demand set of %d, record %v", len(want), record.Demands)
 	}
-	requireSettlementV2AuditDemands(t, sender, f, want)
+	requireSettlementV2AuditDemands(t, sender, f, 0, want)
 }
 
 // VA-4: an F of 64 accounts is demanded whole: the sample takes every
@@ -244,13 +247,14 @@ func TestSettlementV2AuditDemandSampleTakesSmallRootWhole(t *testing.T) {
 	if record := fixture.record(t, 2); !slices.Equal(record.Demands, all) {
 		t.Fatalf("demanded %v", record.Demands)
 	}
-	requireSettlementV2AuditDemands(t, sender, f, all)
+	requireSettlementV2AuditDemands(t, sender, f, 0, all)
 }
 
 // VA-4: each earlier pending root over the same F that was deleted or
 // replaced while a demand was open doubles the sample, and its unanswered
 // indexes are demanded again. A root replaced with every demand answered,
-// and events before F was finalized, do not count.
+// events before F was finalized, and an answer of the same index proven
+// against another root do not count.
 func TestSettlementV2AuditDemandSampleDoublesAfterFailedRoot(t *testing.T) {
 	t.Parallel()
 	fixture := newSettlementV2AuditTestFixture(t)
@@ -261,18 +265,20 @@ func TestSettlementV2AuditDemandSampleDoublesAfterFailedRoot(t *testing.T) {
 	}
 	// Before F's finalization at 460, in the same log span: a failed root
 	// over an older root.
-	vault("PathDemanded", 450, uint64(9), big.NewInt(11), demander)
-	vault("DistributionDeleted", 451, uint64(9), big.NewInt(11), uint8(1), big.NewInt(0), demander)
+	vault("PathDemanded", 450, uint64(9), big.NewInt(0), big.NewInt(11), demander)
+	vault("DistributionDeleted", 451, uint64(9), big.NewInt(0), big.NewInt(11), uint8(1), big.NewInt(0), demander)
 	// Seq 2 is deleted with index 3 open; seq 3 is replaced by seq 4 with
 	// every demand answered.
 	fixture.committed(t, 605, 2, p.Commit, 0)
-	vault("PathDemanded", 610, uint64(2), big.NewInt(3), demander)
-	vault("PathDemanded", 611, uint64(2), big.NewInt(4), demander)
-	vault("PathAnswered", 612, uint64(2), big.NewInt(4), demander)
-	vault("DistributionDeleted", 620, uint64(2), big.NewInt(4), uint8(2), big.NewInt(0), demander)
+	vault("PathDemanded", 610, uint64(2), big.NewInt(0), big.NewInt(3), demander)
+	vault("PathDemanded", 611, uint64(2), big.NewInt(0), big.NewInt(4), demander)
+	vault("PathAnswered", 612, uint64(2), big.NewInt(0), big.NewInt(4), demander)
+	// An opening proven against another root answers another demand.
+	vault("PathAnswered", 615, uint64(2), big.NewInt(1), big.NewInt(3), demander)
+	vault("DistributionDeleted", 620, uint64(2), big.NewInt(0), big.NewInt(4), uint8(2), big.NewInt(0), demander)
 	fixture.committed(t, 1405, 3, p.Commit, 0)
-	vault("PathDemanded", 1410, uint64(3), big.NewInt(5), demander)
-	vault("PathAnswered", 1411, uint64(3), big.NewInt(5), demander)
+	vault("PathDemanded", 1410, uint64(3), big.NewInt(0), big.NewInt(5), demander)
+	vault("PathAnswered", 1411, uint64(3), big.NewInt(0), big.NewInt(5), demander)
 	fixture.committed(t, 2405, 4, p.Commit, 3)
 	fixture.useScenarioAt(t, f, p.Commit, ledger.Objects{}, true, 4, 2405, 2430)
 	fixture.mustPass(t)
@@ -284,7 +290,7 @@ func TestSettlementV2AuditDemandSampleDoublesAfterFailedRoot(t *testing.T) {
 	if record.Doublings != 1 || !slices.Equal(record.Demands, want) || !slices.Contains(want, 3) || len(want) < 2*ledger.DemandSample {
 		t.Fatalf("doublings %d, %d demanded", record.Doublings, len(record.Demands))
 	}
-	requireSettlementV2AuditDemands(t, sender, f, want)
+	requireSettlementV2AuditDemands(t, sender, f, 0, want)
 }
 
 // VA-4: rows that show a fault are always demanded, whatever the sample
@@ -315,7 +321,7 @@ func TestSettlementV2AuditDemandsFaultRows(t *testing.T) {
 		len(record.Faults) != 2 || record.Faults[1] != (settlementV2AuditFault{Index: 599, Kind: merkle.LedgerFaultWrongLeaf.String()}) {
 		t.Fatalf("record faults %v, %d demanded", record.Faults, len(record.Demands))
 	}
-	requireSettlementV2AuditDemands(t, sender, f, want)
+	requireSettlementV2AuditDemands(t, sender, f, 0, want)
 }
 
 // VA-4: the demand set is drawn once. A pass whose sends fail keeps the
@@ -339,7 +345,7 @@ func TestSettlementV2AuditDemandSetDrawnOnce(t *testing.T) {
 	again := &settlementV2AuditTestSender{}
 	fixture.audit.sender = again
 	fixture.mustPass(t)
-	requireSettlementV2AuditDemands(t, again, f, record.Demands)
+	requireSettlementV2AuditDemands(t, again, f, 0, record.Demands)
 	if record := fixture.record(t, 2); !record.Done || record.Outcome != "sent" {
 		t.Fatalf("record %+v", record)
 	}
@@ -537,6 +543,130 @@ func TestSettlementV2AuditDemandsResumeAfterFailedSend(t *testing.T) {
 		t.Fatalf("%d demands accepted", len(calls))
 	}
 	for k, call := range calls {
-		requireSettlementV2AuditOpening(t, call, f, uint64(k))
+		requireSettlementV2AuditOpening(t, call, f, 0, uint64(k))
+	}
+}
+
+// useOlderScenario puts two finalized roots on chain: R, root 0, for epoch 3
+// (the standard F), and F, root 1, for epochs 4 and 5 (the standard P),
+// finalized at block 660, with mutate applied to F as vault2 records it. The
+// pending root P covers epoch 6 and is committed at block 705 as seq 3; the
+// head is block 710. Custody holds R's objects when holdR; F's and P's are
+// not published.
+func (self *settlementV2AuditTestFixture) useOlderScenario(t *testing.T, holdR bool, mutate func(*ledger.Root)) (r, f, p *ledger.Ledger) {
+	t.Helper()
+	funded := settlementV2AuditTestFunding()
+	funded[6] = *uint256.NewInt(3_000_000)
+	self.useFunding(funded)
+	r = settlementV2AuditTestF(t)
+	f = settlementV2AuditTestP(t, r)
+	p = settlementV2AuditTestBuild(t, f, []ledger.EpochInput{{Epoch: 6, Rows: []protocol.LedgerUsageRow{settlementV2AuditTestRow(3, 2, 100, false)}}}, funded)
+	if holdR {
+		self.holdF(t, r)
+	}
+	finalized := f.Commit
+	if mutate != nil {
+		mutate(&finalized)
+	}
+	self.chain.addLog(t, settlementV2VaultABI, settlementV2TestVault, "DistributionFinalized", 660, big.NewInt(settlementV2AuditTestNoID), uint64(2), big.NewInt(1), finalized.Epoch, finalized.Root, finalized.Total.ToBig(), finalized.LeafCount, [32]byte(finalized.LedgerHash))
+	self.committed(t, 705, 3, p.Commit, 0)
+	self.chain.advanceTo(709)
+	self.setPool(settlementV2AuditTestPending(3, p.Commit, 705), r.Commit, finalized)
+	return r, f, p
+}
+
+// G2, VA-4: when the latest finalized root's objects are withheld, the audit
+// waits until commit + CHALLENGE_BLOCKS/2, then demands against the latest
+// older finalized root whose objects custody holds: each demand names that
+// root's index and proves its account against it.
+func TestSettlementV2AuditDemandsAgainstOlderRootWhenLatestWithheld(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	r, f, _ := fixture.useOlderScenario(t, true, nil)
+	fixture.mustPass(t)
+	if record := fixture.record(t, 3); record.Decision != "" || record.Check != "fetch" || !slices.Equal(record.Missing, []string{ledger.Ref(f.Commit.LedgerHash).String()}) {
+		t.Fatalf("record %+v", record)
+	}
+	fixture.chain.advanceTo(730)
+	fixture.mustPass(t)
+	record := fixture.record(t, 3)
+	if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || !record.Done || record.Outcome != "sent" || !slices.Equal(record.Demands, []uint64{0, 1, 2, 3}) {
+		t.Fatalf("record %+v", record)
+	}
+	calls := fixture.sentCalls(t)
+	if len(calls) != len(r.Accounts) {
+		t.Fatalf("%d demands sent", len(calls))
+	}
+	for k, call := range calls {
+		requireSettlementV2AuditOpening(t, call, r, 0, uint64(k))
+	}
+}
+
+// G2, VA-4: a latest finalized root whose objects do not rebuild it is
+// passed over at once for the older root custody holds.
+func TestSettlementV2AuditDemandsAgainstOlderRootWhenLatestInvalid(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	r, f, _ := fixture.useOlderScenario(t, true, func(root *ledger.Root) { root.Total.AddUint64(&root.Total, 1) })
+	for ref, data := range f.Objects {
+		if err := fixture.audit.custody.Keep(t.Context(), ref, data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sender := &settlementV2AuditTestSender{}
+	fixture.audit.sender = sender
+	fixture.mustPass(t)
+	record := fixture.record(t, 3)
+	if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || record.Check != "previous root" || !strings.Contains(record.Error, ledger.ErrPreviousNotTight.Error()) {
+		t.Fatalf("record %+v", record)
+	}
+	requireSettlementV2AuditDemands(t, sender, r, 0, []uint64{0, 1, 2, 3})
+}
+
+// G2, VA-4: without a finalized root whose objects custody holds, a root
+// whose previous root cannot be verified is refused, and nothing is sent.
+func TestSettlementV2AuditRefusesWithoutVerifiedRoot(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	fixture.useOlderScenario(t, false, nil)
+	fixture.chain.advanceTo(730)
+	fixture.mustPass(t)
+	record := fixture.record(t, 3)
+	if record.Decision != settlementV2DecisionRefuse || !record.Done || record.Outcome != "refused" || len(fixture.chain.accepted()) != 0 {
+		t.Fatalf("record %+v", record)
+	}
+}
+
+// G2: a demand decided against an older root is sent from custody after a
+// restart; if custody no longer holds that root, nothing is sent and the
+// pass fails, to be retried.
+func TestSettlementV2AuditOlderRootSentAfterRestart(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	r, _, _ := fixture.useOlderScenario(t, true, nil)
+	fixture.chain.advanceTo(730)
+	failing := &settlementV2AuditTestSender{err: errors.New("synthetic send failure")}
+	fixture.audit.sender = failing
+	if err := fixture.pass(t); !errors.Is(err, failing.err) {
+		t.Fatalf("pass: %v", err)
+	}
+	fixture.restart(t)
+	again := &settlementV2AuditTestSender{}
+	fixture.audit.sender = again
+	fixture.mustPass(t)
+	requireSettlementV2AuditDemands(t, again, r, 0, []uint64{0, 1, 2, 3})
+
+	lost := newSettlementV2AuditTestFixture(t)
+	r, _, _ = lost.useOlderScenario(t, true, nil)
+	lost.chain.advanceTo(730)
+	lost.audit.sender = failing
+	if err := lost.pass(t); !errors.Is(err, failing.err) {
+		t.Fatalf("pass: %v", err)
+	}
+	if err := os.Remove(lost.audit.custody.path("objects", hex.EncodeToString(r.Commit.LedgerHash[:]))); err != nil {
+		t.Fatal(err)
+	}
+	if err := lost.pass(t); err == nil || !strings.Contains(err.Error(), "no longer rebuilds the trees of its demand against root 0") {
+		t.Fatalf("pass without the root in custody: %v", err)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/urfoundation/sn/ledger"
+	"github.com/urfoundation/sn/merkle"
 	"github.com/urfoundation/sn/stabi"
 )
 
@@ -74,8 +75,10 @@ type settlementV2AuditRecord struct {
 	Missing []string                 `json:"missing,omitempty"`
 	Faults  []settlementV2AuditFault `json:"faults,omitempty"`
 	// Decision is empty while the audit waits for its objects, then approve,
-	// challenge, demand or refuse. A demand's set is drawn once.
+	// challenge, demand or refuse. A challenge or demand proves accounts of
+	// the finalized root RootIndex; a demand's set is drawn once.
 	Decision  string   `json:"decision,omitempty"`
+	RootIndex uint64   `json:"root_index"`
 	Doublings uint     `json:"doublings,omitempty"`
 	Demands   []uint64 `json:"demands,omitempty"`
 	// Done: nothing is left to send, for the reason in Outcome.
@@ -217,6 +220,38 @@ func (self *settlementV2Custody) auditRecord(noID uint64, pending stabi.ISTSettl
 		return nil, fmt.Errorf("settlement v2 custody %s is not the audit of pool %d's pending root seq %d", path, noID, pending.Seq)
 	}
 	return &record, nil
+}
+
+// accounts returns a finalized root's accounts and their tree from custody
+// alone, or nil when custody does not hold every object of the root or they
+// do not rebuild it.
+func (self *settlementV2Custody) accounts(ctx context.Context, root ledger.Root) ([]merkle.LedgerAccount, *merkle.LedgerSumTree, error) {
+	data, ok, err := self.Object(ctx, root.LedgerHash)
+	if err != nil || !ok {
+		return nil, nil, err
+	}
+	header, err := ledger.DecodeHeader(data)
+	if err != nil {
+		return nil, nil, nil
+	}
+	chunks := make([][]byte, len(header.Accounts))
+	for j, ref := range header.Accounts {
+		if chunks[j], ok, err = self.Object(ctx, ref); err != nil || !ok {
+			return nil, nil, err
+		}
+	}
+	accounts, err := ledger.DecodeAccountChunks(chunks)
+	if err != nil {
+		return nil, nil, nil
+	}
+	tree, err := merkle.BuildLedgerSumTree(ctx, accounts)
+	if err != nil {
+		return nil, nil, ctx.Err()
+	}
+	if hash, total := tree.Root(); hash != root.Root || !total.Eq(&root.Total) || tree.LeafCount() != root.LeafCount {
+		return nil, nil, nil
+	}
+	return accounts, tree, nil
 }
 
 func (self *settlementV2Custody) keepAuditRecord(record *settlementV2AuditRecord) error {
