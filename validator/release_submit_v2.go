@@ -169,7 +169,7 @@ func newReleaseSteererV2Context(ctx context.Context, cfg *ReleaseConfig, chain *
 	}
 	ema.v2.provisionalEpochGaps = runtime.history != nil && runtime.history.retainedStartup && provisionalClosedNativeInputEnabled(&ownedCfg)
 	ema.v2.historyAdoption = runtime.history.historyAdoption
-	self := &ReleaseSteerer{cfg: &ownedCfg, chain: chain, native: native, hotkey: runtime.hotkey, contexts: byNo, operators: operators, intents: intents, headEMA: ema, runtimeV2: runtime}
+	self := &ReleaseSteerer{cfg: &ownedCfg, chain: chain, native: native, hotkey: runtime.hotkey, contexts: byNo, operators: operators, intents: intents, headEMA: ema, runtimeV2: runtime, settlementV2: releaseSettlementV2Addresses(&ownedCfg)}
 	if err := requireReleaseEvidenceV2Runtime(self); err != nil {
 		return nil, err
 	}
