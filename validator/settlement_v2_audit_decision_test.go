@@ -550,6 +550,87 @@ func TestSettlementV2AuditChallengeOfDeletedRootSucceeds(t *testing.T) {
 	}
 }
 
+// VA-8: an approval this auditor's key already counts for the pending root
+// at the current auditor set version is success: the audit sends nothing.
+func TestSettlementV2AuditApprovalAlreadyCountedSucceeds(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f := settlementV2AuditTestF(t)
+	p := settlementV2AuditTestP(t, f)
+	fixture.useScenario(t, f, p.Commit, p.Objects, true, 610)
+	fixture.chain.mutate(func(state *settlementV2TestState) {
+		state.approved[settlementV2TestApproval{noID: settlementV2AuditTestNoID, seq: 2, version: state.version, auditor: fixture.auditor()}] = true
+	})
+	fixture.mustPass(t)
+	record := fixture.record(t, 2)
+	if record.Decision != settlementV2DecisionApprove || !record.Done || record.Outcome != "sent" || len(fixture.chain.accepted()) != 0 {
+		t.Fatalf("record %+v, %d sent", record, len(fixture.chain.accepted()))
+	}
+}
+
+// VA-8: demands are keyed by seq, root index and account index. An index
+// another demander already demanded against the root the audit protects is
+// success and is not demanded again; the same index demanded against another
+// finalized root does not count, so it is demanded against this one.
+func TestSettlementV2AuditDemandAlreadyDemandedSucceeds(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	r, _, _ := fixture.useOlderScenario(t, true, nil)
+	id, watcher := big.NewInt(settlementV2AuditTestNoID), common.Address{0xd2}
+	for _, demand := range []settlementV2TestDemand{{noID: settlementV2AuditTestNoID, seq: 3, rootIndex: 0, index: 2}, {noID: settlementV2AuditTestNoID, seq: 3, rootIndex: 1, index: 1}} {
+		fixture.chain.addLog(t, settlementV2VaultABI, settlementV2TestVault, "PathDemanded", 710, id, demand.seq, new(big.Int).SetUint64(demand.rootIndex), new(big.Int).SetUint64(demand.index), watcher)
+		fixture.chain.mutate(func(state *settlementV2TestState) {
+			state.demanded[demand] = settlementV2TestDemandOpen
+			pending := state.pending[settlementV2AuditTestNoID]
+			pending.OpenDemands++
+			state.pending[settlementV2AuditTestNoID] = pending
+		})
+	}
+	fixture.chain.advanceTo(730)
+	fixture.mustPass(t)
+	record := fixture.record(t, 3)
+	if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || record.Doublings != 0 || !record.Done || record.Outcome != "sent" || !slices.Equal(record.Demands, []uint64{0, 1, 2, 3}) {
+		t.Fatalf("record %+v", record)
+	}
+	calls := fixture.sentCalls(t)
+	if len(calls) != 3 {
+		t.Fatalf("%d demands sent, want 3", len(calls))
+	}
+	for k, index := range []uint64{0, 1, 3} {
+		requireSettlementV2AuditOpening(t, calls[k], r, 0, index)
+	}
+	state := fixture.chain.current()
+	for index := uint64(0); index < 4; index++ {
+		if state.demanded[settlementV2TestDemand{noID: settlementV2AuditTestNoID, seq: 3, rootIndex: 0, index: index}] != settlementV2TestDemandOpen {
+			t.Fatalf("account %d of root 0 is not demanded", index)
+		}
+	}
+	if state.pending[settlementV2AuditTestNoID].OpenDemands != 5 {
+		t.Fatalf("%d open demands, want 5", state.pending[settlementV2AuditTestNoID].OpenDemands)
+	}
+}
+
+// VA-8: a root replaced between the audit's read and its demands ends the
+// decision: no demand is sent, and the outcome records why.
+func TestSettlementV2AuditDemandOfReplacedRootEnds(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f := settlementV2AuditTestF(t)
+	p := settlementV2AuditTestP(t, f)
+	fixture.useScenario(t, f, p.Commit, ledger.Objects{}, true, 630)
+	fixture.chain.before = func(name string) {
+		if name == "demandFeeWei" {
+			fixture.chain.before = nil
+			fixture.setPool(settlementV2AuditTestPending(3, p.Commit, 629), f.Commit)
+		}
+	}
+	fixture.mustPass(t)
+	record := fixture.record(t, 2)
+	if record.Decision != settlementV2DecisionDemand || !record.Done || record.Outcome != ErrSettlementV2RootNotPending.Error() || len(fixture.chain.accepted()) != 0 {
+		t.Fatalf("record %+v, %d sent", record, len(fixture.chain.accepted()))
+	}
+}
+
 // VA-4: a demand set's sends are idempotent: after a send the endpoint
 // refused, a restarted validator rebroadcasts that exact transaction, sends
 // the rest, and never sends a demand twice.
