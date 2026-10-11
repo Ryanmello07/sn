@@ -442,7 +442,8 @@ func ledgerProofCases() []ledgerProofCase {
 		add("index_at_leaf_count", false, "", func(c *ledgerProofCase) { c.index = c.leafCount })
 		add("index_max", false, "", func(c *ledgerProofCase) { c.index = math.MaxUint64 })
 		add("root", false, "", func(c *ledgerProofCase) { c.root[0] ^= 1 })
-		add("total", false, "", func(c *ledgerProofCase) { c.total.AddUint64(&c.total, 1) })
+		add("total_above", false, "", func(c *ledgerProofCase) { c.total.AddUint64(&c.total, 1) })
+		add("total_below", false, "", func(c *ledgerProofCase) { c.total.SubUint64(&c.total, 1) })
 		add("leaf_count_zero", false, "InvalidLeafCount", func(c *ledgerProofCase) { c.leafCount = 0 })
 		add("leaf_count_above_max", false, "InvalidLeafCount", func(c *ledgerProofCase) { c.leafCount = MaxLedgerLeafCount + 1 })
 		if n == 1 {
@@ -551,7 +552,8 @@ func TestLedgerProofRejectsEverySingleChange(t *testing.T) {
 			changedRoot := root
 			changedRoot[31] ^= 1
 			reject("root", changedRoot, total, leafCount, index, a, proof)
-			reject("total", root, *new(uint256.Int).AddUint64(&total, 1), leafCount, index, a, proof)
+			reject("total above", root, *new(uint256.Int).AddUint64(&total, 1), leafCount, index, a, proof)
+			reject("total below", root, *new(uint256.Int).SubUint64(&total, 1), leafCount, index, a, proof)
 			for _, other := range []uint64{0, 2*leafCount + 1, MaxLedgerLeafCount + 1} {
 				reject("leaf count", root, total, other, index, a, proof)
 			}
