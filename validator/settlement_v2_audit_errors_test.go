@@ -327,6 +327,30 @@ func TestSettlementV2AuditDecisionNeedsItsTrees(t *testing.T) {
 			t.Fatalf("a challenge without its trees: %v", err)
 		}
 	})
+	t.Run("challenge with a corrupt pending object", func(t *testing.T) {
+		fixture := newSettlementV2AuditTestFixture(t)
+		f := settlementV2AuditTestF(t)
+		p := settlementV2AuditTestP(t, f)
+		pub := settlementV2AuditTestPublish(t, p)
+		accounts := append([]merkle.LedgerAccount(nil), p.Accounts...)
+		accounts[1].Coldkey = settlementV2AuditTestColdkey(99)
+		pub.setAccounts(t, accounts)
+		commit := pub.seal(t)
+		fixture.useScenario(t, f, commit, pub.objects, true, 610)
+		failing := &settlementV2AuditTestSender{err: errors.New("synthetic send failure")}
+		fixture.audit.sender = failing
+		if err := fixture.pass(t); !errors.Is(err, failing.err) {
+			t.Fatalf("pass: %v", err)
+		}
+		if err := os.WriteFile(fixture.audit.custody.path("objects", strings.TrimPrefix(ledger.Ref(commit.LedgerHash).String(), "sha256:")), []byte("tampered"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		sender := &settlementV2AuditTestSender{}
+		fixture.audit.sender = sender
+		if err := fixture.pass(t); err == nil || !strings.Contains(err.Error(), "does not match its reference") || len(sender.challenges) != 0 {
+			t.Fatalf("a challenge over a corrupt pending object: %v", err)
+		}
+	})
 	t.Run("older root unreadable", func(t *testing.T) {
 		fixture := newSettlementV2AuditTestFixture(t)
 		fixture.useOlderScenario(t, true, nil)

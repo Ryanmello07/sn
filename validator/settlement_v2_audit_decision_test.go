@@ -7,9 +7,11 @@
 package validator
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
+	"io"
 	"math/big"
 	"math/rand/v2"
 	"os"
@@ -679,12 +681,18 @@ func TestSettlementV2AuditDemandsResumeAfterFailedSend(t *testing.T) {
 // not published.
 func (self *settlementV2AuditTestFixture) useOlderScenario(t *testing.T, holdR bool, mutate func(*ledger.Root)) (r, f, p *ledger.Ledger) {
 	t.Helper()
-	funded := settlementV2AuditTestFunding()
-	funded[6] = *uint256.NewInt(3_000_000)
+	return self.useOlderScenarioOver(t, settlementV2AuditTestF(t), settlementV2AuditTestFunding(), holdR, mutate)
+}
+
+// useOlderScenarioOver is useOlderScenario with root 0 r, built over funded,
+// which also funds F's epochs; epoch 6 adds 500,000.
+func (self *settlementV2AuditTestFixture) useOlderScenarioOver(t *testing.T, r *ledger.Ledger, funded map[uint64]uint256.Int, holdR bool, mutate func(*ledger.Root)) (*ledger.Ledger, *ledger.Ledger, *ledger.Ledger) {
+	t.Helper()
+	five := funded[5]
+	funded[6] = *new(uint256.Int).AddUint64(&five, 500_000)
 	self.useFunding(funded)
-	r = settlementV2AuditTestF(t)
-	f = settlementV2AuditTestP(t, r)
-	p = settlementV2AuditTestBuild(t, f, []ledger.EpochInput{{Epoch: 6, Rows: []protocol.LedgerUsageRow{settlementV2AuditTestRow(3, 2, 100, false)}}}, funded)
+	f := settlementV2AuditTestBuild(t, r, []ledger.EpochInput{{Epoch: 4, Rows: settlementV2AuditTestRows4()}, {Epoch: 5, Rows: settlementV2AuditTestRows5()}}, funded)
+	p := settlementV2AuditTestBuild(t, f, []ledger.EpochInput{{Epoch: 6, Rows: []protocol.LedgerUsageRow{settlementV2AuditTestRow(3, 2, 100, false)}}}, funded)
 	if holdR {
 		self.holdF(t, r)
 	}
@@ -697,6 +705,28 @@ func (self *settlementV2AuditTestFixture) useOlderScenario(t *testing.T, holdR b
 	self.chain.advanceTo(709)
 	self.setPool(settlementV2AuditTestPending(3, p.Commit, 705), r.Commit, finalized)
 	return r, f, p
+}
+
+// commitOlderPending replaces the older scenario's pending root with one
+// whose published accounts are accounts, committed to their own tree when
+// reproduce, and otherwise under P's commitment, which they do not
+// reproduce. It publishes the root's header and account chunks.
+func (self *settlementV2AuditTestFixture) commitOlderPending(t *testing.T, r, f, p *ledger.Ledger, accounts []merkle.LedgerAccount, reproduce bool) ledger.Root {
+	t.Helper()
+	pub := settlementV2AuditTestPublish(t, p)
+	if reproduce {
+		pub.setAccounts(t, accounts)
+	} else {
+		chunks, err := ledger.EncodeAccountChunks(accounts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pub.header.Accounts = pub.put(chunks)
+	}
+	commit := pub.seal(t)
+	self.objects.publish(pub.objects)
+	self.setPool(settlementV2AuditTestPending(3, commit, 705), r.Commit, f.Commit)
+	return commit
 }
 
 // G2, VA-4: when the latest finalized root's objects are withheld, the audit
@@ -793,4 +823,237 @@ func TestSettlementV2AuditOlderRootSentAfterRestart(t *testing.T) {
 	if err := lost.pass(t); err == nil || !strings.Contains(err.Error(), "no longer rebuilds the trees of its demand against root 0") {
 		t.Fatalf("pass without the root in custody: %v", err)
 	}
+}
+
+// G2, VA-4: when the latest finalized root's objects are withheld, the audit
+// reads the pending root's published accounts itself and compares them with
+// the older root it protects. A fault they prove while reproducing the
+// pending root is challenged: checkPath names that root's index and carries
+// its account, with its proof against it, and the pending root's path, which
+// shows the fault at the leaf.
+func TestSettlementV2AuditChallengesAgainstOlderRoot(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	r, f, p := fixture.useOlderScenario(t, true, nil)
+	accounts := slices.Clone(p.Accounts)
+	accounts[1].Coldkey = settlementV2AuditTestColdkey(99)
+	commit := fixture.commitOlderPending(t, r, f, p, accounts, true)
+	fixture.chain.faults[1] = true
+	fixture.chain.advanceTo(730)
+	fixture.mustPass(t)
+	record := fixture.record(t, 3)
+	if record.Decision != settlementV2DecisionChallenge || record.RootIndex != 0 || !record.Done || record.Outcome != "sent" ||
+		len(record.Faults) != 1 || record.Faults[0] != (settlementV2AuditFault{Index: 1, Kind: merkle.LedgerFaultWrongLeaf.String()}) {
+		t.Fatalf("record %+v", record)
+	}
+	calls := fixture.sentCalls(t)
+	if len(calls) != 1 || calls[0].method != "checkPath" || calls[0].to != settlementV2TestVault {
+		t.Fatalf("sent %d transactions, want one checkPath", len(calls))
+	}
+	requireSettlementV2AuditOpening(t, calls[0], r, 0, 1)
+	account := calls[0].account()
+	fault, level, err := merkle.WalkLedgerPath(commit.Root, &commit.Total, commit.LeafCount, 1, account.Coldkey, uint256.MustFromBig(account.Cumulative), calls[0].path())
+	if err != nil || fault != merkle.LedgerFaultWrongLeaf || level != 0 {
+		t.Fatalf("the path shows %v at level %d: %v", fault, level, err)
+	}
+	if fixture.chain.current().pending[settlementV2AuditTestNoID].Seq != 0 {
+		t.Fatal("the challenge did not delete the root")
+	}
+}
+
+// G2, VA-4: published accounts that do not reproduce the pending root are
+// compared with the older protected root too, and the rows they fault, here
+// two lowered and a missing one, are always demanded against it. They are
+// sent after the sample, so that rows faulting every account cannot hold the
+// sample back past the window. The pending root's objects, kept when read,
+// are not fetched again.
+func TestSettlementV2AuditDemandsFaultRowsAgainstOlderRoot(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	large, funded := settlementV2AuditTestLargeF(t, 600)
+	r, f, p := fixture.useOlderScenarioOver(t, large, funded, true, nil)
+	sender := &settlementV2AuditTestSender{}
+	fixture.audit.sender = sender
+	accounts := slices.Clone(p.Accounts[:599])
+	for _, i := range []int{1, 2} {
+		accounts[i].Cumulative.SubUint64(&r.Accounts[i].Cumulative, 1)
+	}
+	commit := fixture.commitOlderPending(t, r, f, p, accounts, false)
+	fixture.chain.advanceTo(730)
+	fixture.chain.lock.Lock()
+	fixture.chain.failures["eth_getLogs"] = fixture.chain.counts["eth_getLogs"] + 1
+	fixture.chain.lock.Unlock()
+	if err := fixture.pass(t); err == nil || !strings.Contains(err.Error(), "synthetic eth_getLogs failure") {
+		t.Fatalf("pass: %v", err)
+	}
+	fixture.requireUndecided(t, 3)
+	fixture.chain.lock.Lock()
+	delete(fixture.chain.failures, "eth_getLogs")
+	fixture.chain.lock.Unlock()
+	fixture.mustPass(t)
+	faults := []ledger.Fault{{Index: 1, Kind: merkle.LedgerFaultLowerValue}, {Index: 2, Kind: merkle.LedgerFaultLowerValue}, {Index: 599, Kind: merkle.LedgerFaultWrongLeaf}}
+	sample, err := ledger.DemandSet(r.Accounts, faults, 0, nil, settlementV2AuditTestRandom())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := append(slices.DeleteFunc(slices.Clone(sample), func(index uint64) bool { return index == 1 || index == 2 || index == 599 }), 1, 2, 599)
+	record := fixture.record(t, 3)
+	if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || !record.Done || len(want) != ledger.DemandSample+3 || want[0] != 0 || !slices.Equal(record.Demands, want) ||
+		!slices.Equal(record.Faults, []settlementV2AuditFault{{Index: 1, Kind: merkle.LedgerFaultLowerValue.String()}, {Index: 2, Kind: merkle.LedgerFaultLowerValue.String()}, {Index: 599, Kind: merkle.LedgerFaultWrongLeaf.String()}}) {
+		t.Fatalf("record %+v", record)
+	}
+	requireSettlementV2AuditDemands(t, sender, r, 0, want)
+	header, err := ledger.DecodeHeader(fixture.objects.objects[commit.LedgerHash])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := fixture.objects.fetched(append([]ledger.Ref{commit.LedgerHash}, header.Accounts...)...); n != 1+len(header.Accounts) {
+		t.Fatalf("the pending root's objects were fetched %d times", n)
+	}
+}
+
+// G2: a pending root whose published accounts reproduce it and keep every
+// account of the older protected root is refused, as F cannot be verified,
+// and nothing is sent: every account the audit can protect is intact.
+func TestSettlementV2AuditRefusesIntactRootOverOlderRoot(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	_, _, p := fixture.useOlderScenario(t, true, nil)
+	fixture.objects.publish(p.Objects)
+	fixture.chain.advanceTo(730)
+	fixture.mustPass(t)
+	record := fixture.record(t, 3)
+	if record.Decision != settlementV2DecisionRefuse || !record.Done || record.Outcome != "refused" || record.Faults != nil || len(fixture.chain.accepted()) != 0 {
+		t.Fatalf("record %+v, %d sent", record, len(fixture.chain.accepted()))
+	}
+}
+
+// G2, VA-4: a pending root whose published accounts the audit cannot read
+// over an older protected root is demanded against it with no fault forced:
+// its header beyond the byte budget, served bytes that do not match its
+// reference, a header that does not decode, a chunk withheld, or chunks that
+// do not decode. Each object it could not obtain is recorded as missing.
+func TestSettlementV2AuditOlderRootDemandsUnreadablePendingAccounts(t *testing.T) {
+	t.Parallel()
+	for name, mutate := range map[string]func(*testing.T, *settlementV2AuditTestFixture, *ledger.Ledger, *ledger.Ledger, *ledger.Ledger) []ledger.Ref{
+		"header beyond the byte budget": func(t *testing.T, fixture *settlementV2AuditTestFixture, r, f, p *ledger.Ledger) []ledger.Ref {
+			fixture.objects.publish(p.Objects)
+			fixture.audit.maxBytes = uint64(len(p.Header)) - 1
+			return []ledger.Ref{p.Commit.LedgerHash}
+		},
+		"header bytes not its reference": func(t *testing.T, fixture *settlementV2AuditTestFixture, r, f, p *ledger.Ledger) []ledger.Ref {
+			fixture.objects.publish(p.Objects)
+			fixture.objects.publish(ledger.Objects{p.Commit.LedgerHash: f.Header})
+			return []ledger.Ref{p.Commit.LedgerHash}
+		},
+		"header not canonical": func(t *testing.T, fixture *settlementV2AuditTestFixture, r, f, p *ledger.Ledger) []ledger.Ref {
+			pub := settlementV2AuditTestPublish(t, p)
+			commit := pub.sealBytes(bytes.Replace(p.Header, []byte(`"no_id":1`), []byte(`"no_id": 1`), 1))
+			fixture.objects.publish(pub.objects)
+			fixture.setPool(settlementV2AuditTestPending(3, commit, 705), r.Commit, f.Commit)
+			return nil
+		},
+		"chunk withheld": func(t *testing.T, fixture *settlementV2AuditTestFixture, r, f, p *ledger.Ledger) []ledger.Ref {
+			header, err := ledger.DecodeHeader(p.Header)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture.objects.publish(p.Objects)
+			fixture.objects.withdraw(header.Accounts[0])
+			return []ledger.Ref{header.Accounts[0]}
+		},
+		"chunks do not decode": func(t *testing.T, fixture *settlementV2AuditTestFixture, r, f, p *ledger.Ledger) []ledger.Ref {
+			pub := settlementV2AuditTestPublish(t, p)
+			chunk := pub.objects[pub.header.Accounts[0]]
+			pub.header.Accounts = pub.put([][]byte{chunk[:ledger.AccountRowBytes], chunk[ledger.AccountRowBytes:]})
+			commit := pub.seal(t)
+			fixture.objects.publish(pub.objects)
+			fixture.setPool(settlementV2AuditTestPending(3, commit, 705), r.Commit, f.Commit)
+			return nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fixture := newSettlementV2AuditTestFixture(t)
+			r, f, p := fixture.useOlderScenario(t, true, nil)
+			missing := []string{ledger.Ref(f.Commit.LedgerHash).String()}
+			for _, ref := range mutate(t, fixture, r, f, p) {
+				missing = append(missing, ref.String())
+			}
+			fixture.chain.advanceTo(730)
+			fixture.mustPass(t)
+			record := fixture.record(t, 3)
+			if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || record.Faults != nil || !slices.Equal(record.Demands, []uint64{0, 1, 2, 3}) || !slices.Equal(record.Missing, missing) {
+				t.Fatalf("record %+v, want missing %v", record, missing)
+			}
+			calls := fixture.sentCalls(t)
+			if len(calls) != len(r.Accounts) {
+				t.Fatalf("%d demands sent", len(calls))
+			}
+			for k, call := range calls {
+				requireSettlementV2AuditOpening(t, call, r, 0, uint64(k))
+			}
+		})
+	}
+}
+
+// settlementV2AuditTestFetcher runs before ahead of each fetch.
+type settlementV2AuditTestFetcher struct {
+	ledger.Fetcher
+	before func(ledger.Ref)
+}
+
+func (self settlementV2AuditTestFetcher) Fetch(ctx context.Context, ref ledger.Ref) (io.ReadCloser, error) {
+	self.before(ref)
+	return self.Fetcher.Fetch(ctx, ref)
+}
+
+// G2: reading the pending root's accounts over an older root fails the pass,
+// deciding nothing, when custody cannot read or keep an object or the pass's
+// context ends while fetching one.
+func TestSettlementV2AuditOlderRootPendingReadFailures(t *testing.T) {
+	t.Parallel()
+	setup := func(t *testing.T) (*settlementV2AuditTestFixture, *ledger.Ledger) {
+		fixture := newSettlementV2AuditTestFixture(t)
+		_, _, p := fixture.useOlderScenario(t, true, nil)
+		fixture.objects.publish(p.Objects)
+		fixture.chain.advanceTo(730)
+		return fixture, p
+	}
+	t.Run("custody unreadable", func(t *testing.T) {
+		fixture, p := setup(t)
+		if err := os.Mkdir(fixture.audit.custody.path("objects", hex.EncodeToString(p.Commit.LedgerHash[:])), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := fixture.pass(t); err == nil || !strings.Contains(err.Error(), "is a directory") {
+			t.Fatalf("an unreadable custody object: %v", err)
+		}
+		fixture.requireUndecided(t, 3)
+	})
+	t.Run("custody cannot keep", func(t *testing.T) {
+		fixture, p := setup(t)
+		fixture.audit.pools[0].objects = settlementV2AuditTestFetcher{Fetcher: fixture.audit.pools[0].objects, before: func(ref ledger.Ref) {
+			if ref == p.Commit.LedgerHash {
+				settlementV2CustodyTestBlock(t, fixture.audit.custody.path("objects", ""))
+			}
+		}}
+		if err := fixture.pass(t); err == nil {
+			t.Fatal("an object custody could not keep was read")
+		}
+		fixture.requireUndecided(t, 3)
+	})
+	t.Run("context ends", func(t *testing.T) {
+		fixture, p := setup(t)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		fixture.audit.pools[0].objects = settlementV2AuditTestFetcher{Fetcher: fixture.audit.pools[0].objects, before: func(ref ledger.Ref) {
+			if ref == p.Commit.LedgerHash {
+				cancel()
+			}
+		}}
+		if err := fixture.audit.audit(ctx, fixture.audit.pools[0]); !errors.Is(err, context.Canceled) {
+			t.Fatalf("a pass whose context ended: %v", err)
+		}
+		fixture.requireUndecided(t, 3)
+	})
 }

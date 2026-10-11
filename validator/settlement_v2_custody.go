@@ -68,7 +68,7 @@ type settlementV2AuditRecord struct {
 	FetchedBytes uint64 `json:"fetched_bytes"`
 	// The latest audit: its pinned block, the first check that failed and
 	// its error, the objects it could not obtain, and the accounts of the
-	// finalized root that the published rows fault.
+	// protected finalized root that the published rows fault.
 	Block   uint64                   `json:"block"`
 	Check   string                   `json:"check"`
 	Error   string                   `json:"error,omitempty"`
@@ -76,7 +76,8 @@ type settlementV2AuditRecord struct {
 	Faults  []settlementV2AuditFault `json:"faults,omitempty"`
 	// Decision is empty while the audit waits for its objects, then approve,
 	// challenge, demand or refuse. A challenge or demand proves accounts of
-	// the finalized root RootIndex; a demand's set is drawn once.
+	// the finalized root RootIndex; a demand's set is drawn once and sent in
+	// its order.
 	Decision  string   `json:"decision,omitempty"`
 	RootIndex uint64   `json:"root_index"`
 	Doublings uint     `json:"doublings,omitempty"`
@@ -93,16 +94,21 @@ type settlementV2AuditFault struct {
 
 // observe records an audit's finding at the pinned block.
 func (self *settlementV2AuditRecord) observe(block uint64, res *ledger.Result) {
-	self.Block, self.Check, self.Error, self.Missing, self.Faults = block, res.Check.String(), "", nil, nil
+	self.Block, self.Check, self.Error, self.Missing, self.Faults = block, res.Check.String(), "", nil, settlementV2AuditFaults(res.Faults)
 	if res.Err != nil {
 		self.Error = res.Err.Error()
 	}
 	for _, ref := range res.Missing {
 		self.Missing = append(self.Missing, ref.String())
 	}
-	for _, fault := range res.Faults {
-		self.Faults = append(self.Faults, settlementV2AuditFault{Index: fault.Index, Kind: fault.Kind.String()})
+}
+
+func settlementV2AuditFaults(faults []ledger.Fault) []settlementV2AuditFault {
+	var out []settlementV2AuditFault
+	for _, fault := range faults {
+		out = append(out, settlementV2AuditFault{Index: fault.Index, Kind: fault.Kind.String()})
 	}
+	return out
 }
 
 // openSettlementV2Custody keeps custody under stateDir/settlement-v2-ledger.
@@ -244,14 +250,24 @@ func (self *settlementV2Custody) accounts(ctx context.Context, root ledger.Root)
 	if err != nil {
 		return nil, nil, nil
 	}
-	tree, err := merkle.BuildLedgerSumTree(ctx, accounts)
-	if err != nil {
+	tree := settlementV2Rebuild(ctx, accounts, root)
+	if tree == nil {
 		return nil, nil, ctx.Err()
 	}
-	if hash, total := tree.Root(); hash != root.Root || !total.Eq(&root.Total) || tree.LeafCount() != root.LeafCount {
-		return nil, nil, nil
-	}
 	return accounts, tree, nil
+}
+
+// settlementV2Rebuild returns the tree of accounts when it is root, with its
+// total and leaf count; nil when it is not, or ctx ended.
+func settlementV2Rebuild(ctx context.Context, accounts []merkle.LedgerAccount, root ledger.Root) *merkle.LedgerSumTree {
+	tree, err := merkle.BuildLedgerSumTree(ctx, accounts)
+	if err != nil {
+		return nil
+	}
+	if hash, total := tree.Root(); hash != root.Root || !total.Eq(&root.Total) || tree.LeafCount() != root.LeafCount {
+		return nil
+	}
+	return tree
 }
 
 func (self *settlementV2Custody) keepAuditRecord(record *settlementV2AuditRecord) error {
