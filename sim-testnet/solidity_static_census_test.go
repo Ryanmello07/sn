@@ -11,9 +11,10 @@ import (
 	"testing"
 )
 
-// The deployed contracts, plus the settlement v2 ledger sum tree library,
-// which VERSION2-FINAL.md §15 adds as a root of its own.
-const solidityStaticDeployedRoots = "src/STCoordinator.sol\nsrc/STFleetBatcher.sol\nsrc/STValidatorEvidence.sol\nsrc/probe/STSubnetProbe.sol\nsrc/testnet/STCoordinatorAdversary.sol\nsrc/LedgerTree.sol\nsrc/STSettlementVault2.sol"
+// The deployed contracts, including the settlement v2 coordinator and vault,
+// plus the settlement v2 ledger sum tree library, which VERSION2-FINAL.md §15
+// adds as a root of its own.
+const solidityStaticDeployedRoots = "src/STCoordinator.sol\nsrc/STFleetBatcher.sol\nsrc/STValidatorEvidence.sol\nsrc/probe/STSubnetProbe.sol\nsrc/testnet/STCoordinatorAdversary.sol\nsrc/LedgerTree.sol\nsrc/STSettlement2.sol\nsrc/STSettlementVault2.sol"
 
 // Admit the reviewed literal array only. A comment, duplicate, nondeployed
 // library or dynamic expansion cannot stand in for one actual analysis root.
