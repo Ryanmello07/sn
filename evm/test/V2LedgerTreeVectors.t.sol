@@ -210,7 +210,7 @@ contract V2LedgerTreeVectorsTest is Test {
             proof[k].sum ^= 1;
         }
         for (uint256 k; k < 64; k++) {
-            _rejects(v, LedgerTree.Account(a.index ^ (1 << k), a.coldkey, a.cumulative), proof, "index bit");
+            _rejects(v, LedgerTree.Account(a.index ^ (2 ** k), a.coldkey, a.cumulative), proof, "index bit");
         }
         _rejects(
             v, LedgerTree.Account(a.index, a.coldkey ^ bytes32(uint256(1)), a.cumulative), proof, "coldkey"
