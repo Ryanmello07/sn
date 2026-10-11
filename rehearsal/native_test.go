@@ -5,6 +5,7 @@ package rehearsal
 import (
 	"crypto/rand"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
@@ -85,7 +86,7 @@ func (self *node) trySubmit(t *testing.T, signer signature.KeyringPair, call typ
 	}
 	var submitted string
 	if err := self.sub.API.Client.CallContext(self.ctx, &submitted, "author_submitExtrinsic", codec.HexEncodeToString(raw)); err != nil {
-		t.Fatalf("submit extrinsic: %v", err)
+		t.Fatalf("submit extrinsic: %v (%v)", err, errorData(err))
 	}
 	block := self.seal(t)
 	err = self.sub.VerifyFinalizedExtrinsicContext(self.ctx, block, chain.ExtrinsicHash(raw))
@@ -205,4 +206,54 @@ func accountID(t *testing.T, account [32]byte) types.AccountID {
 		t.Fatal(err)
 	}
 	return *id
+}
+
+// batch is Utility.batch_all: calls dispatched in order, all or none.
+func (self *node) batch(t *testing.T, calls ...types.Call) types.Call {
+	t.Helper()
+	return self.call(t, "Utility.batch_all", calls)
+}
+
+// addStakeCall stakes rao of the signer's TAO on hotkey.
+func (self *node) addStakeCall(t *testing.T, hotkey [32]byte, netuid uint16, rao uint64) types.Call {
+	t.Helper()
+	call, err := chain.AddStakeCall(self.sub.Meta, netuid, hotkey, rao)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return call
+}
+
+// transferStakeCall transfers alpha of the signer's stake on hotkey to coldkey.
+func (self *node) transferStakeCall(t *testing.T, coldkey, hotkey [32]byte, netuid uint16, alpha uint64) types.Call {
+	t.Helper()
+	return self.call(t, "SubtensorModule.transfer_stake", accountID(t, coldkey), accountID(t, hotkey),
+		types.NewU16(netuid), types.NewU16(netuid), types.NewU64(alpha))
+}
+
+// stakingHotkeys reads a coldkey's StakingHotkeys list from storage.
+func (self *node) stakingHotkeys(t *testing.T, coldkey [32]byte) []types.AccountID {
+	t.Helper()
+	key, err := types.CreateStorageKey(self.sub.Meta, crv4.PalletName, "StakingHotkeys", coldkey[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hotkeys []types.AccountID
+	if _, err := chain.ReadStorageAtContext(self.ctx, self.sub, key, crv4.PalletName, "StakingHotkeys", &hotkeys, self.head(t)); err != nil {
+		t.Fatal(err)
+	}
+	return hotkeys
+}
+
+// errorData returns the data field of a JSON-RPC error, where the node
+// explains a refused transaction.
+func errorData(err error) any {
+	value := reflect.ValueOf(err)
+	if value.Kind() != reflect.Pointer || value.Elem().Kind() != reflect.Struct {
+		return nil
+	}
+	if data := value.Elem().FieldByName("Data"); data.IsValid() && data.CanInterface() {
+		return data.Interface()
+	}
+	return nil
 }
