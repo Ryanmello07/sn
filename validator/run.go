@@ -110,6 +110,7 @@ Usage:
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
     validator run --config=<path> [--progress-file=<path>]
+        [--ledger_auditor_key_file=<path>] [--ledger_max_bytes=<n>]
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [(--operators-refresh=<duration> [--operators-url=<url>] [--observe-unpinned-operators])]
         [-v...]
@@ -137,6 +138,10 @@ Options:
                                  init/register/stake/activate/status accept it before its evidence_v2
                                  inputs are rendered; run does not.
 	--progress-file=<path>         Optional bounded operational JSON outside protocol state.
+    --ledger_auditor_key_file=<path>  Hex secp256k1 EVM key of the settlement v2 auditor, which sends
+                                 approvals, challenges and demands. Without it none is sent.
+    --ledger_max_bytes=<n>       Ledger objects new to custody that the settlement v2 audit fetches
+                                 per root, in bytes; raised operationally [default: 2147483648].
     --durable-volumes=<path>      Exact external durable-volume declaration; required for mainnet state.
     --durable-volumes-sha256=<hash>  SHA-256 of the complete declaration bytes; does not change signed config.
     --directory=<path>           Existing service directory for read-only physical inspection; repeatable.
@@ -476,15 +481,17 @@ func run(opts docopt.Opts) {
 		reference := durablevolume.Reference{
 			Path: optString(opts, "--durable-volumes", ""), Sha256: optString(opts, "--durable-volumes-sha256", ""),
 		}
+		ledger, err := settlementV2RuntimeOptionsFromOpts(opts)
+		exitOnError("validator run", err)
 		// The operator list runs beside the release only when asked for; the
 		// release itself is started the same way either way.
 		if optString(opts, "--operators-refresh", "") != "" {
 			settings, err := productionOperatorListSettingsFromOpts(opts)
 			exitOnError("validator run", err)
-			runReleaseWithOperatorList(configPath, progressPath, reference, settings)
+			runReleaseWithOperatorList(configPath, progressPath, reference, ledger, settings)
 			return
 		}
-		runReleaseConfig(configPath, progressPath, reference)
+		runReleaseConfig(configPath, progressPath, reference, ledger)
 		return
 	}
 	if optBool(opts, "--all-operators") {
