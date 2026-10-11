@@ -30,16 +30,20 @@ var settlementV2TestBlock = ReleaseSettlementV2Config{Settlement: "0x5e770000000
 // Computed by the binary before settlement_v2 existed (f92aec6e), when it
 // signed the fixture in testdata/settlement-v2-today: the owner-recycle
 // original inside the history bundle, and today's treasury successor that
-// retains it. Never regenerate these with a later binary.
+// retains it. The bundle is the history entry today's config gives its
+// successor, as snv2 1530b0bc (also without the block) builds it. Never
+// regenerate these with a later binary.
 const (
 	settlementV2TodayConfigHash         = "0xbaaaef11cada1538e70bcfef4a4746813bfbf4a864ebd27393bc76dd0e088b78"
 	settlementV2TodayOriginalConfigHash = "0x8b430b102c5f689f259c62afd6d6676cdf2fead245611c0f840bf9631d971d22"
 	settlementV2TodayConfigSeal         = "0xe69e1dbeb34472dddbe9534c673324fb8d6dd98e68cdb9885b5496679170f8a4"
+	settlementV2TodayBundle             = "0x02d029d47eae8f4fef405b05fc4a2fd296489a200cdd474ca4e263fddd4b6067"
 )
 
 // VA-6: today's validator.yml and its history bundle, written and signed by
 // the binary before settlement_v2 existed, load unchanged through the server
-// staging loader. Each signature names the hash that earlier binary computed.
+// staging loader. Each signature names the hash that earlier binary computed,
+// and the bundle an adoption appends is the one that binary would build.
 func TestSettlementV2TodayConfigAndHistoryHashUnchanged(t *testing.T) {
 	staging := identityTestStateDir(t)
 	source := filepath.Join("testdata", "settlement-v2-today")
@@ -72,12 +76,14 @@ func TestSettlementV2TodayConfigAndHistoryHashUnchanged(t *testing.T) {
 	current, currentErr := OwnerRecycleConfigHash(cfg)
 	prior, priorErr := OwnerRecycleConfigHash(original)
 	seal, sealErr := json.Marshal(cfg)
-	if err := errors.Join(currentErr, priorErr, sealErr); err != nil {
+	bundle, bundleErr := BuildOwnerRecycleProductionAuthority(t.Context(), cfg)
+	if err := errors.Join(currentErr, priorErr, sealErr, bundleErr); err != nil {
 		t.Fatal(err)
 	}
 	if attemptHex32(current) != settlementV2TodayConfigHash || attemptHex32(prior) != settlementV2TodayOriginalConfigHash ||
-		attemptHex32(sha256.Sum256(seal)) != settlementV2TodayConfigSeal || bytes.Contains(seal, []byte("settlement_v2")) {
-		t.Fatal("today's config, its original or its history seal hashes differently")
+		attemptHex32(sha256.Sum256(seal)) != settlementV2TodayConfigSeal || bytes.Contains(seal, []byte("settlement_v2")) ||
+		attemptHex32(sha256.Sum256(bundle)) != settlementV2TodayBundle {
+		t.Fatal("today's config, its original, its history seal or its successor's history bundle hashes differently")
 	}
 }
 

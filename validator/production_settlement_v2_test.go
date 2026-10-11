@@ -215,6 +215,24 @@ func TestProductionSettlementV2AdoptionRequiresOneAppendedEntry(t *testing.T) {
 	}
 }
 
+// VA-6: the class compares the two signed approvals, so it refuses a
+// predecessor whose authority was never loaded and a successor that differs
+// from the config its approval names.
+func TestProductionSettlementV2AdoptionRequiresBothLoadedApprovals(t *testing.T) {
+	block := settlementV2TestBlock
+	if err := validateProductionAuthorityContinuity(&ReleaseConfig{}, &ReleaseConfig{SettlementV2: &block}); err == nil ||
+		!strings.Contains(err.Error(), "owner-recycle production configuration lacks independently loaded authority") {
+		t.Fatal("adoption admitted an unloaded predecessor or refused it for another cause", err)
+	}
+	predecessor := newSettlementV2TestPredecessor(t, true)
+	unsigned := *predecessor.cfg
+	unsigned.SettlementV2 = &block
+	if err := validateProductionAuthorityContinuity(predecessor.cfg, &unsigned); err == nil ||
+		!strings.Contains(err.Error(), "owner-recycle production configuration changed after approval") {
+		t.Fatal("adoption admitted a block its approval never signed or refused it for another cause", err)
+	}
+}
+
 // VA-9: activating a pending config that carries settlement_v2 renders a
 // successor that keeps the block and loads under the rendering class.
 func TestProductionRenderedSuccessorKeepsSettlementV2(t *testing.T) {
