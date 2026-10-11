@@ -174,3 +174,24 @@ func (self *node) head(t *testing.T) types.Hash {
 	}
 	return hash
 }
+
+// number returns the latest block's number.
+func (self *node) number(t *testing.T) uint64 {
+	t.Helper()
+	header, err := self.sub.HeaderAtContext(self.ctx, self.head(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return uint64(header.Number)
+}
+
+// sealUntil seals empty blocks until the latest block is `block`, so that
+// the next transaction executes in block + 1.
+func (self *node) sealUntil(t *testing.T, block uint64) {
+	t.Helper()
+	current := self.number(t)
+	if current > block {
+		t.Fatalf("block %d has passed (now %d)", block, current)
+	}
+	self.advance(t, int(block-current))
+}

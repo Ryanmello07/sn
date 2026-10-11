@@ -7,10 +7,12 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/urfoundation/sn/ss58"
 )
@@ -63,10 +66,25 @@ type artifact struct {
 	creation []byte
 }
 
+// forgeArtifacts holds every loaded artifact, and the names of the custom
+// errors they declare by selector, so a revert that bubbles up through
+// another contract is still named.
+var forgeArtifacts = struct {
+	sync.Mutex
+	loaded map[string]artifact
+	errors map[string]string
+}{loaded: map[string]artifact{}, errors: map[string]string{}}
+
 // forgeArtifact builds source (relative to evm/) with forge and loads the
-// artifact of contract name from evm/out.
+// artifact of contract name from evm/out. Builds run one at a time, and each
+// artifact loads once per test binary, so parallel tests share them.
 func forgeArtifact(t *testing.T, source, name string) artifact {
 	t.Helper()
+	forgeArtifacts.Lock()
+	defer forgeArtifacts.Unlock()
+	if loaded, ok := forgeArtifacts.loaded[source+":"+name]; ok {
+		return loaded
+	}
 	evm, err := filepath.Abs(filepath.Join("..", "evm"))
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +115,12 @@ func forgeArtifact(t *testing.T, source, name string) artifact {
 	if err != nil {
 		t.Fatalf("%s bytecode: %v", name, err)
 	}
-	return artifact{abi: contract, creation: creation}
+	loaded := artifact{abi: contract, creation: creation}
+	forgeArtifacts.loaded[source+":"+name] = loaded
+	for errorName, custom := range contract.Errors {
+		forgeArtifacts.errors[hexutil.Encode(custom.ID[:4])] = errorName
+	}
+	return loaded
 }
 
 // pack ABI-encodes a call to method.
@@ -192,4 +215,110 @@ func (self *node) stake(t *testing.T, hotkey, coldkey [32]byte, netuid uint16) u
 		t.Fatalf("getStake returned %s", stake)
 	}
 	return stake.Uint64()
+}
+
+// estimate runs eth_estimateGas: the gas limit a call needs.
+func (self *node) estimate(from, to common.Address, value *big.Int, data []byte) (uint64, error) {
+	return self.eth.EstimateGas(self.ctx, ethereum.CallMsg{From: from, To: &to, Value: value, Data: data})
+}
+
+// send calls method of contract at `to` in its own block and fails the test,
+// naming the revert, unless it succeeded. value may be nil.
+func (self *node) send(t *testing.T, from evmKey, to common.Address, contract artifact, value *big.Int, method string, args ...any) *gethtypes.Receipt {
+	t.Helper()
+	data := contract.pack(t, method, args...)
+	gas, err := self.estimate(from.address, to, value, data)
+	if err != nil {
+		t.Fatalf("%s: %s", method, reason(err))
+	}
+	receipt := self.transact(t, from, &to, value, data, gas)
+	if receipt.Status != gethtypes.ReceiptStatusSuccessful {
+		t.Fatalf("%s failed in block %s", method, receipt.BlockNumber)
+	}
+	return receipt
+}
+
+// refused requires method to fail in a mined transaction and returns the
+// reason an eth_call of it gives: a custom error of one of the contracts, or
+// the node's message.
+func (self *node) refused(t *testing.T, from evmKey, to common.Address, contract artifact, value *big.Int, method string, args ...any) string {
+	t.Helper()
+	data := contract.pack(t, method, args...)
+	_, err := self.eth.CallContract(self.ctx, ethereum.CallMsg{From: from.address, To: &to, Value: value, Data: data}, nil)
+	if err == nil {
+		t.Fatalf("%s did not revert", method)
+	}
+	if receipt := self.transact(t, from, &to, value, data, refusedGas); receipt.Status != gethtypes.ReceiptStatusFailed {
+		t.Fatalf("%s succeeded in block %s", method, receipt.BlockNumber)
+	}
+	return reason(err)
+}
+
+// read eth_calls a view of contract at `to`.
+func (self *node) read(t *testing.T, to common.Address, contract artifact, method string, args ...any) []any {
+	t.Helper()
+	out, err := self.ethCall(common.Address{}, to, contract.pack(t, method, args...))
+	if err != nil {
+		t.Fatalf("%s: %s", method, reason(err))
+	}
+	return contract.unpack(t, method, out)
+}
+
+// reason names a revert by the custom error it encodes, from any loaded
+// artifact, or returns the node's message.
+func reason(err error) string {
+	var reverted rpc.DataError
+	if errors.As(err, &reverted) {
+		if data, ok := reverted.ErrorData().(string); ok && len(data) >= 10 {
+			forgeArtifacts.Lock()
+			defer forgeArtifacts.Unlock()
+			if name, ok := forgeArtifacts.errors[data[:10]]; ok {
+				return name
+			}
+		}
+	}
+	return err.Error()
+}
+
+// requireEvent requires exactly one event `name` from `at` in receipt, with
+// exactly the fields of want, indexed ones included.
+func requireEvent(t *testing.T, receipt *gethtypes.Receipt, contract artifact, at common.Address, name string, want map[string]any) {
+	t.Helper()
+	event := contract.abi.Events[name]
+	var found []map[string]any
+	for _, log := range receipt.Logs {
+		if log.Address != at || len(log.Topics) == 0 || log.Topics[0] != event.ID {
+			continue
+		}
+		fields := map[string]any{}
+		if err := event.Inputs.UnpackIntoMap(fields, log.Data); err != nil {
+			t.Fatal(err)
+		}
+		var indexed abi.Arguments
+		for _, input := range event.Inputs {
+			if input.Indexed {
+				indexed = append(indexed, input)
+			}
+		}
+		if err := abi.ParseTopicsIntoMap(fields, indexed, log.Topics[1:]); err != nil {
+			t.Fatal(err)
+		}
+		found = append(found, fields)
+	}
+	if len(found) != 1 {
+		t.Fatalf("%d %s events, want 1", len(found), name)
+	}
+	if len(found[0]) != len(want) {
+		t.Fatalf("%s has fields %v, want %v", name, found[0], want)
+	}
+	for key, value := range want {
+		if fmt.Sprint(found[0][key]) != fmt.Sprint(value) {
+			t.Fatalf("%s.%s = %v, want %v", name, key, found[0][key], value)
+		}
+	}
+}
+
+// fee returns the fee a transaction paid, in wei.
+func fee(receipt *gethtypes.Receipt) *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), receipt.EffectiveGasPrice)
 }
