@@ -414,8 +414,8 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race ./model -run "$evidence_source_tests" -count=1
     go test . -run "$evidence_source_tests" -count=1
     go test -race . -run "$evidence_source_tests" -count=1
-    controller_db_tests='^Test(CreateContractRejectsInactiveClient|VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|AuthNetworkClientFeedsConfiguredProxyEgressNamespace|PaymentReconcile(SkipsStripeWithSKUOnlyVault|MalformedCredentialResourcesSkipAllStores)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation)'
-    model_db_tests='Test(FindActiveClientNetwork|StreamHopListenerPrunesInactiveAdjacentClients|ActiveStreamHopsBoundsConcurrentStaleReAdd|ForceCloseRequiresPositiveParallelism|ForceCloseDisputedContract|ForceCloseDirectSettlementRemovesStream|ForceCloseMalformedContractRemovesStreamAndReturnsError|SweepOrphanClearsProxyConfigRedis|SweepOrphanReapsProxyClients|VerifyEgressIndexStoresNoRawIp|VerifyTrailLockMutualExclusion|VerifyTrailLockStaleReleasePreservesSuccessor|SweepExpiredVerifyTrails|VerifyTrailMutationLockTtlCoversLoadedTrail|StDeploymentStateIsIsolatedAcrossCoordinatorReplacements|StTransactionIntentReservationUsesChainAccountNonceScope|StTransactionRevertRetryCreatesOneImmutableSuccessor|StTransactionAttemptCandidatesConvergeOnOneWinner|StTransactionCancellationCannotRegress|StTransactionFinalizedAttemptCannotRegress)'
+    controller_db_tests='^Test(CreateContractRejectsInactiveClient|VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|AuthNetworkClientFeedsConfiguredProxyEgressNamespace|PaymentReconcile(SkipsStripeWithSKUOnlyVault|MalformedCredentialResourcesSkipAllStores)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation|StHeadExcludedClients(EqualV1|Refusals|Configured)|CoreStClientFleetBoundEvents|StFleetBoundTopicIsTheCoordinatorEvent)'
+    model_db_tests='Test(FindActiveClientNetwork|StreamHopListenerPrunesInactiveAdjacentClients|ActiveStreamHopsBoundsConcurrentStaleReAdd|ForceCloseRequiresPositiveParallelism|ForceCloseDisputedContract|ForceCloseDirectSettlementRemovesStream|ForceCloseMalformedContractRemovesStreamAndReturnsError|SweepOrphanClearsProxyConfigRedis|SweepOrphanReapsProxyClients|VerifyEgressIndexStoresNoRawIp|VerifyTrailLockMutualExclusion|VerifyTrailLockStaleReleasePreservesSuccessor|SweepExpiredVerifyTrails|VerifyTrailMutationLockTtlCoversLoadedTrail|StDeploymentStateIsIsolatedAcrossCoordinatorReplacements|StTransactionIntentReservationUsesChainAccountNonceScope|StTransactionRevertRetryCreatesOneImmutableSuccessor|StTransactionAttemptCandidatesConvergeOnOneWinner|StTransactionCancellationCannotRegress|StTransactionFinalizedAttemptCannotRegress|St(Retained|Roster)WalletResolutions(EqualV1|Refusals)|StWalletResolutionsVerifyEachHeadOnce|StPayoutWalletResolutionsBatched(EqualV1|KeepV1PrefixOnMismatch|Duplicates|Refusals)|StFleetBound(NextBlock|ClientIds|ClientIdsRefuseMalformedRows)|StRosterProviderPinRefusals)'
     go test ./controller -run "$controller_db_tests" -count=1
     go test ./model -run "$model_db_tests" -count=1
     provider_attribution_tests='^Test(ContractPayout|CompanionContractPayout|ContractParticipant|StEpochProviderUsage|StatsProviderPayouts|StatsProviders|StatsQueryPlans|SearchProviderStatsRollup|RemoveOldSearchProviderStats|RemoveOldVerifyProviderStats)'
@@ -486,6 +486,22 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test ./controller -run "$server_history_distinct_tests" -count=1 -timeout 10m
     go test -race ./controller -run "$server_history_distinct_tests" -count=1 -timeout 10m
   }
+  # Settlement v2 scale (VERSION2-FINAL.md §15, SV-6): bulk wallet selection,
+  # batched resolutions and bounded head exclusion at 100k and 1M providers,
+  # behind the scale build tag, each inside its share of the one-hour build.
+  # The shard runs on the gate's private services when RUN_SERVER_SCALE_TESTS=1.
+  release_phase_server_scale() {
+    cd "$workspace/server"
+    export WARP_ENV=local
+    export WARP_SERVICE=test
+    export WARP_DOMAIN=bringyour.com
+    export WARP_BLOCK=test
+    export WARP_VERSION=0.0.0
+    source "$RELEASE_GATE_SERVICE_ENV"
+    source "$workspace/server/test-env.sh"
+    test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"
+    go test -tags scale ./model ./controller -run '^TestStV2Scale' -count=1 -p 1 -v -timeout 180m
+  }
   if [[ "$release_gate_services_ready" == 1 ]]; then
     release_gate_start server-db release_phase_server_db
     release_gate_start server-history-shared release_phase_server_history_shared
@@ -494,6 +510,13 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     release_gate_start server-db release_gate_unavailable_services
     release_gate_start server-history-shared release_gate_unavailable_services
     release_gate_start server-history-distinct release_gate_unavailable_services
+  fi
+  if [[ "${RUN_SERVER_SCALE_TESTS:-0}" == "1" && "$release_gate_services_ready" == 1 ]]; then
+    release_gate_start server-scale release_phase_server_scale
+  elif [[ "${RUN_SERVER_SCALE_TESTS:-0}" == "1" ]]; then
+    release_gate_start server-scale release_gate_unavailable_services
+  else
+    echo "[release-1.0] scale suites deferred (set RUN_SERVER_SCALE_TESTS=1 with RUN_SERVER_DB_TESTS=1)"
   fi
 else
   echo "[release-1.0] DB suites deferred (set RUN_SERVER_DB_TESTS=1 to create private disposable PostgreSQL/Redis)"
