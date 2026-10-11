@@ -709,8 +709,10 @@ carry no value.
   `evm/script/Deploy.s.sol:53-59,113-115` predicts it, and `bootstrap` is the
   deployer. The escrow hotkey and `demandFeeWei` are the approved inputs. The
   hotkey must be nonzero, and the fee a nonzero multiple of 10^9 wei, because
-  the runtime truncates sub-rao value. There is no default fee: the plan sets
-  it at no less than twice the answer gas R-6 measures, at the planning fee.
+  the runtime truncates sub-rao value; the command checks nothing more and has
+  no default fee. Set it to at least twice the answer gas R-6 measured at
+  depth 29, 159,665, at the planning fee: at 5 gwei that is
+  1,596,650,000,000,000 wei, 1,596,650 rao.
   The words repack exactly through the release ABI, and the five immutables
   `netuid`, `escrowHotkey`, `selfColdkey`, `bootstrap` and `demandFeeWei` are
   patched into the exact release runtime.
