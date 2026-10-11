@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -54,29 +55,36 @@ type evmActionChain interface {
 }
 
 // The result explicitly separates one contract from the full installation.
+// Settlement v2 results name their own three contracts and omit the reserve.
 type evmCreateResult struct {
-	PlanHash             string                       `json:"plan_hash"`
-	Status               string                       `json:"status"`
-	Address              string                       `json:"reserve_address"`
-	VaultAddress         string                       `json:"vault_address,omitempty"`
-	CoordinatorAddress   string                       `json:"coordinator_implementation_address,omitempty"`
-	ExecutableAction     string                       `json:"executable_action,omitempty"`
-	SigningDigest        string                       `json:"signing_digest"`
-	UnsignedTransaction  string                       `json:"unsigned_transaction"`
-	TransactionHash      string                       `json:"transaction_hash,omitempty"`
-	Attempts             uint8                        `json:"attempts"`
-	Receipt              *evmCreateReceipt            `json:"receipt,omitempty"`
-	ReceiptObservation   string                       `json:"receipt_observation,omitempty"`
-	InstallationComplete bool                         `json:"installation_complete"`
-	ActivationReady      bool                         `json:"activation_ready"`
-	RemainingActions     []string                     `json:"remaining_actions"`
-	EscrowRegistration   *contractEscrowRegistration  `json:"escrow_registration,omitempty"`
-	ProxyAddress         string                       `json:"coordinator_proxy_address,omitempty"`
-	ProxyConstructor     *contractProxyConstructor    `json:"proxy_constructor,omitempty"`
-	ReserveBinding       *contractReserveBinding      `json:"reserve_binding,omitempty"`
-	VaultBinding         *contractVaultBinding        `json:"vault_binding,omitempty"`
-	EvidenceAddress      string                       `json:"validator_evidence_address,omitempty"`
-	EvidenceConstructor  *contractEvidenceConstructor `json:"evidence_constructor,omitempty"`
+	PlanHash                         string                          `json:"plan_hash"`
+	Status                           string                          `json:"status"`
+	Address                          string                          `json:"reserve_address,omitempty"`
+	VaultAddress                     string                          `json:"vault_address,omitempty"`
+	CoordinatorAddress               string                          `json:"coordinator_implementation_address,omitempty"`
+	ExecutableAction                 string                          `json:"executable_action,omitempty"`
+	SigningDigest                    string                          `json:"signing_digest"`
+	UnsignedTransaction              string                          `json:"unsigned_transaction"`
+	TransactionHash                  string                          `json:"transaction_hash,omitempty"`
+	Attempts                         uint8                           `json:"attempts"`
+	Receipt                          *evmCreateReceipt               `json:"receipt,omitempty"`
+	ReceiptObservation               string                          `json:"receipt_observation,omitempty"`
+	InstallationComplete             bool                            `json:"installation_complete"`
+	ActivationReady                  bool                            `json:"activation_ready"`
+	RemainingActions                 []string                        `json:"remaining_actions"`
+	EscrowRegistration               *contractEscrowRegistration     `json:"escrow_registration,omitempty"`
+	ProxyAddress                     string                          `json:"coordinator_proxy_address,omitempty"`
+	ProxyConstructor                 *contractProxyConstructor       `json:"proxy_constructor,omitempty"`
+	ReserveBinding                   *contractReserveBinding         `json:"reserve_binding,omitempty"`
+	VaultBinding                     *contractVaultBinding           `json:"vault_binding,omitempty"`
+	EvidenceAddress                  string                          `json:"validator_evidence_address,omitempty"`
+	EvidenceConstructor              *contractEvidenceConstructor    `json:"evidence_constructor,omitempty"`
+	Vault2Address                    string                          `json:"vault2_address,omitempty"`
+	Settlement2ImplementationAddress string                          `json:"settlement2_implementation_address,omitempty"`
+	Settlement2Address               string                          `json:"settlement2_address,omitempty"`
+	Vault2Constructor                *contractVault2Constructor      `json:"vault2_constructor,omitempty"`
+	Settlement2Initializer           *contractSettlement2Initializer `json:"settlement2_initializer,omitempty"`
+	EscrowCollateral                 *contractEscrowCollateral       `json:"escrow_collateral,omitempty"`
 }
 
 // All mutable projections are copied on construction. Storage failure poisons
@@ -225,6 +233,15 @@ func copyEvmCreateProjection(source *evmCreatePlan, copiedPlans map[*evmCreatePl
 		constructor := *plan.VaultConstructor
 		plan.VaultConstructor = &constructor
 	}
+	if plan.Vault2Constructor != nil {
+		constructor := *plan.Vault2Constructor
+		plan.Vault2Constructor = &constructor
+	}
+	if plan.Settlement2Initializer != nil {
+		initializer := *plan.Settlement2Initializer
+		initializer.Auditors = append([]common.Address(nil), initializer.Auditors...)
+		plan.Settlement2Initializer = &initializer
+	}
 	return &plan
 }
 
@@ -250,7 +267,7 @@ func newEvmSelectedCreateOwner(plan evmCreatePlan, store evmActionStorage, prior
 	if err := record.validateForAction(plan.Config, plan.ActionIndex); err != nil {
 		return nil, err
 	}
-	if plan.ActionIndex >= 2 && record.Receipt != nil && record.Receipt.Status == 1 {
+	if (plan.ActionIndex >= 2 || plan.Config.Plan.settlementV2()) && record.Receipt != nil && record.Receipt.Status == 1 {
 		if err := validateEvmCreateCompletion(plan, record); err != nil {
 			return nil, err
 		}
@@ -276,31 +293,29 @@ func validateEvmCreateCompletion(plan evmCreatePlan, record evmActionRecord) err
 	}
 	r := record.Receipt
 	if r == nil {
-		name := []string{"reserve", "vault", "coordinator implementation", "escrow registration", "initialized proxy", "reserve recorder binding", "vault coordinator binding", "unanchored validator evidence"}[plan.ActionIndex]
-		return fmt.Errorf("action requires the exact retained successful %s postconditions", name)
+		return fmt.Errorf("action requires the exact retained successful %s postconditions", plan.actionName())
 	}
 	getters, err := plan.receiptGetters(*r)
 	if err != nil {
 		return err
 	}
 	expectedAddress := plan.Address.Hex()
-	if plan.ActionIndex == 3 || plan.ActionIndex == 5 || plan.ActionIndex == 6 {
+	if plan.Config.Plan.Actions[plan.ActionIndex].To != nil {
 		expectedAddress = ""
 	}
 	if r.Status != 1 || r.ContractAddress != expectedAddress || r.RuntimeHash != crypto.Keccak256Hash(plan.Runtime).Hex() || r.GetterHash != rootObjectHash(getters) || r.NativeNumber != record.ScanNumber || r.NativeHash != record.ScanHash {
-		name := []string{"reserve", "vault", "coordinator implementation", "escrow registration", "initialized proxy", "reserve recorder binding", "vault coordinator binding", "unanchored validator evidence"}[plan.ActionIndex]
-		return fmt.Errorf("action requires the exact retained successful %s postconditions", name)
+		return fmt.Errorf("action requires the exact retained successful %s postconditions", plan.actionName())
 	}
 	if len(plan.Storage) != 0 && r.StorageHash != rootObjectHash(plan.Storage) {
 		return errors.New("retained constructor storage postconditions differ")
 	}
-	if plan.ActionIndex == 3 && (plan.EscrowRegistration == nil || r.RegistrationHash != evmEscrowRegistrationHash(plan, *r)) {
+	if plan.actionIs("escrow-register", "escrow2-register") && (plan.EscrowRegistration == nil || r.RegistrationHash != evmEscrowRegistrationHash(plan, *r)) {
 		return errors.New("retained escrow registration postconditions differ")
 	}
-	if plan.ActionIndex == 5 && (plan.ReserveBinding == nil || r.RecorderBindingHash != evmReserveBindingHash(plan, *r)) {
+	if plan.actionIs("reserve-link") && (plan.ReserveBinding == nil || r.RecorderBindingHash != evmReserveBindingHash(plan, *r)) {
 		return errors.New("retained reserve recorder binding postconditions differ")
 	}
-	if plan.ActionIndex == 6 && (plan.VaultBinding == nil || r.VaultBindingHash != evmVaultBindingHash(plan, *r)) {
+	if plan.actionIs("vault-link", "vault2-link") && (plan.VaultBinding == nil || r.VaultBindingHash != evmVaultBindingHash(plan, *r)) {
 		return errors.New("retained vault coordinator binding postconditions differ")
 	}
 	action := plan.Config.Plan.Actions[plan.ActionIndex]
@@ -429,7 +444,7 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 	if err := record.validateForAction(self.plan.Config, self.plan.ActionIndex); err != nil {
 		return result, err
 	}
-	if self.plan.ActionIndex >= 2 && record.Receipt != nil && record.Receipt.Status == 1 {
+	if (self.plan.ActionIndex >= 2 || self.plan.Config.Plan.settlementV2()) && record.Receipt != nil && record.Receipt.Status == 1 {
 		if err := validateEvmCreateCompletion(self.plan, record); err != nil {
 			return result, err
 		}
@@ -537,6 +552,9 @@ func (self *evmCreateOwner) result(record evmActionRecord, status string) evmCre
 	raw, _ := tx.MarshalBinary()
 	signer := types.LatestSignerForChainID(big.NewInt(mainnetEvmChainId))
 	result := evmCreateResult{PlanHash: self.plan.Config.Plan.hash(), Status: status, Address: self.plan.Address.Hex(), SigningDigest: signer.Hash(tx).Hex(), UnsignedTransaction: "0x" + hex.EncodeToString(raw), TransactionHash: record.TransactionHash, Attempts: record.Attempts, Receipt: record.Receipt, RemainingActions: []string{"vault-create", "coordinator-create", "escrow-register", "proxy-create", "reserve-link", "vault-link", "evidence-create", "evidence-anchor"}}
+	if self.plan.Config.Plan.settlementV2() {
+		return evmV2CreateResult(self.plan, result)
+	}
 	if self.plan.ActionIndex >= 1 {
 		result.Address = self.plan.Reserve.Address.Hex()
 		result.VaultAddress = self.plan.Address.Hex()

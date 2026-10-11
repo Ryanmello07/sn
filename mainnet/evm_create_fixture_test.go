@@ -295,6 +295,17 @@ func newEvmCreateFixture(t *testing.T) *evmCreateFixture {
 // Re-sign fixture approvals only; production never gains an approval private key.
 func (self *evmCreateFixture) publishConfig() {
 	self.t.Helper()
+	self.publishApproval()
+	var err error
+	self.plan, err = loadEvmCreatePlan(context.Background(), self.configPath)
+	if err != nil {
+		self.t.Fatal(err)
+	}
+}
+
+// Signing alone lets a refused graph reach the command's own admission.
+func (self *evmCreateFixture) publishApproval() {
+	self.t.Helper()
 	seed := sha256.Sum256([]byte("synthetic contract independent approval"))
 	key := ed25519.NewKeyFromSeed(seed[:])
 	self.config.ApprovalPublicKey = "0x" + hex.EncodeToString(key.Public().(ed25519.PublicKey))
@@ -308,10 +319,6 @@ func (self *evmCreateFixture) publishConfig() {
 		self.t.Fatal(err)
 	}
 	if err := os.WriteFile(self.configPath, raw, 0600); err != nil {
-		self.t.Fatal(err)
-	}
-	self.plan, err = loadEvmCreatePlan(context.Background(), self.configPath)
-	if err != nil {
 		self.t.Fatal(err)
 	}
 }

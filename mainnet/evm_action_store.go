@@ -73,7 +73,14 @@ func (self evmActionRecord) validateForAction(config evmPhaseConfig, actionIndex
 	if actionIndex == 7 {
 		schema = evmEvidenceActionStateSchema
 	}
-	if actionIndex < 0 || actionIndex > 7 || actionIndex >= len(p.Actions) || actionIndex == 0 && self.PredecessorHash != "" || actionIndex > 0 && !planSha256(self.PredecessorHash) {
+	maximum := 7
+	if p.settlementV2() {
+		maximum = len(evmV2Actions) - 1
+		if actionIndex >= 0 && actionIndex <= maximum {
+			schema = evmV2Actions[actionIndex].schema
+		}
+	}
+	if actionIndex < 0 || actionIndex > maximum || actionIndex >= len(p.Actions) || actionIndex == 0 && self.PredecessorHash != "" || actionIndex > 0 && !planSha256(self.PredecessorHash) {
 		return errors.New("EVM journal action or prerequisite differs")
 	}
 	if self.Schema != schema || self.ConfigHash != rootObjectHash(config) || claimed != rootObjectHash(self) || self.Attempts > p.MaximumAttempts || self.ScanNumber < p.StartNativeNumber || !rootCanonicalHash(self.ScanHash) || self.ScanNumber == p.StartNativeNumber && self.ScanHash != p.StartNativeHash {
@@ -96,13 +103,14 @@ func (self evmActionRecord) validateForAction(config evmPhaseConfig, actionIndex
 	if self.Receipt != nil && (self.Receipt.TransactionHash != self.TransactionHash || !rootCanonicalHash(self.Receipt.NativeHash) || !rootCanonicalHash(self.Receipt.BlockHash) || self.Receipt.NativeNumber <= p.StartNativeNumber || self.Receipt.Status > 1) {
 		return errors.New("retained EVM receipt is incomplete")
 	}
-	if self.Receipt != nil && (actionIndex != 3 || self.Receipt.Status == 0) && (self.Receipt.RegistrationHash != "" || self.Receipt.EscrowUid != 0 || self.Receipt.EscrowLogIndex != 0) {
+	id := p.Actions[actionIndex].Id
+	if self.Receipt != nil && (id != "escrow-register" && id != "escrow2-register" || self.Receipt.Status == 0) && (self.Receipt.RegistrationHash != "" || self.Receipt.EscrowUid != 0 || self.Receipt.EscrowLogIndex != 0) {
 		return errors.New("non-registration outcome contains escrow receipt fields")
 	}
-	if self.Receipt != nil && (actionIndex != 5 || self.Receipt.Status == 0) && (self.Receipt.RecorderBindingHash != "" || self.Receipt.RecorderLogIndex != 0) {
+	if self.Receipt != nil && (id != "reserve-link" || self.Receipt.Status == 0) && (self.Receipt.RecorderBindingHash != "" || self.Receipt.RecorderLogIndex != 0) {
 		return errors.New("non-binding outcome contains reserve recorder receipt fields")
 	}
-	if self.Receipt != nil && (actionIndex != 6 || self.Receipt.Status == 0) && (self.Receipt.VaultBindingHash != "" || self.Receipt.CoordinatorLogIndex != 0) {
+	if self.Receipt != nil && (id != "vault-link" && id != "vault2-link" || self.Receipt.Status == 0) && (self.Receipt.VaultBindingHash != "" || self.Receipt.CoordinatorLogIndex != 0) {
 		return errors.New("non-binding outcome contains vault coordinator receipt fields")
 	}
 	return nil
@@ -254,7 +262,11 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 	if err := errors.Join(config.validate(), bootstrapRootDirectory(config.Plan.RunDirectory)); err != nil {
 		return nil, err
 	}
-	if actionIndex < 0 || actionIndex > 7 || actionIndex >= len(config.Plan.Actions) || actionIndex == 0 && predecessorHash != "" || actionIndex > 0 && !planSha256(predecessorHash) {
+	maximum := 7
+	if config.Plan.settlementV2() {
+		maximum = len(evmV2Actions) - 1
+	}
+	if actionIndex < 0 || actionIndex > maximum || actionIndex >= len(config.Plan.Actions) || actionIndex == 0 && predecessorHash != "" || actionIndex > 0 && !planSha256(predecessorHash) {
 		return nil, errors.New("EVM store action or prerequisite differs")
 	}
 	name, schema := evmCreateStateFile, evmActionStateSchema
@@ -279,6 +291,9 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 	}
 	if actionIndex == 7 {
 		name, schema = evmEvidenceCreateStateFile, evmEvidenceActionStateSchema
+	}
+	if config.Plan.settlementV2() {
+		name, schema = evmV2Actions[actionIndex].file, evmV2Actions[actionIndex].schema
 	}
 	if actionIndex > 0 {
 		marker = rootObjectHash(struct{ ConfigHash, ActionId, PredecessorHash string }{ConfigHash: rootObjectHash(config), ActionId: config.Plan.Actions[actionIndex].Id, PredecessorHash: predecessorHash}) + "\n"

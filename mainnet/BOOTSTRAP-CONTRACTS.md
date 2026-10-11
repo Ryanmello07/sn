@@ -7,7 +7,8 @@ is the unchanged default; `--action vault-create`, `--action coordinator-create`
 `--action escrow-register`, `--action proxy-create`, `--action reserve-link`, `--action vault-link` and `--action evidence-create` explicitly select actions one through seven from
 the **same already approved graph**.
 It does not anchor evidence, register miners, change emissions, activate validators, or complete
-mainnet bootstrap. The [reserve qualification receipt](evidence/bootstrap-contract-qualification-20260928.md)
+mainnet bootstrap. The same command also runs the separately approved
+[settlement v2 contract phase](#settlement-v2-contract-phase). The [reserve qualification receipt](evidence/bootstrap-contract-qualification-20260928.md)
 records its passed normal/race scopes, retained fixture failures and composed
 dependency check. The [vault qualification receipt](evidence/bootstrap-contract-vault-qualification-20260928.md)
 records its separate normal/race and causal checks. The
@@ -645,3 +646,153 @@ inner-EVM completeness fields remain false: these archive APIs cannot prove the
 unchanged full-history policy. A qualified node trace extension or independent
 complete replay is still required. No current-storage-only policy, signature,
 approval budget, original journal or public send authority changes here.
+
+## Settlement v2 contract phase
+
+`bootstrap-contracts` also runs the separate five-action settlement v2 graph
+(`VERSION2-FINAL.md` §8.5, step 2 of §12.1). One independent approval covers
+all five actions, sent by one bootstrap deployer at consecutive nonces:
+
+| Index | `--action` | Transaction | Journal | Completed status |
+| --- | --- | --- | --- | --- |
+| 0 | `vault2-create` | `STSettlementVault2(netuid, escrowHotkey, selfColdkey, bootstrap, demandFeeWei)` CREATE | `vault2-create.json` | `vault2-created` |
+| 1 | `escrow2-register` | vault2 `registerEscrow(maximumBurnRao)` with `maximumBurnRao × 10^9` wei | `escrow2-register.json` | `escrow2-registered` |
+| 2 | `settlement2-create` | `STSettlement2` implementation CREATE | `settlement2-create.json` | `settlement2-created` |
+| 3 | `proxy2-create` | `ERC1967Proxy(implementation, initialize(owner, v1Coordinator, vault2, auditors, quorum))` CREATE | `proxy2-create.json` | `proxy2-created-initialized` |
+| 4 | `vault2-link` | vault2 `setCoordinatorOnce(proxy)` | `vault2-link.json` | `vault2-coordinator-bound` |
+
+The config schema is `urnetwork-mainnet-settlement-v2-contract-phase-config-v1`
+and the plan schema `urnetwork-mainnet-settlement-v2-contract-phase-v1`. The
+plan has the original fields without `reserve_hotkey` and exactly these five
+actions. The approval signs `urnetwork-mainnet-settlement-v2-contract-phase-approval-v1`,
+a zero byte and the canonical plan JSON, and the plan hash uses the v2 plan
+schema as its domain, so neither phase's approval or hash verifies the other's
+plan. A v2 config selects only the five v2 ids and an original config only the
+original ones. Signature encoding, key provisioning, `preview`/`plan`/`apply`/`resume`,
+`--accept-plan-hash`, `--run-dir`, signed-byte import, `--online`, `--submit`,
+the per-sender funding admission and the cumulative `maximum_attempts` (at most
+eight across all five actions) are the original phase's. `artifacts` pins a
+release file of schema `urnetwork-settlement-v2-contract-release-artifacts-v1`
+holding exactly `SettlementVault2`, `Settlement2` and `ERC1967Proxy`, checked
+like the original release.
+
+**Builder checks.** Every selection, in `preview`, `plan` and every custody
+operation, rebuilds the complete graph from the approval and the release, so a
+fault in any action refuses even the first one, before any journal or route
+opens. One sender sends all five at consecutive nonces, and the three CREATEs
+carry no value.
+
+- Vault2 is the exact release creation and five constructor words. Netuid 25,
+  `selfColdkey` and `bootstrap` are rebuilt: `selfColdkey` is the mapped
+  account of the CREATE address predicted from the deployer nonce, as
+  `evm/script/Deploy.s.sol:53-59,113-115` predicts it, and `bootstrap` is the
+  deployer. The escrow hotkey and `demandFeeWei` are the approved inputs. The
+  hotkey must be nonzero, and the fee a nonzero multiple of 10^9 wei, because
+  the runtime truncates sub-rao value. There is no default fee: the plan sets
+  it at no less than twice the answer gas R-6 measures, at the planning fee.
+  The words repack exactly through the release ABI, and the five immutables
+  `netuid`, `escrowHotkey`, `selfColdkey`, `bootstrap` and `demandFeeWei` are
+  patched into the exact release runtime.
+- Escrow registration is the exact 36-byte `registerEscrow(uint64)` call to
+  the derived vault2, with a nonzero cap and value `cap × 10^9` wei. Its
+  `escrow_registration` review values are the original phase's.
+- The implementation is the exact argument-free release creation; its UUPS
+  `__self` immutable is its predicted address.
+- The proxy is the exact release creation with `(implementation, initializer)`.
+  The implementation is the derived one. The initializer's vault is the derived
+  vault2, the owner and v1 coordinator are nonzero, the auditors number 1 to 16
+  with no zero or repeated address and `1 <= quorum <= auditors`, which are the
+  contract's own `setAuditors` bounds, and the deployer is neither the owner nor
+  an auditor. Both ABI layers repack exactly. At launch the auditor set is the
+  validator's admitted address with quorum 1. A configured owner does not prove
+  live Safe authority.
+- The binding is the exact 36-byte `setCoordinatorOnce(proxy)` call to vault2,
+  with zero value.
+
+`plan` exports the decoded `vault2_constructor` (escrow hotkey and demand fee),
+`escrow_registration`, `settlement2_initializer` and `vault_binding` of the
+selected prefix. `preview` (schema
+`urnetwork-mainnet-settlement-v2-contract-phase-preview-v1`) exports the
+approval bytes and plan hash with, for vault2, the implementation and the
+proxy, the predicted address, runtime hash and the exact completion readback:
+every getter and storage word.
+
+**Custody.** Each action has its own journal and schema
+(`urnetwork-mainnet-evm-vault2-state-v1`, `…-escrow2-state-v1`,
+`…-settlement2-state-v1`, `…-proxy2-state-v1`, `…-vault2-link-state-v1`),
+and each seals the exact completed record of the action before it, while every
+earlier journal stays locked. Prepare five `mainnet-evm-action` snapshots with
+these file names in the approved run directory. An action opens only after each
+predecessor's receipt is retained with its readback, and every online operation
+reauthenticates them, as in the original chain.
+
+**Receipts and readback.** A receipt is retained only after its readback at
+the authenticated canonical inclusion:
+
+- `vault2-create`: the exact runtime and the getters `netuid`, `escrowHotkey`,
+  `selfColdkey`, `bootstrap`, `demandFeeWei`, `CHALLENGE_BLOCKS` (14,400),
+  `coordinator` (zero) and `escrowRegistered` (false).
+- `escrow2-register`: the original escrow checks (one `EscrowRegistered` event
+  and the `getUid`/`getHotkey`/`getColdkey` mapping), the vault2 getters with
+  `escrowRegistered` true, and the escrow position's registration collateral,
+  `getMinerCollateral(netuid, escrowHotkey, selfColdkey)` on the staking
+  precompile `0x805` (`evm/src/interfaces/stakingCollateral.sol`). While SN25's
+  collateral lock share is zero, registration locks nothing and the view must
+  read `(false, 0, 0, 0, 0)`; any other value refuses the readback until a new
+  approval reviews it. The receipt's `getter_hash` records it and the result
+  reports it as `escrow_collateral`.
+- `settlement2-create`: the implementation's `vault`, `v1Coordinator`,
+  `auditors` (empty), `quorum`, `auditorSetVersion` and `owner`, all zero,
+  `UPGRADE_INTERFACE_VERSION` (`5.0.0`) and `proxiableUUID` (the ERC1967
+  implementation slot); its Initializable word is disabled at `uint64` maximum
+  and its own ERC1967 implementation slot is zero.
+- `proxy2-create`: the original proxy receipt identity, then through the proxy
+  `vault` (vault2), `v1Coordinator`, `auditors`, `quorum`, `auditorSetVersion`
+  (1), `owner` and the interface version, and five storage words: the ERC1967
+  implementation slot holds the implementation, admin and beacon are zero, the
+  Initializable word is version 1 and the Ownable word is the owner. The
+  implementation's runtime and storage are read again at the same block.
+- `vault2-link`: one `CoordinatorFixed` event, then the completion readback,
+  all at the binding's canonical inclusion: vault2's runtime and getters with
+  `coordinator` the proxy, `escrowRegistered` true and the escrow collateral,
+  and the proxy's and the implementation's runtime, getters and storage words.
+  Before its send, admission performs the same readback of the registered,
+  unbound vault2, the proxy and the implementation at both the canonical head
+  and pending state. A coordinator already fixed, even to the proxy, prevents
+  the send.
+
+`installation_complete` becomes true only with a retained successful
+`vault2-link` receipt; `activation_ready` stays false, because activation is the
+Safe's `registerOperatorPool` (§12.1 step 5). The five journals' receipts are
+the v2 deployment record. v1's launch skipped installation readback
+(`LAUNCH.md:50-58`); the v2 phase cannot complete without it. The launch
+readiness digest is unchanged: the phase changes no v1 contract, config or
+journal.
+
+**Escrow front-running.** Vault2's constructor calldata reveals the escrow
+hotkey as soon as its CREATE is broadcast. Anyone who registers that hotkey
+first, under their own coldkey, makes `registerEscrow` fail for good. The call
+reverts and returns its funding, but vault2 can never register its escrow. So
+the registration is the deployer's very next nonce and the very next action,
+and runs immediately after `vault2-create` completes, with no step in between.
+The command admits it only after vault2's creation is finalized and read back,
+so its funding can never reach an address whose CREATE failed. The residual
+window therefore runs from vault2's broadcast to the registration's inclusion,
+across vault2's finality. Admission refuses the send when the hotkey already
+has a UID; a registration that lands after admission leaves
+`escrow-registration-reverted-nonce-consumed`. Either way the recovery is a
+redeploy: a new approval with a fresh escrow hotkey and fresh nonces. No funds
+are at risk, because vault2 holds nothing until a pool registers.
+
+```sh
+sn-mainnet bootstrap-contracts preview --action vault2-create --config /secure/ur-mainnet/settlement-v2.unsigned.json > /secure/ur-mainnet/settlement-v2.preview.json
+sn-mainnet bootstrap-contracts plan --action vault2-create --config /secure/ur-mainnet/settlement-v2.json
+sn-mainnet bootstrap-contracts apply --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH"
+sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --signed-transaction /secure/ur-mainnet/vault2.signed.bin --signed-transaction-hash "$VAULT2_SIGNED_FILE_HASH"
+sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --online --submit
+sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --online
+```
+
+Repeat `apply`, signed-byte import and online `resume` for `escrow2-register`,
+`settlement2-create`, `proxy2-create` and `vault2-link`, in that order, each
+after the previous action's completed status.
