@@ -361,6 +361,32 @@ func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 	}
 }
 
+// E-4, withheld, at the end of the challenge window: eth_call and
+// eth_estimateGas run at the head while a transaction runs in the next block,
+// so a demand whose block would reach committedBlock + CHALLENGE_BLOCKS passes
+// its preflight and reverts ChallengeWindowClosed. The watcher, like the
+// validator's sender, sends a demand only while the next block is inside the
+// window: with the head two blocks before the window's last block, the two
+// demands that can land do, and nothing more is sent.
+func TestSettlementV2E2EWatcherDemandsInsideWindow(t *testing.T) {
+	s := newE2ESuccessor(t)
+	f := s.f
+	commitment, _, _ := f.forge(s.honest, e2eBadSuccessors[1].mutate(s.finalized.accounts, s.honest.Accounts))
+	seq := f.commit(f.operator, s.epoch, commitment)
+	last := f.pending().CommittedBlock + e2eWindow - 1
+	f.chain.rollTo(last - 1)
+	output, stderr, _ := s.check(t)
+	sent := f.chain.sentBy(f.watcher.address)
+	for k, tx := range sent {
+		if receipt := f.chain.receipt(tx.Hash()); k >= 2 || receipt == nil || receipt.Status != types.ReceiptStatusSuccessful || receipt.BlockNumber.Uint64() != last-1+uint64(k) {
+			t.Fatalf("watcher transaction %d of %d is not a demand landing inside the window, which ends after block %d:\n%s%s", k, len(sent), last, output, stderr)
+		}
+	}
+	if demanded := f.watcherDemands(t, 0, seq); len(demanded) != 2 {
+		t.Fatalf("the watcher demanded %v before the window closed", demanded)
+	}
+}
+
 // watcherDemands returns the indexes the watcher's transactions after the
 // first skip demanded on seq, checking that each paid the fee.
 func (f *e2eFixture) watcherDemands(t *testing.T, skip int, seq uint64) []uint64 {
