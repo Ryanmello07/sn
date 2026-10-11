@@ -816,7 +816,10 @@ Paths in this section are in `server/` unless marked.
 - **Preflight.** Each new v2 operation is first simulated with `eth_call`,
   so a call that would revert never takes a nonce.
 - **Alerts.** A missed close, a missed commit window, an open demand older
-  than one day, and a root not finalized by `end(e) + 14,400 + 1,200`.
+  than one day, a root not finalized by `end(e) + 14,400 + 1,200`, and SN25
+  nearing the prune threshold: within the lowest few non-immune subnets by
+  moving price, which a registration at the subnet limit would dissolve (§17,
+  dissolution row).
 
 **Gas.** R-6 measured each v2 transaction on ledgers of 2^29 accounts, the
 deepest vault2 takes, as gas used and the gas limit `eth_estimateGas` needs:
