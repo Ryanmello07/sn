@@ -638,12 +638,20 @@ func queryClaimedFinalizedObserved(ctx context.Context, cfg *ClaimDaemonConfig, 
 	return false, errors.Join(failures...)
 }
 
+// The v1 and v2 queues each prove that exact bytes are in acknowledged custody.
+type claimSignedCustody interface {
+	requireSigned(context.Context, *types.Transaction) error
+}
+
 // The caller already authenticated the exact signed transaction. Replaying
 // those bytes needs finalized chain authority, not a retained historical API.
-// The v1 and v2 queues each prove that the bytes are in acknowledged custody.
-func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *types.Transaction, from common.Address, store interface {
-	requireSigned(context.Context, *types.Transaction) error
-}) (bool, error) {
+func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *types.Transaction, from common.Address, store claimSignedCustody) (bool, error) {
+	return replaySignedClaim(ctx, cfg, tx, from, store, true)
+}
+
+// Only the v2 daemon replays without the preflight, and only bytes whose claim
+// its finalized watermark already covers, which can only revert in the vault.
+func replaySignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *types.Transaction, from common.Address, store claimSignedCustody, preflight bool) (bool, error) {
 	if err := store.requireSigned(ctx, tx); err != nil {
 		return false, err
 	}
@@ -684,11 +692,13 @@ func rebroadcastSignedClaim(ctx context.Context, cfg *ClaimDaemonConfig, tx *typ
 		// The vault checks the saved epoch, proof and claim status at the
 		// finalized head. A now-invalid intent remains a signed liability;
 		// it is never converted into a new transaction or erased.
-		_, preflightErr := client.CallContract(ctx, ethereum.CallMsg{From: from, To: tx.To(), Gas: tx.Gas(), GasPrice: tx.GasPrice(), Value: tx.Value(), Data: tx.Data()}, new(big.Int).SetUint64(finalized.Number))
-		if preflightErr != nil {
-			client.Close()
-			failures = append(failures, fmt.Errorf("finalized exact-claim preflight: %w", preflightErr))
-			continue
+		if preflight {
+			_, preflightErr := client.CallContract(ctx, ethereum.CallMsg{From: from, To: tx.To(), Gas: tx.Gas(), GasPrice: tx.GasPrice(), Value: tx.Value(), Data: tx.Data()}, new(big.Int).SetUint64(finalized.Number))
+			if preflightErr != nil {
+				client.Close()
+				failures = append(failures, fmt.Errorf("finalized exact-claim preflight: %w", preflightErr))
+				continue
+			}
 		}
 		if err := closeClaimFinalizedEVM(ctx, client, finalized); err != nil {
 			client.Close()
