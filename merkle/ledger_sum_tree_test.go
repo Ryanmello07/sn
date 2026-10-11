@@ -832,8 +832,8 @@ func TestLedgerSumTreeLeafCountBound(t *testing.T) {
 	}
 }
 
-// The build refuses a nil context and stops with the context's error, both
-// before the leaves and between levels.
+// GT-6: the build also refuses a nil context, and stops with the context's
+// error both before the leaves and between levels.
 func TestLedgerSumTreeBuildContext(t *testing.T) {
 	accounts := ledgerDerivedAccounts("context", 5)
 	if tree, err := BuildLedgerSumTree(nil, accounts); tree != nil || err == nil {
