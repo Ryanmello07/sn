@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import {Test} from "forge-std/Test.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {STSettlementVault2} from "../../src/STSettlementVault2.sol";
 import {ISTSettlementVault2} from "../../src/interfaces/ISTSettlementVault2.sol";
@@ -106,7 +107,10 @@ abstract contract V2VaultBase is Test {
     {
         V2TreeHelper.Node memory top = V2TreeHelper.root(levels);
         return ISTSettlementVault2.Commitment({
-            root: top.hash, total: top.sum, leafCount: uint64(leafCount), ledgerHash: _ledgerHash(top.hash)
+            root: top.hash,
+            total: top.sum,
+            leafCount: SafeCast.toUint64(leafCount),
+            ledgerHash: _ledgerHash(top.hash)
         });
     }
 

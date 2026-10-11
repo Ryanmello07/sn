@@ -26,6 +26,8 @@ contract V2ReentrantPayer {
     receive() external payable {
         (bool ok, bytes memory result) = msg.sender.call(_reentry);
         reentered = ok;
+        // Revert data starts with the refusal's 4-byte selector.
+        // forge-lint: disable-next-line(unsafe-typecast)
         refusal = bytes4(result);
     }
 }
@@ -46,6 +48,8 @@ contract V2VaultReentryTest is V2VaultBase {
     function reenter(address target, bytes calldata data) external {
         (bool ok, bytes memory result) = target.call(data);
         reentered = ok;
+        // Revert data starts with the refusal's 4-byte selector.
+        // forge-lint: disable-next-line(unsafe-typecast)
         refusal = bytes4(result);
         if (uidHotkey != bytes32(0)) neuron.setUid(NETUID, uidHotkey, 42);
     }

@@ -189,7 +189,7 @@ contract V2VaultRootsTest is V2VaultBase {
 
         vm.expectEmit(address(vault));
         emit ISTSettlementVault2.DistributionCommitted(
-            NO1, 1, uint64(epoch), commitment.root, F_TOTAL, 5, commitment.ledgerHash, 0
+            NO1, 1, SafeCast.toUint64(epoch), commitment.root, F_TOTAL, 5, commitment.ledgerHash, 0
         );
         assertEq(vault.commitPending(epoch, NO1, 0, commitment), 1);
 
@@ -406,7 +406,14 @@ contract V2VaultRootsTest is V2VaultBase {
         ISTSettlementVault2.Commitment memory commitment = _commitment(p, 6);
         vm.expectEmit(address(vault));
         emit ISTSettlementVault2.DistributionCommitted(
-            NO1, replaced + 1, uint64(epoch), commitment.root, P_TOTAL, 6, commitment.ledgerHash, replaced
+            NO1,
+            replaced + 1,
+            SafeCast.toUint64(epoch),
+            commitment.root,
+            P_TOTAL,
+            6,
+            commitment.ledgerHash,
+            replaced
         );
         uint64 seq = vault.commitPending(epoch, NO1, 1, commitment);
 
@@ -432,7 +439,7 @@ contract V2VaultRootsTest is V2VaultBase {
         ISTSettlementVault2.Commitment memory commitment = _commitment(_honestP(), 6);
         vm.expectEmit(address(vault));
         emit ISTSettlementVault2.DistributionCommitted(
-            NO1, deleted + 1, uint64(epoch), commitment.root, P_TOTAL, 6, commitment.ledgerHash, 0
+            NO1, deleted + 1, SafeCast.toUint64(epoch), commitment.root, P_TOTAL, 6, commitment.ledgerHash, 0
         );
         uint64 next = vault.commitPending(epoch, NO1, 1, commitment);
         assertGt(next, deleted);
@@ -912,7 +919,7 @@ contract V2VaultRootsTest is V2VaultBase {
 
         vm.expectEmit(address(vault));
         emit ISTSettlementVault2.DistributionFinalized(
-            NO1, seq, 1, uint64(epoch), commitment.root, P_TOTAL, 6, commitment.ledgerHash
+            NO1, seq, 1, SafeCast.toUint64(epoch), commitment.root, P_TOTAL, 6, commitment.ledgerHash
         );
         assertEq(vault.finalizePending(NO1), 1);
 

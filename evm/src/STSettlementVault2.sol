@@ -149,6 +149,8 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         Pool storage pool = _pools[noId];
         if (!pool.registered) revert UnknownPool();
         bytes32 hotkey = pool.hotkey;
+        // Only whether a UID exists matters here.
+        // slither-disable-next-line unused-return
         (bool exists,) = INeuron(INeuron_ADDRESS).getUid(netuid, hotkey);
         if (exists) revert UidExists();
         if (maximumBurnRao == 0) revert InvalidConfiguration();
@@ -166,7 +168,7 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         nonReentrant
         returns (uint256 amount)
     {
-        bytes32 hotkey = _requireNextEpoch(epoch, noId);
+        bytes32 hotkey = _advance(epoch, noId);
         uint256 observed = _movable(hotkey);
         if (observed != 0) {
             amount = _moveToEscrow(hotkey, observed);
@@ -174,7 +176,7 @@ contract STSettlementVault2 is ISTSettlementVault2 {
             totalCaptured += amount;
             escrowAccounted += amount;
         }
-        uint256 funded = _fund(epoch, noId);
+        uint256 funded = _snapshot(epoch, noId);
         _requireBacking();
         emit EmissionCaptured(epoch, noId, observed, amount, funded);
     }
@@ -182,8 +184,8 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     /// @notice Funds epoch `epoch` with nothing. Its emission stays on the pool
     /// hotkey for the next capture.
     function deferEmission(uint256 epoch, uint256 noId) external onlyCoordinator nonReentrant {
-        _requireNextEpoch(epoch, noId);
-        emit EmissionDeferred(epoch, noId, _fund(epoch, noId));
+        _advance(epoch, noId);
+        emit EmissionDeferred(epoch, noId, _snapshot(epoch, noId));
     }
 
     /// @notice Replaces the pool's pending root, and with it every demand on
@@ -204,8 +206,9 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         Root[] storage history = _roots[noId];
         if (prevRootCount != history.length) revert StaleRootCount();
         // With no finalized root, the pool starts empty before its first epoch.
-        Root memory previous;
-        previous.epoch = pool.firstEpoch - 1;
+        Root memory previous = Root({
+            root: bytes32(0), total: 0, leafCount: 0, epoch: pool.firstEpoch - 1, ledgerHash: bytes32(0)
+        });
         if (history.length != 0) previous = history[history.length - 1];
         if (epoch <= previous.epoch || epoch > lastFundedEpoch[noId]) revert EpochOutOfRange();
         if (commitment.total != fundedThrough[noId][epoch]) revert TotalMismatch();
@@ -305,9 +308,8 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         if (next.seq == 0) revert NoPendingRoot();
         if (block.number < uint256(next.committedBlock) + CHALLENGE_BLOCKS) revert ChallengeWindowOpen();
         if (next.openDemands != 0) revert DemandOpen();
-        Root[] storage history = _roots[noId];
-        rootIndex = history.length;
-        history.push(
+        rootIndex = _roots[noId].length;
+        _roots[noId].push(
             Root({
                 root: next.root,
                 total: next.total,
@@ -433,19 +435,20 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         }
     }
 
-    // Checks that `epoch` is the pool's next unfunded epoch; returns its hotkey.
-    function _requireNextEpoch(uint256 epoch, uint256 noId) private view returns (bytes32) {
+    // Records `epoch`, which must be the pool's next unfunded epoch, as funded
+    // before any runtime call, and returns the pool hotkey.
+    function _advance(uint256 epoch, uint256 noId) private returns (bytes32) {
         Pool storage pool = _pools[noId];
         if (!pool.registered) revert UnknownPool();
         if (epoch != lastFundedEpoch[noId] + 1) revert InvalidTransition();
+        lastFundedEpoch[noId] = epoch;
         return pool.hotkey;
     }
 
-    // Writes the pool's funding snapshot for its next epoch, once (§4.2 G5).
-    function _fund(uint256 epoch, uint256 noId) private returns (uint256 funded) {
+    // Writes the funding snapshot of the epoch just advanced to, once (§4.2 G5).
+    function _snapshot(uint256 epoch, uint256 noId) private returns (uint256 funded) {
         funded = capturedTotal[noId];
         fundedThrough[noId][epoch] = funded;
-        lastFundedEpoch[noId] = epoch;
     }
 
     // Moves `observed` of the vault's stake on `hotkey` into escrow and returns
@@ -514,6 +517,8 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     // the lock, and a move that digs into it fails StakeUnavailable.
     function _movable(bytes32 hotkey) private view returns (uint256) {
         uint256 staked = _stake(hotkey, selfColdkey);
+        // Only the locked amount limits a move; the other fields say how it drains.
+        // slither-disable-next-line unused-return
         (, uint64 locked,,,) =
             IStakingCollateral(ISTAKING_ADDRESS).getMinerCollateral(netuid, hotkey, selfColdkey);
         return staked > locked ? staked - locked : 0;

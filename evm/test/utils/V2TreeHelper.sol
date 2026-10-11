@@ -25,7 +25,7 @@ library V2TreeHelper {
     {
         uint256 d = LedgerTree.depth(coldkeys.length);
         levels = new Node[][](d + 1);
-        levels[0] = new Node[](1 << d);
+        levels[0] = new Node[](2 ** d);
         for (uint256 i; i < coldkeys.length; i++) {
             levels[0][i] = leaf(coldkeys[i], values[i]);
         }
