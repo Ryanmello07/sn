@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -18,7 +19,17 @@ import (
 // original signature. Both receipt and application use actual canonical rows;
 // a later preparation request is blocked before it can sign anything new.
 func TestProductionStartupRunReleaseReconcilesBeforeCurrentPreparation(t *testing.T) {
-	fixture := newProductionStartupTestFixture(t)
+	productionStartupTestReconcile(t, newProductionStartupTestFixture(t))
+}
+
+// VA-9: activation history and original recovery run unchanged under a
+// config carrying settlement_v2; its identity check waits for preparation.
+func TestProductionStartupRunReleaseReconcilesWithSettlementV2(t *testing.T) {
+	productionStartupTestReconcile(t, newProductionStartupSettlementV2TestFixture(t))
+}
+
+func productionStartupTestReconcile(t *testing.T, fixture *productionStartupTestFixture) {
+	t.Helper()
 	continuation := fixture.continuation
 	pending := continuation.beginAndLoseAcknowledgement(t, fixture.native)
 	fixture.native.receiptNumber, fixture.native.applied = 103, true
@@ -89,7 +100,17 @@ func TestProductionStartupRunReleaseReconcilesBeforeCurrentPreparation(t *testin
 // settlement publication owner have completed. The test cancels at that I/O
 // barrier. The empty measurement census cannot authorize a native signature.
 func TestProductionStartupRunReleaseInitialDeploymentBecomesReady(t *testing.T) {
-	fixture := newProductionStartupTestFixture(t)
+	productionStartupTestInitialDeployment(t, newProductionStartupTestFixture(t))
+}
+
+// VA-9: activation, the closed census publication and readiness run
+// unchanged under a config carrying settlement_v2, after its identity check.
+func TestProductionStartupRunReleaseInitialDeploymentWithSettlementV2(t *testing.T) {
+	productionStartupTestInitialDeployment(t, newProductionStartupSettlementV2TestFixture(t))
+}
+
+func productionStartupTestInitialDeployment(t *testing.T, fixture *productionStartupTestFixture) {
+	t.Helper()
 	fixture.selectEmptyDeployment(t)
 	cfg := fixture.continuation.production.cfg
 	intentPath := filepath.Join(cfg.StateDir, "steering-intents.json")
@@ -133,5 +154,40 @@ func TestProductionStartupRunReleaseInitialDeploymentBecomesReady(t *testing.T) 
 	fixture.stateLock.Unlock()
 	if len(fixture.native.broadcasts) != 0 || writeRequests != 0 {
 		t.Fatal("fresh startup invented a native send before the test's trail barrier")
+	}
+}
+
+// The startup config also carries settlement_v2, and the EVM answers its
+// three identity getters at the finalized head.
+func newProductionStartupSettlementV2TestFixture(t *testing.T) *productionStartupTestFixture {
+	t.Helper()
+	block := settlementV2TestBlock
+	fixture := newProductionStartupTestFixtureWithConfig(t, false, func(cfg *ReleaseConfig) { cfg.SettlementV2 = &block })
+	fixture.evm.settlementV2 = settlementV2TestAnswers(fixture.continuation.production.cfg.Coordinator)
+	return fixture
+}
+
+// VA-6: when STSettlement2 names another vault, the validator stops at its
+// first finalized snapshot, before trail seeding or any native send.
+func TestProductionStartupRunReleaseRefusesSettlementV2Mismatch(t *testing.T) {
+	fixture := newProductionStartupSettlementV2TestFixture(t)
+	fixture.evm.settlementV2[settlementV2TestKey(settlementV2TestBlock.Settlement, "vault()")] = settlementV2TestWord("0x5e77000000000000000000000000000000000003")
+	fixture.selectEmptyDeployment(t)
+	err := RunRelease(fixture.storageContext(t.Context()), fixture.configPath)
+	if err == nil || !strings.Contains(err.Error(), "settlement_v2 STSettlement2.vault() at block") {
+		t.Fatalf("startup admitted another vault or stopped for another cause: %v", err)
+	}
+	for _, api := range fixture.origins {
+		select {
+		case <-api.seedRead:
+			t.Fatal("trail seeding began under a refused settlement v2 identity")
+		default:
+		}
+	}
+	fixture.stateLock.Lock()
+	writeRequests := fixture.writeRequests
+	fixture.stateLock.Unlock()
+	if len(fixture.native.broadcasts) != 0 || writeRequests != 0 {
+		t.Fatal("refused settlement v2 identity reached a native send")
 	}
 }
