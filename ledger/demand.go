@@ -17,18 +17,19 @@ import (
 const DemandSample = 256
 
 // ErrDemandIndex is returned by DemandSet for a fault or an earlier
-// unanswered index that is not an index of the previous root.
+// unanswered index that is not an account of the given root.
 var ErrDemandIndex = errors.New("ledger: demand index is not an account of the previous root")
 
-// DemandSet returns, in ascending order, the indexes of the previous root's
-// accounts to demand on a pending root whose objects are missing or do not
-// reproduce it (§9.3, the residual risk of §4.2 G2):
+// DemandSet returns, in ascending order, the indexes of a finalized root's
+// accounts, previous, to demand on a pending root whose objects are missing
+// or do not reproduce it (§9.3, the residual risk of §4.2 G2). previous is
+// the newest finalized root whose accounts the caller holds and verified:
 //
 //   - every fault: an index whose published row is below the account's
-//     value, names another coldkey or is missing (Result.Faults);
+//     value, names another coldkey or is missing (Faults, Result.Faults);
 //   - every index in again: the unanswered demands of the earlier pending
-//     roots over the same previous root that were replaced or deleted while
-//     a demand was open;
+//     roots over the latest finalized root that were replaced or deleted
+//     while a demand was open;
 //   - a sample of DemandSample << doublings of the remaining accounts,
 //     where doublings counts those earlier roots, drawn by value without
 //     replacement. When no more remaining accounts have a positive value,
