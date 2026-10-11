@@ -50,7 +50,7 @@ func claimV2TestRefused(t *testing.T, name string, err error, want string) {
 	}
 }
 
-// §10.1 config: one strict YAML document pinning chain and vault; relative
+// E-5, §10.1 config: one strict YAML document pinning chain and vault; relative
 // paths are anchored at the config and the poll defaults to 30 seconds.
 func TestClaimV2ConfigRefusals(t *testing.T) {
 	dir := t.TempDir()
@@ -116,7 +116,7 @@ func TestClaimV2ConfigRefusals(t *testing.T) {
 	}
 }
 
-// §8.3 account body: other vaults and pending-only accounts are skipped, a
+// E-5, §8.3 account body: other vaults and pending-only accounts are skipped, a
 // vault in another letter case is the same vault, and anything malformed
 // refuses the reply.
 func TestClaimV2AccountResponseRefusals(t *testing.T) {
@@ -167,7 +167,7 @@ func TestClaimV2AccountResponseRefusals(t *testing.T) {
 	}
 }
 
-// §8.3: a refused or malformed reply for any coldkey fails the snapshot.
+// E-5, §8.3: a refused or malformed reply for any coldkey fails the snapshot.
 func TestClaimV2SnapshotRefusals(t *testing.T) {
 	chain := newClaimV2TestChain(t)
 	chain.finalize(claimV2TestAccount(claimV2TestOther, 1), claimV2TestAccount(claimV2TestColdkey, 5))
@@ -183,7 +183,7 @@ func TestClaimV2SnapshotRefusals(t *testing.T) {
 	claimV2TestRefused(t, "malformed", err, "is malformed")
 }
 
-// §10.1 finalized read: another chain, an unreadable chain or finalized head,
+// E-5, §10.1 finalized read: another chain, an unreadable chain or finalized head,
 // a refused view and a regressed finalized head are refused per endpoint; the
 // next endpoint is then tried.
 func TestClaimV2FinalizedReadRefusals(t *testing.T) {
@@ -217,7 +217,7 @@ func TestClaimV2FinalizedReadRefusals(t *testing.T) {
 	}
 }
 
-// §10.1 custody: retained bytes reconcile only as this unit's relayer-signed
+// E-5, §10.1 custody: retained bytes reconcile only as this unit's relayer-signed
 // v2 claim on the configured chain and vault, in canonical calldata.
 func TestClaimV2AuthenticationRefusals(t *testing.T) {
 	key, keyFile := writeClaimV2TestKey(t)
@@ -270,7 +270,7 @@ func TestClaimV2AuthenticationRefusals(t *testing.T) {
 	}
 }
 
-// §10.1 settlement: only exactly one canonical Claimed event that matches
+// E-5, §10.1 settlement: only exactly one canonical Claimed event that matches
 // the signed intent settles a claim. Foreign logs are ignored.
 func TestClaimV2ReceiptRefusals(t *testing.T) {
 	key, keyFile := writeClaimV2TestKey(t)
@@ -332,7 +332,7 @@ func TestClaimV2ReceiptRefusals(t *testing.T) {
 	}
 }
 
-// §10.1 state: a v2 queue loads only its own schema with well-formed units.
+// E-5, §10.1 state: a v2 queue loads only its own schema with well-formed units.
 func TestClaimV2QueueRefusesMalformedState(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "claims-v2")
 	store, err := newClaimQueueV2Store(claimQueueTestContext(t, t.Context(), dir), dir)
@@ -364,7 +364,7 @@ func TestClaimV2QueueRefusesMalformedState(t *testing.T) {
 	}
 }
 
-// §10.1 custody: an uncertain publication refuses later saves until a new
+// E-5, §10.1 custody: an uncertain publication refuses later saves until a new
 // owner reconciles it; a closed store refuses everything; a lost queue file
 // or malformed acknowledged bytes refuse loads and broadcast custody, which
 // also needs the exact bytes; a queue needs a declared durable volume.
@@ -424,7 +424,7 @@ func TestClaimV2StoreRefusals(t *testing.T) {
 	}
 }
 
-// §10.1 nonce admission: startup seeds the shared floor from every retained
+// E-5, §10.1 nonce admission: startup seeds the shared floor from every retained
 // v2 signature, and forged bytes or a nonce with no successor stop signing.
 func TestClaimV2SeedRefusals(t *testing.T) {
 	key, keyFile := writeClaimV2TestKey(t)
@@ -459,7 +459,7 @@ func TestClaimV2SeedRefusals(t *testing.T) {
 	}
 }
 
-// §10.1 one operation at a time: a poll that is not admitted, or whose
+// E-5, §10.1 one operation at a time: a poll that is not admitted, or whose
 // context ended, changes nothing; a nonce custody failure stops the daemon.
 func TestClaimV2PollAdmission(t *testing.T) {
 	chain := newClaimV2TestChain(t)
@@ -499,7 +499,7 @@ func TestClaimV2PollAdmission(t *testing.T) {
 	}
 }
 
-// §10.1 submission and settlement refusals: an unreadable relayer key backs
+// E-5, §10.1 submission and settlement refusals: an unreadable relayer key backs
 // off unsigned; a lost acknowledgement of prepared bytes still reserves their
 // nonce; unauthenticated bytes or a receipt without the event stay in flight.
 func TestClaimV2SubmitAndSettleRefusals(t *testing.T) {
@@ -557,7 +557,7 @@ func TestClaimV2SubmitAndSettleRefusals(t *testing.T) {
 	})
 }
 
-// §10.1: a failed submitting checkpoint stops the operation before signing;
+// E-5, §10.1: a failed submitting checkpoint stops the operation before signing;
 // a failed startup checkpoint or a custody failure stops the daemon, which a
 // shutdown never reports as a failure.
 func TestClaimV2CheckpointRefusals(t *testing.T) {
@@ -591,7 +591,7 @@ func TestClaimV2CheckpointRefusals(t *testing.T) {
 	}
 }
 
-// The orchestrator's runtime-475 measurement: the staking precompile needs a
+// E-5, the orchestrator's runtime-475 measurement: the staking precompile needs a
 // far higher gas limit than a claim uses. The limit comes from eth_estimateGas
 // after a successful eth_call preflight, with v1's 20% headroom; a refused
 // preflight is neither estimated nor sent.
@@ -621,7 +621,7 @@ func TestClaimV2GasLimitFollowsTheEstimate(t *testing.T) {
 	})
 }
 
-// §10.1 loop: a snapshot is merged and claimed, a tick polls, cancellation
+// E-5, §10.1 loop: a snapshot is merged and claimed, a tick polls, cancellation
 // stops cleanly; a failing poll or save stops the loop.
 func TestClaimV2RunLoop(t *testing.T) {
 	chain := newClaimV2TestChain(t)
@@ -663,7 +663,7 @@ func TestClaimV2RunLoop(t *testing.T) {
 	claimV2TestRefused(t, "custody", err, "synthetic custody loss")
 }
 
-// §10.1 public entry: a v2-only daemon claims on demand from its own queue
+// E-5, §10.1 public entry: a v2-only daemon claims on demand from its own queue
 // and stops cleanly; each startup refusal precedes any signature.
 func TestClaimV2PublicEntrypoint(t *testing.T) {
 	chain := newClaimV2TestChain(t)
@@ -690,7 +690,7 @@ func TestClaimV2PublicEntrypoint(t *testing.T) {
 	}
 }
 
-// §10.1 startup refusals of the public entry and the command, each before
+// E-5, §10.1 startup refusals of the public entry and the command, each before
 // any queue is opened for signing.
 func TestClaimV2StartupRefusals(t *testing.T) {
 	chain := newClaimV2TestChain(t)
@@ -751,7 +751,7 @@ func TestClaimV2StartupRefusals(t *testing.T) {
 	}
 }
 
-// §10.1 startup custody: a malformed v2 queue or forged retained bytes stop
+// E-5, §10.1 startup custody: a malformed v2 queue or forged retained bytes stop
 // the v2 daemon alone and beside v1; forged v1 bytes stop the pair.
 func TestClaimV2StartupCustodyRefusals(t *testing.T) {
 	chain := newClaimV2TestChain(t)
@@ -793,7 +793,7 @@ func TestClaimV2StartupCustodyRefusals(t *testing.T) {
 	}
 }
 
-// The command line names the v2 daemon, its v1 sibling, the rao threshold and
+// E-5: the command line names the v2 daemon, its v1 sibling, the rao threshold and
 // the on-demand claim.
 func TestMainUsageClaimDaemonV2(t *testing.T) {
 	opts := parseArgsForTest(t, []string{"claim-daemon-v2", "--config=/etc/claim-v2.yml", "--v1-config=/etc/claim.yml", "--threshold-rao=20000000", "--claim-now"})

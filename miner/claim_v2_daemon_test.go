@@ -432,7 +432,7 @@ func TestClaimV2OnDemandClaim(t *testing.T) {
 	}
 }
 
-// §10.1 refusal: a proof that does not reproduce the finalized on-chain root
+// E-5, §10.1 refusal: a proof that does not reproduce the finalized on-chain root
 // is refused before signing, and the unit retries.
 func TestClaimV2RefusesUnverifiedProof(t *testing.T) {
 	for name, tamper := range map[string]func(map[string]any){
