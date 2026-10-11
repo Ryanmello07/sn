@@ -131,8 +131,9 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         returns (uint16 uid)
     {
         if (
-            noId == 0 || noId > type(uint64).max || hotkey == bytes32(0) || hotkey == escrowHotkey
-                || poolHotkeyUsed[hotkey] || maximumBurnRao == 0 || firstEpoch == 0 || _pools[noId].registered
+            !escrowRegistered || noId == 0 || noId > type(uint64).max || hotkey == bytes32(0)
+                || hotkey == escrowHotkey || poolHotkeyUsed[hotkey] || maximumBurnRao == 0 || firstEpoch == 0
+                || _pools[noId].registered
         ) revert InvalidConfiguration();
         _pools[noId] = Pool({hotkey: hotkey, firstEpoch: firstEpoch, registered: true});
         poolHotkeyUsed[hotkey] = true;
