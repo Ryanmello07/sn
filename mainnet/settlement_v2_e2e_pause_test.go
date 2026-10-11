@@ -37,44 +37,44 @@ func TestSettlementV2E2EPauseStopsSettlementOnly(t *testing.T) {
 	f.publisher.publish(p1.Objects, p1.Accounts, p1.Tree)
 	seq := f.commit(f.operator, e1, p1.Commit)
 
-	receipt := f.must(f.guardian, f.coordinator, nil, coordinatorABI.PackSetPaused(true))
+	receipt := f.must(f.guardian, f.coordinator, nil, e2eCoordinatorBinding.PackSetPaused(true))
 	f.requireLogs(receipt, f.coordinatorLog("PausedSet", true, f.guardian.address))
 
 	// Approvals continue.
 	f.approve()
 	// Claims continue: anyone claims Alice's root-0 balance to her coldkey.
 	account, proof := e2eProof(t, root0.Tree, root0.Accounts, a)
-	receipt = f.must(f.anyone, f.vault2, nil, vault2Binding.PackClaim(e2eRao(e2eNoID), e2eRao(0), account, proof))
+	receipt = f.must(f.anyone, f.vault2, nil, e2eVault2Binding.PackClaim(e2eRao(e2eNoID), e2eRao(0), account, proof))
 	f.requireLogs(receipt, f.vault2Log("Claimed", e2eRao(e2eNoID), e2eRao(0), e2eRao(a), alice, account.Cumulative, account.Cumulative, f.anyone.address))
 	if f.chain.stake(f.escrowV2, alice).Cmp(account.Cumulative) != 0 {
 		t.Fatal("the claim during the pause did not pay Alice")
 	}
 	// Demands continue, and so does the operator's answer.
 	account, proof = e2eProof(t, root0.Tree, root0.Accounts, b)
-	receipt = f.must(f.watcher, f.vault2, e2eRao(e2eDemandFeeWei), vault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof))
+	receipt = f.must(f.watcher, f.vault2, e2eRao(e2eDemandFeeWei), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof))
 	f.requireLogs(receipt, f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(b), f.watcher.address))
 	path, err := p1.Tree.Path(b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt = f.must(f.operator, f.vault2, nil, vault2Binding.PackCheckPath(e2eRao(e2eNoID), account, proof, e2ePath(path)))
+	receipt = f.must(f.operator, f.vault2, nil, e2eVault2Binding.PackCheckPath(e2eRao(e2eNoID), account, proof, e2ePath(path)))
 	f.requireLogs(receipt, f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(b), f.operator.address))
 
 	// Settlement stops: a commit inside the window, a finalize once the
 	// window has passed, and the next epoch's close.
 	f.refused(f.operator, f.settlement, nil, f.commitData(e1, p1.Commit), "SettlementPaused")
 	f.chain.rollTo(f.pending().CommittedBlock + e2eWindow)
-	f.refused(f.anyone, f.settlement, nil, settlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)), "SettlementPaused")
+	f.refused(f.anyone, f.settlement, nil, e2eSettlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)), "SettlementPaused")
 	f.emitV2(1_470_000_000_000)
 	f.chain.rollTo(f.end(e2))
-	f.refused(f.anyone, f.settlement, nil, settlementBinding.PackCloseOperatorEpoch(e2eRao(e2), e2eRao(e2eNoID)), "SettlementPaused")
+	f.refused(f.anyone, f.settlement, nil, e2eSettlementBinding.PackCloseOperatorEpoch(e2eRao(e2), e2eRao(e2eNoID)), "SettlementPaused")
 	if f.pending().Seq != seq || f.rootCount() != 1 || f.fundedThrough(e2).Sign() != 0 {
 		t.Fatal("settlement moved while paused")
 	}
 
 	// Only the owner unpauses; settlement resumes where it stopped.
-	f.refused(f.guardian, f.coordinator, nil, coordinatorABI.PackSetPaused(false), "Unauthorized")
-	receipt = f.must(f.owner, f.coordinator, nil, coordinatorABI.PackSetPaused(false))
+	f.refused(f.guardian, f.coordinator, nil, e2eCoordinatorBinding.PackSetPaused(false), "Unauthorized")
+	receipt = f.must(f.owner, f.coordinator, nil, e2eCoordinatorBinding.PackSetPaused(false))
 	f.requireLogs(receipt, f.coordinatorLog("PausedSet", false, f.owner.address))
 	f.finalize()
 	f.closeV2(e2)
@@ -93,7 +93,7 @@ func TestSettlementV2E2EPauseStopsSettlementOnly(t *testing.T) {
 	seq = f.commit(f.operator, e2, commitment)
 
 	// Paused again, the watcher's challenge still deletes it.
-	f.must(f.guardian, f.coordinator, nil, coordinatorABI.PackSetPaused(true))
+	f.must(f.guardian, f.coordinator, nil, e2eCoordinatorBinding.PackSetPaused(true))
 	output, stderr, code := f.snclaim(f.snclaimArgs("v2", "check", "--all", "--no_id=1", "--challenge", "--key_file="+f.watcher.keyFile(t))...)
 	want := fmt.Sprintf("DistributionDeleted: pool 1, seq %d\n  account:     %d\n  fault:       lower_value at level 0\n  challenger:  %s\n", seq, a, f.watcher.address.Hex())
 	if code != 0 || !strings.HasSuffix(output, want) {

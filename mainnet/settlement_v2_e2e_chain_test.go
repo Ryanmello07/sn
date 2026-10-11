@@ -56,8 +56,10 @@ const (
 	// more as the whole position (scripts/runtime-rehearsal/README.md).
 	e2eTransferFloorTaoRao = 100_000
 	e2eWholePosition       = ^uint64(0)
-	// One rao is 10^9 wei of native balance.
-	e2eRaoWei = 1_000_000_000
+	// One rao is 10^9 wei of native balance; a registration burns
+	// e2eBurnRao from the registering contract's balance.
+	e2eRaoWei  = 1_000_000_000
+	e2eBurnRao = 500_000_000
 )
 
 var (
@@ -106,10 +108,6 @@ type e2eRuntime struct {
 	// shortfall makes every move and transfer credit its destination one rao
 	// short, as a share pool above price 1 can.
 	shortfall bool
-	// burn is the registration price in rao; lock is the alpha a registration
-	// stakes and locks as collateral on the registering coldkey's position.
-	burn uint64
-	lock uint64
 }
 
 func e2eRuntimeSlot(kind string, words ...[32]byte) common.Hash {
@@ -303,12 +301,12 @@ func (self *e2ePrecompile) Run(input []byte) ([]byte, error) {
 		if owner != (common.Hash{}) && owner != common.Hash(coldkey) {
 			return nil, errors.New("NonAssociatedColdKey")
 		}
-		if rt.burn > limit {
+		if e2eBurnRao > limit {
 			return nil, errors.New("RegistrationPriceLimitExceeded")
 		}
 		// The burn is paid from the caller's mapped account, which is its
 		// EVM balance; call value only funds that balance beforehand.
-		price := new(uint256.Int).Mul(uint256.NewInt(rt.burn), uint256.NewInt(e2eRaoWei))
+		price := new(uint256.Int).Mul(uint256.NewInt(e2eBurnRao), uint256.NewInt(e2eRaoWei))
 		if rt.db.GetBalance(rt.caller).Lt(price) {
 			return nil, errors.New("NotEnoughBalanceToStake")
 		}
@@ -317,11 +315,6 @@ func (self *e2ePrecompile) Run(input []byte) ([]byte, error) {
 		rt.setWord(e2eNeuron, e2eRuntimeSlot("next-uid"), new(big.Int).Add(next, common.Big1))
 		rt.setWord(e2eNeuron, e2eRuntimeSlot("uid", hotkey), new(big.Int).Add(next, common.Big1))
 		rt.db.SetState(e2eNeuron, e2eRuntimeSlot("owner", hotkey), common.Hash(coldkey))
-		if rt.lock != 0 {
-			lock := new(big.Int).SetUint64(rt.lock)
-			rt.setStake(hotkey, coldkey, new(big.Int).Add(rt.stake(hotkey, coldkey), lock))
-			rt.setWord(e2eStaking, e2eRuntimeSlot("collateral", hotkey, coldkey), new(big.Int).Add(rt.collateral(hotkey, coldkey), lock))
-		}
 		return nil, nil
 	case "getUid":
 		if err := netuid(args[0]); err != nil {
@@ -344,7 +337,6 @@ type e2eBlock struct {
 	root     common.Hash
 	txs      types.Transactions
 	receipts types.Receipts
-	senders  []common.Address
 }
 
 type e2eIncluded struct {
@@ -368,8 +360,6 @@ type e2eChain struct {
 	// set, and any whose nonce leaves a gap.
 	pool []*types.Transaction
 	hold bool
-	// failSends refuses that many eth_sendRawTransaction, as a lost broadcast.
-	failSends int
 	// nonceView answers eth_getTransactionCount with a stale nonce.
 	nonceView map[common.Address]uint64
 	// sent counts every transaction accepted from each sender over RPC.
@@ -388,8 +378,7 @@ func newE2EChain(t testing.TB, funded map[common.Address]*big.Int) *e2eChain {
 	config.PragueTime, config.OsakaTime = nil, nil
 	config.BlobScheduleConfig = &params.BlobScheduleConfig{Cancun: params.DefaultCancunBlobConfig}
 	chain := &e2eChain{t: t, config: &config, signer: types.LatestSignerForChainID(config.ChainID), database: state.NewDatabaseForTesting(),
-		included: map[common.Hash]*e2eIncluded{}, nonceView: map[common.Address]uint64{}, sent: map[common.Address][]*types.Transaction{},
-		runtime: e2eRuntime{burn: 500_000_000}}
+		included: map[common.Hash]*e2eIncluded{}, nonceView: map[common.Address]uint64{}, sent: map[common.Address][]*types.Transaction{}}
 	db, err := state.New(types.EmptyRootHash, chain.database)
 	if err != nil {
 		t.Fatal(err)
@@ -446,12 +435,12 @@ func (self *e2eChain) evmLocked(db *state.StateDB, number uint64, call bool) *vm
 }
 
 // commitLocked closes db as block number: the next block after the head.
-func (self *e2eChain) commitLocked(db *state.StateDB, number uint64, txs types.Transactions, receipts types.Receipts, senders []common.Address) *e2eBlock {
+func (self *e2eChain) commitLocked(db *state.StateDB, number uint64, txs types.Transactions, receipts types.Receipts) *e2eBlock {
 	root, err := db.Commit(number, true, false)
 	if err != nil {
 		panic(err)
 	}
-	block := &e2eBlock{number: number, root: root, txs: txs, receipts: receipts, senders: senders}
+	block := &e2eBlock{number: number, root: root, txs: txs, receipts: receipts}
 	self.blocks = append(self.blocks, block)
 	self.head = number
 	for index, tx := range txs {
@@ -489,7 +478,7 @@ func (self *e2eChain) mineLocked(tx *types.Transaction) (*types.Receipt, []byte,
 		receipt.Logs = []*types.Log{}
 	}
 	receipt.Bloom = types.CreateBloom(receipt)
-	self.commitLocked(db, number, types.Transactions{tx}, types.Receipts{receipt}, []common.Address{message.From})
+	self.commitLocked(db, number, types.Transactions{tx}, types.Receipts{receipt})
 	return receipt, result.Revert(), nil
 }
 
@@ -548,7 +537,7 @@ func (self *e2eChain) native(change func(*e2eRuntime)) {
 		self.runtime.db = db
 		change(&self.runtime)
 		db.Finalise(true)
-		self.commitLocked(db, self.head+1, nil, nil, nil)
+		self.commitLocked(db, self.head+1, nil, nil)
 	})
 }
 
@@ -819,19 +808,11 @@ func (self *e2eChain) blockLocked(raw json.RawMessage) (uint64, bool, error) {
 	}
 	var selector string
 	if err := json.Unmarshal(raw, &selector); err != nil {
-		var object struct {
-			BlockNumber *hexutil.Uint64 `json:"blockNumber"`
-		}
-		if err := json.Unmarshal(raw, &object); err != nil || object.BlockNumber == nil {
-			return 0, false, errors.New("unsupported block selector")
-		}
-		return uint64(*object.BlockNumber), uint64(*object.BlockNumber) <= self.head, nil
+		return 0, false, err
 	}
 	switch selector {
 	case "latest", "finalized", "safe", "pending":
 		return self.head, true, nil
-	case "earliest":
-		return 0, true, nil
 	}
 	number, err := hexutil.DecodeUint64(selector)
 	if err != nil {
@@ -858,10 +839,6 @@ func (self *e2eChain) rpc(method string, params []json.RawMessage) (any, *e2eRPC
 	switch method {
 	case "eth_chainId":
 		return hexutil.EncodeUint64(e2eChainID), nil
-	case "net_version":
-		return fmt.Sprint(e2eChainID), nil
-	case "eth_blockNumber":
-		return hexutil.EncodeUint64(self.head), nil
 	case "eth_gasPrice":
 		return hexutil.EncodeUint64(e2eGasPrice), nil
 	case "eth_getBlockByNumber":
@@ -869,16 +846,10 @@ func (self *e2eChain) rpc(method string, params []json.RawMessage) (any, *e2eRPC
 		if err != nil {
 			return nil, e2eInvalidParams(err)
 		}
-		var full bool
-		if len(params) > 1 {
-			if err := param(1, &full); err != nil {
-				return nil, e2eInvalidParams(err)
-			}
-		}
 		if !ok {
 			return nil, nil
 		}
-		return self.blockJSONLocked(number, full), nil
+		return self.blockJSONLocked(number), nil
 	case "eth_getTransactionCount":
 		var address common.Address
 		if err := param(0, &address); err != nil {
@@ -907,20 +878,6 @@ func (self *e2eChain) rpc(method string, params []json.RawMessage) (any, *e2eRPC
 			}
 		}
 		return hexutil.EncodeUint64(nonce), nil
-	case "eth_getBalance", "eth_getCode":
-		var address common.Address
-		if err := param(0, &address); err != nil {
-			return nil, e2eInvalidParams(err)
-		}
-		number, ok, err := block(1)
-		if err != nil || !ok {
-			return nil, e2eInvalidParams(fmt.Errorf("block %v", err))
-		}
-		db := self.stateLocked(number)
-		if method == "eth_getCode" {
-			return hexutil.Encode(db.GetCode(address)), nil
-		}
-		return (*hexutil.Big)(db.GetBalance(address).ToBig()), nil
 	case "eth_call", "eth_estimateGas":
 		var args e2eCallArgs
 		if err := param(0, &args); err != nil {
@@ -958,21 +915,6 @@ func (self *e2eChain) rpc(method string, params []json.RawMessage) (any, *e2eRPC
 			return included.block.receipts[included.index], nil
 		}
 		return nil, nil
-	case "eth_getTransactionByHash":
-		var hash common.Hash
-		if err := param(0, &hash); err != nil {
-			return nil, e2eInvalidParams(err)
-		}
-		if included := self.included[hash]; included != nil {
-			return e2eTxJSON(included.block.txs[included.index], included.block.senders[included.index], included.block.number, included.index), nil
-		}
-		for _, tx := range self.pool {
-			if tx.Hash() == hash {
-				from, _ := types.Sender(self.signer, tx)
-				return e2eTxJSON(tx, from, 0, -1), nil
-			}
-		}
-		return nil, nil
 	case "eth_getLogs":
 		return self.logsLocked(params)
 	}
@@ -1008,10 +950,6 @@ func (self *e2eChain) acceptLocked(params []json.RawMessage) (any, *e2eRPCError)
 	if err != nil {
 		return nil, &e2eRPCError{Code: -32000, Message: "invalid sender: " + err.Error()}
 	}
-	if self.failSends > 0 {
-		self.failSends--
-		return nil, &e2eRPCError{Code: -32000, Message: "synthetic broadcast outage"}
-	}
 	if self.included[tx.Hash()] != nil || slices.ContainsFunc(self.pool, func(pooled *types.Transaction) bool { return pooled.Hash() == tx.Hash() }) {
 		return nil, &e2eRPCError{Code: -32000, Message: "already known"}
 	}
@@ -1026,42 +964,20 @@ func (self *e2eChain) acceptLocked(params []json.RawMessage) (any, *e2eRPCError)
 	return tx.Hash().Hex(), nil
 }
 
-// e2eTxJSON renders a transaction with its inclusion; index −1 is pending.
-func e2eTxJSON(tx *types.Transaction, from common.Address, number uint64, index int) map[string]any {
-	raw, err := tx.MarshalJSON()
-	if err != nil {
-		panic(err)
-	}
-	var fields map[string]any
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		panic(err)
-	}
-	fields["from"], fields["blockHash"], fields["blockNumber"], fields["transactionIndex"] = from, nil, nil, nil
-	if index >= 0 {
-		fields["blockHash"], fields["blockNumber"], fields["transactionIndex"] = e2eBlockHash(number), hexutil.EncodeUint64(number), hexutil.EncodeUint64(uint64(index))
-	}
-	return fields
-}
-
 // blockJSONLocked renders block number in geth's shape.
-func (self *e2eChain) blockJSONLocked(number uint64, full bool) map[string]any {
+func (self *e2eChain) blockJSONLocked(number uint64) map[string]any {
 	index := sort.Search(len(self.blocks), func(i int) bool { return self.blocks[i].number > number }) - 1
 	mined := self.blocks[index]
 	var txs types.Transactions
 	var receipts types.Receipts
-	var senders []common.Address
 	if mined.number == number {
-		txs, receipts, senders = mined.txs, mined.receipts, mined.senders
+		txs, receipts = mined.txs, mined.receipts
 	}
-	transactions := []any{}
+	transactions := []common.Hash{}
 	var gasUsed uint64
 	for k, tx := range txs {
 		gasUsed += receipts[k].GasUsed
-		if full {
-			transactions = append(transactions, e2eTxJSON(tx, senders[k], number, k))
-		} else {
-			transactions = append(transactions, tx.Hash())
-		}
+		transactions = append(transactions, tx.Hash())
 	}
 	txRoot, receiptRoot := types.EmptyTxsHash, types.EmptyReceiptsHash
 	if len(txs) > 0 {

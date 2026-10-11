@@ -114,7 +114,7 @@ func TestSettlementV2E2ETenEpochsThenOneClaim(t *testing.T) {
 	for _, rootIndex := range []uint64{10, 9} {
 		view := f.publisher.view(f.root(rootIndex).Root)
 		account, proof := e2eProof(t, view.tree, view.accounts, a)
-		f.refused(f.anyone, f.vault2, nil, vault2Binding.PackClaim(e2eRao(e2eNoID), e2eRao(rootIndex), account, proof), "NothingToClaim")
+		f.refused(f.anyone, f.vault2, nil, e2eVault2Binding.PackClaim(e2eRao(e2eNoID), e2eRao(rootIndex), account, proof), "NothingToClaim")
 	}
 	output, _, code = f.snclaim(f.snclaimArgs("v2", "claim", fmt.Sprintf("--coldkey=0x%x", alice), "--key_file="+relayer)...)
 	if code != 0 || !strings.HasSuffix(output, fmt.Sprintf("pool 1 account %d: claimed %s already reaches the cumulative %s; nothing to claim\n", a, e2eAlphaText(expected), e2eAlphaText(expected))) || len(f.chain.sentBy(f.anyone.address)) != 2 {

@@ -26,7 +26,7 @@ func (f *e2eFixture) closeV1(epoch uint64) *big.Int {
 	f.t.Helper()
 	f.chain.rollTo(f.end(epoch))
 	observed := f.chain.stake(f.poolV1, f.vault1Coldkey)
-	receipt := f.must(f.anyone, f.coordinator, nil, coordinatorABI.PackCloseOperatorEpoch(e2eRao(epoch), e2eRao(e2eNoID)))
+	receipt := f.must(f.anyone, f.coordinator, nil, e2eCoordinatorBinding.PackCloseOperatorEpoch(e2eRao(epoch), e2eRao(e2eNoID)))
 	f.requireLogs(receipt, f.vault1Log("EmissionCaptured", e2eRao(epoch), e2eRao(e2eNoID), f.poolV1, observed))
 	return observed
 }
@@ -34,7 +34,7 @@ func (f *e2eFixture) closeV1(epoch uint64) *big.Int {
 // commitV1 commits a v1 payout root for epoch as the operator's root signer.
 func (f *e2eFixture) commitV1(epoch uint64, root, artifact [32]byte) {
 	f.t.Helper()
-	receipt := f.must(f.operator, f.coordinator, nil, coordinatorABI.PackCommitOperatorRoot(e2eRao(epoch), e2eRao(e2eNoID), root, artifact))
+	receipt := f.must(f.operator, f.coordinator, nil, e2eCoordinatorBinding.PackCommitOperatorRoot(e2eRao(epoch), e2eRao(e2eNoID), root, artifact))
 	f.requireLogs(receipt, f.coordinatorLog("OperatorRootCommitted", e2eRao(epoch), e2eRao(e2eNoID), root, artifact, f.operator.address))
 }
 
@@ -44,11 +44,11 @@ func (f *e2eFixture) finalizeV1(epoch uint64) *types.Receipt {
 	if at := f.end(epoch) + e2eWindow; f.chain.next() < at {
 		f.chain.rollTo(at)
 	}
-	return f.must(f.anyone, f.coordinator, nil, coordinatorABI.PackFinalizeOperatorEpoch(e2eRao(epoch), e2eRao(e2eNoID)))
+	return f.must(f.anyone, f.coordinator, nil, e2eCoordinatorBinding.PackFinalizeOperatorEpoch(e2eRao(epoch), e2eRao(e2eNoID)))
 }
 
 func (f *e2eFixture) entitlement(epoch uint64) (total, claimed *big.Int, expiry uint64) {
-	value := e2eView(f, f.vault1, vault1Binding.PackEntitlement(e2eRao(epoch), e2eRao(e2eNoID)), vault1Binding.UnpackEntitlement)
+	value := e2eView(f, f.vault1, e2eVault1Binding.PackEntitlement(e2eRao(epoch), e2eRao(e2eNoID)), e2eVault1Binding.UnpackEntitlement)
 	return value.Total, value.Claimed, value.ExpiryBlock
 }
 
@@ -93,7 +93,7 @@ func TestSettlementV2E2ESweepPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	carolShare := new(big.Int).Div(new(big.Int).Mul(total1, big.NewInt(6_000)), big.NewInt(10_000))
-	receipt = f.must(f.anyone, f.vault1, nil, vault1Binding.PackClaim(e2eRao(1), e2eRao(e2eNoID), carol, big.NewInt(6_000), proof))
+	receipt = f.must(f.anyone, f.vault1, nil, e2eVault1Binding.PackClaim(e2eRao(1), e2eRao(e2eNoID), carol, big.NewInt(6_000), proof))
 	f.requireLogs(receipt, f.vault1Log("Claimed", e2eRao(1), e2eRao(e2eNoID), carol, big.NewInt(6_000), carolShare, f.anyone.address), f.vault1Log("ClaimPaid", carol, carolShare, f.anyone.address))
 
 	// v1 epoch 2, the last before E_s, misses its root: its funding carries.
@@ -110,12 +110,12 @@ func TestSettlementV2E2ESweepPath(t *testing.T) {
 	injected += 333_000_000_000
 	a := e2eAccountOf(t, root0.Accounts, alice)
 	account, v2proof := e2eProof(t, root0.Tree, root0.Accounts, a)
-	f.must(f.anyone, f.vault2, nil, vault2Binding.PackClaim(e2eRao(e2eNoID), e2eRao(0), account, v2proof))
+	f.must(f.anyone, f.vault2, nil, e2eVault2Binding.PackClaim(e2eRao(e2eNoID), e2eRao(0), account, v2proof))
 
 	// v1 roots expire: epoch 1's unclaimed remainder joins the carry.
 	f.chain.rollTo(expiry1 + 1)
 	remainder := new(big.Int).Sub(total1, carolShare)
-	receipt = f.must(f.anyone, f.vault1, nil, vault1Binding.PackExpireEntitlement(e2eRao(1), e2eRao(e2eNoID)))
+	receipt = f.must(f.anyone, f.vault1, nil, e2eVault1Binding.PackExpireEntitlement(e2eRao(1), e2eRao(e2eNoID)))
 	carry := new(big.Int).Add(remainder, funded2)
 	f.requireLogs(receipt, f.vault1Log("EntitlementExpired", e2eRao(1), e2eRao(e2eNoID), remainder, carry))
 
@@ -137,18 +137,18 @@ func TestSettlementV2E2ESweepPath(t *testing.T) {
 	if totalSweep.Cmp(swept) != 0 {
 		t.Fatalf("the sweep root holds %s, want %s", totalSweep, swept)
 	}
-	receipt = f.must(f.anyone, f.vault1, nil, vault1Binding.PackClaim(e2eRao(sweep), e2eRao(e2eNoID), f.vault2Coldkey, big.NewInt(10_000), nil))
+	receipt = f.must(f.anyone, f.vault1, nil, e2eVault1Binding.PackClaim(e2eRao(sweep), e2eRao(e2eNoID), f.vault2Coldkey, big.NewInt(10_000), nil))
 	f.requireLogs(receipt, f.vault1Log("Claimed", e2eRao(sweep), e2eRao(e2eNoID), f.vault2Coldkey, big.NewInt(10_000), swept, f.anyone.address), f.vault1Log("ClaimPaid", f.vault2Coldkey, swept, f.anyone.address))
 	if f.chain.stake(f.escrowV1, f.vault2Coldkey).Cmp(swept) != 0 {
 		t.Fatal("the sweep did not pay vault2's coldkey on the v1 escrow hotkey")
 	}
 
 	// absorbStake moves it into vault2's escrow, accounted to nothing.
-	accounted := f.vault2Counter(vault2Binding.PackEscrowAccounted)
-	receipt = f.must(f.anyone, f.vault2, nil, vault2Binding.PackAbsorbStake(f.escrowV1))
+	accounted := f.vault2Counter(e2eVault2Binding.PackEscrowAccounted)
+	receipt = f.must(f.anyone, f.vault2, nil, e2eVault2Binding.PackAbsorbStake(f.escrowV1))
 	f.requireLogs(receipt, f.vault2Log("StakeAbsorbed", f.escrowV1, swept, swept, f.anyone.address))
-	surplus := new(big.Int).Sub(e2eView(f, f.vault2, vault2Binding.PackLiveEscrowStake(), vault2Binding.UnpackLiveEscrowStake), f.vault2Counter(vault2Binding.PackEscrowAccounted))
-	if surplus.Cmp(swept) != 0 || f.vault2Counter(vault2Binding.PackEscrowAccounted).Cmp(accounted) != 0 || f.chain.stake(f.escrowV1, f.vault2Coldkey).Sign() != 0 {
+	surplus := new(big.Int).Sub(e2eView(f, f.vault2, e2eVault2Binding.PackLiveEscrowStake(), e2eVault2Binding.UnpackLiveEscrowStake), f.vault2Counter(e2eVault2Binding.PackEscrowAccounted))
+	if surplus.Cmp(swept) != 0 || f.vault2Counter(e2eVault2Binding.PackEscrowAccounted).Cmp(accounted) != 0 || f.chain.stake(f.escrowV1, f.vault2Coldkey).Sign() != 0 {
 		t.Fatalf("absorbed surplus %s, want %s", surplus, swept)
 	}
 
@@ -167,7 +167,7 @@ func TestSettlementV2E2ESweepPath(t *testing.T) {
 	f.requireLogs(receipt, f.settlementLog("Upgraded", upgrade))
 	f.refused(f.anyone, f.settlement, nil, pack("assignSurplus", e2eRao(e2eNoID), swept), "OwnableUnauthorizedAccount")
 	f.refused(f.owner, f.settlement, nil, pack("assignSurplus", e2eRao(e2eNoID), new(big.Int).Add(swept, common.Big1)), "InvalidSurplus")
-	next := e2eView(f, f.vault2, vault2Binding.PackLastFundedEpoch(e2eRao(e2eNoID)), vault2Binding.UnpackLastFundedEpoch).Uint64() + 1
+	next := e2eView(f, f.vault2, e2eVault2Binding.PackLastFundedEpoch(e2eRao(e2eNoID)), e2eVault2Binding.UnpackLastFundedEpoch).Uint64() + 1
 	receipt = f.must(f.owner, f.settlement, nil, pack("assignSurplus", e2eRao(e2eNoID), swept))
 	f.requireLogs(receipt, f.vault2Log("SurplusAssigned", e2eRao(e2eNoID), e2eRao(next), swept))
 	f.requireConservation()
@@ -176,10 +176,10 @@ func TestSettlementV2E2ESweepPath(t *testing.T) {
 	// surplus with its own capture.
 	f.emitV2(1_000_000_000_000)
 	injected += 1_000_000_000_000
-	captured := e2eView(f, f.vault2, vault2Binding.PackCapturedTotal(e2eRao(e2eNoID)), vault2Binding.UnpackCapturedTotal)
+	captured := e2eView(f, f.vault2, e2eVault2Binding.PackCapturedTotal(e2eRao(e2eNoID)), e2eVault2Binding.UnpackCapturedTotal)
 	closing := uint64(sweep + 1)
 	f.chain.rollTo(f.end(closing))
-	receipt = f.must(f.anyone, f.settlement, nil, settlementBinding.PackCloseOperatorEpoch(e2eRao(closing), e2eRao(e2eNoID)))
+	receipt = f.must(f.anyone, f.settlement, nil, e2eSettlementBinding.PackCloseOperatorEpoch(e2eRao(closing), e2eRao(e2eNoID)))
 	var expected []e2eLog
 	for epoch := next; epoch < closing; epoch++ {
 		expected = append(expected, f.vault2Log("EmissionDeferred", e2eRao(epoch), e2eRao(e2eNoID), captured))
@@ -189,12 +189,12 @@ func TestSettlementV2E2ESweepPath(t *testing.T) {
 
 	// Conservation, in each vault and across both: every rao of emission is
 	// paid to a provider coldkey or backed by a vault's accounted escrow.
-	if !e2eView(f, f.vault1, vault1Binding.PackConservationHolds(), vault1Binding.UnpackConservationHolds) {
+	if !e2eView(f, f.vault1, e2eVault1Binding.PackConservationHolds(), e2eVault1Binding.UnpackConservationHolds) {
 		t.Fatal("vault1 conservation does not hold")
 	}
 	f.requireConservation()
-	paid1, accounted1 := f.vault1Counter(vault1Binding.PackTotalPaid), f.vault1Counter(vault1Binding.PackEscrowAccounted)
-	paid2, accounted2 := f.vault2Counter(vault2Binding.PackTotalPaid), f.vault2Counter(vault2Binding.PackEscrowAccounted)
+	paid1, accounted1 := f.vault1Counter(e2eVault1Binding.PackTotalPaid), f.vault1Counter(e2eVault1Binding.PackEscrowAccounted)
+	paid2, accounted2 := f.vault2Counter(e2eVault2Binding.PackTotalPaid), f.vault2Counter(e2eVault2Binding.PackEscrowAccounted)
 	providers := new(big.Int).Add(new(big.Int).Sub(paid1, swept), paid2)
 	held := new(big.Int).Add(new(big.Int).Add(providers, accounted1), accounted2)
 	if held.Cmp(big.NewInt(injected)) != 0 || f.chain.stake(f.escrowV1, f.vault1Coldkey).Cmp(accounted1) != 0 || f.chain.stake(f.escrowV2, f.vault2Coldkey).Cmp(accounted2) != 0 ||

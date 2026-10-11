@@ -67,11 +67,11 @@ const (
 )
 
 var (
-	vault2Binding     = stabi.NewSTSettlementVault2()
-	settlementBinding = stabi.NewSTSettlement2()
-	coordinatorABI    = stabi.NewSTCoordinator()
-	vault1Binding     = stabi.NewSTSettlementVault()
-	sinkBinding       = stabi.NewSTReserveSink()
+	e2eVault2Binding      = stabi.NewSTSettlementVault2()
+	e2eSettlementBinding  = stabi.NewSTSettlement2()
+	e2eCoordinatorBinding = stabi.NewSTCoordinator()
+	e2eVault1Binding      = stabi.NewSTSettlementVault()
+	e2eSinkBinding        = stabi.NewSTReserveSink()
 )
 
 // e2eArtifact is a contract's ABI and exact creation bytecode.
@@ -197,11 +197,11 @@ type e2eFixture struct {
 	escrowV1, reserveHotkey, poolV1, deposit [32]byte
 	operatorColdkey                          [32]byte
 	// v2
-	vault2, settlement, settlementImpl common.Address
-	vault2Coldkey, escrowV2, poolV2    [32]byte
-	firstEpoch                         uint64
-	vault2ABI, settlementABI           abi.ABI
-	publisher                          *e2ePublisher
+	vault2, settlement              common.Address
+	vault2Coldkey, escrowV2, poolV2 [32]byte
+	firstEpoch                      uint64
+	vault2ABI, settlementABI        abi.ABI
+	publisher                       *e2ePublisher
 	// The operator's state: each covered epoch's rows, and the chunks it was
 	// first built with (§6.4 fixed inputs).
 	rows   map[uint64][]protocol.LedgerUsageRow
@@ -308,18 +308,18 @@ func (f *e2eFixture) deployV1() {
 	f.vault1Coldkey = ss58.EvmMirrorPubkey(predicted(1))
 	f.vault1 = f.deploy(f.deployer, e2eCatalogArtifact(f.t, "SettlementVault"), nil, uint16(e2eNetuid), f.escrowV1, f.vault1Coldkey, uint64(e2eMinimumTTL), uint64(e2eTransferFloorTaoRao), f.deployer.address)
 	implementation := f.deploy(f.deployer, e2eCatalogArtifact(f.t, "Coordinator"), nil)
-	f.must(f.deployer, f.vault1, e2eWei(1), vault1Binding.PackRegisterEscrow(e2eBurnLimit))
-	initialize := coordinatorABI.PackInitialize(e2eNetuid, f.owner.address, f.guardian.address, ss58.EvmMirrorPubkey(predicted(4)), f.vault1, f.sink, f.oracle.address, f.policy(e2eEpoch0Blocks, 2_400))
+	f.must(f.deployer, f.vault1, e2eWei(1), e2eVault1Binding.PackRegisterEscrow(e2eBurnLimit))
+	initialize := e2eCoordinatorBinding.PackInitialize(e2eNetuid, f.owner.address, f.guardian.address, ss58.EvmMirrorPubkey(predicted(4)), f.vault1, f.sink, f.oracle.address, f.policy(e2eEpoch0Blocks, 2_400))
 	f.coordinator = f.deploy(f.deployer, e2eCatalogArtifact(f.t, "ERC1967Proxy"), nil, implementation, initialize)
 	if f.coordinator != predicted(4) {
 		f.t.Fatal("coordinator proxy address drift")
 	}
-	f.must(f.deployer, f.sink, nil, sinkBinding.PackSetRecorderOnce(f.coordinator))
-	f.must(f.deployer, f.vault1, nil, vault1Binding.PackSetCoordinatorOnce(f.coordinator))
+	f.must(f.deployer, f.sink, nil, e2eSinkBinding.PackSetRecorderOnce(f.coordinator))
+	f.must(f.deployer, f.vault1, nil, e2eVault1Binding.PackSetCoordinatorOnce(f.coordinator))
 	production := f.policy(e2eEpochBlocks, e2eWindow)
 	production.EffectiveEpoch = 1
-	f.must(f.owner, f.coordinator, nil, coordinatorABI.PackSchedulePolicy(production))
-	f.must(f.owner, f.coordinator, e2eWei(1), coordinatorABI.PackRegisterOperator(e2eRao(e2eNoID), f.operatorColdkey, f.poolV1, f.deposit, f.depositSigner.address, f.operator.address, 0, e2eBurnLimit))
+	f.must(f.owner, f.coordinator, nil, e2eCoordinatorBinding.PackSchedulePolicy(production))
+	f.must(f.owner, f.coordinator, e2eWei(1), e2eCoordinatorBinding.PackRegisterOperator(e2eRao(e2eNoID), f.operatorColdkey, f.poolV1, f.deposit, f.depositSigner.address, f.operator.address, 0, e2eBurnLimit))
 }
 
 // deployV2 deploys vault2 and registers its escrow on the next nonce (SPEC
@@ -332,42 +332,42 @@ func (f *e2eFixture) deployV2() {
 	f.vault2ABI, f.settlementABI = vault2.abi, settlement.abi
 	f.vault2Coldkey = ss58.EvmMirrorPubkey(crypto.CreateAddress(f.deployer.address, f.chain.nonce(f.deployer.address)))
 	f.vault2 = f.deploy(f.deployer, vault2, nil, uint16(e2eNetuid), f.escrowV2, f.vault2Coldkey, f.deployer.address, e2eRao(e2eDemandFeeWei))
-	f.must(f.deployer, f.vault2, e2eWei(1), vault2Binding.PackRegisterEscrow(e2eBurnLimit))
-	f.settlementImpl = f.deploy(f.deployer, settlement, nil)
-	initialize := settlementBinding.PackInitialize(f.owner.address, f.coordinator, f.vault2, []common.Address{f.auditor.address}, common.Big1)
-	f.settlement = f.deploy(f.deployer, e2eCatalogArtifact(f.t, "ERC1967Proxy"), nil, f.settlementImpl, initialize)
-	f.must(f.deployer, f.vault2, nil, vault2Binding.PackSetCoordinatorOnce(f.settlement))
+	f.must(f.deployer, f.vault2, e2eWei(1), e2eVault2Binding.PackRegisterEscrow(e2eBurnLimit))
+	implementation := f.deploy(f.deployer, settlement, nil)
+	initialize := e2eSettlementBinding.PackInitialize(f.owner.address, f.coordinator, f.vault2, []common.Address{f.auditor.address}, common.Big1)
+	f.settlement = f.deploy(f.deployer, e2eCatalogArtifact(f.t, "ERC1967Proxy"), nil, implementation, initialize)
+	f.must(f.deployer, f.vault2, nil, e2eVault2Binding.PackSetCoordinatorOnce(f.settlement))
 }
 
 // registerPool commits pool 1 to v2 from firstEpoch (§12.1 step 5).
 func (f *e2eFixture) registerPool() {
 	f.t.Helper()
-	f.must(f.owner, f.settlement, e2eWei(1), settlementBinding.PackRegisterOperatorPool(e2eRao(e2eNoID), f.poolV2, e2eBurnLimit, f.firstEpoch))
+	f.must(f.owner, f.settlement, e2eWei(1), e2eSettlementBinding.PackRegisterOperatorPool(e2eRao(e2eNoID), f.poolV2, e2eBurnLimit, f.firstEpoch))
 }
 
 func (f *e2eFixture) end(epoch uint64) uint64 {
-	return e2eView(f, f.coordinator, coordinatorABI.PackEpochEndBlock(e2eRao(epoch)), coordinatorABI.UnpackEpochEndBlock).Uint64()
+	return e2eView(f, f.coordinator, e2eCoordinatorBinding.PackEpochEndBlock(e2eRao(epoch)), e2eCoordinatorBinding.UnpackEpochEndBlock).Uint64()
 }
 
 // The vault2 views the end-to-end tests read.
 func (f *e2eFixture) pending() stabi.ISTSettlementVault2Pending {
-	return e2eView(f, f.vault2, vault2Binding.PackPending(e2eRao(e2eNoID)), vault2Binding.UnpackPending)
+	return e2eView(f, f.vault2, e2eVault2Binding.PackPending(e2eRao(e2eNoID)), e2eVault2Binding.UnpackPending)
 }
 
 func (f *e2eFixture) rootCount() uint64 {
-	return e2eView(f, f.vault2, vault2Binding.PackRootCount(e2eRao(e2eNoID)), vault2Binding.UnpackRootCount).Uint64()
+	return e2eView(f, f.vault2, e2eVault2Binding.PackRootCount(e2eRao(e2eNoID)), e2eVault2Binding.UnpackRootCount).Uint64()
 }
 
 func (f *e2eFixture) root(index uint64) stabi.ISTSettlementVault2Root {
-	return e2eView(f, f.vault2, vault2Binding.PackRoots(e2eRao(e2eNoID), e2eRao(index)), vault2Binding.UnpackRoots)
+	return e2eView(f, f.vault2, e2eVault2Binding.PackRoots(e2eRao(e2eNoID), e2eRao(index)), e2eVault2Binding.UnpackRoots)
 }
 
 func (f *e2eFixture) fundedThrough(epoch uint64) *big.Int {
-	return e2eView(f, f.vault2, vault2Binding.PackFundedThrough(e2eRao(e2eNoID), e2eRao(epoch)), vault2Binding.UnpackFundedThrough)
+	return e2eView(f, f.vault2, e2eVault2Binding.PackFundedThrough(e2eRao(e2eNoID), e2eRao(epoch)), e2eVault2Binding.UnpackFundedThrough)
 }
 
 func (f *e2eFixture) claimed(index uint64) *big.Int {
-	return e2eView(f, f.vault2, vault2Binding.PackClaimed(e2eRao(e2eNoID), e2eRao(index)), vault2Binding.UnpackClaimed)
+	return e2eView(f, f.vault2, e2eVault2Binding.PackClaimed(e2eRao(e2eNoID), e2eRao(index)), e2eVault2Binding.UnpackClaimed)
 }
 
 func (f *e2eFixture) vault2Counter(pack func() []byte) *big.Int {
@@ -377,13 +377,13 @@ func (f *e2eFixture) vault2Counter(pack func() []byte) *big.Int {
 // requireConservation checks G1 on vault2 and the per-pool bounds.
 func (f *e2eFixture) requireConservation() {
 	f.t.Helper()
-	if !e2eView(f, f.vault2, vault2Binding.PackConservationHolds(), vault2Binding.UnpackConservationHolds) {
+	if !e2eView(f, f.vault2, e2eVault2Binding.PackConservationHolds(), e2eVault2Binding.UnpackConservationHolds) {
 		f.t.Fatal("vault2 conservation does not hold")
 	}
-	captured, paid, accounted := f.vault2Counter(vault2Binding.PackTotalCaptured), f.vault2Counter(vault2Binding.PackTotalPaid), f.vault2Counter(vault2Binding.PackEscrowAccounted)
-	poolCaptured := e2eView(f, f.vault2, vault2Binding.PackCapturedTotal(e2eRao(e2eNoID)), vault2Binding.UnpackCapturedTotal)
-	poolClaimed := e2eView(f, f.vault2, vault2Binding.PackClaimedTotal(e2eRao(e2eNoID)), vault2Binding.UnpackClaimedTotal)
-	finalized := e2eView(f, f.vault2, vault2Binding.PackFinalizedTotal(e2eRao(e2eNoID)), vault2Binding.UnpackFinalizedTotal)
+	captured, paid, accounted := f.vault2Counter(e2eVault2Binding.PackTotalCaptured), f.vault2Counter(e2eVault2Binding.PackTotalPaid), f.vault2Counter(e2eVault2Binding.PackEscrowAccounted)
+	poolCaptured := e2eView(f, f.vault2, e2eVault2Binding.PackCapturedTotal(e2eRao(e2eNoID)), e2eVault2Binding.UnpackCapturedTotal)
+	poolClaimed := e2eView(f, f.vault2, e2eVault2Binding.PackClaimedTotal(e2eRao(e2eNoID)), e2eVault2Binding.UnpackClaimedTotal)
+	finalized := e2eView(f, f.vault2, e2eVault2Binding.PackFinalizedTotal(e2eRao(e2eNoID)), e2eVault2Binding.UnpackFinalizedTotal)
 	if new(big.Int).Add(paid, accounted).Cmp(captured) != 0 || new(big.Int).Sub(poolCaptured, poolClaimed).Cmp(accounted) != 0 ||
 		poolClaimed.Cmp(finalized) > 0 || finalized.Cmp(poolCaptured) > 0 || f.chain.stake(f.escrowV2, f.vault2Coldkey).Cmp(accounted) < 0 {
 		f.t.Fatalf("G1: captured %s paid %s accounted %s; pool captured %s claimed %s finalized %s", captured, paid, accounted, poolCaptured, poolClaimed, finalized)
@@ -461,8 +461,8 @@ func (f *e2eFixture) closeV2(epoch uint64) *types.Receipt {
 		f.chain.rollTo(end)
 	}
 	observed := f.chain.stake(f.poolV2, f.vault2Coldkey)
-	before := e2eView(f, f.vault2, vault2Binding.PackCapturedTotal(e2eRao(e2eNoID)), vault2Binding.UnpackCapturedTotal)
-	receipt := f.must(f.anyone, f.settlement, nil, settlementBinding.PackCloseOperatorEpoch(e2eRao(epoch), e2eRao(e2eNoID)))
+	before := e2eView(f, f.vault2, e2eVault2Binding.PackCapturedTotal(e2eRao(e2eNoID)), e2eVault2Binding.UnpackCapturedTotal)
+	receipt := f.must(f.anyone, f.settlement, nil, e2eSettlementBinding.PackCloseOperatorEpoch(e2eRao(epoch), e2eRao(e2eNoID)))
 	funded := new(big.Int).Add(before, observed)
 	if observed.Sign() == 0 {
 		f.requireLogs(receipt, f.vault2Log("EmissionCaptured", e2eRao(epoch), e2eRao(e2eNoID), observed, new(big.Int), funded))
@@ -530,7 +530,7 @@ func (f *e2eFixture) commit(signer *e2eActor, epoch uint64, commitment ledger.Ro
 }
 
 func (f *e2eFixture) commitData(epoch uint64, commitment ledger.Root) []byte {
-	return settlementBinding.PackCommitDistribution(e2eRao(epoch), e2eRao(e2eNoID), e2eRao(f.rootCount()),
+	return e2eSettlementBinding.PackCommitDistribution(e2eRao(epoch), e2eRao(e2eNoID), e2eRao(f.rootCount()),
 		stabi.ISTSettlementVault2Commitment{Root: commitment.Root, Total: commitment.Total.ToBig(), LeafCount: commitment.LeafCount, LedgerHash: commitment.LedgerHash})
 }
 
@@ -570,7 +570,7 @@ func (f *e2eFixture) approve() {
 func (f *e2eFixture) approveBlind(auditor *e2eActor) {
 	f.t.Helper()
 	pending := f.pending()
-	receipt := f.must(auditor, f.settlement, nil, settlementBinding.PackApproveDistribution(e2eRao(e2eNoID), pending.Seq, pending.Root, pending.LedgerHash))
+	receipt := f.must(auditor, f.settlement, nil, e2eSettlementBinding.PackApproveDistribution(e2eRao(e2eNoID), pending.Seq, pending.Root, pending.LedgerHash))
 	f.requireLogs(receipt, f.settlementLog("DistributionApproved", e2eRao(e2eNoID), pending.Seq, auditor.address, uint64(1), common.Big1))
 }
 
@@ -583,7 +583,7 @@ func (f *e2eFixture) finalize() uint64 {
 		f.chain.rollTo(at)
 	}
 	index := f.rootCount()
-	receipt := f.must(f.anyone, f.settlement, nil, settlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)))
+	receipt := f.must(f.anyone, f.settlement, nil, e2eSettlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)))
 	f.requireLogs(receipt, f.vault2Log("DistributionFinalized", e2eRao(e2eNoID), pending.Seq, e2eRao(index), pending.Epoch, pending.Root, pending.Total, pending.LeafCount, pending.LedgerHash))
 	return index
 }
@@ -789,14 +789,14 @@ func (self *e2ePublisher) serveAccount(writer http.ResponseWriter, request *http
 	}
 	var finalized, pending *e2eTreeView
 	var rootIndex uint64
-	if count := new(big.Int).SetBytes(read(vault2Binding.PackRootCount(e2eRao(e2eNoID)))).Uint64(); count > 0 {
-		root, err := vault2Binding.UnpackRoots(read(vault2Binding.PackRoots(e2eRao(e2eNoID), e2eRao(count-1))))
+	if count := new(big.Int).SetBytes(read(e2eVault2Binding.PackRootCount(e2eRao(e2eNoID)))).Uint64(); count > 0 {
+		root, err := e2eVault2Binding.UnpackRoots(read(e2eVault2Binding.PackRoots(e2eRao(e2eNoID), e2eRao(count-1))))
 		if err != nil {
 			self.t.Error(err)
 		}
 		rootIndex, finalized = count-1, self.view(root.Root)
 	}
-	if next, err := vault2Binding.UnpackPending(read(vault2Binding.PackPending(e2eRao(e2eNoID)))); err != nil {
+	if next, err := e2eVault2Binding.UnpackPending(read(e2eVault2Binding.PackPending(e2eRao(e2eNoID)))); err != nil {
 		self.t.Error(err)
 	} else if next.Seq != 0 {
 		pending = self.view(next.Root)
@@ -821,7 +821,7 @@ func (self *e2ePublisher) serveAccount(writer http.ResponseWriter, request *http
 			value := pending.accounts[pendingIndex].Cumulative.Dec()
 			entry.PendingCumulative = &value
 		}
-		entry.Claimed = new(big.Int).SetBytes(read(vault2Binding.PackClaimed(e2eRao(e2eNoID), e2eRao(entry.Index)))).String()
+		entry.Claimed = new(big.Int).SetBytes(read(e2eVault2Binding.PackClaimed(e2eRao(e2eNoID), e2eRao(entry.Index)))).String()
 		accounts = append(accounts, entry)
 	}
 	writer.Header().Set("Content-Type", "application/json")
@@ -916,7 +916,7 @@ func TestSettlementV2E2EHarness(t *testing.T) {
 	f.emitV2(5_000_000_000)
 	f.chain.do(func() { f.chain.runtime.shortfall = true })
 	f.chain.rollTo(f.end(f.firstEpoch))
-	receipt := f.must(f.anyone, f.settlement, nil, settlementBinding.PackCloseOperatorEpoch(e2eRao(f.firstEpoch), e2eRao(e2eNoID)))
+	receipt := f.must(f.anyone, f.settlement, nil, e2eSettlementBinding.PackCloseOperatorEpoch(e2eRao(f.firstEpoch), e2eRao(e2eNoID)))
 	f.requireLogs(receipt, f.vault2Log("EmissionCaptured", e2eRao(f.firstEpoch), e2eRao(e2eNoID), e2eRao(5_000_000_000), e2eRao(4_999_999_999), e2eRao(4_999_999_999)))
 	if f.chain.stake(f.poolV2, f.vault2Coldkey).Sign() != 0 || f.chain.stake(f.escrowV2, f.vault2Coldkey).Uint64() != 4_999_999_999 {
 		t.Fatal("capture deltas differ from the runtime's")
@@ -930,7 +930,7 @@ func TestSettlementV2E2EHarness(t *testing.T) {
 		rt.setStake(f.poolV2, f.vault2Coldkey, big.NewInt(99_999_999))
 	})
 	f.chain.rollTo(f.end(f.firstEpoch + 1))
-	failed, _ := f.chain.send(f.anyone.key, &f.settlement, nil, settlementBinding.PackCloseOperatorEpoch(e2eRao(f.firstEpoch+1), e2eRao(e2eNoID)))
+	failed, _ := f.chain.send(f.anyone.key, &f.settlement, nil, e2eSettlementBinding.PackCloseOperatorEpoch(e2eRao(f.firstEpoch+1), e2eRao(e2eNoID)))
 	if failed.Status != types.ReceiptStatusFailed || f.fundedThrough(f.firstEpoch+1).Sign() != 0 || f.chain.stake(f.poolV2, f.vault2Coldkey).Uint64() != 99_999_999 {
 		t.Fatal("a capture below the floor was not refused whole")
 	}
@@ -939,7 +939,7 @@ func TestSettlementV2E2EHarness(t *testing.T) {
 		rt.setWord(e2eAlpha, e2eRuntimeSlot("price"), big.NewInt(1e18))
 		rt.setWord(e2eStaking, e2eRuntimeSlot("collateral", f.poolV2, f.vault2Coldkey), big.NewInt(9_999_999))
 	})
-	receipt = f.must(f.anyone, f.settlement, nil, settlementBinding.PackCloseOperatorEpoch(e2eRao(f.firstEpoch+1), e2eRao(e2eNoID)))
+	receipt = f.must(f.anyone, f.settlement, nil, e2eSettlementBinding.PackCloseOperatorEpoch(e2eRao(f.firstEpoch+1), e2eRao(e2eNoID)))
 	f.requireLogs(receipt, f.vault2Log("EmissionCaptured", e2eRao(f.firstEpoch+1), e2eRao(e2eNoID), e2eRao(90_000_000), e2eRao(90_000_000), e2eRao(5_089_999_999)))
 	if f.chain.stake(f.poolV2, f.vault2Coldkey).Uint64() != 9_999_999 {
 		t.Fatal("capture dug into the collateral lock")

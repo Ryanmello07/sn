@@ -101,7 +101,6 @@ type e2eDaemon struct {
 	config   string
 	v1       string
 	stateDir string
-	ctx      context.Context
 	cancel   context.CancelFunc
 	done     chan error
 }
@@ -138,7 +137,7 @@ func (d *e2eDaemon) start(demand bool, extra ...string) {
 	d.f.t.Helper()
 	roots := append([]string{d.stateDir}, extra...)
 	ctx, cancel := context.WithCancel(e2eClaimQueueContext(d.f.t, d.f.t.Context(), roots...))
-	d.ctx, d.cancel, d.done = ctx, cancel, make(chan error, 1)
+	d.cancel, d.done = cancel, make(chan error, 1)
 	go func() {
 		d.done <- miner.RunClaimDaemonV2(ctx, d.config, d.v1, miner.ClaimV2DefaultThresholdRao, demand)
 	}()
@@ -187,6 +186,8 @@ func (d *e2eDaemon) await(what string, done func() bool) {
 	for !done() {
 		select {
 		case err := <-d.done:
+			// Keep the outcome for stop, which the test's cleanup runs.
+			d.done <- err
 			d.f.t.Fatalf("the daemon stopped before %s: %v", what, err)
 		default:
 		}
@@ -360,7 +361,7 @@ func TestSettlementV2E2EDaemonThirdPartyFirst(t *testing.T) {
 	claim := func(rootIndex uint64) {
 		view := f.publisher.view(f.root(rootIndex).Root)
 		account, proof := e2eProof(t, view.tree, view.accounts, alice)
-		f.must(f.anyone, f.vault2, nil, vault2Binding.PackClaim(e2eRao(e2eNoID), e2eRao(rootIndex), account, proof))
+		f.must(f.anyone, f.vault2, nil, e2eVault2Binding.PackClaim(e2eRao(e2eNoID), e2eRao(rootIndex), account, proof))
 	}
 	claim(0)
 	d := f.daemon(relayer, e2eKey("alice"))
@@ -483,7 +484,7 @@ func TestSettlementV2E2EDaemonBesideV1(t *testing.T) {
 	if entry := v1Queue.Entries["1"]; entry.TxHash != strings.ToLower(v1Claim.Hash().Hex()) || entry.RawTxHex != hexutil.Encode(signed) || entry.ReceiptStatus != 1 {
 		t.Fatalf("the v1 entry: %+v", entry)
 	}
-	if !e2eView(f, f.vault1, vault1Binding.PackConservationHolds(), vault1Binding.UnpackConservationHolds) || f.chain.stake(f.escrowV1, carol).Cmp(funded) != 0 {
+	if !e2eView(f, f.vault1, e2eVault1Binding.PackConservationHolds(), e2eVault1Binding.UnpackConservationHolds) || f.chain.stake(f.escrowV1, carol).Cmp(funded) != 0 {
 		t.Fatal("v1 did not pay Carol exactly")
 	}
 	f.requireConservation()

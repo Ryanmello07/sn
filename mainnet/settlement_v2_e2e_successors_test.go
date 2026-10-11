@@ -20,7 +20,7 @@ import (
 func (f *e2eFixture) demand(actor *e2eActor, finalized *e2eTreeView, seq, index uint64) {
 	f.t.Helper()
 	account, proof := e2eProof(f.t, finalized.tree, finalized.accounts, index)
-	receipt := f.must(actor, f.vault2, e2eRao(e2eDemandFeeWei), vault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof))
+	receipt := f.must(actor, f.vault2, e2eRao(e2eDemandFeeWei), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof))
 	f.requireLogs(receipt, f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(index), actor.address))
 }
 
@@ -29,7 +29,7 @@ func (f *e2eFixture) demand(actor *e2eActor, finalized *e2eTreeView, seq, index 
 func (f *e2eFixture) open(actor *e2eActor, finalized *e2eTreeView, index uint64, path []merkle.LedgerPathNode) *types.Receipt {
 	f.t.Helper()
 	account, proof := e2eProof(f.t, finalized.tree, finalized.accounts, index)
-	return f.must(actor, f.vault2, nil, vault2Binding.PackCheckPath(e2eRao(e2eNoID), account, proof, e2ePath(path)))
+	return f.must(actor, f.vault2, nil, e2eVault2Binding.PackCheckPath(e2eRao(e2eNoID), account, proof, e2ePath(path)))
 }
 
 // e2eRawTree is a ledger sum tree whose nodes can be misstated.
@@ -146,8 +146,9 @@ func (s *e2eSuccessor) faults(t *testing.T, root [32]byte, total uint256.Int, le
 	return faults
 }
 
-// The bad successors whose account rows are a consistent tree, each with
-// the accounts of F it faults; mutate keeps the total.
+// The bad successors whose account rows form a consistent tree. Each
+// mutation of the honest accounts keeps the total, which vault2 binds to the
+// funding.
 var e2eBadSuccessors = []struct {
 	name   string
 	mutate func(f, p []merkle.LedgerAccount) []merkle.LedgerAccount
@@ -218,9 +219,9 @@ func TestSettlementV2E2EBadSuccessorsPublished(t *testing.T) {
 }
 
 // inconsistent is the bad successor that hides an over-allocation in an
-// inconsistent subtree: its published account rows give Gina hidden more
-// than the honest root, and the node above F's four accounts states their
-// sum less hidden, so the committed total is still the funding.
+// inconsistent subtree: its published account rows give the last new account
+// hidden more than the honest root, and the node above F's four accounts
+// states their sum less hidden, so the committed total is still the funding.
 func (s *e2eSuccessor) inconsistent(t *testing.T, hidden uint64) (ledger.Root, ledger.Objects, []merkle.LedgerAccount, *e2eRawTree) {
 	t.Helper()
 	rows := slices.Clone(s.honest.Accounts)
@@ -273,7 +274,7 @@ func (s *e2eSuccessor) requireDemanded(t *testing.T, seq uint64, indexes []uint6
 	}
 	for k, tx := range sent {
 		account, proof := e2eProof(t, s.finalized.tree, s.finalized.accounts, indexes[k])
-		if tx.Value().Cmp(e2eRao(e2eDemandFeeWei)) != 0 || !slices.Equal(tx.Data(), vault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof)) {
+		if tx.Value().Cmp(e2eRao(e2eDemandFeeWei)) != 0 || !slices.Equal(tx.Data(), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof)) {
 			t.Fatalf("demand %d is not account %d's, with the fee", k, indexes[k])
 		}
 		f.requireLogs(f.chain.receipt(tx.Hash()), f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(indexes[k]), f.watcher.address))
@@ -345,7 +346,7 @@ func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 			}
 			// The demands block the root past its window.
 			f.chain.rollTo(f.pending().CommittedBlock + e2eWindow)
-			f.refused(f.anyone, f.settlement, nil, settlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)), "DemandOpen")
+			f.refused(f.anyone, f.settlement, nil, e2eSettlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)), "DemandOpen")
 			// Opening a faulted account deletes the root.
 			_, level, err := merkle.WalkLedgerPath(commitment.Root, &commitment.Total, commitment.LeafCount, uint64(faulted), s.finalized.accounts[faulted].Coldkey, &s.finalized.accounts[faulted].Cumulative, path(uint64(faulted)))
 			if err != nil {
@@ -370,7 +371,7 @@ func (f *e2eFixture) watcherDemands(t *testing.T, skip int, seq uint64) []uint64
 		if tx.Value().Cmp(e2eRao(e2eDemandFeeWei)) != 0 || receipt == nil || len(receipt.Logs) != 1 {
 			t.Fatalf("watcher transaction %s is not a paid demand", tx.Hash())
 		}
-		event, err := vault2Binding.UnpackPathDemandedEvent(receipt.Logs[0])
+		event, err := e2eVault2Binding.UnpackPathDemandedEvent(receipt.Logs[0])
 		if err != nil || event.NoId.Uint64() != e2eNoID || event.Seq != seq || event.Demander != f.watcher.address {
 			t.Fatalf("PathDemanded %+v (%v), want seq %d by the watcher", event, err, seq)
 		}
@@ -474,7 +475,7 @@ func TestSettlementV2E2EReRollDrill(t *testing.T) {
 	answer(seq, tree, demanded)
 	f.approveBlind(f.auditor)
 	f.chain.rollTo(f.pending().CommittedBlock + e2eWindow)
-	f.refused(f.anyone, f.settlement, nil, settlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)), "DemandOpen")
+	f.refused(f.anyone, f.settlement, nil, e2eSettlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)), "DemandOpen")
 	if f.pending().Seq != seq || f.rootCount() != 1 {
 		t.Fatal("the attacker's root left the pending slot")
 	}
