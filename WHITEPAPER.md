@@ -2,9 +2,25 @@
 
 **A Bittensor subnet for a decentralized privacy network.**
 
-Version 1.0 (launch specification). Target chain: Bittensor / Subtensor — **testnet first, then mainnet**
+Version 2 (launch specification with settlement v2). Target chain: Bittensor / Subtensor — **testnet first, then mainnet**
 (D28). The mainnet subnet is **SN25 (netuid 25)**; the testnet campaign runs on netuid 521. Version 1.0
-promotes the completed v0.5 design to the normative release specification without changing its scope.
+promotes the completed v0.5 design to the normative release specification without changing its scope;
+version 2 changes only the pool tier's payout settlement, on mainnet from the switch epoch **E_s** (below).
+
+> **v2 — usage‑proportional, cumulative pool settlement (`VERSION2-FINAL.md`).** From the switch epoch
+> **E_s** (the first epoch starting at least two days after the last activation gate passes), an operator
+> pool pays its providers **in proportion to verified usage only** — no per‑provider reliability factor,
+> no validator‑measurement gate. Each payout coldkey has **one cumulative account per pool that never
+> expires**; each epoch's ledger is committed as a position‑binding **Merkle sum tree** over accounts at
+> fixed positions; a root becomes claimable only after a quorum of **owner‑admitted auditors** (the
+> validator alone, at launch) approves it **and** a **14,400‑block** (≈ 2‑day) window open to challenges
+> and path demands passes; claims are **cumulative and permissionless** and always pay the account's
+> coldkey. Two new contracts — immutable **`STSettlementVault2`** ("vault2") and owner‑upgradeable
+> **`STSettlement2`** — sit beside the **unchanged** v1 contracts; protocol policy v1 is unchanged, its
+> claim‑TTL and bps fields inert for v2 epochs. Release 1.0's per‑epoch bps roots, with their claim
+> expiry, remain in force only for epochs before E_s. Validators still weight pools by
+> `implied_usage × quality`; validator dividends and head fleets are unchanged. Capacity target and
+> activation gate: **≥ 1,000,000 providers per operator pool**. See §1, §6, §8.2–8.3, §11.
 
 > **v1.0 — validator effort bounty removed from scope (D29).** The fee‑funded validator effort bounty is
 > **no longer a committed deferred phase** — it is **out of v1 scope entirely**, and whether to add any
@@ -46,8 +62,12 @@ Because one NO may serve **100k+ providers — far beyond a subnet's ~256 UID ca
 **pool UID**, and its providers are paid *inside* the pool by **Merkle claim**. A smart contract on the
 **Subtensor EVM** (the **ST contract**, denominated in the subnet's **α** token) is the ledger, the
 emission custodian, and the **7‑day settlement** engine: providers **claim their α directly from the
-contract with cryptographic proofs**, so a NO *directs* where its pool's rewards go but **never holds
-anyone else's funds**. Validators earn Bittensor‑native **dividends** (∝ stake × scoring accuracy) —
+contract with cryptographic proofs**, so a NO *reports* the usage its pool's rewards follow but **never
+holds anyone else's funds**. Under **settlement v2** (from the switch epoch **E_s**) every eligible
+provider's share, **in proportion to its verified usage**, is credited at any population size to its
+payout coldkey's **cumulative account in that pool, which never expires**; one permissionless claim pays
+everything the account accrued since its last (§1).
+Validators earn Bittensor‑native **dividends** (∝ stake × scoring accuracy) —
 **v1's only validator reward**; the fee‑funded effort bounty of earlier drafts is **out of scope** (D29), a
 post‑launch open question, its spec parked in §9.3/§13.6 as a future‑iteration candidate.
 
@@ -76,7 +96,11 @@ The subnet **launches centralized‑but‑bounded** — an upgradeable policy co
 testnet key and, on mainnet, a Safe multisig (1-of-1 at the SN25 launch; a Safe transaction can add owners and
 raise the threshold) — while the reserve and settlement vault are
 **non-upgradeable from day one**. Finalized claims are therefore un-clawbackable even by a hostile
-coordinator upgrade. Governance later adds a timelock around coordinator changes. v1 rewards independently *measured liveness*;
+coordinator upgrade. Settlement v2 keeps that split — an immutable vault (**vault2**) beside an
+owner‑upgradeable coordinator (**`STSettlement2`**): vault2 keeps every finalized root, never stops claims,
+and lets an account's accrued balance survive even a hostile `STSettlement2` upgrade, as long as someone
+challenges the bad root, or demands that account's path, within 14,400 blocks of its commit. Governance
+later adds a timelock around coordinator changes. v1 rewards independently *measured liveness*;
 closing the gap to honest‑relay, payout‑grade verification is the `VALIDATOR.md` §10 roadmap.
 
 **At a glance**
@@ -88,13 +112,17 @@ closing the gap to honest‑relay, payout‑grade verification is the `VALIDATOR
 - **Deposits are conviction stake:** every deposit is locked into a contract **buyback reserve**, never
   paid back out; its cumulative amount sets the NO's **tier → deposit rate** (staking lowers the rate —
   onboarding + alignment); miners are paid from **emission only** (§7.3, §7.4, §12.4).
-- **Scales to 100k+ providers:** pool UIDs + off‑chain **Merkle** payout claims (providers inside a pool
-  are *not* UIDs; validators remain independent native UIDs).
+- **Scales to 1M+ providers per pool:** pool UIDs + an off‑chain ledger committed on chain as a **Merkle
+  sum tree** of **cumulative, never‑expiring accounts** (settlement v2, whose design target and activation
+  gate is ≥ 1,000,000 providers per operator pool). Providers inside a pool are *not* UIDs; validators
+  remain independent native UIDs.
 - **Two miner tiers:** a per-NO **pool** (on-ramp — `implied_usage × quality`, Merkle claim) *and*
   **top-level miners** (the top ~200 **fleets by distinct routable egress-IP count**, split-adjusted, as
   direct native UIDs), split by a governed share **θ** (§8.4–8.5).
 - **Trust‑minimized custody:** no operator holds others' emission; everyone is paid by direct on‑chain
-  claim against a committed Merkle root.
+  claim against a committed Merkle root. Under settlement v2 a root is claimable only after a quorum of
+  owner‑admitted auditors (at launch, the validator) approves it **and** a 14,400‑block window open to
+  anyone's challenge or path demand passes; claims are permissionless and always pay the account's coldkey.
 - **Validator data:** native dividends reward consensus‑accurate scoring; at launch the owner is the
   majority validator (by α holdings + the reserve) and runs the trail volume itself. A coverage‑weighted
   **effort bounty** is **out of v1 scope** (D29) — a possible future iteration, not a committed phase.
@@ -106,7 +134,7 @@ closing the gap to honest‑relay, payout‑grade verification is the `VALIDATOR
 ## 0. Reading guide
 
 This document specifies, in implementable detail, a Bittensor subnet that coordinates a
-decentralized privacy/VPN network through on‑chain incentives. It is the synthesis of three
+decentralized privacy/VPN network through on‑chain incentives. It is the synthesis of four
 inputs:
 
 - **`seed/INCENTIVES.md`** — the economic intent (network operators, miners, validators; deposit‑weighted
@@ -115,7 +143,12 @@ inputs:
   signed **validated paths** this subnet pays for.
 - **Current Bittensor mechanics** (Yuma Consensus, dTAO, the Subtensor EVM, the commitments pallet,
   the precompiles) as release-pinned at RaoFoundation/subtensor **v454**
-  (`14cde6410fe8ec81a940e290c56f94a632a0988d`).
+  (`14cde6410fe8ec81a940e290c56f94a632a0988d`); settlement v2 targets runtime **475** (`d1718c99`) on
+  chain 964, checked against `docs/spec/runtime-475-audit.md` and rehearsed on a node built from that
+  source before activation.
+- **`VERSION2-FINAL.md`** — the plan of record for **settlement v2**, the pool tier's usage‑proportional,
+  cumulative‑account settlement from the switch epoch **E_s**: its contracts, ledger, audit, migration,
+  activation gates and tests.
 
 It is written so that an engineer can build the smart contract, the off‑chain operator/validator
 software, and the chain configuration from it. Where a parameter or chain default is load‑bearing
@@ -180,10 +213,19 @@ Money flows in three coupled channels, all in α:
 
 3. **Settlement (contract).** Over a 7‑day epoch the contract accrues the **captured miner emission**,
    then distributes it. A NO's **miner pool** — its UID's earned emission, nothing else (deposits are
-   reserved, never distributed, §7.4) — goes to its providers. Since the **100k+ providers are not
-   on‑chain UIDs** (the subnet cap is ~256) they are paid *inside* the pool by **Merkle claim**: the NO
-   commits a payout root and every provider **claims its α directly from the contract** with an
-   O(log N) proof. The NO directs the split but never holds the α.
+   reserved, never distributed, §7.4) — goes to its providers **in proportion to verified usage only**
+   (no per‑provider reliability factor, no validator‑measurement gate). Since the **100k+ providers are not
+   on‑chain UIDs** (the subnet cap is ~256) they are paid *inside* the pool by **Merkle claim**: each payout
+   coldkey has **one cumulative account per pool that never expires**, the NO commits each epoch's ledger as
+   a position‑binding **Merkle sum tree** over those accounts, and one **permissionless** claim with an
+   O(log N) proof pays everything an account accrued since its last claim, always to its coldkey. A root is
+   claimable only once a quorum of **owner‑admitted auditors** (at launch, the validator alone) approves it
+   **and** 14,400 blocks pass after its commit, in which anyone may **challenge** a root that lowers,
+   replaces or hides an existing account (deleting it) or **demand** the on‑chain opening of an account's
+   path (blocking finalization until answered). The NO builds the ledger from usage and wallet records it
+   attests, as in release 1.0 (the auditor re‑checks everything derived from them), but never holds the α.
+   This is **settlement v2** (vault2 + `STSettlement2`, §6); epochs before the switch epoch **E_s** keep
+   release 1.0's per‑epoch bps roots and claim expiry (§8.3).
 
 Top-level miners need **no settlement** — Yuma pays their UID natively each tempo (§8.4); the contract
 holds and settles only the **pool tier** (the tail), exactly as above.
@@ -333,6 +375,12 @@ A condensed, current (dTAO‑era) reference. Identifiers are from `opentensor/su
   registration supplies the full approved ceiling and atomically returns the difference after the
   runtime burns the actual price.
 
+  The version 2 vault, vault2 (§3), depends on Neuron, to register its escrow and pool hotkeys (and to let
+  anyone re-register a pruned pool hotkey), and on Staking V2, for capture, claims and `absorbStake`. It does
+  not depend on Ed25519Verify, Sr25519Verify or the alpha-price precompile (`0x…0808`): it accepts no signed
+  permits, root admission uses auditor approvals sent as ordinary transactions from owner-admitted
+  addresses, and a claim that the runtime's transfer floor refuses simply reverts and stays claimable.
+
   > Precompile ABIs are **not formally versioned** (issue #2455). Pin a Subtensor release tag, target
   > **Staking V2** (`0x805`, not the legacy `0x801`), and re‑verify addresses/ABIs before launch.
 
@@ -416,6 +464,12 @@ The exact source, artifact, upstream-test and live-conformance requirements are 
 groups while the runtime sentinel independently pins the deployed version and Wasm. These models do not replace
 the pinned FRAME tests or the disposable live contract/precompile battery.
 
+Version 2 settlement is pinned separately, to mainnet (chain 964) runtime 475, source commit
+`d1718c99c34cf96abbf2bf09c0e9e48b945c76f5`. The runtime facts vault2 and `STSettlement2` (§3) rely on come
+from the local v451–v454 sources and that source, checked against `docs/spec/runtime-475-audit.md`. Before
+deployment their exact bytecode must pass a rehearsal on a node built from runtime 475's source (R-1 to R-6,
+`VERSION2-FINAL.md` §15.8); any mainnet runtime change repeats it.
+
 ---
 
 ## 3. Roles and on‑chain identity
@@ -423,11 +477,12 @@ the pinned FRAME tests or the disposable live contract/precompile battery.
 | Design role (`seed/INCENTIVES.md`) | On‑chain identity | Notes |
 |---|---|---|
 | **Subnet owner** (BringYour, Inc.) | owner coldkey + owner hotkey at **UID 0** (immune); deploys & governs the ST contract; operates the **reserve validator hotkey** (§7.4) | receives the 18% owner cut; the **majority validator** in the early network (§9.2); the governance **referee** (§9.6). |
-| **Network Operator (NO)** | a contract registration (`noId`) with **one miner‑pool UID** (its providers, contract‑owned). Holds **no emission**; runs no validator. | a per‑NO *pool operator*: deposits; runs the `/verify` server (co‑signs trails); commits the Merkle payout root that splits its miner pool. Directs flow; the contract holds and pays. |
-| **Provider (miner)** | a `client_id` **inside** a NO's miner pool — **not a UID** (100k+ providers can't each be a UID) | carries traffic; **claims its α directly from the contract** with a Merkle proof against its NO's payout root. The **on-ramp / tail** tier; can **graduate** to a top-level slot (§8.4). |
+| **Network Operator (NO)** | a contract registration (`noId`) with **one miner‑pool UID** (its providers, contract‑owned; from `E_s` a new pool UID owned by vault2). Holds **no emission**; runs no validator. | a per‑NO *pool operator*: deposits; runs the `/verify` server (co‑signs trails); commits the Merkle payout root that splits its miner pool — from `E_s` a sum-tree root over per-coldkey accounts, split by verified usage alone, whose ledger it publishes and whose paths it opens on demand. Directs flow; the contract holds and pays. |
+| **Provider (miner)** | a `client_id` **inside** a NO's miner pool — **not a UID** (100k+ providers can't each be a UID); from `E_s` its earnings accrue to its payout coldkey's one **account** in that pool | carries traffic; **claims its α directly from the contract** with a Merkle proof against its NO's payout root: for epochs before `E_s`, per epoch and before a TTL; from `E_s`, cumulatively and without expiry — one claim, which anyone may send and which always pays the account's coldkey, collects all accrual since the last. The **on-ramp / tail** tier; can **graduate** to a top-level slot (§8.4). |
 | **Top-level miner (head)** | **its own miner UID**; a **fleet** — its `client_id`s **bound to its hotkey** (§11.4) | the **supply apex**: the top ~200 fleets by **split-adjusted distinct routable egress-IP count**, steered **directly** by validators (`weight = score`); **native** emission to its own coldkey — no contract custody, no Merkle claim; maintained by deregistration churn (§8.4). |
 | **Validator** (was "verifier") | an **independent** Bittensor validator UID; stakes its **own** α | runs `/verify` trails (the failure‑data signal), scores pools `implied_usage × Q_n` under commit‑reveal (§10). Earns **native dividends** (∝ stake × vtrust) — its **only** reward; a validator effort bounty is **out of scope** (D29, parked in §9.3). No NO, no pool. |
-| **ST contract set** | three distinct mapped coldkeys: coordinator, immutable settlement vault, immutable reserve sink | the vault owns pool UIDs and claims escrow; the reserve sink owns permanently locked conviction; the coordinator owns neither and only applies policy. Does **not** custody validator emission (it is native). |
+| **Auditor** (version 2) | an owner-admitted EVM address in `STSettlement2`'s auditor set (at most 16, with a quorum), not a hotkey or `vpk` binding; at launch a single address whose key the validator holds, quorum 1 | approves the exact pending v2 root before the next epoch ends. A root finalizes only with a quorum of approvals, and never while vault2 blocks it (inside its challenge window or with a demand open); challenges and path demands are open to anyone (§5.2). |
+| **ST contract set** | three distinct mapped coldkeys: coordinator, immutable settlement vault, immutable reserve sink. Version 2 adds the immutable `STSettlementVault2` ("vault2") and the owner-upgradeable `STSettlement2` beside them, leaving every v1 contract unchanged | the vault owns pool UIDs and claims escrow; the reserve sink owns permanently locked conviction; the coordinator owns neither and only applies policy. vault2 owns each v2 pool UID (from `E_s`) and its own claims escrow; `STSettlement2` owns neither, holds the auditor set and approvals, and reads operators, windows and epoch boundaries from the coordinator. Does **not** custody validator emission (it is native). |
 
 **Why pools (miner side only).** A NO has up to 100k providers — they cannot be UIDs (subnet cap ≈ 256),
 so each NO gets **one miner‑pool UID** and its providers are paid *inside* it by Merkle claim. That
@@ -438,7 +493,8 @@ Bittensor validator UIDs (own hotkey, own stake, native dividends), which is bot
 binding, the intersection split, and the VT of earlier drafts (§13.6).
 
 **Why also a head tier (top-level miners).** Pools solve *scale* (100k+ providers), but inside a pool a
-provider trusts its NO's discretionary payout split and is one of thousands. The **top ~200 fleets by
+provider trusts its NO — in v1 for a discretionary payout split, from `E_s` for the usage records that alone
+set the split — and is one of thousands. The **top ~200 fleets by
 routable-IP breadth** therefore *also* get the canonical Bittensor treatment — **their own UID, steered
 directly by validators, paid natively** (§8.4) — so the biggest routable-supply operators compete
 head-to-head on breadth, trust-minimized, while the pool stays the low-barrier on-ramp everyone starts
@@ -463,6 +519,7 @@ as `vpk` also works but couples key rotation to the wallet; binding is preferred
 | `T_tempo` | tempo length in blocks (360) |
 | `T_epoch` | UR settlement epoch in blocks (50 400 ≈ 7 days) |
 | `e` | epoch index (monotone counter in the contract) |
+| `E_s` | the **switch epoch**: a pool's first version 2 epoch, its `firstEpoch` as set by `registerOperatorPool`; earlier epochs settle on v1 (§5.2) |
 | `D_n` | α deposited by NO `n` during epoch `e` (summed from finalized `Deposit` events; coordinator counters enforce caps but do not weight, §7.5) |
 | `conviction_n` | NO `n`'s cumulative locked α (all‑time deposits + voluntary stake) → its tier (§7.2) |
 | `rate(tier_n)` | published α‑per‑usage rate for `n`'s conviction tier; zero tier = baseline (§7.3) |
@@ -475,7 +532,8 @@ as `vpk` also works but couples key rotation to the wallet; binding is preferred
 | `client_id`s ⇄ hotkey | the signed binding mapping a fleet's `client_id`s to a top-level miner's UID (§11.4) |
 | `R` | the **buyback reserve**: cumulative locked deposits + voluntary conviction + their compounded dividends (§7.4) |
 | `φ` / `ω` / `FeePool` / `effort_v` | effort‑bounty quantities — **out of scope** (parked, §9.3/§13.6, D29) |
-| `s_{n,p}` | NO `n`'s payout share for provider `p` (Σ_p s_{n,p} = 1) |
+| `s_{n,p}` | NO `n`'s payout share for provider `p` (Σ_p s_{n,p} = 1); v1 epochs only, before `E_s` |
+| `(coldkey_i, cumulative_i)` | account `i` of a pool's v2 ledger: a payout coldkey (one account per coldkey per pool) and its cumulative accrual in rao, which never decreases or expires; claimable = latest finalized cumulative − `claimed` |
 
 ---
 
@@ -490,6 +548,9 @@ offset, and a 6-block close grace. It must complete three consecutive fully
 observed epochs. This test-only snapshot exercises the identical state machine
 and must never be promoted as the mainnet policy, whose epoch remains 50,400
 blocks (approximately seven days) with separately reviewed +4h/+48h windows.
+Version 2 settlement (§5.2) cannot run at the testnet cadence: vault2 fixes a
+14,400-block challenge window, so `T_epoch` must be at least the root commit
+window plus 14,400 blocks. Mainnet's 50,400 satisfies this.
 
 ### 5.1 Tempo cadence (chain‑native; weights + emission)
 
@@ -518,8 +579,9 @@ each validator runs standard Bittensor validator software.
 ### 5.2 Epoch cadence (application‑layer; settlement)
 
 The 7‑day epoch is the unit `seed/INCENTIVES.md` calls a "block." It is tracked by the contract as an
-incrementing counter with a fixed block length `T_epoch`. The epoch lifecycle (timeline from
-`README.md`):
+incrementing counter with a fixed block length `T_epoch`; version 2 reads the same counter, boundaries and
+windows from the v1 coordinator, whose policy is unchanged. Epochs before a pool's switch epoch `E_s` keep
+the v1 lifecycle (timeline from `README.md`):
 
 ```
   t = 0         Epoch e closes. Snapshot D_n (per-NO deposit totals) and the miner-pool emissions.
@@ -528,6 +590,28 @@ incrementing counter with a fixed block length `T_epoch`. The epoch lifecycle (t
   +48h          coordinator.finalizeOperatorEpoch(e,n): immutable per-NO entitlement opens in the vault.
                 Unclaimed α rolls into epoch e+1 (or a grace pool) after a TTL.
                 (The +24h effort-claim step + challenge window belong to the parked bounty design, §9.3/D29 — not in v1.)
+```
+
+From `E_s` (the pool's `firstEpoch`, set when the owner calls `registerOperatorPool`) each epoch follows the
+version 2 lifecycle (`VERSION2-FINAL.md` §5), in blocks after the epoch's end block `end(e)`:
+
+```
+  ≤ +1,200 (≈4h)     STSettlement2.closeOperatorEpoch(e,n), by anyone: vault2 captures the pool hotkey's stake,
+                     first deferring any earlier unfunded epoch. The v2 close window is this root commit window,
+                     not v1's 120-block close grace.
+  ≤ +1,200           After the close, the operator publishes e's ledger and its root signer commits the root
+                     (commitDistribution): a Merkle sum tree over the pool's cumulative per-coldkey accounts,
+                     covering every epoch since the last finalized root.
+  < end(e+1)         Auditors approve the exact pending root (approveDistribution); at launch the quorum is the
+                     validator alone.
+  < commit + 14,400  Challenge window (≈48h from the commit, fixed in vault2): anyone may prove that the root
+                     lowers, replaces or hides an existing account (checkPath, which deletes the root), or demand
+                     an account's path opening (demandPath), which blocks finalization until the operator answers.
+  ≥ commit + 14,400  finalizeDistribution(n), by anyone, once a quorum has approved and no demand is open. Each
+                     account's cumulative becomes claimable with no expiry; anyone may send the claim, which
+                     always pays the account's coldkey.
+  ≥ end(e+1)         A root still unfinalized can be replaced by the next commit, which covers its epochs too.
+                     vault2 refuses any commit within 14,400 blocks of the pool's previous commit.
 ```
 
 Deposits, emission weighting, and dividend capture happen continuously across the epoch at tempo
@@ -552,9 +636,25 @@ code organization:
    open/future work, but immutable vault state prevents it from rewriting or blocking an already-finalized
    entitlement, and immutable sink bytecode prevents it from moving reserve stake.
 
+Version 2 adds two contracts beside this set and leaves the release 1.0 contracts unmodified. A pool's
+epochs from its registered `firstEpoch` (the switch epoch E_s) settle through them; the release 1.0
+vault keeps paying the epochs before E_s and the credits it has accepted (§6.3):
+
+4. **`STSettlementVault2` ("vault2") is non-upgradeable.** Its mapped coldkey owns each v2 pool UID and
+   its own escrow hotkey. It snapshots each epoch's funding once, holds at most one pending root per pool,
+   keeps every finalized root, and pays each account its cumulative balance less what it has already been
+   paid. It fixes the 14,400-block challenge window itself and has no owner, pause or upgrade path once its
+   coordinator link is fixed, so its guarantees (`VERSION2-FINAL.md` §4.2) hold whatever `STSettlement2`
+   does.
+5. **`STSettlement2` is UUPS-upgradeable by the owner.** It reads operators, windows, epoch boundaries and
+   the pause flag from the coordinator. It registers v2 pools, answers `settlementAt` (which vault and pool
+   hotkey settle an epoch), closes epochs, takes the root signer's commits, counts approvals from an
+   owner-set auditor quorum, and finalizes. An upgrade can change how roots are admitted, but it cannot
+   finalize a root that vault2 blocks, change a finalized root or stop a claim.
+
 The contract set is **not** the subnet validator. Independent validators (§9–§10) compute and submit
-native weights and receive native dividends. Only tail miner emission enters the vault; head emission is
-native (§8.4), deposits enter only the reserve, and the effort bounty is out of scope (§9.3/D29).
+native weights and receive native dividends. Only tail miner emission enters the settlement vaults; head
+emission is native (§8.4), deposits enter only the reserve, and the effort bounty is out of scope (§9.3/D29).
 
 ### 6.1 State (essential)
 
@@ -566,12 +666,23 @@ Essential state is deliberately partitioned:
   audit events; the contract never turns them into weights.
 - The reserve sink stores only immutable identity, cumulative principal and per-NO principal audit
   totals. `liveStake() >= principal` is executable at every finalized block.
-- The settlement vault stores immutable pool identities and one entitlement per `(epoch,noId)`:
+- The release 1.0 settlement vault stores immutable pool identities and one entitlement per `(epoch,noId)`:
   `payoutRoot`, `artifactHash`, captured funding, total (including same-NO carry), claimed amount,
   expiry block and state. It also stores an immutable finalized-runtime `minimumTransferTaoRao`,
   durable per-coldkey `claimCredit`, and the exact custody counters. Global
   `totalCaptured = totalPaid + escrowAccounted` and
   `escrowAccounted = pendingFunding + outstandingLiability` are executable conservation identities.
+- vault2 stores its immutable identity and the fixed 14,400-block challenge window and, per pool, the pool
+  hotkey and `firstEpoch`; one cumulative funding snapshot per epoch (`fundedThrough`), written once when
+  the epoch is captured or deferred; every finalized root (`root`, `total`, `leafCount`, `epoch`,
+  `ledgerHash`), append-only; at most one pending root and its open demands; and a `claimed` watermark per
+  account. It has no per-epoch entitlement, expiry or claim credit. Its conservation identities are
+  `totalCaptured = totalPaid + escrowAccounted` and `escrowAccounted = Σ_pools (capturedTotal − claimedTotal)`,
+  with `claimedTotal <= finalizedTotal <= capturedTotal` per pool, and every call that moves stake ends by
+  checking that live escrow stake covers `escrowAccounted`.
+- `STSettlement2` stores only its links to the coordinator and vault2, the auditor set (at most 16
+  addresses) with its quorum and version, and per-pool approvals. v2 roots and funding live in vault2, not
+  in the coordinator.
 
 There is no on-chain tier/rate/weight computation and no validator-effort registry.
 
@@ -600,10 +711,28 @@ cleanupFleetBinding(clientId)
 claim(epoch, noId, coldkey, shareBps, proof)
 withdrawClaimCredit(coldkey)
 expireEntitlement(epoch, noId)
+
+// STSettlement2 (owner-upgradeable UUPS): a pool's epochs from its firstEpoch (E_s).
+registerOperatorPool(noId, hotkey, maxBurn, firstEpoch)
+setAuditors(auditors, quorum)
+settlementAt(noId, epoch)            // view: (vault, pool hotkey, version)
+closeOperatorEpoch(e, noId)
+commitDistribution(e, noId, prevRootCount, root, total, leafCount, ledgerHash)
+approveDistribution(noId, seq, root, ledgerHash)
+finalizeDistribution(noId)
+
+// Immutable vault2: anyone may call these; none has a coordinator or pause check.
+claim(noId, rootIndex, index, coldkey, cumulative, proof)
+demandPath(noId, index)              // payable: the immutable demandFeeWei
+checkPath(noId, index, oldColdkey, oldCumulative, oldProof, newPath)
+absorbStake(hotkey)
+registerPoolUid(noId, maxBurn)
 ```
 
-Policy, operator roles, guardian and commitment-oracle rotations are future-effective. Independent
-validators submit native CRv4 themselves; no EVM function sets subnet weights.
+Policy, operator roles, guardian and commitment-oracle rotations are future-effective, and so is a pool's
+move to v2 (`firstEpoch` must follow the current epoch). A `setAuditors` change applies at once and voids
+approvals given under the previous set. Independent validators submit native CRv4 themselves; no EVM
+function sets subnet weights.
 
 ### 6.3 How the contract holds and moves α
 
@@ -617,6 +746,12 @@ validators submit native CRv4 themselves; no EVM function sets subnet weights.
   metadata constant. If a pool observation is below it, the epoch records zero captured funding and emits an
   explicit dust deferral while the α remains on the same pool hotkey to accumulate; a price-read failure
   reverts for retry. Only an exact measured pool decrease and escrow increase enter the accounting ledger.
+  From E_s, vault2 captures each v2 pool the same way, except that the close window is the 1,200-block
+  (+4h) root commit window, closing an epoch first defers every earlier unfunded epoch of the pool, and a
+  capture the runtime refuses (dust, or a runtime failure) reverts: the epoch is later deferred with zero
+  funding, and its α stays on the pool hotkey for the next close. The pool must lose exactly the observed
+  stake; escrow may gain one rao less, and only its measured gain is funded. Each epoch's cumulative
+  funding is snapshotted once (`fundedThrough`), and a root for that epoch must total exactly that snapshot.
 - **Validator emission is native.** Independent validators stake their **own** α and earn their **41%
   dividends natively** to their own hotkeys ∝ stake × vtrust — the contract neither stakes for them nor
   custodies their dividends. (Native dividends are the **whole** validator reward; a fee‑funded effort
@@ -636,19 +771,34 @@ validators submit native CRv4 themselves; no EVM function sets subnet weights.
   the immutable floor, the vault transfers the full credit from escrow to that coldkey and admits the
   payment only after measuring exact source and destination deltas. A sub-floor credit, price outage, or
   runtime failure emits a payment-deferral event and preserves the credit for permissionless retry via
-  `withdrawClaimCredit`; it cannot be redirected and survives entitlement expiry. Recipients receive α
-  as stake. Deposit/conviction principal is held by a different contract coldkey whose bytecode has no
-  outbound operation.
+  `withdrawClaimCredit`; it cannot be redirected and survives entitlement expiry. From E_s, vault2 pays
+  v2 accounts instead. A claim proves an account's `(coldkey, cumulative)` leaf in any finalized root and
+  pays `cumulative` less the account's `claimed` watermark, so one claim against the latest root collects
+  everything accrued since the last. Payment goes only to the leaf's coldkey, whoever sends the claim, and
+  a pool's claims never exceed its latest finalized total. Escrow must lose exactly the amount and the
+  coldkey gain it or one rao less. vault2 keeps no credit: a payment the runtime refuses (below its
+  100,000-rao TAO-equivalent transfer floor, or blocked by a full staking-hotkey list) reverts the whole
+  claim, which stays claimable, and nothing expires. The release 1.0 vault keeps paying epochs before E_s
+  until their expiry, and its credits through `withdrawClaimCredit` forever. Recipients receive α as stake.
+  Deposit/conviction principal is held by a different contract coldkey whose bytecode has no outbound
+  operation.
+- **Surplus in vault2.** Anyone can call `absorbStake` to move stake that vault2's coldkey holds on another
+  hotkey (never its escrow or a pool hotkey) into escrow, where it is surplus that no account is owed. Only
+  `assignSurplus`, a coordinator call capped at the escrow's surplus, credits surplus to a pool's funding.
+  The first `STSettlement2` release never calls it; a later upgrade adds a wrapper for the release 1.0 carry
+  sweep (`VERSION2-FINAL.md` §16).
 - **TAO is only touched** for gas and the owner's discretionary conversions. Participants never pay AMM
   slippage to *use* the system; only to exit α→TAO.
 
 ### 6.4 Control, custody, and the launch governance model
 
 Because the contract set is custody-critical (§13.1), *how each component is controlled is part of the
-spec.* The upgrade authority reaches only the coordinator. The reserve sink and settlement vault have
-no owner or upgrade authority after their one-time recorder/coordinator links are fixed. Coordinator
-control is a bundle of admission, future-effective role/policy changes, finalized commitment mirroring,
-pause of new-risk surfaces, and UUPS upgrade authority. We launch these policy powers centralized but
+spec.* The upgrade authority reaches only the coordinator and, under version 2, `STSettlement2`. The reserve
+sink and both settlement vaults have no owner or upgrade authority after their one-time recorder/coordinator
+links are fixed. Coordinator control is a bundle of admission, future-effective role/policy changes,
+finalized commitment mirroring, pause of new-risk surfaces, and UUPS upgrade authority. `STSettlement2`
+control is the auditor set and quorum, v2 pool registration and its own UUPS upgrade; v2 settlement stops
+while the coordinator is paused. We launch these policy powers centralized but
 bounded (Phase 0), then add delay (Phase 1). Deeper decentralization —
 trustless inputs, on‑chain governance, immutability, and handing off the Bittensor subnet‑owner role —
 is deferred (§6.4.3) until the mechanism is proven (notably the `VALIDATOR.md` §10 defenses).
@@ -658,6 +808,15 @@ is deferred (§6.4.3) until the mechanism is proven (notably the `VALIDATOR.md` 
 expiry cannot be rewritten. `claim` is implemented in the non-upgradeable vault and has no pause/admin
 gate, so **no coordinator upgrade, pause, operator deactivation, owner or guardian action may block or
 claw back that finalized claim.**
+
+Under version 2 the same boundary holds in vault2. A finalized root is kept forever and cannot be changed,
+and vault2's `claim` has no pause or admin gate, so no `STSettlement2` upgrade, pause, owner or guardian
+action can rewrite a finalized root or stop a claim. Anyone holding a successor root's tree can delete it
+with `checkPath` if it lowers an account of the latest finalized root, gives that account another coldkey
+or hides it behind an inconsistent node. If the tree is withheld, anyone can `demandPath` an account's
+on-chain opening, and the root cannot finalize until each demand is answered by an opening that shows no
+fault. An accrued v2 balance therefore survives a bad successor as long as someone challenges or demands
+during the 14,400-block window (`VERSION2-FINAL.md` §4.2).
 
 **Sibling invariant — the buyback reserve is one‑way.** The reserve sink has no outbound stake function,
 generic call, delegatecall, owner, proxy or upgrade path. Deposits and dividends can only enter its
@@ -670,11 +829,18 @@ upgradeable proxy. The reserve is publicly auditable every finalized block:
 - **Testnet owner = one dedicated, generated, value-capped EOA; mainnet owner = a distinct Safe**, 1-of-1 at
   the SN25 launch by owner decision (October 7); a Safe transaction can add owners and raise the threshold.
   Neither key is used by an operator, validator, depositor, root task, keeper or server process.
-- **Upgradeable UUPS coordinator only.** The owner can patch open/future coordination logic. It cannot
-  replace the reserve sink or vault bytecode and cannot modify finalized entitlement state.
-- **Owner-gated admission** (`registerOperator` owner-only). Per-NO deposit and root signers are distinct
-  scoped roles; finalization/cleanup are permissionless; the guardian can pause only new-risk coordinator
-  surfaces and only the owner can unpause.
+- **Upgradeable UUPS coordinators only.** The owner can patch open/future coordination logic in the
+  coordinator and, under version 2, in `STSettlement2`. It cannot replace the reserve sink or either vault's
+  bytecode and cannot modify finalized entitlement state or a finalized vault2 root. Even an upgraded
+  `STSettlement2` cannot commit a v2 root whose total differs from the pool's funding snapshot, finalize
+  one before its 14,400-block window ends or while a demand is open, or stop a challenge from deleting it.
+- **Owner-gated admission** (`registerOperator` owner-only; under version 2 also `setAuditors` and
+  `registerOperatorPool`, which commits a pool to v2 from its `firstEpoch`). Per-NO deposit and root signers
+  are distinct scoped roles; finalization/cleanup are permissionless; the guardian can pause only new-risk
+  coordinator surfaces and only the owner can unpause. Under version 2 the reviewed `STSettlement2`
+  finalizes a root only after an auditor quorum (at launch the validator alone) approves it, and the
+  coordinator's pause also stops v2 closes, commits and finalization, never claims, approvals, challenges
+  or demands.
 - **Treasury:** the 18% owner cut accrues to the owner multisig (a governance treasury later, §6.4.3).
   The buyback reserve is **not** treasury — it is contract‑locked (§7.4).
 
@@ -686,14 +852,15 @@ visibility*, not by removing the ability to fix bugs.
 - **Timelock on every coordinator upgrade and parameter change**, delay **≥ 1 epoch (target 2 epochs ≈ 14 days)**.
   Any change to reward logic or parameters is queued in public for a full epoch before it can take
   effect, so participants can audit it and `claim`/exit ahead of it. With the §6.4 invariant, the owner
-  cannot alter finalized vault entitlements; ordinary policy/operator changes are already constrained to
-  future epochs.
+  cannot alter finalized vault entitlements or vault2 roots; ordinary policy/operator changes are already
+  constrained to future epochs (a v2 auditor-set change is not, §6.2).
 - **Role split (least privilege):**
   - a **larger M‑of‑N multisig** holds the **timelock** (proposes/executes upgrades + parameter
     changes); and
   - a separate **guardian** holds **pause‑only** power — it can halt `deposit`
     (and, if necessary, the *opening* of new claims) to stop an exploit in progress, but **cannot move
-    funds, change parameters, or upgrade**, and **cannot block claims for already‑finalized epochs**.
+    funds, change parameters, or upgrade**, and **cannot block claims for already‑finalized epochs or
+    v2 roots**.
 - **Emergency power is therefore strictly *pause, never seize or rewrite*:** the worst a compromised
   guardian can do is freeze new activity (a liveness incident), not cause a custody loss.
 
@@ -704,7 +871,9 @@ permissionless bonded admission and stronger cryptographic inputs for operator-e
 **on-chain governance** of the timelock (α-stake-weighted via the staking / `0x80D`
 precompiles, or participant/reputation‑weighted — basis TBD); and transferring the **Bittensor
 subnet-owner role** to broader governance. The designed-for seam already exists: custody/settlement and
-reserve are immutable, while admission, oracle and parameters live in the replaceable coordinator.
+reserve are immutable, while admission, oracle and parameters live in the replaceable coordinator. Version 2
+keeps that seam: vault2 holds v2 custody and fixes the challenge window and its guarantees, while root
+admission (the auditor set and quorum) lives in the replaceable `STSettlement2`.
 
 ---
 
@@ -738,7 +907,10 @@ demand deposits**: none are required and none are audited. Every registered pool
 implied demand** (exactly 1, §8.1), so the validators' measured quality alone steers the pool channel; a
 voluntary deposit or conviction lock neither helps nor hurts a pool. The head channel, θ, the quality
 clamp and the cede rule are unchanged. This is a deliberate launch mode used while bugs are flushed out
-of the network.
+of the network. Version 2 settles each pool's epochs from E_s through the v2 ledger rather than a payout
+artifact, and the signed policy's `deposit.usage_artifact` field is inert for those epochs. The deposit
+audit stays dormant at zero price, and a priced policy needs its own v2 deposit design
+(`VERSION2-FINAL.md` §9.4).
 
 ### 7.2 A deposit is conviction stake (D25)
 
@@ -835,7 +1007,9 @@ reads, per NO `n`, straight off chain state and its own trails:
 - **`epoch_deposit_n`** — this epoch's deposit, read from the coordinator (§7.5), together with the NO's
   signed payout artifact for the previous epoch and its audited **`bytes_n`** and **`users_n`**: the
   deposit must equal `floor(bytes_n × rate_gib(tier_n) / GiB + users_n × rate_user(tier_n))`, capped, or
-  the pool is zero‑weighted (the deposit audit);
+  the pool is zero‑weighted (the deposit audit). This is the release 1.0 audit, dormant at zero price;
+  epochs from `E_s` have no signed payout artifact, so a priced policy needs its own v2 deposit design
+  (`VERSION2-FINAL.md` §9.4);
 - **`tier_n`** — the NO's conviction tier, from its cumulative locked α (§7.2), and the published
   two‑component **`rate(tier_n)`** (§7.3);
 - **`Q_n`** — the pool's aggregate provider quality, from the validator's own `VALIDATOR.md` trails.
@@ -870,59 +1044,104 @@ captures the realized stake on each pool hotkey at the epoch boundary; it never 
 from a point-in-time incentive/emission view. (Validators each apply the same published rate schedule + their own `Q_n`; Yuma's
 median/clip/vtrust over many independent validators is what turns those into the pool's pay, §10.)
 
-### 8.2 Within an operator — the payout list (the NO's lever, but auditable)
+### 8.2 Within an operator — the payout ledger (usage‑proportional, auditor‑approved)
 
-The NO does not hold the pool; it only **says how its pool splits** among its 100k+ providers —
-`seed/INCENTIVES.md`: "The network operator determines the payout from their mining slots." The natural basis
-(not mandated by the protocol) is
-
-```
-s_{n,p}  ∝  contracts_{n,p} · reliability_{n,p},        Σ_p s_{n,p} = 1
-```
-
-where `contracts_{n,p}` is the usage provider `p` served for NO `n` and `reliability_{n,p}` is the **same
-`VALIDATOR.md` per‑provider signal** the validators aggregate into the pool quality `Q_n` (§9.4, §10). The
-NO commits `payoutRoot` = a Merkle root over its `(provider_coldkey, share)` leaves (§11). Because the
-validated paths are public, the list is **auditable**: a NO that pays idle providers over live ones is
-detectable and bleeds quality consensus (lower `Q_n` → less emission, §8.1). This commitment is the NO's
-entire on‑chain footprint for the miner channel — a *direction*, never custody.
-
-### 8.3 Settlement — providers claim per‑NO, directly from the contract
-
-At the epoch boundary the vault captures, **per NO `n`**, its realized pool emission into immutable
-escrow. After the root window the coordinator fixes an entitlement whose total is
+The NO does not hold the pool, and in version 2 it no longer chooses the split either:
+`seed/INCENTIVES.md`'s "the network operator determines the payout from their mining slots" now means
+only that the NO supplies the usage and wallet records. For every epoch from the switch epoch `E_s` (the
+pool's v2 `firstEpoch`, `VERSION2-FINAL.md` §3, §6), provider `p` is **eligible** in NO `n`'s pool when
+it has settled usage in the epoch's earning window, a payout coldkey selected by a signed consent (its
+own, else its network's, else a hotkey delegation), and no active fleet binding at either epoch boundary
+(head fleets are paid natively, §8.4). Its share is proportional to its **verified usage and nothing
+else**, allocated in exact integer rao by `coldkey_usage_largest_remainder_rao_v1` for the amount `A` the
+pool allocates for the epoch (its funding plus any carry, §8.3):
 
 ```
-poolTotal_n  =  captured_emission_n + same_operator_carry_n
+s_{n,p}     =  usage_{n,p} / Σ_{eligible p'} usage_{n,p'}  for eligible p, else 0;      Σ_p s_{n,p} = 1
+U_{n,c}     =  Σ usage_{n,p} over eligible p whose payout coldkey is c;                ΣU_n = Σ_c U_{n,c}
+base_{n,c}  =  floor(A · U_{n,c} / ΣU_n),      rem_{n,c} = (A · U_{n,c}) mod ΣU_n
+δ_{n,c}     =  base_{n,c} + (1 rao if c is among the A − Σ_c' base_{n,c'} coldkeys with the largest rem, else 0)
+               ties → ascending coldkey;   Σ_c δ_{n,c} = A exactly, each within one rao of A·U_{n,c}/ΣU_n
 ```
 
-There is **no global claim root**: a provider `p`
-claims against its NO's *own* committed `payoutRoot`, which holds **fractional shares** `s_{n,p}` (Σ = 1),
-and the contract derives the α amount from **on‑chain state**:
+where `usage_{n,p}` is the settled payout bytes `p` served for NO `n` on contracts that closed between
+the epoch's boundary-block timestamps. Aggregating by coldkey first means splitting a provider never
+changes its coldkey's amount. The per‑provider `reliability_{n,p}` and release 1.0's measured‑cohort
+eligibility (`a_min` minimum exposure, `VALIDATOR.md` §7.4) are **gone from the payout**: quality stays
+operator‑level (`Q_n` weights the pool against other pools, §8.1, and cancels while there is one
+operator), so measurement no longer gates who is paid or limits how many are.
+
+The NO publishes each epoch's inputs as provider rows `(client_id, coldkey, usage_bytes, head_excluded)`
+in its ledger (§8.3). The validator checks every row (each head flag against chain state), recomputes
+the allocation and the accounts, and approves nothing that does not reproduce exactly. The NO alone still
+attests the population, the usage amounts, window membership and wallet selection (owner decision,
+October 11) — its remaining lever, published but not yet checkable. Committing the ledger's root (§8.3)
+is the NO's only privileged on‑chain act in the miner channel — a *record*, never custody.
+
+### 8.3 Settlement — providers claim per‑NO, cumulatively, directly from the contract
+
+From `E_s` the pool settles through two contracts beside the unchanged release 1.0 set: the immutable
+**vault2** (`STSettlementVault2`), which owns the pool UID and holds the funds, and an owner‑upgradeable
+coordinator, `STSettlement2`. Within 1,200 blocks (≈ 4 h) of each epoch's end, vault2 moves the pool
+hotkey's realized emission into escrow and snapshots the pool's cumulative funding, so epoch `e` funds
 
 ```
-vault.claim(e, n, p, s_{n,p}, proof):
-    verify (p, s_{n,p}) ∈ payoutRoot[e][n]
-    amount = s_{n,p} · poolTotal_n
-    require claimed[e][n] + amount ≤ poolTotal_n      // a pool can't be over-drained
-    mark the leaf claimed; claimCredit[p] += amount
-    if TAOEquivalent(claimCredit[p]) ≥ immutable DefaultMinTransfer:
-        transfer the full credit to p and verify exact escrow/p deltas
-    else:
-        preserve credit for a later claim or permissionless retry
+f_e  =  fundedThrough_n[e] − fundedThrough_n[e−1]      // a missed close funds 0; the next close captures that α
 ```
 
-So the amount is a deterministic function of immutable on-chain entitlement state × the NO's committed
-share. Release artifacts allocate exactly 10,000 bps with deterministic largest-remainder rounding;
-the vault independently caps cumulative payout at the entitlement total. A malformed root whose shares
-exceed 10,000 bps cannot overdraw escrow. An unclaimed or under-allocated remainder expires after the
-snapshotted TTL+grace and becomes only that same NO's carry; already-claimed credit is excluded from that
-remainder and remains payable after expiry. A missed root follows the same isolation. `Claimed` records
-logical entitlement acceptance, `ClaimPaymentDeferred` records durable unpaid credit, and `ClaimPaid`
-records the measured runtime transfer; public history must not conflate them.
-A provider attached to several NOs makes **one claim per NO** (the
-trade for dropping the global root). **Every α of the miner channel flows contract → provider; the
-operator holds none of it.**
+**One cumulative account per payout coldkey per pool, never expiring.** NO `n`'s ledger is an ordered
+list of accounts `(coldkey_i, cumulative_i)` in rao. An account's position and coldkey never change, its
+cumulative never decreases, new accounts are appended in ascending coldkey order, and none is ever
+removed. Each root covers every epoch since the last finalized root (at most 96), allocates each from
+its own provider rows (§8.2) and adds each coldkey's `δ` to its account; a wallet change sends later
+deltas to the new coldkey's account, and the old one keeps its balance. Value moves to later earners only
+when an epoch has no eligible usage, when the NO explicitly declares its inputs unrecoverable, or when
+its close is missed; an epoch whose root is missed, refused or deleted is allocated later from its own
+usage (owner decision, October 11). The accounts are committed as a **Merkle sum tree**, each node
+committing to its children's hashes and sums:
+
+```
+leafHash(c, v)            =  keccak256(0x00 ‖ c ‖ uint256(v))
+nodeHash(hL, sL, hR, sR)  =  keccak256(0x01 ‖ hL ‖ uint256(sL) ‖ hR ‖ uint256(sR))     // node sum = sL + sR
+commitDistribution(e, n, prevRootCount, root, total, leafCount, ledgerHash):  total = root sum = fundedThrough_n[e] > finalizedTotal_n
+```
+
+`ledgerHash` is the sha256 of a header listing each covered epoch's provider‑row chunks and the account
+chunks — public, content‑addressed objects that the validator retains.
+
+**Admission.** A root becomes claimable only once a quorum of owner‑admitted auditors has approved it
+before the next epoch ends (at launch: quorum 1, the validator, after its audit reproduces the ledger,
+§8.2) **and** a 14,400‑block (≈ 48 h) window fixed in vault2 has passed since the commit. During the
+window anyone may **challenge** — prove on chain that the root lowers, replaces or hides an existing
+account, which deletes the root — or **demand** that the operator open an account's path on chain, which
+blocks finalization until answered. A withheld or garbage node can never be opened, so a demanded
+account is protected even when the tree is not published. A root still unfinalized at the end of the next
+epoch can be replaced, and its epochs' funding stays for the replacement. A refused or deleted root does not change the
+pool's weight while there is one operator: zeroing the pool would hand the pool channel to the head
+(§8.5), punishing providers for the operator's fault.
+
+**Claims are cumulative and permissionless**, and the contract derives the α from **on‑chain state**:
+
+```
+vault2.claim(n, rootIndex, i, coldkey, cumulative, proof):           // anyone may call; claims never pause
+    verify (coldkey, cumulative) is leaf i of finalized root roots[n][rootIndex]
+    amount = cumulative − claimed[n][i]                               // everything accrued since the last claim
+    require amount > 0 and claimedTotal_n + amount ≤ finalizedTotal_n // a pool can't be over-drained
+    claimed[n][i] = cumulative
+    transfer amount escrow → coldkey     // escrow loses exactly amount, coldkey gains it or 1 rao less; else revert
+```
+
+One claim therefore pays everything an account accrued since its last claim, across any number of
+epochs, always to the leaf's coldkey whoever sends it. Every finalized root is kept, so nothing expires;
+a claim the runtime refuses (for example below its transfer floor) reverts and stays claimable — there is
+no deferred claim credit. The promise is accrual, not timing: a balance is delivered when anyone claims
+it, which is worth doing once it is large relative to the claim's gas. A provider attached to several NOs
+has **one account, and makes one claim, per NO** (the trade for dropping the global root). **Every α of
+the miner channel flows contract → provider; the operator holds none of it.**
+
+Epochs before `E_s` keep release 1.0 settlement (§6, §11.2): per‑epoch `payoutRoot`s of 10,000 bps shares
+built from usage × reliability, claims into durable `claimCredit`, and TTL+grace expiry into same‑NO
+carry. Those claims stay open until each epoch's expiry, and accepted credit stays withdrawable.
 
 > **The pool is the unit of scale.** Providers number 100k+ and cannot be UIDs, so the *pool* is the
 > on‑chain miner (one UID per NO) and the providers are paid *inside* it by Merkle claim. Yuma operates
@@ -930,7 +1149,7 @@ operator holds none of it.**
 
 ### 8.4 Top-level miners — the direct head channel (routable-IP breadth, D27)
 
-The pool tier scales to 100k+ providers but pays them by a NO-directed Merkle split. The **top ~200
+The pool tier scales to 100k+ providers but pays them by a NO-published Merkle ledger. The **top ~200
 fleets by routable-IP breadth** *also* get the **canonical Bittensor treatment**: each claims **its own
 miner UID**, is **steered directly by validators**, and is **paid natively**. This is the supply apex of
 §1 — and it is *more* trust-minimized than the pool (no operator in the payout path).
@@ -979,9 +1198,10 @@ oldest `reg_block` → lowest UID; owner/immune skipped) when a new `burned_regi
 That *is* the tournament, driven by the weights validators set:
 
 - **Promote.** A fleet whose measured IP `score` would out-earn the eviction floor `burned_register`s a
-  UID; validators weight it on `score`; its bound `client_id`s are **removed from any NO's `payoutRoot`**
-  (promoted out — **no double-pay**; a `client_id` earns in exactly one tier at a time — the server's
-  head-exclusion, §8.3).
+  UID; validators weight it on `score`; its bound `client_id`s are **flagged `head_excluded` in any NO's
+  ledger** while the binding is active at either epoch boundary, so they earn no pool share (promoted
+  out — **no double-pay**; a `client_id` earns in exactly one tier at a time — the server sets the flag
+  and the validator checks it, §8.2). Their coldkeys' existing pool accounts stay claimable (§8.3).
 - **Demote.** A fleet whose routable-IP breadth shrinks earns the lowest emission, is pruned on the next
   registration, and its `client_id`s **fall back to earning via their NO's pool** — the baseline catches
   them.
@@ -1051,6 +1271,9 @@ the subnet's core data — **which providers are the weakest links** (`VALIDATOR
 **only** for accurate, consensus‑aligned scoring, via **native Yuma dividends** — the plain Bittensor
 norm; there is **no** separate protocol reward for trail *effort* (D29 — the effort bounty is out of scope,
 its design parked in §9.3 as a future‑iteration candidate). ("Verifier" and "validator" are now one role.)
+From version 2's switch epoch E_s, UR's validator is also the launch **auditor** of payout roots: from an
+owner-admitted EVM address it audits each pool's published ledger and approves the root, challenges a
+provable fault, or demands openings (§11.3).
 
 ### 9.1 What a "validated path" is
 
@@ -1134,9 +1357,11 @@ The bounty needs **no claim root**: `effort[e][valId]` is on‑chain (after the 
 
 The completed and failed trails, aggregated with `VALIDATOR.md` §7 (per‑transition attribution,
 Wilson‑smoothed liveness, latency percentiles), yield **per‑provider** liveness/latency/failure
-attribution — *which providers are the weakest links*. This feeds **(a)** each NO's within‑pool payout
-list (`reliability_{n,p}`, §8.2) **and (b)** each pool's cross‑operator quality `Q_n` (§8.1, §10) — i.e.
-it drives the miner emission — and is published as a public good. In v1 the majority of this data is
+attribution — *which providers are the weakest links*. This feeds each pool's cross‑operator quality
+`Q_n` (§8.1, §10) — i.e. it drives the miner emission — and is published as a public good. Before E_s it
+also fed each NO's within‑pool payout list (`reliability_{n,p}`, §8.2); from E_s per-provider reliability
+no longer enters payouts — the within-pool split is by usage alone (§8.2) — so the measurement sets pool
+quality but no longer gates who is paid. In v1 the majority of this data is
 produced by the owner‑validator, whose business runs on it (§9.2). If a future iteration ever finds
 independent‑validator coverage too thin, the parked §9.3 bounty is one lever that would pay validators
 **precisely for producing this data** — weighted toward the coverage gaps — but v1 does not include it (D29).
@@ -1166,8 +1391,9 @@ divergence + the disputes**, not from a contested‑value pot.
 ### 9.7 Validators are permissionless and Bittensor‑native
 
 Entry is the standard path: **stake α, earn a permit (top‑k by stake), validate** — no NO, no owner
-approval, no pool. Most validators run no NO, which is exactly the **independence** `VALIDATOR.md` §1
-needs and the structural defense against self‑dealing (§9.5, §12.3). In v1 the owner is the majority
+approval, no pool. (Approving v2 payout roots is separate: auditor addresses are owner-admitted, while
+anyone may challenge or demand, §11.3.) Most validators run no NO, which is exactly the **independence**
+`VALIDATOR.md` §1 needs and the structural defense against self‑dealing (§9.5, §12.3). In v1 the owner is the majority
 validator by construction (§9.2, §7.4); cultivating a broad, independent validator set is a stated goal of
 a **later** phase — **re‑delegating reserve slices** (§6.4.3) is the committed lever, and a
 validator‑effort incentive (the parked §9.3 bounty, or another shape) is a *possible* addition if launch
@@ -1201,6 +1427,15 @@ for validator v:
 
 The self-mask covers the NOs a validator declares it controls. The SN25 launch's one UR validator declares none and
 scores UR's own pool (owner decision, October 7).
+
+Version 2 changes only *which* UID is NO `n`'s pool. For epochs at or after the pool's v2 `firstEpoch` (E_s for
+UR's pool), a validator resolves it with `STSettlement2.settlementAt(n, epoch)`, which returns the pool hotkey
+registered in vault2 (`STSettlementVault2`). The validator checks that hotkey against vault2's own
+`pools(n)` record and refuses a mismatch, so an upgrade cannot redirect emission. For earlier epochs it uses the v1 coordinator's `operatorAt`, so
+replay never calls a contract that did not yet exist. Live steering and replay share this one resolver, and from
+E_s the v1 pool hotkey is no longer consulted. A refused or deleted v2 payout root (§11.3) does not change the
+pool's weight while there is one operator: zeroing the pool would hand the pool channel to the head fleets,
+punishing providers for the operator's fault.
 
 Yuma combines the validators' vectors with their stake:
 
@@ -1244,15 +1479,24 @@ therefore mandatory release gates.
 | Datum | Where | Why |
 |---|---|---|
 | finalized `Deposit` / `ConvictionAdded` / `ReservePrincipalAdded` events and cap counters | coordinator + reserve sink | demand and conviction audit inputs; validators reproduce them from finalized history |
-| immutable `entitlement[e][noId]` and conservation counters | settlement vault | captured/carry total, root, artifact hash, claimed amount, expiry and exact custody accounting |
+| immutable `entitlement[e][noId]` and conservation counters (epochs before E_s) | v1 settlement vault | captured/carry total, root, artifact hash, claimed amount, expiry and exact custody accounting |
+| funding snapshots `fundedThrough[noId][e]`, every finalized root and the one pending root (each `root`, `total`, `leafCount`, `epoch`, `ledgerHash`), open demands, per-account `claimed` and conservation counters (epochs from E_s) | vault2 (`STSettlementVault2`, immutable) | each root's total is bound to captured funding; finalized roots are append-only, so accruals never expire; exact custody accounting |
+| auditor set, quorum and per-root approvals | `STSettlement2` (owner-upgradeable) | admission: a pending root finalizes only with a quorum of approvals of its exact commit (§11.3) |
 | validator activation anchors and write-once validator/operator evidence hashes | coordinator's pool namespace | domain-bound consent and immutable closed-epoch census/audit commitments, independent of payout-root publication |
-| payout artifact and completed-trail/statistics artifacts | **server API + content-addressed `server/blob` MinIO** | canonical bulk inputs; publicly retrievable by SHA-256 and independently reproducible |
+| v1 payout artifacts, v2 ledger objects (header, provider and account chunks) and completed-trail/statistics artifacts | **server API + content-addressed `server/blob` MinIO** | canonical bulk inputs; publicly retrievable by SHA-256 and independently reproducible; the validator also retains each v2 ledger it audits |
 | fleet manifest hash | **commitments pallet + finalized coordinator mirror** | hotkey-authorized native anchor used by every binding member |
 
 This directly answers `seed/INCENTIVES.md`'s open question: **yes**, each NO commits a **Merkle root** of its
-payout table (fractional shares) so every provider verifies *its own* payout with an `O(log N)` proof,
-with no bulk data on chain. The contract holds each NO's payout root and the on‑chain pool total, and
-derives the α at claim time (§8.3) — there is **no global, off‑chain‑computed claim root**.
+payout table so every provider verifies *its own* payout with an `O(log N)` proof, with no bulk data on
+chain. Before E_s the table holds fractional shares; the v1 vault keeps each NO's per-epoch payout root with
+the on‑chain pool total and derives the α at claim time (§8.3). From E_s it is the pool's public **ledger**:
+a canonical JSON header listing content-addressed binary chunks of each covered epoch's provider rows
+(`client_id`, coldkey, usage bytes, head flag) and of the accounts (coldkey, cumulative rao). Each commit
+puts on chain the root, total and leaf count of a **sum tree** over the accounts, plus
+`ledgerHash = sha256(header)`, and vault2 requires the total to equal the pool's captured funding through
+the root's epoch (§11.2). The objects are unsigned: the root signer's on-chain commitment authenticates the
+header, and the header authenticates the chunks. Either way each NO has its own root — there is **no global
+claim root**.
 
 Validator evidence uses immutable on-chain hashes, not bulk proof bytes on-chain.
 Its full signed artifacts and referenced proof streams must be publicly available
@@ -1269,32 +1513,90 @@ shares, carry, or the parked validator-bounty design.
 
 ### 11.2 Claiming
 
-```solidity
-function claim(uint256 e, uint256 noId, bytes32 coldkey, uint256 shareBps, bytes32[] proof) external {
-    bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(coldkey, shareBps))));
-    require(MerkleProof.verify(proof, entitlement[e][noId].payoutRoot, leaf), "bad proof");
-    bytes32 k = keccak256(abi.encode(noId, coldkey));
-    require(!minerClaimedBy[e][k], "claimed");  minerClaimedBy[e][k] = true;
-    uint256 amt = shareBps * entitlement[e][noId].total / 10_000;
-    entitlement[e][noId].claimed += amt;
-    require(entitlement[e][noId].claimed <= entitlement[e][noId].total, "pool over-drained");
-    transferStake(coldkey, escrowHotkey, netuid, netuid, amt);
-}
+From E_s a pool pays through **cumulative accounts**. An account is one payout coldkey in one pool, at a fixed
+position `index`; its leaf carries the coldkey's **cumulative** accrual in rao — the running sum of its shares
+of the pool's funding, epoch by epoch, allocated by usage alone (§8.2) — which never decreases. Accounts are
+never removed: after a wallet change new shares accrue to the new coldkey's account, and the old one stays
+claimable. A root commits the pool's `n` accounts as a **Merkle sum tree** of depth `d = ⌈log2 n⌉` (`d = 0`
+when `n = 1`):
 
 ```
+leafHash(c, v)        = keccak256(0x00 ‖ c ‖ uint256(v))
+nodeHash(hL,sL,hR,sR) = keccak256(0x01 ‖ hL ‖ uint256(sL) ‖ hR ‖ uint256(sR))
+level 0, position i   = (leafHash(c_i, v_i), v_i) for i < n;  (0x00…00, 0) for n <= i < 2^d
+level k+1, position j = (nodeHash(L.h, L.s, R.h, R.s), L.s + R.s) for L, R = positions 2j, 2j+1 of level k
+root = level d, position 0; committed with total = root sum and leafCount = n
 
-Claims are pull‑based, so settlement is `O(1)` on‑chain regardless of participant count. The **miner**
-amount is `share × entitlement.total` (share proven against the NO's committed root, total fixed from
-captured emission plus same-NO carry) — **no global claim root is computed off-chain**. (`claimValidator` — the bounty claim,
-`feePool · effort / Σ effort` — is part of the parked bounty design, not in v1, §9.3/D29.)
+vault2.claim(noId, rootIndex, index, coldkey, cumulative, proof):     // anyone may send it
+    r = roots[noId][rootIndex]                       // any finalized root; every one is kept
+    require index < r.leafCount and exactly d (hash, sum) siblings, d from r.leafCount
+    fold (leafHash(coldkey, cumulative), cumulative) up the siblings  // bit k of index: right child at level k
+    require the fold reproduces both r.root and r.total
+    require coldkey ≠ 0 and coldkey ≠ vault2's own coldkey
+    amount = cumulative − claimed[noId][index];  require 0 < amount < 2^64 − 1
+    require claimedTotal[noId] + amount ≤ finalizedTotal[noId]       // the latest finalized root's total
+    claimed[noId][index] = cumulative;  claimedTotal[noId] += amount  // and the conservation counters
+    transferStake(coldkey, escrowHotkey, netuid, netuid, amount)     // escrow −amount exactly; coldkey +amount or 1 rao less
+    any failure reverts the whole claim, and the account stays claimable
+```
+
+One claim pays everything the account accrued since its last claim, across any number of epochs, or it
+reverts — there is no per-epoch claim, no deferred credit and no expiry. Anyone may send it for any account;
+the payment always goes to the coldkey in the leaf, so a proof — served publicly by
+`GET /sn/ledger/account?coldkey=…` or rebuilt from the published ledger — cannot redirect a payment. A runtime
+refusal (a transfer below the `DefaultMinTransfer` floor of 100,000 rao TAO-equivalent, or a destination
+coldkey whose staking-hotkey list is full) reverts the claim and leaves the balance claimable; since balances
+never expire, a provider or the miner claim daemon simply claims once the balance is large relative to gas.
+Pausing settlement never stops claims. Claims are pull‑based, so settlement is `O(1)` on‑chain regardless of
+participant count, and each pool has its own root — **there is no global claim root**.
+
+Epochs before E_s keep the v1 per-epoch claim, `claim(epoch, noId, coldkey, shareBps, proof)`, worth
+`share × entitlement.total` against that epoch's immutable entitlement (§8.3) and open until that
+entitlement's expiry; v1 credit stays withdrawable through `withdrawClaimCredit`. (`claimValidator` — the
+bounty claim, `feePool · effort / Σ effort` — is part of the parked bounty design, not in v1, §9.3/D29.)
 
 ### 11.3 Disputes
 
-The v1 on‑chain dispute surface is deliberately small — deposits are reserved (nothing distributable to
-dispute), pool amounts are read from chain state, and effort claims do not exist yet:
+From E_s a committed payout root is only *pending*. Anyone may finalize it, and it becomes claimable, only
+once a quorum of owner-admitted auditor EVM addresses has approved its exact commit
+(`approveDistribution(noId, seq, root, ledgerHash)`) before the next epoch ends, and the 14,400-block window
+from its commit has passed with no open demand. At launch the quorum is the validator alone. It fetches the
+public ledger, checks the header against `ledgerHash` and every chunk against its hash, and re-runs the build
+against chain state — covered epochs, row rules, head exclusion from the fleet bindings (§11.4), the
+allocation from on-chain funding, unchanged account positions and coldkeys, and the rebuilt root, total and
+leaf count. Population, usage, window membership and wallet selection stay operator-attested in this phase.
+Approval, in the upgradeable `STSettlement2`, vouches for how new funding is allocated. The window and two
+objective, permissionless checks live in immutable vault2, so they hold whatever `STSettlement2` does; both
+protect the accounts of the latest finalized root:
 
-- **Bad payout artifact/share.** The operator API and validators reject any artifact that does not
-  reproduce its content hash/root or exactly allocate 10,000 bps. Independently, every claim proves
+- **`checkPath` — challenge.** Anyone submits an account's leaf and proof from the latest finalized root,
+  plus a top-down opening of the pending root along that index. A lowered value, a changed coldkey, a
+  garbage leaf or an inconsistent node (child sums that do not add up to the node's) deletes the pending
+  root.
+- **`demandPath` — demand.** Anyone may demand the on-chain opening of an existing account's path, the
+  remedy when the ledger is withheld. The root cannot finalize until each demand is answered by a clean
+  `checkPath`, which the operator sends from its copy of the tree; a garbage or withheld node can never be
+  answered.
+
+The validator approves only if every check passes, challenges any fault it can prove, and, if the objects
+are missing or do not reproduce the root, refuses approval and demands two sets of accounts. One is every
+previous account whose published row shows a fault. The other is a value-weighted random sample of at least
+256 previous accounts, drawn with randomness the operator cannot predict, which doubles after each failed
+root over the same predecessor. vault2 allows one commit per pool per 14,400 blocks, so the sample cannot be
+re-rolled quickly, and each demand carries an immutable fee that keeps griefing costly. `snclaim v2 check` lets anyone do the same;
+UR runs it as an independent watcher on a host other than the validator's. The residual risk is an account
+that is faulted but never demanded, under a withheld ledger *and* a bypassed approval; demands are weighted
+by value, so the larger a theft, the likelier it is caught. A pool's first root has no predecessor and rests
+on approval alone. A root still unfinalized at the end of the next epoch can be replaced by the next commit,
+and a deleted root frees the pending slot; either way no value moves, since the next root allocates their
+epochs from their own usage, and while there is one operator neither changes the pool's weight (§10).
+Pausing settlement stops finalization but never approvals, challenges or demands.
+
+Otherwise the on‑chain dispute surface is deliberately small — deposits are reserved (nothing distributable
+to dispute), pool amounts are read from chain state, and effort claims do not exist yet:
+
+- **Bad payout artifact/share (epochs before E_s).** The operator API and validators reject any artifact that
+  does not reproduce its content hash/root or exactly allocate 10,000 bps. Independently, every claim proves
   `(coldkey,share)` against the immutable entitlement and the vault cannot pay more than its total.
 - **Bad `client_id ⇄ hotkey` binding.** Invalid consent never enters state: the coordinator checks the
   complete replay-bound payload, Ed25519 and sr25519 signatures, matching finalized commitment, validity
@@ -1308,8 +1610,9 @@ dispute), pool amounts are read from chain state, and effort claims do not exist
   worth the gamble and the contract never verifies *every* trail (it scales).
 
 Statistical disputes (a validator's trails look self-dealt or coverage-gamed, `VALIDATOR.md` §7.7) are
-**not** resolved on-chain in v1. They remain public evidence and affect Yuma trust naturally; the
-contract layer handles only deterministic custody and cryptographic authorization.
+**not** resolved on-chain, in v1 or v2. They remain public evidence and affect Yuma trust naturally; the
+contract layer handles only deterministic custody, cryptographic authorization and, from E_s, the
+objective root checks above.
 
 ### 11.4 The fleet `client_id`s ⇄ hotkey binding (top-level miners)
 
@@ -1414,7 +1717,8 @@ designs, §9.3/§13.6) is an open post‑launch question, not a committed roadma
   liveness) — **validators' evaluation drives the miner payout**, the
   Bittensor mechanism — via median + clipping + vtrust over many **independent** validators, plus the
   self‑weight mask and the fully‑sunk deposit (§10, §12.1); provider quality also bites **within the
-  pool** (auditable payout list) and via reputation.
+  pool** under v1 settlement (auditable payout list, §8.2) and via reputation; v2 settlement splits each
+  pool by usage alone (below, §13.4).
 - **Bootstrap caveat (not a removal — a ramp):** `Q_n` is noisy until the validator set and data mature,
   so governance **caps the quality swing** early (closer to deposit‑weighted) and widens it as the
   independent‑validator stake share grows. Quality is on the payout path from day one; its *magnitude*
@@ -1430,6 +1734,26 @@ designs, §9.3/§13.6) is an open post‑launch question, not a committed roadma
   measurement. Whether owner‑independent coverage ever becomes thin enough to need an effort fix — and if
   so, whether the parked **(X)**/**(Y)** designs are the right one — is left to a post‑launch iteration
   (D29), not pre‑committed here.
+- **Secured by v2 settlement** (epochs from the switch epoch `E_s`, from which a pool settles on v2;
+  §13.1, `VERSION2-FINAL.md` §3–§4): the promise is **accrual** — each eligible provider's usage share of
+  its pool is credited to its payout coldkey's account, never expires, and is delivered whenever anyone
+  claims it. Whatever the owner-upgradeable `STSettlement2` coordinator does, the immutable
+  `STSettlementVault2` (vault2) enforces (G1–G6): conservation
+  (`totalCaptured = totalPaid + escrowAccounted`; per pool, claimed ≤ finalized ≤ captured); survival of
+  accrued balances under a bad successor root (a challenge deletes it; an unanswered path demand blocks
+  it); payment only to the account's coldkey, whoever claims; no expiry; root totals bound to the pool's
+  snapshotted funding; and no finalization within 14,400 blocks of the commit or with a demand open.
+- **Not secured by v2 settlement** (beyond the residuals above): **usage fraud on new funding** —
+  population, usage, earning-window membership and wallet selection are operator-attested and not yet
+  checkable, so a dishonest operator can misallocate each root's new funding, though G2 keeps it from
+  lowering existing balances; an account that is faulted but **never demanded** while the tree is
+  withheld *and* admission is bypassed (an owner upgrade, or the root-signer and auditor keys) — watchers
+  demand a value-weighted sample, so the larger the theft, the likelier it is caught; and an epoch whose
+  **close is missed** beyond its 1,200-block window, whose share moves to later earners. Nor is delivery
+  time promised: at live rates about 1,450 α per epoch reaches the pool at θ = 3/10, ≈ 0.0145 α per
+  provider per week at 100k providers, so a 250k-gas claim at a 5 gwei base fee (≈ 0.19 α) costs about
+  13 weeks of average earnings, and gas falls under 10% of a claim only after ≈ 131 weeks; both take ten
+  times longer at 1M providers (`VERSION2-FINAL.md` §3).
 
 ### 12.4 The buyback reserve and the demand crossover
 
@@ -1493,6 +1817,28 @@ on NO hotkeys (violates no‑custody); a **single** contract miner UID with the 
 (collapses Yuma); and the earlier **per‑NO validator pool with a take‑0 custody hack** (fragile, and
 redundant with crypto‑validity — replaced by plain independent validators earning native dividends, §13.6).
 
+**v2 settlement (from `E_s`; owner decisions, October 11; `VERSION2-FINAL.md`).** The release-1.0 (v1)
+vault fixes a per-epoch entitlement of expiring per-coldkey shares, so a provider claims once per epoch,
+and only providers the validator has measured can be paid (at launch, a closed cohort of at most 2,000).
+v2 leaves the v1 contract set and policy v1 unchanged — they settle every earlier epoch and a later sweep
+of v1 carry — and adds two contracts beside them: the immutable **`STSettlementVault2`** (vault2), which
+owns the v2 pool and escrow hotkeys and holds the funds, and the owner-upgradeable **`STSettlement2`**
+coordinator, which holds no funds. Each root is a **Merkle sum tree** over cumulative, never-expiring
+**accounts**, one per payout coldkey per pool at a fixed position, credited by usage alone (§13.4). A root
+becomes claimable only after a quorum of owner-admitted auditors approves it (the validator alone at
+launch) **and** a 14,400-block window passes, in which anyone can prove that it lowers, replaces or hides
+an existing account, which deletes the root, or demand the on-chain opening of an account's path, which
+blocks finalization until answered. One permissionless claim pays everything accrued since the account's
+last claim, only to its coldkey; it pays or reverts, and a reverted claim stays claimable. Claims,
+approvals, challenges and demands never pause. At launch one organisation is owner, operator and
+validator, so approval guards against bugs and single-key compromise; vault2's guarantees protect accrued
+balances against an upgraded `STSettlement2` or a compromised root signer plus auditor, as long as
+someone challenges or demands in the window (§12.3). *Rejected:* changing the policy or the v1 contract
+identities (every wallet consent and hotkey delegation is signed under them, so any change orphans them
+all); an OpenZeppelin multiproof tree with a ring of four roots (the sum tree makes a lowered or hidden
+account provable on one path); relayer permits (wallets differ in the bytes they sign); and an
+evidence-journal veto in place of affirmative approval.
+
 ### 13.2 Payment token: α (chosen) vs. TAO vs. USDC
 
 α aligns the contract with subnet value, creates buy/stake pressure, and keeps all internal transfers
@@ -1522,6 +1868,13 @@ money. The one nuance is **magnitude at bootstrap**: `Q_n` is noisy until the
 validator set + data mature, so governance **caps the quality swing** early (closer to deposit‑weighted)
 and widens it as the independent‑validator stake share grows (§12.3). So quality is on the payout path
 from day one — we ramp its *strength*, we do not defer the mechanism.
+
+**v2 settlement confines quality to this cross-operator weight** (§13.1). From `E_s` the within-pool split
+is by usage alone, with no per-provider reliability factor (cf. §8.2), so the validator's measurement no
+longer gates which providers inside a pool are paid. Root approval is an objective ledger check, not a
+quality lever: while there is one operator, a refused or deleted root leaves the pool weight unchanged,
+because zeroing the pool would hand the pool channel to the head fleets and punish providers for the
+operator's fault (owner decisions, October 11).
 
 ### 13.5 No on‑chain oracle (simplified out)
 
@@ -1605,6 +1958,13 @@ are live UIDs holding permits according to native stake. New product lines remai
 classification unless a future whitepaper revision supplies a new economic model and explicit UID
 budget; they are not a latent release-1.0 mechanism switch.
 
+v2 settlement (§13.1) registers two more vault-owned identities, one burn each: vault2's escrow hotkey at
+deployment, and the v2 pool hotkey one to two days before `E_s`, so that it earns weight before its
+registration immunity ends. During the switch a NO therefore holds two pool UIDs. From `E_s` validators
+weight only the v2 one, and the v1 pool UID may be pruned without error: pruning removes only subnet
+membership, and stake moves need only the hotkey's `Owner` entry. Anyone can re-register a pruned v2 pool
+hotkey through `registerPoolUid`, paying the burn.
+
 ---
 
 ## 15. Concrete parameters
@@ -1637,7 +1997,12 @@ budget; they are not a latent release-1.0 mechanism switch.
 | Parameter | Symbol | Suggested | Notes |
 |---|---|---|---|
 | Epoch length | `T_epoch` | 50 400 blocks (7 d) | settlement period |
-| Operator data deadline | — | +4 h | `README.md` |
+| Operator data deadline | — | +4 h (1,200 blocks) | `README.md`; the root commit window, unchanged in v2 settlement |
+| Close window | — | v1: 120 blocks after the epoch end; **v2: the 1,200-block commit window** | a v2 close missed beyond it defers the epoch with zero funding, and the next close captures its emission for later earners (§12.3) |
+| Challenge window (v2) | `minimumChallengeBlocks` | **14,400 blocks** (≈ 48 h) from the commit, immutable in vault2 | no v2 root finalizes earlier or with a path demand open; needs `T_epoch` ≥ commit window + 14,400 (mainnet's 50,400 holds; testnet's 360-block cadence does not). v1 instead finalizes 14,400 blocks after the epoch end |
+| Root approval (v2) | — | owner-admitted auditor addresses (≤ 16); **quorum 1 at launch** (the validator); approve before the end of epoch `e+1` | a root still unfinalized at the end of epoch `e+1` can be replaced by the next commit, and its epochs' funding stays for that root (§13.1) |
+| Claim expiry | — | v1: `claim_ttl_epochs` 8 + `claim_grace_epochs` 1; **v2: never** | policy v1 stays in force: `claim_ttl_epochs`, `claim_grace_epochs`, `expired_claim_action`, `shares_total_bps`, `rounding` and `deposit.usage_artifact` keep their meaning for v1 epochs and the v1 carry sweep and are **inert for v2 epochs**, which allocate in rao by `coldkey_usage_largest_remainder_rao_v1` |
+| Ledger bounds (v2) | — | ≤ 96 covered epochs per root; header ≤ 256 KiB (about 3,500 chunk references); 131,072 rows per chunk (48-byte account rows, 6 MiB; 57-byte provider rows, ≈ 7.1 MiB); ≤ 2^29 accounts per pool in vault2's tree | design target and activation gate: ≥ 1,000,000 providers per pool; the validator fetches at most `--ledger_max_bytes` of new objects per root (default 2 GiB, a runtime flag) |
 | Reserve hotkey | — | the owner‑validator hotkey, set at initialize | the buyback reserve's staking target (§7.4); run its delegate **take = 0** so reserve yield compounds whole |
 | `φ` / `ω` / effort‑claim deadline / dispute window | — | — | **out of scope** — parked bounty design (§9.3/§13.6, D29) |
 | **Head share** | `θ` | governance; start ~0.3, ramp | fraction of the 41% miner emission to top-level miners; `1−θ` to pools — **the load-bearing new dial** (§8.5) |
@@ -1687,10 +2052,12 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
 4. **Network‑Operator software.** Runs the privacy servers + the `VALIDATOR.md` `/verify` server
    (SEED/EXTEND/FINAL, poisoning, idempotency, the four Ed25519 signatures, the egress‑IP index);
    stages and `deposit`s each epoch through its isolated hotkey/signer (conviction stake; no contract
-   weighting, D25); computes provider reliability + payout list; publishes a content-addressed artifact and commits the **`payoutRoot`**
-   (fractional shares); serves leaves. (No validator pool — it co‑signs trails as the `/verify` server.)
-5. **Provider software.** Carries ingress/egress; registers a `client_id`; verifies its payout leaf
-   against `payoutRoot`; calls the immutable vault's `claim`. **If it reaches the top ~200:**
+   weighting, D25); for release 1.0 epochs (before E_s), computes provider reliability + payout list, publishes a
+   content-addressed artifact, commits the **`payoutRoot`** (fractional shares) and serves leaves; from E_s it builds
+   and publishes the v2 ledger instead (item 8). (No validator pool — it co‑signs trails as the `/verify` server.)
+5. **Provider software.** Carries ingress/egress; registers a `client_id`; for release 1.0 epochs, verifies its
+   payout leaf against `payoutRoot` and calls the immutable vault's `claim` (from E_s its coldkey's account is
+   claimed from vault2, item 8). **If it reaches the top ~200:**
    limit-registers its own UID, publishes the dual-signed `client_id ⇄ hotkey` binding (§11.4), and
    earns **natively** (no claim, §8.4).
 6. **Validator client (was "verifier").** Stake α; run `/verify` trails; submit commit‑reveal pool
@@ -1699,6 +2066,30 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
 7. **Indexer/explorer.** Surfaces `D_n`, pool quality `Q_n`, consensus weights, vtrust, the
    **independent‑validator stake share**, the **buyback reserve + demand ratio `R_e`** (§12.4), and
    roots — the public audit surface.
+8. **Version 2 payout settlement (`VERSION2-FINAL.md`; epochs from E_s).** Each epoch's pool funding is
+   allocated by usage alone and credited to per-account cumulative balances that never expire; the release
+   1.0 contracts above are not modified or upgraded.
+   - **Contracts.** The immutable `STSettlementVault2` ("vault2") and the owner-upgradeable UUPS
+     `STSettlement2`, with the `LedgerTree.sol` sum-tree library (same pinned toolchain). A new v2 phase of
+     `sn-mainnet bootstrap-contracts` creates vault2 and the `STSettlement2` implementation, registers
+     vault2's escrow (one burn), creates the proxy with `initialize` and sets vault2's coordinator once; it
+     completes only on readback of exact runtime code, getters and storage slots.
+   - **Operator server.** Builds each root's v2 ledger (provider rows per covered epoch, accounts, sum
+     tree, header), publishes the chunks and then the header, and closes, commits and finalizes through
+     `STSettlement2`. It answers every data-availability demand with `checkPath` and serves the public
+     `GET /sn/ledger/object` and `GET /sn/ledger/account`.
+   - **Validator.** From the pool's `firstEpoch` it weights the pool UID resolved through
+     `STSettlement2.settlementAt`. It audits each pending root's ledger and, from its admitted auditor
+     address, approves the root only if every check passes, challenges a provable fault with `checkPath`,
+     and demands a value-weighted sample of at least 256 previous accounts with `demandPath` when the
+     objects are missing or do not reproduce the root. The sample doubles after each failed root.
+   - **Claims and apps.** The miner claim daemon v2, beside the unchanged v1 daemon, claims an account
+     whenever its claimable amount reaches the daemon's threshold. `snclaim v2` provides `status`, `claim`
+     and `check --all` (with `--challenge` and `--demand`), and `snclaim withdraw --vault v1` withdraws v1
+     claim credit; UR runs `snclaim v2 check --all --challenge --demand` as an independent watcher on a
+     host other than the validator's. The SDK shows the v2 finalized, claimable and paid amounts, a pending
+     root as pending, v1 balances separately, and "unavailable" rather than zero when the proof service
+     cannot be reached.
 
 ### 16.2 The chain is identity + stake + weights only
 
@@ -1788,9 +2179,29 @@ faulted.
 7. **M6 — Decentralize further (deferred, §6.4.3):** trustless oracle (§13.5), permissionless bonded
    admission, on‑chain governance; advance the `VALIDATOR.md` §10 roadmap.
 
+**Version 2 (`VERSION2-FINAL.md`)** changes payout settlement on mainnet beside the ladder above. Its
+runtime rehearsal (gate 2 of §16.4) runs on a node built from runtime 475's source, not testnet: testnet's
+360-block cadence cannot satisfy `epochBlocks >= rootCommitWindowBlocks + 14,400`, and the testnet campaign
+closed on 2026-09-28.
+
+- **Version 2 phase A — activation at E_s** (`VERSION2-FINAL.md` §12.1). Ships §16.1 item 8. With gates
+  1–4 of §16.4 met and the gate 5 software released, deploy vault2 and `STSettlement2` through the v2
+  contract phase, with readback; adopt the validator config, re-sign the treasury approval, ship and
+  configure the server, and check that the validator runs the adopted config and the server the v2 build.
+  One to two days before E_s the owner Safe calls `registerOperatorPool(1, poolHotkeyV2, maxBurn, E_s)`,
+  the commitment point: it falls inside the 21,600-block registration immunity, and if it fails nothing
+  has changed and E_s moves. From E_s the validator weights the v2 pool UID, the server runs the v2 driver
+  and the v1 driver stops; epoch `E_s − 1` completes on v1 in its normal windows, and v1 claims stay open
+  until each v1 expiry.
+- **Later version 2 phases** (`VERSION2-FINAL.md` §16). Roster and evidence (signed work requests; the
+  validator verifies consent chains); phase B, measurement (sampling frame, VRF cohort, stratified
+  estimator, head budget, validator state bounds); phase C, the v1 carry sweep into vault2 at or after
+  `E_s + 8`, once the last v1 expiry has passed, plus a second operator, a fractional approval quorum,
+  operator bonds and a priced deposit policy.
+
 ### 16.4 Pre‑launch verification checklist (load‑bearing live values)
 
-*(D28: these checks run against **testnet** (chain 945 dust probes) + the SP‑3 localnet — they are the
+*(D28, release 1.0: these checks run against **testnet** (chain 945 dust probes) + the SP‑3 localnet — they are the
 Phase A/B gates of `docs/LAUNCH.md`, and all must be green before the supplied subnet is modified; re-run them
 against finney at the Phase‑E mainnet promotion.)*
 
@@ -1818,13 +2229,31 @@ against finney at the Phase‑E mainnet promotion.)*
   `max_weight_limit_u16`, audit finalized vectors, and set a high `immunity_period` to protect the head
   from breadth-sampling-dip eviction.
 
+**Version 2 activation gates** (`VERSION2-FINAL.md` §14; test IDs from its §15). Version 2 phase A
+activates (the owner Safe sends `registerOperatorPool`) only when all six hold; E_s is the first epoch that
+starts at least two days after the last one passes.
+
+1. **Contracts.** The Foundry suite is green at its coverage bars, with `forge fmt --check`,
+   `forge build --deny warnings --sizes` and `scripts/test-solidity-static.sh` clean; sizes and margins
+   are recorded; an independent review of vault2, `LedgerTree.sol` and `STSettlement2` is resolved.
+2. **Runtime rehearsal (R-1 to R-6).** The exact bytecode runs on a node built from runtime 475's source;
+   building that node is phase A work. Any runtime change on mainnet repeats this gate.
+3. **Ledger.** The Go suites are green, including the million-provider fixtures (GL-10, SV-6) inside
+   budget.
+4. **End-to-end.** The E suite passes (E-1 to E-7).
+5. **Software released and contracts deployed.** The server, validator, claim daemon, `snclaim` and SDK
+   display changes are released, and the v2 contract phase of `sn-mainnet bootstrap-contracts` has run
+   with readback.
+6. **Approvals.** The validator config is adopted, the treasury approval is re-signed, and the server is
+   configured.
+
 ---
 
 ## 17. Open questions from `seed/INCENTIVES.md` — resolved
 
 | Question | Resolution |
 |---|---|
-| **How is oracle data stored/charged on Subtensor? Can the NO payout table be a Merkle tree so each miner validates its payout without storing it on chain?** | **Yes.** Commit a 32-byte Merkle root plus artifact hash per NO/epoch in the coordinator; immutable entitlement state gates claims; canonical bulk bytes live in `server/blob` MinIO and are served by the public server API. Each provider verifies an `O(log N)` proof (§11). The commitments pallet anchors fleet manifests, not payout bulk data. |
+| **How is oracle data stored/charged on Subtensor? Can the NO payout table be a Merkle tree so each miner validates its payout without storing it on chain?** | **Yes.** Release 1.0 commits a 32-byte Merkle root plus artifact hash per NO/epoch in the coordinator; immutable entitlement state gates claims; canonical bulk bytes live in `server/blob` MinIO and are served by the public server API. Each provider verifies an `O(log N)` proof (§11). From E_s, version 2 instead commits the root of a Merkle **sum tree** over the pool's cumulative accounts, with its total, leaf count and ledger-header hash, into vault2 through `STSettlement2`; the ledger objects are served at `/sn/ledger/object`, and each account verifies an `O(log n)` proof of `(hash, sum)` siblings. The commitments pallet anchors fleet manifests, not payout bulk data. |
 | **Are smart contracts standard EVM?** | **Yes** — Frontier EVM, Cancun, Solidity 0.8.24: chain 945 testnet and 964 mainnet. Subtensor precompiles let the contracts stake/transfer α and verify binding identities; validators submit CRv4 through native Substrate extrinsics (§2.5). |
 | **How to adapt to standard BT payout formulas?** | Independent validators set standard Yuma weights `= implied_usage × quality` (implied usage = deposit ÷ conviction-tier rate, computed from finalized events + signed policy — contracts weigh nothing, D25) on per-NO miner-pool UIDs; the chain delivers emission to vault-owned pools (re-split by Merkle claim) and native dividends to validators. A second head tier holds provider-owned UIDs and receives native emission by split-adjusted routable-prefix breadth under θ (§8.4–8.5). |
 
@@ -1835,10 +2264,12 @@ against finney at the Phase‑E mainnet promotion.)*
 - **NO (Network Operator)** — runs servers; operates **one miner-pool UID** (vault-owned) but holds no
   emission; posts isolated conviction deposits; runs the `/verify` server (co-signs trails); commits the payout root for its
   providers. No validator.
-- **Miner-pool UID** — the on-chain miner: one per NO, immutable-vault-owned. The 100k+ providers are **inside**
-  it (not UIDs) and are paid by Merkle claim.
+- **Miner-pool UID** — the on-chain miner: one per NO, immutable-vault-owned (from E_s, a new vault2-owned UID
+  that validators resolve through `settlementAt`). The 100k+ providers are **inside** it (not UIDs) and are
+  paid by Merkle claim.
 - **Provider / miner (tail)** — carries traffic; inside a NO's miner pool (the on-ramp tier); **claims its
-  α directly from the contract** per the NO payout root. Can **graduate** to a top-level slot (§8.4).
+  α directly from the contract** — per the NO payout root for release 1.0 epochs, and from E_s through its
+  payout coldkey's **account** in vault2. Can **graduate** to a top-level slot (§8.4).
 - **Top-level miner (head)** — a top ~200 **fleet** (an operator of many routable exit IPs) that holds
   **its own miner UID**, steered **directly** by validators on its **split-adjusted distinct routable
   egress-IP count** (`score`, §8.4) and paid **natively** (no contract custody, no Merkle claim); matched
@@ -1863,14 +2294,61 @@ against finney at the Phase‑E mainnet promotion.)*
 - **Effort bounty** — a fee‑funded reward that *would* pay ∝ verified, coverage‑weighted, server‑assigned
   completed trails; **out of v1 scope** and **not a committed phase** — a parked future‑iteration candidate
   (§9.3, §13.6, D29).
-- **ST contract set** — UUPS policy coordinator plus an immutable settlement-vault coldkey and an
-  immutable reserve-sink coldkey. Custody is physically separated from upgradeable policy. **Not** the
-  validator (§9–§10).
+- **ST contract set** — release 1.0's UUPS policy coordinator plus an immutable settlement-vault coldkey and
+  an immutable reserve-sink coldkey; version 2 leaves it unmodified and adds **vault2** and **`STSettlement2`**
+  beside it. Custody is physically separated from upgradeable policy. **Not** the validator (§9–§10).
 - **`D_n` / `Q_n` / `ŵ_n`** — NO's epoch deposit total (from the event log) / its consensus‑measured pool
   quality / its resulting validator‑computed weight (∝ `implied_usage_n × Q_n`, §8.1).
 - **Validated path** — a completed `VALIDATOR.md` trail proof, id `keccak256(trail_id‖vpk‖server_key_id)`;
   self‑proving (NO `FINAL` + validator `vpk` sigs), verified via `0x402`.
 - **Epoch (7 d)** — application settlement period; **tempo (360 blk)** — chain weight/emission cadence.
+- **Version 2 (v2) / `firstEpoch` / E_s** — the second version of payout settlement (`VERSION2-FINAL.md`).
+  It settles a pool's epochs from its `firstEpoch`, fixed when the owner Safe registers the pool through
+  `STSettlement2`; earlier epochs settle under release 1.0 (v1). **E_s**, the switch epoch, is pool 1's
+  `firstEpoch`: the first epoch that starts at least two days after the last activation gate passes (§16.4).
+- **vault2 (`STSettlementVault2`)** — the immutable v2 custody contract. Its coldkey owns the v2 pool hotkey
+  and the escrow hotkey; it snapshots each epoch's funding, holds the pending root and every finalized root,
+  runs challenges and demands, enforces the 14,400-block challenge window, and pays claims. Its guarantees
+  hold whatever `STSettlement2` does (`VERSION2-FINAL.md` §4.2).
+- **`STSettlement2`** — the owner-upgradeable (UUPS) v2 settlement coordinator beside the release 1.0 set. It
+  reads operators, windows and pause from the v1 coordinator, holds the auditor set and approvals, and drives
+  close, commit and finalize into vault2; `settlementAt(noId, epoch)` names the vault and pool hotkey that
+  settle an epoch.
+- **Ledger (header, chunks)** — a v2 root's published, content-addressed objects: a canonical JSON
+  **header**, whose sha256 is committed on chain as `ledgerHash` and which lists every chunk by hash;
+  **provider chunks** of 57-byte rows per covered epoch; and **account chunks** of 48-byte
+  `coldkey ‖ cumulative` rows. Served at `GET /sn/ledger/object` and retained by the validator.
+- **Account / cumulative / claimed watermark** — an **account** is one payout coldkey in one pool, at a fixed
+  position in the pool's ledger. Its **cumulative** is the total rao that v2 roots have credited to it; it
+  never decreases or expires. vault2's **`claimed` watermark** is the amount already paid, and the claimable
+  amount is the latest finalized cumulative minus `claimed`. A claim pays `cumulative − claimed` to the
+  account's coldkey, whoever sends it, and raises `claimed` to `cumulative`.
+- **Sum tree** — the position-binding Merkle tree a v2 root commits (`urnetwork-ledger-sum-tree-v1`). Each
+  node hashes both children's hashes and value sums, so the root binds the pool total, and a claim proof of
+  `d` `(hash, sum)` siblings proves an account's coldkey and cumulative at its index.
+- **Pending root / finalized root** — a pool has at most one **pending root**. Committed by the operator's
+  root signer for an epoch `e`, it is deleted by a successful challenge, can be replaced by the next commit if
+  it is still unfinalized once `end(e+1)` passes, and finalizes once a quorum of auditors has approved it,
+  14,400 blocks have passed since its commit and no demand is open. vault2 keeps every **finalized root**;
+  claims verify against them.
+- **Auditor** — an owner-admitted EVM address (at most 16, with a quorum; at launch only the validator's,
+  quorum 1) that audits a pending root's ledger and approves the exact root for epoch `e` with
+  `approveDistribution` before `end(e+1)`.
+- **Challenge (`checkPath`) / demand (`demandPath`)** — while a root is pending, anyone holding its tree can
+  **challenge** it by opening its path at an index of the latest finalized root; a lowered value, a changed
+  coldkey or an inconsistent node deletes it. Anyone without the tree can instead **demand** that opening on
+  chain; the root cannot finalize until the operator answers with a clean `checkPath`, which a withheld or
+  garbage node never allows.
+- **Carry** — release 1.0: an expired or unallocated remainder, or a missed root's funding, folded into the
+  same NO's next finalized entitlement (§8.3). Version 2: within one root, the funding of a covered epoch
+  with no eligible usage or with inputs declared unrecoverable, allocated with the next covered epoch that has
+  eligible usage (`VERSION2-FINAL.md` §6.4). Release 1.0's remaining carry reaches vault2 through the phase C
+  sweep.
+- **Payout list / `share_bps` / claim expiry (release 1.0)** — for epochs before E_s, the NO's per-epoch
+  `payoutRoot` over `(coldkey, share_bps)` leaves allocating exactly 10,000 bps; a leaf claims
+  `share_bps × total / 10,000` of that epoch's entitlement, and the unclaimed remainder expires after the
+  snapshotted TTL+grace into carry (§8.2–8.3, §11.2). Version 2 replaces them with accounts that never
+  expire.
 
 ---
 
@@ -1880,4 +2358,5 @@ against finney at the Phase‑E mainnet promotion.)*
 (D25–D28), v0.3 deposits-as-buybacks (locked, dividend-compounding reserve; miner pay = emission-only; §7.4,
 §12.4; D23), and the v0.2 two-tier miner side (pool on-ramp + direct top-level miners; §8.4–8.5, §10, §11.4,
 §14; D16–D20). This document fixes the architecture and the formulas; the next artifacts are the contract
-source, the chain‑config script, and the operator/validator reference daemons (§16).*
+source, the chain‑config script, and the operator/validator reference daemons (§16). Version 2 payout
+settlement, for epochs from E_s, is specified in `VERSION2-FINAL.md`.*
