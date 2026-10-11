@@ -141,6 +141,7 @@ type txRequest struct {
 	from            common.Address
 	key             *ecdsa.PrivateKey
 	calldata        []byte
+	value           *big.Int // nil sends none and omits it from the preflight
 	nonceFloor      uint64
 	gasLimit        uint64 // 0 = estimate + 20% headroom
 	dryRun          bool
@@ -164,7 +165,7 @@ func runTx(
 	req txRequest,
 	printIntent func(gasEst uint64, gasErr error),
 ) (*types.Receipt, error) {
-	msg := ethereum.CallMsg{From: req.from, To: &req.contract, Data: req.calldata}
+	msg := ethereum.CallMsg{From: req.from, To: &req.contract, Data: req.calldata, Value: req.value}
 	if _, err := retryOnchainRead(ctx, func(ctx context.Context) ([]byte, error) {
 		cctx, cancel := context.WithTimeout(ctx, callTimeout)
 		defer cancel()
@@ -220,7 +221,7 @@ func runTx(
 		GasPrice: gasPrice,
 		Gas:      gasLimit,
 		To:       &req.contract,
-		Value:    big.NewInt(0),
+		Value:    req.value, // NewTx copies nil as zero
 		Data:     req.calldata,
 	})
 	signed, err := types.SignTx(tx, types.LatestSignerForChainID(chainID), req.key)
