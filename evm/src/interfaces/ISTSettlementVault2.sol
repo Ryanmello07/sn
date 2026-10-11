@@ -70,11 +70,16 @@ interface ISTSettlementVault2 {
         bytes32 ledgerHash,
         uint64 replacedSeq
     );
-    event PathDemanded(uint256 indexed noId, uint64 indexed seq, uint256 index, address demander);
-    event PathAnswered(uint256 indexed noId, uint64 indexed seq, uint256 index, address answerer);
+    event PathDemanded(
+        uint256 indexed noId, uint64 indexed seq, uint256 rootIndex, uint256 index, address demander
+    );
+    event PathAnswered(
+        uint256 indexed noId, uint64 indexed seq, uint256 rootIndex, uint256 index, address answerer
+    );
     event DistributionDeleted(
         uint256 indexed noId,
         uint64 indexed seq,
+        uint256 rootIndex,
         uint256 index,
         LedgerTree.Fault fault,
         uint256 level,
@@ -167,19 +172,23 @@ interface ISTSettlementVault2 {
         returns (uint64 seq);
 
     /// A, payable with exactly demandFeeWei, inside the challenge window.
-    /// `account` must be proven against the latest finalized root, so only an
-    /// existing account can be demanded.
+    /// `account` must be proven against the finalized root `rootIndex` (any
+    /// finalized root, so a withheld newest tree cannot stop demands), and
+    /// only an existing account can be demanded.
     function demandPath(
         uint256 noId,
+        uint256 rootIndex,
         LedgerTree.Account calldata account,
         LedgerTree.ProofNode[] calldata oldProof
     ) external payable;
 
-    /// A. `account` is the latest finalized root's account with `oldProof`
-    /// against it; `newPath` opens the pending root along account.index.
-    /// A fault deletes the pending root; a clean opening answers an open demand.
+    /// A. `account` is an account of the finalized root `rootIndex` with
+    /// `oldProof` against it; `newPath` opens the pending root along
+    /// account.index. A fault deletes the pending root; a clean opening
+    /// answers the open demand at (seq, rootIndex, index).
     function checkPath(
         uint256 noId,
+        uint256 rootIndex,
         LedgerTree.Account calldata account,
         LedgerTree.ProofNode[] calldata oldProof,
         LedgerTree.PathNode[] calldata newPath
@@ -223,7 +232,10 @@ interface ISTSettlementVault2 {
     function pending(uint256 noId) external view returns (Pending memory);
     function commitSeq(uint256 noId) external view returns (uint64);
     function lastCommitBlock(uint256 noId) external view returns (uint64);
-    function demanded(uint256 noId, uint64 seq, uint256 index) external view returns (DemandState);
+    function demanded(uint256 noId, uint64 seq, uint256 rootIndex, uint256 index)
+        external
+        view
+        returns (DemandState);
     function claimed(uint256 noId, uint256 index) external view returns (uint256);
 
     function totalCaptured() external view returns (uint256);
