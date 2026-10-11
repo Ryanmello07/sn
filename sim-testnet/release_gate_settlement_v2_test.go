@@ -152,8 +152,8 @@ func verifyReleaseGateSolidityCoverage(script string) error {
 }
 
 // I-1 to I-6 (§15.5): the deep profile exists, the test file sizes its
-// campaign, and the Solidity phase runs it last, after the plain suite and the
-// release build's checks.
+// campaign, and the Solidity phase runs it once, right after the plain suite
+// on the release build.
 func verifyReleaseGateV2InvariantCampaign(script, foundry, invariant string) error {
 	if !regexp.MustCompile(`(?m)^\[profile\.v2_invariant\.invariant\]$`).MatchString(foundry) {
 		return errors.New("foundry.toml has no v2_invariant invariant profile")
@@ -167,11 +167,9 @@ func verifyReleaseGateV2InvariantCampaign(script, foundry, invariant string) err
 	if err != nil {
 		return err
 	}
-	last := len(commands) - 1
-	plain := slices.Index(commands, "forge test --summary")
-	binding := slices.Index(commands, `"$sn_repo/stabi/generate.sh" --check --artifacts "$FOUNDRY_OUT"`)
-	if last < 1 || commands[last] != releaseGateV2InvariantCommand || commands[last-1] != `cd "$sn_repo/evm"` || plain < 0 || binding < plain || binding >= last-1 {
-		return errors.New("the Solidity phase does not end with the deep v2 invariant campaign")
+	prefix := []string{`cd "$sn_repo/evm"`, "forge fmt --check", "forge build --deny warnings --sizes", "forge test --summary", releaseGateV2InvariantCommand}
+	if len(commands) < len(prefix) || !slices.Equal(commands[:len(prefix)], prefix) {
+		return errors.New("the Solidity phase does not run the deep v2 invariant campaign after the plain suite")
 	}
 	count := 0
 	for _, line := range strings.Split(script, "\n") {
@@ -205,6 +203,23 @@ func releaseGateLedgerV2ServerGroup(t *testing.T) releaseEvidenceV2GateGroup {
 		commands: []string{
 			"go test " + packages + ` -run "$ledger_v2_tests" -count=1`,
 			"go test -race " + packages + ` -run "$ledger_v2_tests" -count=1`,
+		},
+	}
+}
+
+// The monitor's contracts of the published migration suffix, to which each new
+// migration, settlement v2's among them, adds its schema, on the gate's
+// private services in both modes.
+func releaseGateMigrationSuffixGroup(t *testing.T) releaseEvidenceV2GateGroup {
+	t.Helper()
+	return releaseEvidenceV2GateGroup{
+		phase: "server_db", job: "server-db", variable: "migration_suffix_tests",
+		alternatives: "MigrationsCurrentSuffix",
+		packages:     []string{"./monitor"},
+		sources:      map[string][]string{"./monitor": releaseEvidenceV2GateSources(t, []string{"../../server/monitor/migration_current_suffix_test.go"})},
+		commands: []string{
+			`go test ./monitor -run "$migration_suffix_tests" -count=1`,
+			`go test -race ./monitor -run "$migration_suffix_tests" -count=1`,
 		},
 	}
 }
@@ -396,14 +411,14 @@ func TestReleaseGateSettlementV2InvariantCampaignRejectsDrift(t *testing.T) {
 			t.Fatalf("invariant campaign accepted %s", change.name)
 		}
 	}
-	const campaign = "\n  cd \"$sn_repo/evm\"\n  " + releaseGateV2InvariantCommand + "\n"
-	moved := strings.Replace(script, campaign, "\n", 1)
-	moved = strings.Replace(moved, "  forge test --summary\n", "  "+releaseGateV2InvariantCommand+"\n  forge test --summary\n", 1)
-	if strings.Count(script, campaign) != 1 || strings.Count(moved, releaseGateV2InvariantCommand) != 1 {
+	const campaign = "  " + releaseGateV2InvariantCommand + "\n"
+	moved := strings.Replace(script, campaign, "", 1)
+	moved = strings.Replace(moved, "  forge build --deny warnings --sizes\n", campaign+"  forge build --deny warnings --sizes\n", 1)
+	if strings.Count(script, campaign) != 1 || strings.Count(moved, campaign) != 1 || moved == script {
 		t.Fatal("the moved campaign names no unique text")
 	}
 	if err := verifyReleaseGateV2InvariantCampaign(moved, foundry, invariant); err == nil {
-		t.Fatal("invariant campaign accepted a run before the plain suite and the release build's checks")
+		t.Fatal("invariant campaign accepted a run before the release build and the plain suite")
 	}
 	for _, change := range []struct{ name, foundry, invariant string }{
 		{"no profile", strings.Replace(foundry, "[profile.v2_invariant.invariant]", "[profile.default.invariant.v2]", 1), invariant},
@@ -421,42 +436,47 @@ func TestReleaseGateSettlementV2InvariantCampaignRejectsDrift(t *testing.T) {
 
 func TestReleaseGateSettlementV2RunsTheOperatorSuites(t *testing.T) {
 	t.Parallel()
-	if err := verifyReleaseEvidenceV2GateGroup(readReleaseGateLocalScript(t), releaseGateLedgerV2ServerGroup(t)); err != nil {
-		t.Fatal(err)
+	script := readReleaseGateLocalScript(t)
+	for _, group := range []releaseEvidenceV2GateGroup{releaseGateLedgerV2ServerGroup(t), releaseGateMigrationSuffixGroup(t)} {
+		if err := verifyReleaseEvidenceV2GateGroup(script, group); err != nil {
+			t.Fatalf("%s: %v", group.variable, err)
+		}
 	}
 }
 
-// Removing a family, a mode or the admitted phase fails, as does a v2 root
-// that escapes the selector.
+// Removing a family, a mode or the admitted phase fails, as does a root of a
+// v2 or suffix contract test file that escapes its selector.
 func TestReleaseGateSettlementV2OperatorSuitesRejectOmissions(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
-	group := releaseGateLedgerV2ServerGroup(t)
-	selector, err := releaseConnectPolicySelectorAssignment(script, group.variable)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, omitted := range strings.Split(group.alternatives, "|") {
-		var retained []string
-		for _, value := range strings.Split(group.alternatives, "|") {
-			if value != omitted {
-				retained = append(retained, value)
+	for _, group := range []releaseEvidenceV2GateGroup{releaseGateLedgerV2ServerGroup(t), releaseGateMigrationSuffixGroup(t)} {
+		selector, err := releaseConnectPolicySelectorAssignment(script, group.variable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, omitted := range strings.Split(group.alternatives, "|") {
+			var retained []string
+			for _, value := range strings.Split(group.alternatives, "|") {
+				if value != omitted {
+					retained = append(retained, value)
+				}
+			}
+			changed := strings.Replace(script, group.variable+"='"+selector+"'", group.variable+"='^Test("+strings.Join(retained, "|")+")'", 1)
+			if err := verifyReleaseEvidenceV2GateGroup(changed, group); err == nil {
+				t.Fatalf("%s accepted the removed family %s", group.variable, omitted)
 			}
 		}
-		changed := strings.Replace(script, group.variable+"='"+selector+"'", group.variable+"='^Test("+strings.Join(retained, "|")+")'", 1)
-		if err := verifyReleaseEvidenceV2GateGroup(changed, group); err == nil {
-			t.Fatalf("operator v2 suites accepted the removed family %s", omitted)
+		for _, command := range append(slices.Clone(group.commands), "release_gate_start server-db release_phase_server_db") {
+			if err := verifyReleaseEvidenceV2GateGroup(strings.Replace(script, command, "# omitted: "+command, 1), group); err == nil {
+				t.Fatalf("%s accepted the removed command %s", group.variable, command)
+			}
 		}
-	}
-	for _, command := range append(slices.Clone(group.commands), "release_gate_start server-db release_phase_server_db") {
-		if err := verifyReleaseEvidenceV2GateGroup(strings.Replace(script, command, "# omitted: "+command, 1), group); err == nil {
-			t.Fatalf("operator v2 suites accepted the removed command %s", command)
+		escaped := group
+		escaped.sources = maps.Clone(group.sources)
+		packagePath := group.packages[len(group.packages)-1]
+		escaped.sources[packagePath] = append(slices.Clone(group.sources[packagePath]), "package fixture\nfunc TestOmittedSettlementV2Root(t *testing.T) {}\n")
+		if err := verifyReleaseEvidenceV2GateGroup(script, escaped); err == nil {
+			t.Fatalf("%s accepted a root outside its selector", group.variable)
 		}
-	}
-	escaped := group
-	escaped.sources = maps.Clone(group.sources)
-	escaped.sources["./controller"] = append(slices.Clone(group.sources["./controller"]), "package controller\nfunc TestOmittedSettlementV2Root(t *testing.T) {}\n")
-	if err := verifyReleaseEvidenceV2GateGroup(script, escaped); err == nil {
-		t.Fatal("operator v2 suites accepted a root outside the selector")
 	}
 }

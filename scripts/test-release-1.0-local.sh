@@ -194,6 +194,10 @@ release_phase_solidity() {
   forge fmt --check
   forge build --deny warnings --sizes
   forge test --summary
+  # I-1 to I-6 (VERSION2-FINAL.md §15.5): the plain suite ran the settlement v2
+  # lifecycle campaign short; its own profile runs it deep, with metrics, on
+  # the same build.
+  FOUNDRY_PROFILE=v2_invariant forge test --match-path test/V2Invariant.t.sol
 
   echo "[release-1.0] generated contract payload and storage-layout lock"
   cd "$sn_repo"
@@ -205,13 +209,6 @@ release_phase_solidity() {
   go run ./sim-testnet/gencontracts --check "$FOUNDRY_OUT" sim-testnet/contracts_gen.go
   echo "[release-1.0] generated ABI and Go binding freshness"
   "$sn_repo/stabi/generate.sh" --check --artifacts "$FOUNDRY_OUT"
-
-  # I-1 to I-6 (VERSION2-FINAL.md §15.5): the plain suite above ran the
-  # settlement v2 lifecycle campaign short; its own profile runs it deep, with
-  # metrics, on the same build.
-  echo "[release-1.0] settlement v2 lifecycle invariants, deep campaign"
-  cd "$sn_repo/evm"
-  FOUNDRY_PROFILE=v2_invariant forge test --match-path test/V2Invariant.t.sol
 }
 release_gate_start solidity release_phase_solidity
 
@@ -445,6 +442,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2)'
     go test . ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
     go test -race . ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    # The monitor's schema contracts of the published migration suffix, from
+    # 794 on, where settlement v2's migrations are appended, read a real
+    # database's catalog.
+    migration_suffix_tests='^Test(MigrationsCurrentSuffix)'
+    go test ./monitor -run "$migration_suffix_tests" -count=1
+    go test -race ./monitor -run "$migration_suffix_tests" -count=1
     # Run the complete operator proxy surface. Its real network/DB roots have a
     # measured lower bound above Go's implicit ten-minute package deadline, so
     # the explicit deadline supplies deterministic headroom without changing
