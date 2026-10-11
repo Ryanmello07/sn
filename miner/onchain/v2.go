@@ -46,7 +46,7 @@ var parsedVault2ABI = sync.OnceValues(func() (*abi.ABI, error) {
 // v2Random is the randomness of the demand sample; tests replace it.
 var v2Random io.Reader = rand.Reader
 
-// v2HTTP reads the ledger endpoints.
+// v2HTTP reads the ledger endpoints; an object of several MiB has minutes.
 var v2HTTP = &http.Client{Timeout: 5 * time.Minute}
 
 // v2AccountReplyLimit bounds GET /sn/ledger/account: one entry per pool.
@@ -199,8 +199,11 @@ func v2Get(ctx context.Context, u *url.URL) (io.ReadCloser, error) {
 	return response.Body, nil
 }
 
-// fetchV2Accounts reads the coldkey's accounts from GET /sn/ledger/account.
+// fetchV2Accounts reads the coldkey's accounts from GET /sn/ledger/account,
+// within the time of a chain call.
 func fetchV2Accounts(ctx context.Context, api *url.URL, coldkey [32]byte) ([]v2Account, error) {
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
 	u := api.JoinPath("sn", "ledger", "account")
 	u.RawQuery = url.Values{"coldkey": {fmt.Sprintf("0x%x", coldkey)}}.Encode()
 	body, err := v2Get(ctx, u)
