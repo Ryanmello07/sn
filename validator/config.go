@@ -503,9 +503,6 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 		return errors.New("settlement_vault is missing or zero")
 	}
 	if c.SettlementV2 != nil {
-		if !production {
-			return errors.New("settlement_v2 requires an authenticated production schema 3 config")
-		}
 		if err := c.SettlementV2.validate(); err != nil {
 			return err
 		}

@@ -157,8 +157,6 @@ func (self *releaseRuntimeV2) authenticatedStartupEpoch() (uint64, error) {
 // The independent refresh worker stays dormant while an original native
 // outcome is unresolved. Once requested, current identity/stake and real
 // publication must both pass before trails or fresh native preparation begin.
-// The first finalized snapshot also pins the settlement v2 identity check, so
-// a current EVM outage never delays recovery of original signatures.
 func (self *ReleaseSteerer) runProductionPreparationAndRefresh(ctx context.Context) error {
 	if self.runtimeV2 == nil || self.runtimeV2.preparation == nil {
 		return errors.New("production preparation worker has no runtime owner")
@@ -187,9 +185,6 @@ func (self *ReleaseSteerer) runProductionPreparationAndRefresh(ctx context.Conte
 			var err error
 			snapshot, err = self.chain.ReleaseSnapshotContext(attempt)
 			if err != nil || !first {
-				return err
-			}
-			if err := verifyReleaseSettlementV2Context(attempt, self.chain, self.cfg, snapshot.BlockNumber, snapshot.BlockHash); err != nil {
 				return err
 			}
 			uid, found, err := self.chain.FindUidByHotkeyAtHashContext(attempt, snapshot.BlockNumber, snapshot.BlockHash, self.cfg.Netuid, self.hotkey.PublicKey())

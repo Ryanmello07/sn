@@ -10,6 +10,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"maps"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -144,13 +146,22 @@ func TestSettlementV2ConfigRefusesMalformedAddresses(t *testing.T) {
 	}
 }
 
-// VA-6: only the authenticated production config can adopt settlement v2.
-func TestSettlementV2ConfigRequiresProductionSchema(t *testing.T) {
+// VA-6: an unsigned legacy config carries the block under the same spelling
+// rule; only production's signed lineage adds the successor class.
+func TestSettlementV2ConfigLoadsInLegacySchema(t *testing.T) {
 	cfg := validReleaseConfig(t)
 	block := settlementV2TestBlock
 	cfg.SettlementV2 = &block
-	if _, err := LoadReleaseConfig(writeReleaseConfig(t, cfg)); err == nil || !strings.Contains(err.Error(), "settlement_v2 requires an authenticated production schema 3 config") {
-		t.Fatal("a legacy config adopted settlement v2", err)
+	loaded, err := LoadReleaseConfig(writeReleaseConfig(t, cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.SchemaVersion != ReleaseValidatorSchemaVersion || releaseSettlementV2Addresses(loaded) != (SettlementV2Addresses{Settlement: common.HexToAddress(block.Settlement), Vault: common.HexToAddress(block.Vault)}) {
+		t.Fatal("legacy config does not name its settlement_v2 addresses")
+	}
+	cfg.SettlementV2 = &ReleaseSettlementV2Config{Settlement: common.HexToAddress(block.Settlement).Hex(), Vault: block.Vault}
+	if _, err := LoadReleaseConfig(writeReleaseConfig(t, cfg)); err == nil || !strings.Contains(err.Error(), "settlement_v2.settlement must be a nonzero lowercase 0x address") {
+		t.Fatal("legacy config admitted a checksum-case address", err)
 	}
 }
 
@@ -252,5 +263,58 @@ func TestSettlementV2IdentityCheckRefusesEachMismatch(t *testing.T) {
 	reader = &settlementV2TestReader{answers: settlementV2TestAnswers(coordinator), err: canary}
 	if err := verifyReleaseSettlementV2Context(t.Context(), reader, cfg, 77, [32]byte{0x77}); !errors.Is(err, canary) || len(reader.calls) != 1 {
 		t.Fatal("a failed read was not returned at the first getter", err)
+	}
+}
+
+// Replaces the settlement v2 views the runtime fixture's chain serves.
+func (self *releaseRuntimeV2ChainTestFixture) serveSettlementV2(views map[string][]byte) {
+	self.settlementV2Lock.Lock()
+	defer self.settlementV2Lock.Unlock()
+	self.settlementV2 = views
+}
+
+// The settlement v2 views the runtime fixture's chain has served.
+func (self *releaseRuntimeV2ChainTestFixture) settlementV2ReadCount() int {
+	self.settlementV2Lock.Lock()
+	defer self.settlementV2Lock.Unlock()
+	return self.settlementV2Reads
+}
+
+// VA-6: the runtime's first advance confirms the block at its finalized
+// snapshot before it closes anything. A mismatch stops it with no epoch closed
+// and nothing published; the same runtime checks again at its next advance,
+// and once the check passes it is not repeated.
+func TestSettlementV2RuntimeConfirmsIdentityBeforeClosing(t *testing.T) {
+	block := settlementV2TestBlock
+	fixture := newReleaseRuntimeV2TestFixtureWithBounds(t, nil, func(cfg *ReleaseConfig) { cfg.SettlementV2 = &block })
+	honest := settlementV2TestAnswers(fixture.startup.cfg.Coordinator)
+	other := maps.Clone(honest)
+	other[settlementV2TestKey(block.Settlement, "vault()")] = settlementV2TestWord("0x5e77000000000000000000000000000000000003")
+	snapshot := &ReleaseSnapshot{Epoch: big.NewInt(9), BlockNumber: 2001, BlockHash: fixture.startup.blocks[2001]}
+	before := fixture.runtime.history.current[fixture.runtime.history.participants[0].NoID].epoch
+	fixture.evm.serveSettlementV2(other)
+	if err := fixture.runtime.advance(t.Context(), snapshot); err == nil || !strings.Contains(err.Error(), "settlement_v2 STSettlement2.vault() at block 2001 returned") {
+		t.Fatalf("runtime admitted another vault or stopped for another cause: %v", err)
+	}
+	for _, participant := range fixture.runtime.history.participants {
+		if fixture.runtime.history.current[participant.NoID].epoch != before {
+			t.Fatal("a refused identity closed an epoch")
+		}
+	}
+	for _, store := range fixture.stores {
+		if len(store.counts()) != 0 {
+			t.Fatal("a refused identity published evidence")
+		}
+	}
+	fixture.evm.serveSettlementV2(honest)
+	if err := fixture.runtime.advance(t.Context(), snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.runtime.history.current[fixture.runtime.history.participants[0].NoID].epoch != 9 || fixture.evm.settlementV2ReadCount() != 4 {
+		t.Fatal("the confirmed runtime did not close its epochs after one failed and three good reads", fixture.evm.settlementV2ReadCount())
+	}
+	fixture.evm.serveSettlementV2(other)
+	if err := fixture.runtime.advance(t.Context(), snapshot); err != nil || fixture.evm.settlementV2ReadCount() != 4 {
+		t.Fatal("a confirmed runtime checked its identity again", err)
 	}
 }
