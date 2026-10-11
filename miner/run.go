@@ -133,6 +133,9 @@ Usage:
     provider claim-daemon --config=<path>
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
+    provider claim-daemon-v2 --config=<path> [--v1-config=<path>] [--threshold-rao=<rao>] [--claim-now]
+        [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
+        [-v...]
     provider fleet manifest --manifest=<path>
         [-v...]
     provider fleet register --manifest=<path> --hotkey_seed_file=<path> --coldkey_seed_file=<path> --substrate=<ws_url>...
@@ -187,6 +190,12 @@ Options:
 	--allow-client-registration       Explicitly permit a new durable provider client operation; never replaces retained identity.
 	--adopt-legacy-provider-key       Assert the retained legacy provider key is original; refresh only, no new client allocation.
 	--config=<path>                    Strict release-1.0 daemon/component configuration.
+	--v1-config=<path>                 claim-daemon-v2: also run the unchanged v1 claim daemon of this configuration in
+	                                   the same process; both use one relayer key and share its nonce admission.
+	--threshold-rao=<rao>              claim-daemon-v2: claim an account once its claimable balance reaches this many
+	                                   rao. Default 1900000000 (1.9 α, so a claim's planning gas is at most 10%% of it);
+	                                   never below the 15200000-rao (0.0152 α) transfer floor.
+	--claim-now                        claim-daemon-v2: on start, claim every account with anything claimable, once.
     --connect_url=<connect_url>      Specify a custom connect URL to use.
     <api_url>                        API URL to save (https://, or http:// only for an explicit loopback host).
     <connect_url>                    Connect URL to save (wss://, or ws:// only for an explicit loopback host).
@@ -348,6 +357,10 @@ func Run(args []string) {
 		claim(opts)
 	} else if claimDaemon, _ := opts.Bool("claim-daemon"); claimDaemon {
 		if err := runClaimDaemon(minerStorageContext(context.Background(), opts), fleetOpt(opts, "--config")); err != nil {
+			panic(err)
+		}
+	} else if claimDaemonV2, _ := opts.Bool("claim-daemon-v2"); claimDaemonV2 {
+		if err := runClaimDaemonV2Command(minerStorageContext(context.Background(), opts), opts); err != nil {
 			panic(err)
 		}
 	} else if fleet_, _ := opts.Bool("fleet"); fleet_ {
