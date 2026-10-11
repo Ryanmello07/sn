@@ -35,9 +35,10 @@ interface ISTSettlementVault2 {
         uint64 openDemands;
     }
 
-    /// @notice A path demand on one index of the pending root: none, open
-    /// until a clean opening answers it, or answered. Each index can be
-    /// demanded once per pending root.
+    /// @notice A path demand on one account of a finalized root, opened in
+    /// the pending root: none, open until a clean opening answers it, or
+    /// answered. Each account of each finalized root can be demanded once per
+    /// pending root.
     enum DemandState {
         None,
         Open,

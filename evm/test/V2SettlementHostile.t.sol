@@ -107,7 +107,7 @@ contract V2SettlementHostileTest is V2StackBase {
     function test_S10_aHostileUpgradeCannotFinalizeWithAnOpenDemand() public {
         _captureNext();
         uint64 seq = _commitHostile(NEXT, _honest(), 3);
-        _demandV2(NO1, _root0(), _account(1, BOB, 400));
+        _demandV2(NO1, 0, _root0(), _account(1, BOB, 400));
 
         vm.roll(block.number + WINDOW * 10);
         vm.expectRevert(ISTSettlementVault2.DemandOpen.selector);
@@ -174,7 +174,7 @@ contract V2SettlementHostileTest is V2StackBase {
         _commitHostile(NEXT, lowered, 3);
         uint256 committed = block.number;
         LedgerTree.Fault fault = vault2.checkPath(
-            NO1, _account(0, ALICE, 600), V2TreeHelper.proof(_root0(), 0), V2TreeHelper.path(lowered, 0)
+            NO1, 0, _account(0, ALICE, 600), V2TreeHelper.proof(_root0(), 0), V2TreeHelper.path(lowered, 0)
         );
         assertEq(uint8(fault), uint8(LedgerTree.Fault.LowerValue));
         assertEq(vault2.pending(NO1).seq, 0);
@@ -244,10 +244,10 @@ contract V2SettlementHostileTest is V2StackBase {
         vm.expectRevert(ISTSettlementVault2.ChallengeWindowOpen.selector);
         _forwardFinalize();
         vm.expectEmit(address(vault2));
-        emit ISTSettlementVault2.DistributionDeleted(NO1, seq, 0, LedgerTree.Fault.WrongLeaf, 0, stranger);
+        emit ISTSettlementVault2.DistributionDeleted(NO1, seq, 0, 0, LedgerTree.Fault.WrongLeaf, 0, stranger);
         vm.prank(stranger);
         vault2.checkPath(
-            NO1, _account(0, ALICE, 600), V2TreeHelper.proof(_root0(), 0), V2TreeHelper.path(moved, 0)
+            NO1, 0, _account(0, ALICE, 600), V2TreeHelper.proof(_root0(), 0), V2TreeHelper.path(moved, 0)
         );
         vm.roll(block.number + WINDOW);
         vm.expectRevert(ISTSettlementVault2.NoPendingRoot.selector);

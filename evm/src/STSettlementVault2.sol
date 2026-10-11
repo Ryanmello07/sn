@@ -50,8 +50,12 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     mapping(uint256 noId => Pending root) private _pending;
     mapping(uint256 noId => uint64 seq) public commitSeq;
     mapping(uint256 noId => uint64 blockNumber) public lastCommitBlock;
-    mapping(uint256 noId => mapping(uint64 seq => mapping(uint256 index => DemandState state))) public
-        demanded;
+    mapping(
+        uint256 noId
+            => mapping(
+            uint64 seq => mapping(uint256 rootIndex => mapping(uint256 index => DemandState state))
+        )
+    ) public demanded;
     mapping(uint256 noId => mapping(uint256 index => uint256 amount)) public claimed;
 
     uint256 public totalCaptured;
@@ -247,58 +251,63 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     }
 
     /// @notice Demands, during the challenge window, the on-chain opening in
-    /// the pending root of an account proven against the latest finalized
-    /// root. The pending root cannot finalize until checkPath answers it, so a
-    /// withheld or garbage tree blocks itself (§2.2); only a provable account
-    /// can be demanded, so an honest successor can always answer. The fee
-    /// stays in this vault.
+    /// the pending root of an account proven against the finalized root
+    /// `rootIndex`. Any finalized root will do, so withholding the newest tree
+    /// cannot stop demands on the accounts of an older one (§4.2 G2). The
+    /// pending root cannot finalize until checkPath answers it, so a withheld
+    /// or garbage tree blocks itself (§2.2); only a provable account can be
+    /// demanded, so an honest successor, which keeps every account at its
+    /// value or more (§6.1), can always answer. Each account of each finalized
+    /// root can be demanded once per pending root. The fee stays in this vault.
     function demandPath(
         uint256 noId,
+        uint256 rootIndex,
         LedgerTree.Account calldata account,
         LedgerTree.ProofNode[] calldata oldProof
     ) external payable nonReentrant {
         if (msg.value != demandFeeWei) revert InvalidDemandFee();
-        (Pending storage next, Root storage previous) = _disputedRoots(noId);
+        (Pending storage next, Root storage previous) = _disputedRoots(noId, rootIndex);
         if (block.number >= uint256(next.committedBlock) + CHALLENGE_BLOCKS) revert ChallengeWindowClosed();
         _requireProven(previous, account, oldProof);
         uint64 seq = next.seq;
         uint256 index = account.index;
-        mapping(uint256 => DemandState) storage demands = demanded[noId][seq];
+        mapping(uint256 => DemandState) storage demands = demanded[noId][seq][rootIndex];
         if (demands[index] != DemandState.None) revert AlreadyDemanded();
         demands[index] = DemandState.Open;
         next.openDemands++;
-        emit PathDemanded(noId, seq, index, msg.sender);
+        emit PathDemanded(noId, seq, rootIndex, index, msg.sender);
     }
 
-    /// @notice The §6.5 path check of a latest finalized account against the
-    /// pending root. A fault deletes the pending root; an opening with no fault
-    /// answers an open demand on the account; anything else reverts. Works at
-    /// any time while the root is pending, and never checks backing, so a
-    /// deficit cannot freeze disputes.
+    /// @notice The §6.5 path check of an account of the finalized root
+    /// `rootIndex` against the pending root. A fault deletes the pending root;
+    /// an opening with no fault answers an open demand on that account of that
+    /// root; anything else reverts. Works at any time while the root is
+    /// pending, and never checks backing, so a deficit cannot freeze disputes.
     function checkPath(
         uint256 noId,
+        uint256 rootIndex,
         LedgerTree.Account calldata account,
         LedgerTree.ProofNode[] calldata oldProof,
         LedgerTree.PathNode[] calldata newPath
     ) external nonReentrant returns (LedgerTree.Fault fault) {
-        (Pending storage next, Root storage previous) = _disputedRoots(noId);
+        (Pending storage next, Root storage previous) = _disputedRoots(noId, rootIndex);
         _requireProven(previous, account, oldProof);
         uint64 seq = next.seq;
         uint256 index = account.index;
-        // The pending root holds at least as many accounts as the finalized
-        // one (commitPending), so `index` is inside it.
+        // Leaf counts never decrease from one root to the next (commitPending),
+        // so `index` is inside the pending root.
         uint256 level;
         (fault, level) = LedgerTree.walkPath(next.root, next.total, next.leafCount, account, newPath);
         if (fault != LedgerTree.Fault.None) {
             delete _pending[noId];
-            emit DistributionDeleted(noId, seq, index, fault, level, msg.sender);
+            emit DistributionDeleted(noId, seq, rootIndex, index, fault, level, msg.sender);
             return fault;
         }
-        mapping(uint256 => DemandState) storage demands = demanded[noId][seq];
+        mapping(uint256 => DemandState) storage demands = demanded[noId][seq][rootIndex];
         if (demands[index] != DemandState.Open) revert NoFault();
         demands[index] = DemandState.Answered;
         next.openDemands--;
-        emit PathAnswered(noId, seq, index, msg.sender);
+        emit PathAnswered(noId, seq, rootIndex, index, msg.sender);
     }
 
     /// @notice Appends the pending root to the pool's finalized roots once its
@@ -484,14 +493,18 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         ) revert RuntimeAccountingMismatch();
     }
 
-    // The pool's pending root and the latest finalized root it must extend:
-    // the two roots every demand and path check is about.
-    function _disputedRoots(uint256 noId) private view returns (Pending storage next, Root storage previous) {
+    // The pool's pending root and the finalized root `rootIndex` whose
+    // accounts it must keep: the two roots a demand or path check is about.
+    function _disputedRoots(uint256 noId, uint256 rootIndex)
+        private
+        view
+        returns (Pending storage next, Root storage previous)
+    {
         next = _pending[noId];
         if (next.seq == 0) revert NoPendingRoot();
         Root[] storage history = _roots[noId];
-        if (history.length == 0) revert NoFinalizedRoot();
-        previous = history[history.length - 1];
+        if (rootIndex >= history.length) revert UnknownRoot();
+        previous = history[rootIndex];
     }
 
     // Requires `account` to be an account of the finalized root `previous`.
