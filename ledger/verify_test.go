@@ -925,3 +925,26 @@ func TestCheckAndActionNames(t *testing.T) {
 		}
 	}
 }
+
+// H1, VA-4: Faults compares published rows with any finalized root's
+// accounts, by position: an honest successor shows none against an older
+// root; a row below the older value, another coldkey or a missing row is a
+// fault, and a row lowered only below a newer value is no fault against the
+// older root.
+func TestFaultsAgainstAnyRoot(t *testing.T) {
+	s := newScenario(t)
+	older, newer := s.f.Accounts, s.p.Accounts
+	if faults := Faults(older, newer); faults != nil {
+		t.Fatalf("honest successor faults %v", faults)
+	}
+	rows := slices.Clone(newer)
+	rows[0].Cumulative.SubUint64(&older[0].Cumulative, 1)
+	rows[1].Coldkey = key(99)
+	rows[2].Cumulative = older[2].Cumulative
+	if want := []Fault{{0, merkle.LedgerFaultLowerValue}, {1, merkle.LedgerFaultWrongLeaf}}; !slices.Equal(Faults(older, rows), want) {
+		t.Fatalf("faults %v, want %v", Faults(older, rows), want)
+	}
+	if want := []Fault{{2, merkle.LedgerFaultWrongLeaf}}; len(older) != 3 || !slices.Equal(Faults(older, newer[:2]), want) {
+		t.Fatalf("missing rows fault %v, want %v", Faults(older, newer[:2]), want)
+	}
+}
