@@ -650,6 +650,11 @@ func (self *evmOwnedChain) admitCurrent(ctx context.Context, plan evmCreatePlan,
 	} else if code != "0x" {
 		return result, errors.New("CREATE address already has pending code without its canonical receipt")
 	}
+	if plan.actionIs("vault2-create") {
+		if err := self.admitVault2Create(ctx, plan, block); err != nil {
+			return result, err
+		}
+	}
 	if plan.actionIs("evidence-create") {
 		if err := self.admitEvidenceCreate(ctx, plan, block); err != nil {
 			return result, err

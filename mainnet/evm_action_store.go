@@ -27,17 +27,22 @@ const evmEvidenceActionStateSchema = "urnetwork-mainnet-evm-evidence-state-v1"
 
 // Receipt facts are reauthenticated on every online resume. Their retained hash
 // detects accidental corruption; it is neither consensus nor external custody.
+// Only the settlement v2 vault2 journal may also hold the escrow registration's
+// original bytes and attempts, which its send broadcasts back to back (A7).
 type evmActionRecord struct {
-	Schema          string            `json:"schema"`
-	ConfigHash      string            `json:"config_hash"`
-	Signed          string            `json:"signed_transaction,omitempty"`
-	TransactionHash string            `json:"transaction_hash,omitempty"`
-	Attempts        uint8             `json:"attempts"`
-	ScanNumber      uint64            `json:"scan_number"`
-	ScanHash        string            `json:"scan_hash"`
-	Receipt         *evmCreateReceipt `json:"receipt,omitempty"`
-	PredecessorHash string            `json:"predecessor_hash,omitempty"`
-	ContentHash     string            `json:"content_hash"`
+	Schema                string            `json:"schema"`
+	ConfigHash            string            `json:"config_hash"`
+	Signed                string            `json:"signed_transaction,omitempty"`
+	TransactionHash       string            `json:"transaction_hash,omitempty"`
+	Attempts              uint8             `json:"attempts"`
+	ScanNumber            uint64            `json:"scan_number"`
+	ScanHash              string            `json:"scan_hash"`
+	Receipt               *evmCreateReceipt `json:"receipt,omitempty"`
+	PredecessorHash       string            `json:"predecessor_hash,omitempty"`
+	EscrowSigned          string            `json:"escrow_signed_transaction,omitempty"`
+	EscrowTransactionHash string            `json:"escrow_transaction_hash,omitempty"`
+	EscrowAttempts        uint8             `json:"escrow_attempts,omitempty"`
+	ContentHash           string            `json:"content_hash"`
 }
 
 // The original reserve schema and content hash remain byte-for-byte compatible.
@@ -83,8 +88,11 @@ func (self evmActionRecord) validateForAction(config evmPhaseConfig, actionIndex
 	if actionIndex < 0 || actionIndex > maximum || actionIndex >= len(p.Actions) || actionIndex == 0 && self.PredecessorHash != "" || actionIndex > 0 && !planSha256(self.PredecessorHash) {
 		return errors.New("EVM journal action or prerequisite differs")
 	}
-	if self.Schema != schema || self.ConfigHash != rootObjectHash(config) || claimed != rootObjectHash(self) || self.Attempts > p.MaximumAttempts || self.ScanNumber < p.StartNativeNumber || !rootCanonicalHash(self.ScanHash) || self.ScanNumber == p.StartNativeNumber && self.ScanHash != p.StartNativeHash {
+	if self.Schema != schema || self.ConfigHash != rootObjectHash(config) || claimed != rootObjectHash(self) || uint16(self.Attempts)+uint16(self.EscrowAttempts) > uint16(p.MaximumAttempts) || self.ScanNumber < p.StartNativeNumber || !rootCanonicalHash(self.ScanHash) || self.ScanNumber == p.StartNativeNumber && self.ScanHash != p.StartNativeHash {
 		return errors.New("EVM journal identity, continuity or allowance differs")
+	}
+	if err := self.validateEscrowFollow(p, actionIndex); err != nil {
+		return err
 	}
 	if self.Signed == "" {
 		if self.TransactionHash != "" || self.Attempts != 0 || self.Receipt != nil || self.ScanNumber != p.StartNativeNumber {

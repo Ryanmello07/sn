@@ -64,11 +64,6 @@ type contractSettlement2Initializer struct {
 	Quorum        uint64           `json:"quorum"`
 }
 
-// A getter selector named by its Solidity signature.
-func contractSelector(signature string) []byte {
-	return crypto.Keccak256([]byte(signature))[:4]
-}
-
 // The payload is the exact release creation and five constructor words: netuid
 // 25, the escrow hotkey, the predicted address's mapped coldkey, the deployer
 // as bootstrap and the demand fee. The hotkey and the fee are approved inputs,
@@ -87,7 +82,7 @@ func contractVault2Payload(artifact contractReleaseArtifact, p evmPhasePlan) (co
 	hotkey, fee := [32]byte(arguments[32:64]), new(big.Int).SetBytes(arguments[128:160])
 	mirror := ss58.EvmMirrorPubkey(crypto.CreateAddress(action.Sender, action.Nonce))
 	expected, err := parsed.Pack("", p.Netuid, hotkey, mirror, action.Sender, fee)
-	if err != nil || hotkey == ([32]byte{}) || fee.Sign() == 0 || new(big.Int).Mod(fee, big.NewInt(1_000_000_000)).Sign() != 0 || !bytes.Equal(arguments, expected) {
+	if err != nil || hotkey == ([32]byte{}) || fee.Sign() == 0 || new(big.Int).Mod(fee, big.NewInt(1_000_000_000)).Sign() != 0 || !bytes.Equal(arguments, expected) || !bytes.Equal(arguments, stabi.NewSTSettlementVault2().PackConstructor(p.Netuid, hotkey, mirror, action.Sender, fee)) {
 		return result, nil, errors.Join(errors.New("approved vault2 constructor differs from its netuid, mapped coldkey and bootstrap, or lacks a nonzero escrow hotkey and a nonzero whole-rao demand fee"), err)
 	}
 	runtime, err := artifact.withImmutables(map[string][]byte{"netuid": common.BigToHash(big.NewInt(int64(p.Netuid))).Bytes(), "escrowHotkey": hotkey[:], "selfColdkey": mirror[:], "bootstrap": common.BytesToHash(action.Sender[:]).Bytes(), "demandFeeWei": common.BigToHash(fee).Bytes()})
@@ -100,7 +95,10 @@ func contractVault2Payload(artifact contractReleaseArtifact, p evmPhasePlan) (co
 // Vault2's immutable identity plus its one-shot escrow registration and
 // coordinator binding, which are the only getters the installation changes.
 // Once registered, the escrow position's collateral is read back as well.
-func contractVault2Getters(vault evmCreatePlan, coordinator common.Address, registered bool) []contractGetter {
+// Reviewed STSettlementVault2 layout: coordinator in the low 20 bytes of slot
+// zero with escrowRegistered at byte offset 20, the reentrancy flag in slot
+// one and totalCaptured, totalPaid and escrowAccounted in slots 14 to 16.
+func contractVault2State(vault evmCreatePlan, coordinator common.Address, registered bool) ([]contractGetter, []contractStorageWord) {
 	contract := stabi.NewSTSettlementVault2()
 	fee, _ := new(big.Int).SetString(vault.Vault2Constructor.DemandFeeWei, 10)
 	flag := common.Hash{}
@@ -123,12 +121,37 @@ func contractVault2Getters(vault evmCreatePlan, coordinator common.Address, regi
 	} {
 		getters = append(getters, contractGetter{Data: "0x" + hex.EncodeToString(getter.data), Expected: getter.word.Hex()})
 	}
+	packed := common.BytesToHash(coordinator[:])
 	if registered {
 		netuid, hotkey, coldkey := common.BigToHash(big.NewInt(int64(vault.Config.Plan.Netuid))), common.HexToHash(vault.Vault2Constructor.EscrowHotkey), common.Hash(ss58.EvmMirrorPubkey(vault.Address))
-		data := append(append(append(contractSelector("getMinerCollateral(uint16,bytes32,bytes32)"), netuid[:]...), hotkey[:]...), coldkey[:]...)
+		data := append(append(append(crypto.Keccak256([]byte("getMinerCollateral(uint16,bytes32,bytes32)"))[:4], netuid[:]...), hotkey[:]...), coldkey[:]...)
 		getters = append(getters, contractGetter{To: contractStakingPrecompile, Data: "0x" + hex.EncodeToString(data), Expected: "0x" + strings.Repeat("00", 5*32)})
+		packed[11] = 1
 	}
-	return getters
+	storage := []contractStorageWord{{Slot: (common.Hash{}).Hex(), Expected: packed.Hex()}}
+	for _, slot := range []int64{1, 14, 15, 16} {
+		storage = append(storage, contractStorageWord{Slot: common.BigToHash(big.NewInt(slot)).Hex(), Expected: (common.Hash{}).Hex()})
+	}
+	return getters, storage
+}
+
+// Reviewed STSettlement2 layout (evm/layout/STSettlement2.json): slot zero
+// v1Coordinator, one vault, two the auditors' length with their addresses from
+// keccak256(2), three quorum and four auditorSetVersion.
+func contractSettlement2Storage(initializer contractSettlement2Initializer, version uint64) []contractStorageWord {
+	word := func(value *big.Int) string { return common.BigToHash(value).Hex() }
+	storage := []contractStorageWord{
+		{Slot: word(big.NewInt(0)), Expected: common.BytesToHash(initializer.V1Coordinator[:]).Hex()},
+		{Slot: word(big.NewInt(1)), Expected: common.BytesToHash(initializer.Vault[:]).Hex()},
+		{Slot: word(big.NewInt(2)), Expected: word(big.NewInt(int64(len(initializer.Auditors))))},
+		{Slot: word(big.NewInt(3)), Expected: word(new(big.Int).SetUint64(initializer.Quorum))},
+		{Slot: word(big.NewInt(4)), Expected: word(new(big.Int).SetUint64(version))},
+	}
+	data := new(big.Int).SetBytes(crypto.Keccak256(common.BigToHash(big.NewInt(2)).Bytes()))
+	for index, auditor := range initializer.Auditors {
+		storage = append(storage, contractStorageWord{Slot: word(new(big.Int).Add(data, big.NewInt(int64(index)))), Expected: common.BytesToHash(auditor[:]).Hex()})
+	}
+	return storage
 }
 
 // STSettlement2's public state through either address, plus OpenZeppelin's
@@ -149,8 +172,8 @@ func contractSettlement2Getters(initializer contractSettlement2Initializer, vers
 		{data: contract.PackAuditors(), word: auditors},
 		{data: contract.PackQuorum(), word: common.BigToHash(new(big.Int).SetUint64(initializer.Quorum)).Bytes()},
 		{data: contract.PackAuditorSetVersion(), word: common.BigToHash(new(big.Int).SetUint64(version)).Bytes()},
-		{data: contractSelector("owner()"), word: common.BytesToHash(initializer.Owner[:]).Bytes()},
-		{data: contractSelector("UPGRADE_INTERFACE_VERSION()"), word: interfaceVersion},
+		{data: contract.PackOwner(), word: common.BytesToHash(initializer.Owner[:]).Bytes()},
+		{data: contract.PackUPGRADEINTERFACEVERSION(), word: interfaceVersion},
 	} {
 		getters = append(getters, contractGetter{Data: "0x" + hex.EncodeToString(getter.data), Expected: "0x" + hex.EncodeToString(getter.word)})
 	}
@@ -171,9 +194,9 @@ func contractSettlement2Payload(artifact contractReleaseArtifact, action evmPhas
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	getters := append(contractSettlement2Getters(contractSettlement2Initializer{}, 0), contractGetter{Data: "0x" + hex.EncodeToString(contractSelector("proxiableUUID()")), Expected: contractImplementationSlot})
+	getters := append(contractSettlement2Getters(contractSettlement2Initializer{}, 0), contractGetter{Data: "0x" + hex.EncodeToString(stabi.NewSTSettlement2().PackProxiableUUID()), Expected: contractImplementationSlot})
 	storage := []contractStorageWord{{Slot: contractInitializableSlot, Expected: "0x" + strings.Repeat("00", 24) + strings.Repeat("ff", 8)}, {Slot: contractImplementationSlot, Expected: (common.Hash{}).Hex()}}
-	return runtime, getters, storage, nil
+	return runtime, getters, append(storage, contractSettlement2Storage(contractSettlement2Initializer{}, 0)...), nil
 }
 
 // Action two calls the derived vault2 with one exact uint64 burn cap and its
@@ -251,7 +274,7 @@ func contractSettlement2ProxyPayload(artifact contractReleaseArtifact, p evmPhas
 		{Slot: contractInitializableSlot, Expected: "0x" + strings.Repeat("00", 31) + "01"},
 		{Slot: contractOwnableSlot, Expected: common.BytesToHash(result.Owner[:]).Hex()},
 	}
-	return result, runtime, contractSettlement2Getters(result, 1), storage, nil
+	return result, runtime, contractSettlement2Getters(result, 1), append(storage, contractSettlement2Storage(result, 1)...), nil
 }
 
 // Action five fixes vault2's coordinator to the initialized proxy, once, with

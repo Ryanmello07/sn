@@ -671,10 +671,27 @@ plan. A v2 config selects only the five v2 ids and an original config only the
 original ones. Signature encoding, key provisioning, `preview`/`plan`/`apply`/`resume`,
 `--accept-plan-hash`, `--run-dir`, signed-byte import, `--online`, `--submit`,
 the per-sender funding admission and the cumulative `maximum_attempts` (at most
-eight across all five actions) are the original phase's. `artifacts` pins a
-release file of schema `urnetwork-settlement-v2-contract-release-artifacts-v1`
-holding exactly `SettlementVault2`, `Settlement2` and `ERC1967Proxy`, checked
-like the original release.
+eight across all five actions, the back-to-back escrow send included) are the
+original phase's. `artifacts` pins a release file of schema
+`urnetwork-settlement-v2-contract-release-artifacts-v1` holding exactly
+`SettlementVault2`, `Settlement2` and `ERC1967Proxy`, checked like the original
+release. The same generator exports it from the reviewed catalog, whose
+`SettlementV2ReleaseArtifacts` list stays apart from the original release:
+
+```sh
+go run ./sim-testnet/gencontracts --release-v2-json evm/out sim-testnet/contracts_gen.go /secure/ur-mainnet/settlement-v2-contracts.json
+```
+
+**Gas.** Each action's gas limit is part of the approval. Size it from the
+runtime-475 rehearsal (R-1, R-6): the runtime admits a precompile dispatch only
+if the forwarded gas covers its declared weight, while it charges the actual
+weight. `registerLimit` used about 1.41M gas there, with an `eth_estimateGas`
+limit of about 1.49M, so `escrow2-register` needs a limit well above that; no
+other v2 action calls a precompile, and none moves stake. Reasonable starting
+limits are 4,000,000 for `vault2-create` (11,798 runtime bytes), 2,500,000 for
+`escrow2-register`, 3,000,000 for `settlement2-create` (8,588 runtime bytes),
+1,000,000 for `proxy2-create` and 150,000 for `vault2-link`; `maximum_total_wei`
+covers every limit times its fee cap plus the escrow funding.
 
 **Builder checks.** Every selection, in `preview`, `plan` and every custody
 operation, rebuilds the complete graph from the approval and the release, so a
@@ -731,12 +748,17 @@ the authenticated canonical inclusion:
 
 - `vault2-create`: the exact runtime and the getters `netuid`, `escrowHotkey`,
   `selfColdkey`, `bootstrap`, `demandFeeWei`, `CHALLENGE_BLOCKS` (14,400),
-  `coordinator` (zero) and `escrowRegistered` (false).
+  `coordinator` (zero) and `escrowRegistered` (false), and five storage words
+  of the reviewed layout: slot zero packs `coordinator` in its low 20 bytes
+  with `escrowRegistered` at byte offset 20, the reentrancy flag in slot one
+  and `totalCaptured`, `totalPaid` and `escrowAccounted` in slots 14 to 16 stay
+  zero. The generator pins these coordinates to the compiler layout.
 - `escrow2-register`: the original escrow checks (one `EscrowRegistered` event
-  and the `getUid`/`getHotkey`/`getColdkey` mapping), the vault2 getters with
-  `escrowRegistered` true, and the escrow position's registration collateral,
-  `getMinerCollateral(netuid, escrowHotkey, selfColdkey)` on the staking
-  precompile `0x805` (`evm/src/interfaces/stakingCollateral.sol`). While SN25's
+  and the `getUid`/`getHotkey`/`getColdkey` mapping), the vault2 getters and
+  slot zero with `escrowRegistered` true, and the escrow position's
+  registration collateral, `getMinerCollateral(netuid, escrowHotkey,
+  selfColdkey)` on the staking precompile `0x805`
+  (`evm/src/interfaces/stakingCollateral.sol`). While SN25's
   collateral lock share is zero, registration locks nothing and the view must
   read `(false, 0, 0, 0, 0)`; any other value refuses the readback until a new
   approval reviews it. The receipt's `getter_hash` records it and the result
@@ -745,17 +767,22 @@ the authenticated canonical inclusion:
   `auditors` (empty), `quorum`, `auditorSetVersion` and `owner`, all zero,
   `UPGRADE_INTERFACE_VERSION` (`5.0.0`) and `proxiableUUID` (the ERC1967
   implementation slot); its Initializable word is disabled at `uint64` maximum
-  and its own ERC1967 implementation slot is zero.
+  and its own ERC1967 implementation slot and linear slots zero to four are
+  zero.
 - `proxy2-create`: the original proxy receipt identity, then through the proxy
   `vault` (vault2), `v1Coordinator`, `auditors`, `quorum`, `auditorSetVersion`
-  (1), `owner` and the interface version, and five storage words: the ERC1967
+  (1), `owner` and the interface version, and the storage words: the ERC1967
   implementation slot holds the implementation, admin and beacon are zero, the
-  Initializable word is version 1 and the Ownable word is the owner. The
+  Initializable word is version 1, the Ownable word is the owner, and the
+  reviewed linear layout (`evm/layout/STSettlement2.json`) holds the v1
+  coordinator, vault2, the auditor count with each auditor from
+  `keccak256(2)`, the quorum and version 1 in slots zero to four. The
   implementation's runtime and storage are read again at the same block.
 - `vault2-link`: one `CoordinatorFixed` event, then the completion readback,
-  all at the binding's canonical inclusion: vault2's runtime and getters with
-  `coordinator` the proxy, `escrowRegistered` true and the escrow collateral,
-  and the proxy's and the implementation's runtime, getters and storage words.
+  all at the binding's canonical inclusion: vault2's runtime, getters and
+  storage words with `coordinator` the proxy, `escrowRegistered` true and the
+  escrow collateral, and the proxy's and the implementation's runtime, getters
+  and storage words.
   Before its send, admission performs the same readback of the registered,
   unbound vault2, the proxy and the implementation at both the canonical head
   and pending state. A coordinator already fixed, even to the proxy, prevents
@@ -769,30 +796,48 @@ the v2 deployment record. v1's launch skipped installation readback
 readiness digest is unchanged: the phase changes no v1 contract, config or
 journal.
 
-**Escrow front-running.** Vault2's constructor calldata reveals the escrow
-hotkey as soon as its CREATE is broadcast. Anyone who registers that hotkey
-first, under their own coldkey, makes `registerEscrow` fail for good. The call
-reverts and returns its funding, but vault2 can never register its escrow. So
-the registration is the deployer's very next nonce and the very next action,
-and runs immediately after `vault2-create` completes, with no step in between.
-The command admits it only after vault2's creation is finalized and read back,
-so its funding can never reach an address whose CREATE failed. The residual
-window therefore runs from vault2's broadcast to the registration's inclusion,
-across vault2's finality. Admission refuses the send when the hotkey already
-has a UID; a registration that lands after admission leaves
-`escrow-registration-reverted-nonce-consumed`. Either way the recovery is a
-redeploy: a new approval with a fresh escrow hotkey and fresh nonces. No funds
-are at risk, because vault2 holds nothing until a pool registers.
+**Back-to-back escrow registration (A7).** Vault2's constructor calldata
+reveals the escrow hotkey as soon as its CREATE is broadcast. Anyone who
+registers that hotkey first, under their own coldkey, makes `registerEscrow`
+fail for good. So the registration is the deployer's very next nonce, and
+vault2's journal can also hold the registration's original signed bytes:
+import them with `--escrow-signed-transaction` and its pin beside vault2's own
+bytes. `resume --action vault2-create --online --submit` then sends vault2's
+transaction and, right after it in the same invocation, the registration's
+bytes, each after its own durable attempt within the one allowance. The status
+is `submitted-with-escrow-registration-awaiting-canonical-receipts`, or
+`escrow-registration-allowance-exhausted` when no attempt remains. Vault2's
+admission refuses both sends while the escrow hotkey already has a UID, at the
+canonical head or in pending state. Once vault2 completes, open
+`escrow2-register`'s journal and import exactly the same bytes, which its
+journal adopts; any other signature is refused. Its online `resume` then finds
+the registration's receipt and completes it with the readback. Without the
+escrow bytes, `escrow2-register` is admitted and sent by its own journal after
+vault2's finalized readback, with the same unregistered-hotkey check.
+
+Two residuals remain. A registration of the hotkey that lands before ours
+leaves `escrow-registration-reverted-nonce-consumed`; the call reverts and
+returns its funding, and the recovery is a redeploy under a new approval with a
+fresh escrow hotkey and fresh nonces. No funds are at risk, because vault2
+holds nothing until a pool registers. And the back-to-back send leaves the
+registration in flight before vault2's own receipt is known: were vault2's
+creation to fail after admission, the registration's funding would reach an
+address without code. The builder admits only a valid constructor, so only an
+approved gas limit below vault2's creation cost could cause that; size it from
+the rehearsal.
 
 ```sh
 sn-mainnet bootstrap-contracts preview --action vault2-create --config /secure/ur-mainnet/settlement-v2.unsigned.json > /secure/ur-mainnet/settlement-v2.preview.json
 sn-mainnet bootstrap-contracts plan --action vault2-create --config /secure/ur-mainnet/settlement-v2.json
 sn-mainnet bootstrap-contracts apply --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH"
-sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --signed-transaction /secure/ur-mainnet/vault2.signed.bin --signed-transaction-hash "$VAULT2_SIGNED_FILE_HASH"
+sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --signed-transaction /secure/ur-mainnet/vault2.signed.bin --signed-transaction-hash "$VAULT2_SIGNED_FILE_HASH" --escrow-signed-transaction /secure/ur-mainnet/escrow2.signed.bin --escrow-signed-transaction-hash "$ESCROW2_SIGNED_FILE_HASH"
 sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --online --submit
 sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --online
+sn-mainnet bootstrap-contracts apply --action escrow2-register --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH"
+sn-mainnet bootstrap-contracts resume --action escrow2-register --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --signed-transaction /secure/ur-mainnet/escrow2.signed.bin --signed-transaction-hash "$ESCROW2_SIGNED_FILE_HASH"
+sn-mainnet bootstrap-contracts resume --action escrow2-register --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --online
 ```
 
-Repeat `apply`, signed-byte import and online `resume` for `escrow2-register`,
-`settlement2-create`, `proxy2-create` and `vault2-link`, in that order, each
-after the previous action's completed status.
+Then repeat `apply`, signed-byte import, `resume --online --submit` and
+`resume --online` for `settlement2-create`, `proxy2-create` and `vault2-link`,
+in that order, each after the previous action's completed status.

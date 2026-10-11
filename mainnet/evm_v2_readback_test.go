@@ -138,9 +138,21 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 		}
 		return getters
 	}
-	for index, expected := range map[int][]contractGetter{0: vaultGetters(common.Address{}, 0), 1: vaultGetters(common.Address{}, 1), 4: vaultGetters(proxy, 1)} {
-		if graph[index].Address != vault || rootObjectHash(graph[index].Getters) != rootObjectHash(expected) || crypto.Keccak256Hash(graph[index].Runtime) != crypto.Keccak256Hash(graph[0].Runtime) {
-			t.Fatalf("vault2 projection %d: %+v", index, graph[index].Getters)
+	slot := func(value int64) string { return common.BigToHash(big.NewInt(value)).Hex() }
+	zero := (common.Hash{}).Hex()
+	vaultStorage := func(coordinator common.Address, registered bool) []contractStorageWord {
+		packed := common.BytesToHash(coordinator[:])
+		if registered {
+			packed[11] = 1
+		}
+		return []contractStorageWord{{Slot: zero, Expected: packed.Hex()}, {Slot: slot(1), Expected: zero}, {Slot: slot(14), Expected: zero}, {Slot: slot(15), Expected: zero}, {Slot: slot(16), Expected: zero}}
+	}
+	for index, expected := range map[int]struct {
+		getters []contractGetter
+		storage []contractStorageWord
+	}{0: {vaultGetters(common.Address{}, 0), vaultStorage(common.Address{}, false)}, 1: {vaultGetters(common.Address{}, 1), vaultStorage(common.Address{}, true)}, 4: {vaultGetters(proxy, 1), vaultStorage(proxy, true)}} {
+		if graph[index].Address != vault || rootObjectHash(graph[index].Getters) != rootObjectHash(expected.getters) || rootObjectHash(graph[index].Storage) != rootObjectHash(expected.storage) || crypto.Keccak256Hash(graph[index].Runtime) != crypto.Keccak256Hash(graph[0].Runtime) {
+			t.Fatalf("vault2 projection %d: %+v %+v", index, graph[index].Getters, graph[index].Storage)
 		}
 	}
 	addresses, _ := abi.NewType("address[]", "", nil)
@@ -167,9 +179,9 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 			{Data: "0xad3cb1cc", Expected: "0x" + hex.EncodeToString(version)},
 		}
 	}
-	zero := (common.Hash{}).Hex()
 	implementationGetters := append(settlementGetters(common.Address{}, common.Address{}, common.Address{}, list(), 0, 0), contractGetter{Data: "0x52d1902d", Expected: "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"})
-	implementationStorage := []contractStorageWord{{Slot: "0xf0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00", Expected: "0x000000000000000000000000000000000000000000000000ffffffffffffffff"}, {Slot: "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc", Expected: zero}}
+	implementationStorage := []contractStorageWord{{Slot: "0xf0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00", Expected: "0x000000000000000000000000000000000000000000000000ffffffffffffffff"}, {Slot: "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc", Expected: zero},
+		{Slot: slot(0), Expected: zero}, {Slot: slot(1), Expected: zero}, {Slot: slot(2), Expected: zero}, {Slot: slot(3), Expected: zero}, {Slot: slot(4), Expected: zero}}
 	if implementation != crypto.CreateAddress(sender, 2) || rootObjectHash(graph[2].Getters) != rootObjectHash(implementationGetters) || rootObjectHash(graph[2].Storage) != rootObjectHash(implementationStorage) {
 		t.Fatalf("implementation projection: %+v %+v", graph[2].Getters, graph[2].Storage)
 	}
@@ -179,6 +191,8 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 		{Slot: "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50", Expected: zero},
 		{Slot: "0xf0c57e16840df040f15088dc2f81fe391c3923bec73e23a9662efc9c229c6a00", Expected: word(1)},
 		{Slot: "0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300", Expected: addressWord(evmV2TestOwner)},
+		{Slot: slot(0), Expected: addressWord(evmV2TestV1)}, {Slot: slot(1), Expected: addressWord(vault)}, {Slot: slot(2), Expected: word(1)}, {Slot: slot(3), Expected: word(1)}, {Slot: slot(4), Expected: word(1)},
+		{Slot: "0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace", Expected: addressWord(evmV2TestAuditor)},
 	}
 	if proxy != crypto.CreateAddress(sender, 3) || rootObjectHash(graph[3].Getters) != rootObjectHash(settlementGetters(vault, evmV2TestV1, evmV2TestOwner, list(evmV2TestAuditor), 1, 1)) || rootObjectHash(graph[3].Storage) != rootObjectHash(proxyStorage) {
 		t.Fatalf("proxy projection: %+v %+v", graph[3].Getters, graph[3].Storage)
@@ -223,7 +237,7 @@ func TestEvmV2ReadbackRefusesEachMismatch(t *testing.T) {
 			cases++
 		}
 	}
-	if cases != 1+9+1+7+5+1+8+2 {
+	if cases != 1+9+5+1+7+11+1+8+7 {
 		t.Fatalf("readback covered %d facts", cases)
 	}
 	for _, method := range []string{"eth_getCode", "eth_call", "eth_getStorageAt"} {

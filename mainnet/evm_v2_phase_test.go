@@ -167,7 +167,7 @@ func TestEvmV2BuilderRefusesEachCheck(t *testing.T) {
 			action(f, 2).To = &target
 		}},
 		{"create-value", edges, func(f *evmCreateFixture, _ contractReleaseArtifacts) {
-			action(f, 3).ValueWei, f.config.Plan.MaximumTotalWei = "1", "2171500001"
+			action(f, 3).ValueWei, f.config.Plan.MaximumTotalWei = "1", "2106500001"
 		}},
 		{"config-alias", "contract phase input aliases a settlement v2 journal", func(f *evmCreateFixture, _ contractReleaseArtifacts) {
 			f.configPath = filepath.Join(f.config.Plan.RunDirectory, "vault2-link.json")
@@ -243,7 +243,7 @@ func TestEvmV2BuilderRefusesEachCheck(t *testing.T) {
 		}},
 		{"settlement2-constructor", implementation, func(f *evmCreateFixture, current contractReleaseArtifacts) {
 			artifact := evmV2TestArtifactNamed(t, current, "Settlement2")
-			artifact.Abi = strings.Replace(artifact.Abi, `"inputs":[],"stateMutability":"nonpayable","type":"constructor"`, `"inputs":[{"name":"owner_","type":"address"}],"stateMutability":"nonpayable","type":"constructor"`, 1)
+			artifact.Abi = strings.Replace(artifact.Abi, `{"type":"constructor","inputs":[]`, `{"type":"constructor","inputs":[{"name":"owner_","type":"address","internalType":"address"}]`, 1)
 			replace(f, current, artifact)
 		}},
 		{"settlement2-immutables", "contract immutable self is absent or not one word", func(f *evmCreateFixture, current contractReleaseArtifacts) {
@@ -337,7 +337,7 @@ func TestEvmV2BuilderRefusesEachCheck(t *testing.T) {
 			action(f, 4).To = &target
 		}},
 		{"link-value", link, func(f *evmCreateFixture, _ contractReleaseArtifacts) {
-			action(f, 4).ValueWei, f.config.Plan.MaximumTotalWei = "1", "2171500001"
+			action(f, 4).ValueWei, f.config.Plan.MaximumTotalWei = "1", "2106500001"
 		}},
 		{"link-coordinator", link, func(f *evmCreateFixture, _ contractReleaseArtifacts) {
 			action(f, 4).Data = "0x" + hex.EncodeToString(stabi.NewSTSettlementVault2().PackSetCoordinatorOnce(crypto.CreateAddress(sender(f), 2)))

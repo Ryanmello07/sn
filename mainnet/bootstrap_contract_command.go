@@ -34,10 +34,12 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 	runDirectory := flags.String("run-dir", "", "approved private journal directory")
 	signaturePath := flags.String("signed-transaction", "", "private regular file containing original public transaction bytes")
 	signatureHash := flags.String("signed-transaction-hash", "", "sha256 pin of original public signed-byte file")
+	escrowPath := flags.String("escrow-signed-transaction", "", "settlement v2 vault2-create only: the escrow registration's original signed bytes, sent right after vault2's")
+	escrowHash := flags.String("escrow-signed-transaction-hash", "", "sha256 pin of the escrow registration's signed-byte file")
 	online := flags.Bool("online", false, "read the independently approved owned RPC route")
 	submit := flags.Bool("submit", false, "permit one originally approved, durably counted HTTP submission")
 	review := command == "plan" || command == "preview"
-	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 || *configPath == "" || (*actionId != "reserve-create" && *actionId != "vault-create" && *actionId != "coordinator-create" && *actionId != "escrow-register" && *actionId != "proxy-create" && *actionId != "reserve-link" && *actionId != "vault-link" && *actionId != "evidence-create" && evmV2ActionIndex(*actionId) < 0) || review && (*accepted != "" || *runDirectory != "" || *signaturePath != "" || *signatureHash != "" || *online || *submit) || !review && (*accepted == "" || *runDirectory == "") || (*signaturePath == "") != (*signatureHash == "") || *signaturePath != "" && (command != "resume" || !planSha256(*signatureHash)) || (*online || *submit) && command != "resume" || *submit && !*online {
+	if err := flags.Parse(args[2:]); err != nil || flags.NArg() != 0 || *configPath == "" || (*actionId != "reserve-create" && *actionId != "vault-create" && *actionId != "coordinator-create" && *actionId != "escrow-register" && *actionId != "proxy-create" && *actionId != "reserve-link" && *actionId != "vault-link" && *actionId != "evidence-create" && evmV2ActionIndex(*actionId) < 0) || review && (*accepted != "" || *runDirectory != "" || *signaturePath != "" || *signatureHash != "" || *online || *submit) || !review && (*accepted == "" || *runDirectory == "") || (*signaturePath == "") != (*signatureHash == "") || *signaturePath != "" && (command != "resume" || !planSha256(*signatureHash)) || (*escrowPath == "") != (*escrowHash == "") || *escrowPath != "" && (command != "resume" || *actionId != "vault2-create" || !planSha256(*escrowHash)) || (*online || *submit) && command != "resume" || *submit && !*online {
 		fmt.Fprintln(stderr, "contract phase requires exact config/plan/run directory; only resume accepts pinned signed bytes, --online and --submit")
 		return 2
 	}
@@ -94,29 +96,42 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 		fmt.Fprintln(stderr, "contract phase acceptance differs; no journal opened")
 		return 3
 	}
-	var signed []byte
-	if *signaturePath != "" {
-		names := []string{evmCreateStateFile, evmVaultCreateStateFile, evmCoordinatorCreateStateFile, evmEscrowRegisterStateFile, evmProxyCreateStateFile, evmReserveLinkStateFile, evmVaultLinkStateFile, evmEvidenceCreateStateFile}
-		if plan.Config.Plan.settlementV2() {
-			names = evmV2JournalNames()
-		}
+	names := []string{evmCreateStateFile, evmVaultCreateStateFile, evmCoordinatorCreateStateFile, evmEscrowRegisterStateFile, evmProxyCreateStateFile, evmReserveLinkStateFile, evmVaultLinkStateFile, evmEvidenceCreateStateFile}
+	if plan.Config.Plan.settlementV2() {
+		names = evmV2JournalNames()
+	}
+	// Pinned public bytes of one approved envelope, never read from custody.
+	readSigned := func(path, hash string, index int) ([]byte, bool) {
 		for _, name := range names[:plan.ActionIndex+1] {
 			state := filepath.Join(*runDirectory, name)
-			if *signaturePath == state || *signaturePath == state+".lock" {
+			if path == state || path == state+".lock" {
 				fmt.Fprintln(stderr, "signed-byte input aliases custody")
-				return 2
+				return nil, false
 			}
 		}
-		raw, digest, err := readBootstrapRootFile(ctx, *signaturePath, 128*1024)
-		if err != nil || digest != *signatureHash {
+		raw, digest, err := readBootstrapRootFile(ctx, path, 128*1024)
+		if err != nil || digest != hash {
 			fmt.Fprintln(stderr, "signed-byte file:", errors.Join(errors.New("exact public signed-byte pin differs"), err))
-			return 2
+			return nil, false
 		}
-		if _, err := plan.Config.Plan.Actions[plan.ActionIndex].signed(raw); err != nil {
+		if _, err := plan.Config.Plan.Actions[index].signed(raw); err != nil {
 			fmt.Fprintln(stderr, "signed-byte envelope:", err)
+			return nil, false
+		}
+		return raw, true
+	}
+	var signed, escrow []byte
+	if *signaturePath != "" {
+		var ok bool
+		if signed, ok = readSigned(*signaturePath, *signatureHash, plan.ActionIndex); !ok {
 			return 2
 		}
-		signed = raw
+	}
+	if *escrowPath != "" {
+		var ok bool
+		if escrow, ok = readSigned(*escrowPath, *escrowHash, 1); !ok {
+			return 2
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		fmt.Fprintln(stderr, err)
@@ -281,7 +296,7 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 		fmt.Fprintln(stderr, "contract phase retained state:", err)
 		return 3
 	}
-	result, err := owner.advance(ctx, signed, *online, *submit)
+	result, err := owner.advanceWithEscrow(ctx, signed, escrow, *online, *submit)
 	if err != nil {
 		fmt.Fprintln(stderr, "contract phase stopped; retain original journal for resume:", err)
 		return 1

@@ -49,6 +49,12 @@ import (
 // another fixture or importing the simulator's package-main transaction manager.
 func evmTestRelease(t *testing.T) contractReleaseArtifacts {
 	t.Helper()
+	return evmTestCatalog(t, "ReleaseContractArtifacts", "urnetwork-contract-release-artifacts-v1")
+}
+
+// One generated catalog list as the release file of its phase.
+func evmTestCatalog(t *testing.T, variable, schema string) contractReleaseArtifacts {
+	t.Helper()
 	file, err := parser.ParseFile(token.NewFileSet(), "../sim-testnet/contracts_gen.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +78,7 @@ func evmTestRelease(t *testing.T) contractReleaseArtifacts {
 				}
 				constants[value.Names[0].Name] = decoded
 			}
-			if value.Names[0].Name == "ReleaseContractArtifacts" {
+			if value.Names[0].Name == variable {
 				entries = value.Values[0].(*ast.CompositeLit)
 			}
 		}
@@ -90,7 +96,7 @@ func evmTestRelease(t *testing.T) contractReleaseArtifacts {
 		}
 		return value
 	}
-	result := contractReleaseArtifacts{Schema: "urnetwork-contract-release-artifacts-v1"}
+	result := contractReleaseArtifacts{Schema: schema}
 	for _, entry := range entries.Elts {
 		artifact := contractReleaseArtifact{ImmutableReferences: map[string][]int{}}
 		fields := map[string]*string{"Name": &artifact.Name, "ABI": &artifact.Abi, "CreationBytecode": &artifact.Creation, "RuntimeBytecode": &artifact.Runtime, "RuntimeBytecodeHash": &artifact.RuntimeHash, "FoundryArtifactHash": &artifact.ArtifactHash, "StorageLayoutHash": &artifact.StorageLayoutHash}
@@ -187,6 +193,15 @@ type evmCreateFixture struct {
 	override         func(string, []any, any) any
 	nativeProof      func([]any) any
 	history          *evmCreateHistory
+	follow           *evmCreateFollow
+}
+
+// A second original transaction that one invocation sends right after the
+// selected one, as the settlement v2 escrow registration follows vault2.
+type evmCreateFollow struct {
+	plan evmCreatePlan
+	tx   *types.Transaction
+	raw  []byte
 }
 
 // Two-action fixtures retain real execution state at each inclusion hash. The
@@ -419,7 +434,7 @@ func (self *evmCreateFixture) execute() error {
 	}
 	self.storageKey = key.Hex()
 	self.receipt = map[string]any{"transactionHash": self.tx.Hash().Hex(), "blockHash": hash, "blockNumber": fmt.Sprintf("0x%x", nextEvm), "transactionIndex": "0x0", "status": "0x1", "gasUsed": fmt.Sprintf("0x%x", gasUsed), "effectiveGasPrice": "0x2", "contractAddress": strings.ToLower(address.Hex())}
-	if self.plan.ActionIndex == 4 || self.plan.ActionIndex == 7 {
+	if self.plan.actionIs("proxy-create", "evidence-create", "proxy2-create") {
 		self.receipt["to"], self.receipt["from"] = nil, self.vm.Origin.Hex()
 	}
 	if self.tx.To() != nil || self.plan.ActionIndex == 7 {
@@ -650,6 +665,10 @@ func (self *evmCreateFixture) serve(writer http.ResponseWriter, request *http.Re
 		result = "0x" + hex.EncodeToString(value)
 	case "eth_sendRawTransaction":
 		raw, err := hex.DecodeString(call.Params[0].(string)[2:])
+		if self.follow != nil && bytes.Equal(raw, self.follow.raw) {
+			self.plan, self.tx, self.raw, self.receipt = self.follow.plan, self.follow.tx, self.follow.raw, nil
+			self.vm.GasLimit, self.follow = self.tx.Gas(), nil
+		}
 		if err != nil || !bytes.Equal(raw, self.raw) {
 			http.Error(writer, "not original signed bytes", 400)
 			return

@@ -116,13 +116,13 @@ func buildEvmV2Graph(ctx context.Context, config evmPhaseConfig, configPath stri
 		return nil, err
 	}
 	vault.Runtime, vault.Vault2Constructor = runtime, &constructor
-	vault.Getters = contractVault2Getters(vault, common.Address{}, false)
+	vault.Getters, vault.Storage = contractVault2State(vault, common.Address{}, false)
 	registration, err := contractEscrow2Action(p, vault)
 	if err != nil {
 		return nil, err
 	}
 	escrow := evmCreatePlan{Config: config, ActionIndex: 1, Vault: &vault, Vault2Constructor: &constructor, EscrowRegistration: &registration, Address: vault.Address, Runtime: append([]byte(nil), vault.Runtime...)}
-	escrow.Getters = contractVault2Getters(vault, common.Address{}, true)
+	escrow.Getters, escrow.Storage = contractVault2State(vault, common.Address{}, true)
 	implementation := evmCreatePlan{Config: config, ActionIndex: 2, Vault: &vault, Escrow: &escrow, Vault2Constructor: &constructor, EscrowRegistration: &registration, Address: crypto.CreateAddress(first.Sender, first.Nonce+2)}
 	implementation.Runtime, implementation.Getters, implementation.Storage, err = contractSettlement2Payload(artifacts["Settlement2"], p.Actions[2])
 	if err != nil {
@@ -139,7 +139,7 @@ func buildEvmV2Graph(ctx context.Context, config evmPhaseConfig, configPath stri
 		return nil, err
 	}
 	link := evmCreatePlan{Config: config, ActionIndex: 4, Vault: &vault, Escrow: &escrow, Coordinator: &implementation, Proxy: &proxy, Vault2Constructor: &constructor, EscrowRegistration: &registration, Settlement2Initializer: &initializer, VaultBinding: &binding, Address: vault.Address, Runtime: append([]byte(nil), vault.Runtime...)}
-	link.Getters = contractVault2Getters(vault, proxy.Address, true)
+	link.Getters, link.Storage = contractVault2State(vault, proxy.Address, true)
 	return []*evmCreatePlan{&vault, &escrow, &implementation, &proxy, &link}, ctx.Err()
 }
 
@@ -222,6 +222,71 @@ func openEvmV2ActionStore(plan evmCreatePlan, prior []evmActionRecord, create bo
 		}
 	}
 	return openEvmSelectedActionStore(plan.Config, plan.ActionIndex, predecessor, create, claimHook, storageContexts...)
+}
+
+// Only vault2's signed journal holds the escrow registration's original
+// bytes, exactly the approved second envelope, for its back-to-back send (A7).
+func (self evmActionRecord) validateEscrowFollow(p evmPhasePlan, actionIndex int) error {
+	if self.EscrowSigned == "" && self.EscrowTransactionHash == "" && self.EscrowAttempts == 0 {
+		return nil
+	}
+	if !p.settlementV2() || actionIndex != 0 || self.Signed == "" {
+		return errors.New("only vault2's signed custody holds its back-to-back escrow registration")
+	}
+	raw, err := rootReceiptHex(self.EscrowSigned, 128*1024)
+	if err != nil {
+		return err
+	}
+	tx, err := p.Actions[1].signed(raw)
+	if err != nil || tx.Hash().Hex() != self.EscrowTransactionHash {
+		return errors.Join(errors.New("retained escrow registration signature differs"), err)
+	}
+	return nil
+}
+
+// Vault2's journal retains the escrow registration's exact signed bytes before
+// any send; later imports cannot substitute another signature.
+func (self *evmCreateOwner) retainEscrowFollow(record *evmActionRecord, raw []byte) error {
+	if !self.plan.Config.Plan.settlementV2() || self.plan.ActionIndex != 0 || record.Signed == "" {
+		return errors.New("only vault2's signed custody accepts its back-to-back escrow registration")
+	}
+	tx, err := self.plan.Config.Plan.Actions[1].signed(raw)
+	if err != nil {
+		return err
+	}
+	encoded := "0x" + hex.EncodeToString(raw)
+	if record.EscrowSigned != "" && record.EscrowSigned != encoded {
+		return errors.New("vault2 custody already owns different escrow registration bytes")
+	}
+	if record.EscrowSigned != "" {
+		return nil
+	}
+	record.EscrowSigned, record.EscrowTransactionHash = encoded, tx.Hash().Hex()
+	return self.retain(record)
+}
+
+// Right after vault2's own send, the escrow registration's original bytes go
+// out at the next nonce, so nobody can register the revealed escrow hotkey
+// in between (A7). A durable attempt precedes the single write, within the
+// graph's one allowance.
+func (self *evmCreateOwner) submitEscrowFollow(ctx context.Context, plan evmCreatePlan, record *evmActionRecord, prior []evmActionRecord, priorAttempts uint16) (string, error) {
+	if uint16(record.Attempts)+uint16(record.EscrowAttempts)+priorAttempts >= uint16(plan.Config.Plan.MaximumAttempts) {
+		return "escrow-registration-allowance-exhausted", nil
+	}
+	if err := self.checkpointCustody(*record, prior); err != nil {
+		return "", err
+	}
+	record.EscrowAttempts++
+	if err := self.retain(record); err != nil {
+		return "", err
+	}
+	if err := self.checkpointCustody(*record, prior); err != nil {
+		return "", err
+	}
+	if err := self.chain.submitEscrow(ctx, plan, *record); err != nil {
+		return "escrow-registration-submission-uncertain", err
+	}
+	return "submitted-with-escrow-registration-awaiting-canonical-receipts", nil
 }
 
 // Results name the phase's own contracts. Installation completes only with

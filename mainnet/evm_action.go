@@ -52,6 +52,7 @@ type evmActionObservation struct {
 type evmActionChain interface {
 	reconcile(context.Context, evmCreatePlan, evmActionRecord) (evmActionObservation, error)
 	submit(context.Context, evmCreatePlan, evmActionRecord) error
+	submitEscrow(context.Context, evmCreatePlan, evmActionRecord) error
 }
 
 // The result explicitly separates one contract from the full installation.
@@ -85,6 +86,8 @@ type evmCreateResult struct {
 	Vault2Constructor                *contractVault2Constructor      `json:"vault2_constructor,omitempty"`
 	Settlement2Initializer           *contractSettlement2Initializer `json:"settlement2_initializer,omitempty"`
 	EscrowCollateral                 *contractEscrowCollateral       `json:"escrow_collateral,omitempty"`
+	EscrowTransactionHash            string                          `json:"escrow_transaction_hash,omitempty"`
+	EscrowAttempts                   uint8                           `json:"escrow_attempts,omitempty"`
 }
 
 // All mutable projections are copied on construction. Storage failure poisons
@@ -382,7 +385,7 @@ func validateEvmCreatePrerequisite(plan evmCreatePlan, record evmActionRecord) e
 				return errors.New("retained predecessor chain or inclusion order differs")
 			}
 		}
-		attempts += uint16(prior.Attempts)
+		attempts += uint16(prior.Attempts) + uint16(prior.EscrowAttempts)
 	}
 	if rootObjectHash(plan.Prerequisites[len(plan.Prerequisites)-1]) != record.PredecessorHash || attempts > uint16(plan.Config.Plan.MaximumAttempts) {
 		return errors.New("prerequisite custody or original graph attempt allowance changed")
@@ -424,6 +427,12 @@ func (self *evmCreateOwner) checkpointCustody(record evmActionRecord, prior []ev
 // Offline mode only retains public bytes. Online mode reconciles first; submit
 // additionally requires exact current admission and an unused finite attempt.
 func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, submit bool) (evmCreateResult, error) {
+	return self.advanceWithEscrow(ctx, signed, nil, online, submit)
+}
+
+// Settlement v2's vault2 journal may also import the escrow registration's
+// original bytes, which its send then broadcasts back to back (A7).
+func (self *evmCreateOwner) advanceWithEscrow(ctx context.Context, signed, escrow []byte, online, submit bool) (evmCreateResult, error) {
 	var result evmCreateResult
 	if ctx == nil || submit && !online {
 		return result, errors.New("EVM operation context or online mode is invalid")
@@ -457,7 +466,7 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 	plan.Prerequisites = prior
 	priorAttempts := uint16(0)
 	for _, record := range prior {
-		priorAttempts += uint16(record.Attempts)
+		priorAttempts += uint16(record.Attempts) + uint16(record.EscrowAttempts)
 	}
 	p := self.plan.Config.Plan
 	action := p.Actions[self.plan.ActionIndex]
@@ -470,11 +479,19 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 		if record.Signed != "" && record.Signed != encoded {
 			return result, errors.New("EVM custody already owns different original signed bytes")
 		}
+		if self.plan.actionIs("escrow2-register") && prior[0].EscrowSigned != "" && encoded != prior[0].EscrowSigned {
+			return result, errors.New("escrow registration custody must keep the bytes sent back to back with vault2")
+		}
 		if record.Signed == "" {
 			record.Signed, record.TransactionHash = encoded, tx.Hash().Hex()
 			if err := self.retain(&record); err != nil {
 				return result, err
 			}
+		}
+	}
+	if len(escrow) != 0 {
+		if err := self.retainEscrowFollow(&record, escrow); err != nil {
+			return result, err
 		}
 	}
 	status := "signature-awaiting-import"
@@ -511,7 +528,7 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 		}
 		status = observation.Status
 		if submit && observation.SendReady {
-			if record.Receipt != nil || uint16(record.Attempts)+priorAttempts >= uint16(p.MaximumAttempts) {
+			if record.Receipt != nil || uint16(record.Attempts)+uint16(record.EscrowAttempts)+priorAttempts >= uint16(p.MaximumAttempts) {
 				status = "attempt-allowance-exhausted"
 			} else {
 				if err := ctx.Err(); err != nil {
@@ -533,6 +550,11 @@ func (self *evmCreateOwner) advance(ctx context.Context, signed []byte, online, 
 					return self.result(record, "submission-uncertain"), err
 				}
 				status = "submitted-awaiting-canonical-receipt"
+				if record.EscrowSigned != "" {
+					if status, err = self.submitEscrowFollow(ctx, plan, &record, prior, priorAttempts); err != nil {
+						return self.result(record, status), err
+					}
+				}
 			}
 		}
 	}
@@ -551,7 +573,8 @@ func (self *evmCreateOwner) result(record evmActionRecord, status string) evmCre
 	tx, _ := self.plan.Config.Plan.Actions[self.plan.ActionIndex].unsigned()
 	raw, _ := tx.MarshalBinary()
 	signer := types.LatestSignerForChainID(big.NewInt(mainnetEvmChainId))
-	result := evmCreateResult{PlanHash: self.plan.Config.Plan.hash(), Status: status, Address: self.plan.Address.Hex(), SigningDigest: signer.Hash(tx).Hex(), UnsignedTransaction: "0x" + hex.EncodeToString(raw), TransactionHash: record.TransactionHash, Attempts: record.Attempts, Receipt: record.Receipt, RemainingActions: []string{"vault-create", "coordinator-create", "escrow-register", "proxy-create", "reserve-link", "vault-link", "evidence-create", "evidence-anchor"}}
+	result := evmCreateResult{PlanHash: self.plan.Config.Plan.hash(), Status: status, Address: self.plan.Address.Hex(), SigningDigest: signer.Hash(tx).Hex(), UnsignedTransaction: "0x" + hex.EncodeToString(raw), TransactionHash: record.TransactionHash, Attempts: record.Attempts, Receipt: record.Receipt, RemainingActions: []string{"vault-create", "coordinator-create", "escrow-register", "proxy-create", "reserve-link", "vault-link", "evidence-create", "evidence-anchor"},
+		EscrowTransactionHash: record.EscrowTransactionHash, EscrowAttempts: record.EscrowAttempts}
 	if self.plan.Config.Plan.settlementV2() {
 		return evmV2CreateResult(self.plan, result)
 	}
