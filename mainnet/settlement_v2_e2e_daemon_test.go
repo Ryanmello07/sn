@@ -406,7 +406,8 @@ func TestSettlementV2E2EDaemonBesideV1(t *testing.T) {
 	f := newE2EFixture(t, e2eDefaultFirst, relayer)
 	t.Setenv("URNETWORK_STATE_DIR", t.TempDir())
 	// v1 epoch 1 pays Carol all of its funding, through a claim the relayer
-	// signed and broadcast before its process stopped.
+	// signed and broadcast before its process stopped, with a gas limit above
+	// the transfer's declared weight.
 	carol := e2eKey("carol")
 	f.emitV1(2_000_000_000_000)
 	funded := f.closeV1(1)
@@ -417,7 +418,7 @@ func TestSettlementV2E2EDaemonBesideV1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v1Claim, err := types.SignNewTx(relayer.key, f.chain.signer, &types.LegacyTx{Nonce: 0, GasPrice: big.NewInt(e2eGasPrice), Gas: 2_000_000, To: &f.vault1, Value: new(big.Int), Data: data})
+	v1Claim, err := types.SignNewTx(relayer.key, f.chain.signer, &types.LegacyTx{Nonce: 0, GasPrice: big.NewInt(e2eGasPrice), Gas: 3_000_000, To: &f.vault1, Value: new(big.Int), Data: data})
 	if err != nil {
 		t.Fatal(err)
 	}

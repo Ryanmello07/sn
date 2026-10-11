@@ -890,8 +890,9 @@ func e2eAccountOf(t testing.TB, accounts []merkle.LedgerAccount, coldkey [32]byt
 // TestSettlementV2E2EHarness pins the fake runtime to the R battery's
 // measured facts (scripts/runtime-rehearsal/README.md), through the real
 // vault2: a move takes exactly the source amount and credits the destination
-// in full or, at a share price above 1, one rao short; the floor; the
-// collateral lock; locked alpha; registration. The harness behind E-1 to E-7.
+// in full or, at a share price above 1, one rao short; a move needs a gas
+// limit covering its declared weight; the floor; the collateral lock; locked
+// alpha; registration. The harness behind E-1 to E-7.
 func TestSettlementV2E2EHarness(t *testing.T) {
 	f := newE2EFixture(t, e2eDefaultFirst)
 	// Registration: vault2 registered its escrow and pool hotkeys under its
@@ -915,11 +916,28 @@ func TestSettlementV2E2EHarness(t *testing.T) {
 	// gains one rao less, and vault2 accounts what it gained.
 	f.emitV2(5_000_000_000)
 	f.chain.do(func() { f.chain.runtime.shortfall = true })
-	f.chain.rollTo(f.end(f.firstEpoch))
-	receipt := f.must(f.anyone, f.settlement, nil, e2eSettlementBinding.PackCloseOperatorEpoch(e2eRao(f.firstEpoch), e2eRao(e2eNoID)))
+	// eth_estimateGas runs at the head, the block before the transaction's,
+	// so the head is inside the close window too.
+	f.chain.rollTo(f.end(f.firstEpoch) + 1)
+	closing := e2eSettlementBinding.PackCloseOperatorEpoch(e2eRao(f.firstEpoch), e2eRao(e2eNoID))
+	// The move is admitted only with its declared weight forwarded: the
+	// close's estimate is within 2% of the limit R-6 measured for a capturing
+	// close, 2,634,202, and a close with a 1M limit runs out of gas in the
+	// precompile and records nothing.
+	var estimate uint64
+	var err error
+	f.chain.do(func() { estimate, err = f.chain.estimateLocked(f.anyone.address, &f.settlement, nil, closing) })
+	starved, signErr := types.SignNewTx(f.anyone.key, f.chain.signer, &types.LegacyTx{Nonce: f.chain.nonce(f.anyone.address), GasPrice: big.NewInt(e2eGasPrice), Gas: 1_000_000, To: &f.settlement, Data: closing})
+	if err != nil || signErr != nil || estimate < 2_634_202*98/100 || estimate > 2_634_202*102/100 {
+		t.Fatalf("close estimate %d: %v %v", estimate, err, signErr)
+	}
+	if receipt := f.chain.include(starved); receipt.Status != types.ReceiptStatusFailed || f.fundedThrough(f.firstEpoch).Sign() != 0 || f.chain.stake(f.poolV2, f.vault2Coldkey).Uint64() != 5_000_000_000 {
+		t.Fatal("a close below the move's declared weight was not refused whole")
+	}
+	receipt := f.must(f.anyone, f.settlement, nil, closing)
 	f.requireLogs(receipt, f.vault2Log("EmissionCaptured", e2eRao(f.firstEpoch), e2eRao(e2eNoID), e2eRao(5_000_000_000), e2eRao(4_999_999_999), e2eRao(4_999_999_999)))
-	if f.chain.stake(f.poolV2, f.vault2Coldkey).Sign() != 0 || f.chain.stake(f.escrowV2, f.vault2Coldkey).Uint64() != 4_999_999_999 {
-		t.Fatal("capture deltas differ from the runtime's")
+	if f.chain.stake(f.poolV2, f.vault2Coldkey).Sign() != 0 || f.chain.stake(f.escrowV2, f.vault2Coldkey).Uint64() != 4_999_999_999 || receipt.GasUsed > estimate/5 {
+		t.Fatalf("capture deltas differ from the runtime's, or it used %d gas of its %d estimate", receipt.GasUsed, estimate)
 	}
 	f.chain.do(func() { f.chain.runtime.shortfall = false })
 	f.requireConservation()

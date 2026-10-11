@@ -91,6 +91,15 @@ var e2eRuntimeGas = map[string]uint64{
 	"registerLimit": 1_409_550, "getUid": 995, "getAlphaPrice": 1_000,
 }
 
+// Runtime 475 charges a dispatch's actual weight but admits it only if the gas
+// forwarded to the precompile covers its declared weight, which for a move or
+// a transfer walks a full 256-entry StakingHotkeys list. These are the
+// forwarded gas the R battery's eth_estimateGas limits for a probe's call
+// leave at the call (2,427,799 and 2,420,524 less intrinsic, calldata, the
+// probe's own work and 1/64), so a transaction moving stake needs a limit of
+// about 2.4M while it uses about 105,000.
+var e2eRuntimeDeclaredGas = map[string]uint64{"moveStake": 2_366_000, "transferStake": 2_359_000}
+
 // e2eBlockHash is block n's hash in the RPC domain. As on Subtensor, it is not
 // Header.Hash(); readers take the explicit hash.
 func e2eBlockHash(number uint64) common.Hash {
@@ -100,11 +109,12 @@ func e2eBlockHash(number uint64) common.Hash {
 func e2eBlockTime(number uint64) uint64 { return e2eGenesisTime + e2eBlockSeconds*number }
 
 // e2eRuntime holds the precompiles' knobs and, during one execution, its
-// StateDB and the address of the contract calling a precompile. The chain
-// lock guards it.
+// StateDB and the address of the contract calling a precompile with the gas it
+// forwarded. The chain lock guards it.
 type e2eRuntime struct {
-	db     *state.StateDB
-	caller common.Address
+	db        *state.StateDB
+	caller    common.Address
+	forwarded uint64
 	// shortfall makes every move and transfer credit its destination one rao
 	// short, as a share pool above price 1 can.
 	shortfall bool
@@ -227,6 +237,9 @@ func (self *e2ePrecompile) Run(input []byte) ([]byte, error) {
 		return nil, err
 	}
 	rt := self.runtime
+	if rt.forwarded < e2eRuntimeDeclaredGas[method.Name] {
+		return nil, vm.ErrOutOfGas
+	}
 	coldkey := ss58.EvmMirrorPubkey(rt.caller)
 	netuid := func(value any) error {
 		var n uint64
@@ -421,7 +434,7 @@ func (self *e2eChain) evmLocked(db *state.StateDB, number uint64, call bool) *vm
 	}
 	hooks := &tracing.Hooks{OnEnter: func(depth int, typ byte, from, to common.Address, input []byte, gas uint64, value *big.Int) {
 		if to == e2eNeuron || to == e2eStaking || to == e2eAlpha {
-			self.runtime.caller = from
+			self.runtime.caller, self.runtime.forwarded = from, gas
 		}
 	}}
 	evm := vm.NewEVM(context, db, self.config, vm.Config{Tracer: hooks, NoBaseFee: call})
