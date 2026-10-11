@@ -406,3 +406,109 @@ func TestSettlementV2AuditRefusesEachMutation(t *testing.T) {
 		})
 	}
 }
+
+// VA-7: a fresh validator fetches and verifies the previous root's header
+// and account chunks, never its provider chunks, keeps every object it
+// fetched with exactly its bytes, and records each covered epoch's valid
+// rows. Restarted, it audits a replacement root that lists the same rows
+// from custody, fetching only the new objects.
+func TestSettlementV2AuditKeepsCustody(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f := settlementV2AuditTestF(t)
+	p := settlementV2AuditTestP(t, f)
+	fixture.useScenario(t, f, p.Commit, p.Objects, false, 610)
+	fixture.mustPass(t)
+	fixture.requireApproved(t, fixture.sentCalls(t), 2, p.Commit)
+	header, err := ledger.DecodeHeader(f.Header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := append([]ledger.Ref{f.Commit.LedgerHash}, header.Accounts...)
+	for ref := range p.Objects {
+		kept = append(kept, ref)
+	}
+	for _, ref := range kept {
+		data, ok, err := fixture.audit.custody.Object(t.Context(), ref)
+		if err != nil || !ok || fixture.objects.fetched(ref) != 1 || (!bytes.Equal(data, p.Objects[ref]) && !bytes.Equal(data, f.Objects[ref])) {
+			t.Fatalf("object %v: held %v, fetched %d times: %v", ref, ok, fixture.objects.fetched(ref), err)
+		}
+	}
+	if fixture.objects.fetched(f.Epochs[0].Providers...) != 0 {
+		t.Fatal("the previous root's provider chunks were fetched")
+	}
+	if _, ok, err := fixture.audit.custody.ValidRows(t.Context(), settlementV2AuditTestNoID, 3); ok || err != nil {
+		t.Fatalf("the previous root's rows were recorded: %v", err)
+	}
+
+	funded := settlementV2AuditTestFunding()
+	funded[6] = *uint256.NewInt(3_000_000)
+	fixture.useFunding(funded)
+	replacement := settlementV2AuditTestBuild(t, f, []ledger.EpochInput{{Epoch: 4, Rows: settlementV2AuditTestRows4()}, {Epoch: 5, Rows: settlementV2AuditTestRows5()},
+		{Epoch: 6, Rows: []protocol.LedgerUsageRow{settlementV2AuditTestRow(3, 2, 100, false)}}}, funded)
+	if !slices.Equal(replacement.Epochs[0].Providers, p.Epochs[0].Providers) || !slices.Equal(replacement.Epochs[1].Providers, p.Epochs[1].Providers) {
+		t.Fatal("the replacement does not list the same rows")
+	}
+	fixture.objects.publish(replacement.Objects)
+	fixture.committed(t, 705, 3, replacement.Commit, 2)
+	fixture.chain.advanceTo(709)
+	fixture.setPool(settlementV2AuditTestPending(3, replacement.Commit, 705), f.Commit)
+	fixture.restart(t)
+	before := fixture.objects.fetched()
+	fixture.mustPass(t)
+	fixture.requireApproved(t, fixture.sentCalls(t)[1:], 3, replacement.Commit)
+	if fetched := fixture.objects.fetched() - before; fetched != len(replacement.Objects)-2 {
+		t.Fatalf("fetched %d objects, want the replacement's %d new ones", fetched, len(replacement.Objects)-2)
+	}
+}
+
+// VA-7: a null declaration for an epoch without valid rows is accepted and
+// recorded with the declaring root's seq; no rows are recorded for it.
+func TestSettlementV2AuditRecordsNullDeclaration(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f := settlementV2AuditTestF(t)
+	declared := settlementV2AuditTestBuild(t, f, []ledger.EpochInput{{Epoch: 4, Null: true}, {Epoch: 5, Rows: settlementV2AuditTestRows5()}}, settlementV2AuditTestFunding())
+	fixture.useScenario(t, f, declared.Commit, declared.Objects, true, 610)
+	fixture.mustPass(t)
+	fixture.requireApproved(t, fixture.sentCalls(t), 2, declared.Commit)
+	var null settlementV2NullRecord
+	if ok, err := fixture.audit.custody.readJSON(fixture.audit.custody.path("nulls", "1-4-2.json"), &null); err != nil || !ok || null.Seq != 2 || null.Epoch != 4 || null.NoID != settlementV2AuditTestNoID {
+		t.Fatalf("null declaration recorded as %+v, %v: %v", null, ok, err)
+	}
+	if _, ok, err := fixture.audit.custody.ValidRows(t.Context(), settlementV2AuditTestNoID, 4); ok || err != nil {
+		t.Fatalf("rows recorded for a null epoch: %v", err)
+	}
+	if _, ok, err := fixture.audit.custody.ValidRows(t.Context(), settlementV2AuditTestNoID, 5); !ok || err != nil {
+		t.Fatalf("epoch 5's rows not recorded: %v", err)
+	}
+}
+
+// VA-7: a fresh validator whose operator serves previous-root chunks that do
+// not match their references records them as missing and the finding, waits
+// until commit + CHALLENGE_BLOCKS/2, then refuses: it holds no verified root
+// to demand against.
+func TestSettlementV2AuditFreshValidatorRefusesUnverifiablePrevious(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f := settlementV2AuditTestF(t)
+	p := settlementV2AuditTestP(t, f)
+	fixture.useScenario(t, f, p.Commit, p.Objects, false, 610)
+	header, err := ledger.DecodeHeader(f.Header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk := header.Accounts[0]
+	fixture.objects.publish(ledger.Objects{chunk: append(slices.Clone(f.Objects[chunk]), 0)})
+	fixture.mustPass(t)
+	record := fixture.record(t, 2)
+	if record.Decision != "" || record.Check != ledger.CheckPrevious.String() || !strings.Contains(record.Error, ledger.ErrPreviousRebuild.Error()) ||
+		!strings.Contains(record.Error, ledger.ErrChunkHash.Error()) || !slices.Equal(record.Missing, []string{chunk.String()}) {
+		t.Fatalf("record %+v", record)
+	}
+	fixture.chain.advanceTo(630)
+	fixture.mustPass(t)
+	if record := fixture.record(t, 2); record.Decision != settlementV2DecisionRefuse || !record.Done || len(fixture.chain.accepted()) != 0 {
+		t.Fatalf("record %+v", record)
+	}
+}

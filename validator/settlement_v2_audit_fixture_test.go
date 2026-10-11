@@ -610,8 +610,9 @@ func (self *settlementV2AuditTestFixture) record(t *testing.T, seq uint64) *sett
 }
 
 // settlementV2AuditTestSender records what the audit asks a sender to do,
-// and answers each call with err.
+// runs before, when set, and answers each call with err.
 type settlementV2AuditTestSender struct {
+	before      func()
 	approvals   []stabi.ISTSettlementVault2Pending
 	challenges  []stabi.LedgerTreeAccount
 	demands     []stabi.LedgerTreeAccount
@@ -621,18 +622,27 @@ type settlementV2AuditTestSender struct {
 	err         error
 }
 
+func (self *settlementV2AuditTestSender) call() {
+	if self.before != nil {
+		self.before()
+	}
+}
+
 func (self *settlementV2AuditTestSender) Approve(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending) error {
+	self.call()
 	self.approvals = append(self.approvals, pending)
 	return self.err
 }
 
 func (self *settlementV2AuditTestSender) Challenge(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, rootIndex uint64, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode, newPath []stabi.LedgerTreePathNode) error {
+	self.call()
 	self.challenges, self.rootIndexes = append(self.challenges, account), append(self.rootIndexes, rootIndex)
 	self.proofs, self.paths = append(self.proofs, oldProof), append(self.paths, newPath)
 	return self.err
 }
 
 func (self *settlementV2AuditTestSender) Demand(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, rootIndex uint64, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode) error {
+	self.call()
 	self.demands, self.rootIndexes, self.proofs = append(self.demands, account), append(self.rootIndexes, rootIndex), append(self.proofs, oldProof)
 	return self.err
 }
