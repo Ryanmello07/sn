@@ -5,13 +5,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -19,12 +22,17 @@ import (
 	"strings"
 	"testing"
 
+	native "github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
+	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/ss58"
 )
 
@@ -35,7 +43,7 @@ import (
 func newEvmV2ChainFixture(t *testing.T) *evmCreateFixture {
 	t.Helper()
 	f := newEvmV2Fixture(t)
-	f.history = &evmCreateHistory{receipts: map[string]map[string]any{}, transactions: map[string]*types.Transaction{}, states: map[string]*state.StateDB{}, storage: map[string]map[string]string{}}
+	f.history = &evmCreateHistory{receipts: map[string]map[string]any{}, transactions: map[string]*types.Transaction{}, blocks: map[string]types.Transactions{}, states: map[string]*state.StateDB{}, storage: map[string]map[string]string{}}
 	sender := f.config.Plan.Actions[0].Sender
 	f.installRegistrationPrecompiles(7, evmV2TestHotkey, ss58.EvmMirrorPubkey(crypto.CreateAddress(sender, 0)))
 	staking, collateralJump := evmTestPrecompileDispatch(nil, "getMinerCollateral(uint16,bytes32,bytes32)")
@@ -61,6 +69,92 @@ func (self *evmCreateFixture) refreshV2History() {
 	for hash := range self.evmHeaders {
 		self.history.states[hash] = self.state.Copy()
 	}
+}
+
+// Back-to-back original transactions execute in order into one block, each
+// with its own receipt, index and logs, and the native commitment lists them
+// all, the way a chain includes two sends broadcast together.
+func (self *evmCreateFixture) executeBlock(entries ...evmCreateFollow) error {
+	next := uint64(0)
+	var parentHash string
+	for hash, header := range self.evmHeaders {
+		if number := header.Number.Uint64(); number >= next {
+			next = number + 1
+			parentHash = hash
+		}
+	}
+	self.vm.BlockNumber = new(big.Int).SetUint64(next)
+	transactions, receipts, used := types.Transactions{}, []map[string]any{}, uint64(0)
+	for index, entry := range entries {
+		config := self.vm
+		config.GasLimit, config.Value = entry.tx.Gas(), entry.tx.Value()
+		self.state.SetTxContext(entry.tx.Hash(), index)
+		receipt := map[string]any{"transactionHash": entry.tx.Hash().Hex(), "transactionIndex": fmt.Sprintf("0x%x", index), "status": "0x1", "effectiveGasPrice": "0x2"}
+		var left uint64
+		var err error
+		if entry.tx.To() == nil {
+			var code []byte
+			var address common.Address
+			code, address, left, err = runtime.Create(entry.tx.Data(), &config)
+			if err == nil && (address != entry.plan.Address || !bytes.Equal(code, entry.plan.Runtime)) {
+				err = errors.New("genuine EVM constructor differs from approved immutable projection")
+			}
+			receipt["contractAddress"] = strings.ToLower(address.Hex())
+		} else {
+			self.state.SetNonce(self.vm.Origin, entry.tx.Nonce()+1, tracing.NonceChangeUnspecified)
+			_, left, err = runtime.Call(*entry.tx.To(), entry.tx.Data(), &config)
+			receipt["contractAddress"], receipt["to"], receipt["from"] = nil, entry.tx.To().Hex(), self.vm.Origin.Hex()
+		}
+		if err != nil {
+			return err
+		}
+		receipt["gasUsed"], used = fmt.Sprintf("0x%x", config.GasLimit-left), used+config.GasLimit-left
+		transactions, receipts = append(transactions, entry.tx), append(receipts, receipt)
+	}
+	header := &types.Header{ParentHash: common.HexToHash(parentHash), UncleHash: types.EmptyUncleHash, Root: self.state.IntermediateRoot(true), TxHash: types.DeriveSha(transactions, trie.NewStackTrie(nil)), ReceiptHash: types.EmptyReceiptsHash, Difficulty: big.NewInt(0), Number: new(big.Int).SetUint64(next), GasLimit: 75_000_000, GasUsed: used, Time: 1700000001001}
+	raw, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		return err
+	}
+	hash := header.Hash().Hex()
+	self.evmHeaders[hash], self.rawHeaders[hash] = header, "0x"+hex.EncodeToString(raw)
+	hashes := []string{}
+	for _, transaction := range transactions {
+		hashes = append(hashes, transaction.Hash().Hex())
+	}
+	nativeHeader, nativeHash := evmTestNativeHeader(self.t, self.hashes[self.head], self.head+1, []string{mappingTestDigest(self.t, 1, hash, hashes)})
+	self.headers[nativeHash], self.hashes[self.head+1], self.head = nativeHeader, nativeHash, self.head+1
+	metadata, _, err := crv4.DecodeRuntimeMetadata("0x" + hex.EncodeToString(self.metadata))
+	if err != nil {
+		return err
+	}
+	arg := make([]byte, 32)
+	binary.LittleEndian.PutUint64(arg, next)
+	key, err := native.CreateStorageKey(metadata, "Ethereum", "BlockHash", arg)
+	if err != nil {
+		return err
+	}
+	self.storageKey = key.Hex()
+	for index, receipt := range receipts {
+		receipt["blockHash"], receipt["blockNumber"] = hash, fmt.Sprintf("0x%x", next)
+		if transactions[index].To() != nil {
+			logs := []map[string]any{}
+			for _, log := range self.state.GetLogs(transactions[index].Hash(), next, header.Hash(), header.Time) {
+				topics := []string{}
+				for _, topic := range log.Topics {
+					topics = append(topics, topic.Hex())
+				}
+				logs = append(logs, map[string]any{"address": log.Address.Hex(), "topics": topics, "data": "0x" + hex.EncodeToString(log.Data), "transactionHash": log.TxHash.Hex(), "blockHash": log.BlockHash.Hex(), "blockNumber": fmt.Sprintf("0x%x", log.BlockNumber), "transactionIndex": fmt.Sprintf("0x%x", log.TxIndex), "logIndex": fmt.Sprintf("0x%x", log.Index), "removed": log.Removed})
+			}
+			receipt["logs"] = logs
+		}
+		self.history.receipts[transactions[index].Hash().Hex()] = receipt
+	}
+	self.history.transactions[hash], self.history.blocks[hash] = transactions[0], transactions
+	self.history.states[hash] = self.state.Copy()
+	self.history.storage[self.storageKey] = map[string]string{nativeHash: hash}
+	self.receipt = receipts[len(receipts)-1]
+	return nil
 }
 
 // The deployer's original signature over one approved envelope, in its own
@@ -138,8 +232,9 @@ func (self *evmCreateFixture) completeV2Action(id string) evmCreateResult {
 }
 
 // A7: vault2's send broadcasts the escrow registration's original bytes at the
-// next nonce in the same invocation; escrow2's journal then adopts them.
-func (self *evmCreateFixture) completeV2BackToBack() (evmCreateResult, evmCreateResult) {
+// next nonce in the same invocation; escrow2's journal then adopts them. The
+// chain includes the two in one block, or the registration in the next one.
+func (self *evmCreateFixture) completeV2BackToBack(sameBlock bool) (evmCreateResult, evmCreateResult) {
 	self.t.Helper()
 	self.selectV2Action("vault2-create")
 	escrowPlan, err := selectEvmCreatePlan(context.Background(), self.plan, "escrow2-register", self.configPath)
@@ -147,7 +242,7 @@ func (self *evmCreateFixture) completeV2BackToBack() (evmCreateResult, evmCreate
 		self.t.Fatal(err)
 	}
 	escrowTx, escrowRaw, escrowPath, escrowHash := self.v2SignedFile(1)
-	self.follow = &evmCreateFollow{plan: escrowPlan, tx: escrowTx, raw: escrowRaw}
+	self.follow = &evmCreateFollow{plan: escrowPlan, tx: escrowTx, raw: escrowRaw, sameBlock: sameBlock}
 	self.prepareV2Action("vault2-create", "--escrow-signed-transaction", escrowPath, "--escrow-signed-transaction-hash", escrowHash)
 	writes := len(self.writes)
 	result, code, diagnostic := self.command("resume", "--action", "vault2-create", "--online", "--submit")
@@ -158,19 +253,20 @@ func (self *evmCreateFixture) completeV2BackToBack() (evmCreateResult, evmCreate
 	self.plan, self.signedPath, self.signedHash = escrowPlan, escrowPath, escrowHash
 	self.prepareV2Action("escrow2-register")
 	escrow := self.finishV2Action("escrow2-register")
-	if escrow.Attempts != 0 || escrow.Receipt.BlockNumber != vault.Receipt.BlockNumber+1 {
-		self.t.Fatalf("escrow registration did not follow vault2 at the next block: %+v %+v", vault.Receipt, escrow.Receipt)
+	if escrow.Attempts != 0 || (escrow.Receipt.BlockHash == vault.Receipt.BlockHash) != sameBlock || !sameBlock && escrow.Receipt.BlockNumber != vault.Receipt.BlockNumber+1 {
+		self.t.Fatalf("escrow registration did not follow vault2 in its block or the next: %+v %+v", vault.Receipt, escrow.Receipt)
 	}
 	return vault, escrow
 }
 
 // SV-8, A7, A3: the complete phase on the EVM, vault2 and its escrow
-// registration broadcast back to back, every completion read back, and the
-// installation complete only with the binding. An offline reopen keeps the
-// record; an online one reads everything back again.
+// registration broadcast back to back and included in one block, every
+// completion read back, and the installation complete only with the binding.
+// An offline reopen keeps the record; an online one reads everything back
+// again.
 func TestEvmV2PhaseInstallsBackToBackWithReadback(t *testing.T) {
 	f := newEvmV2ChainFixture(t)
-	vault, escrow := f.completeV2BackToBack()
+	vault, escrow := f.completeV2BackToBack(true)
 	sender := f.config.Plan.Actions[0].Sender
 	if vault.Vault2Address != crypto.CreateAddress(sender, 0).Hex() || vault.InstallationComplete || vault.EscrowCollateral != nil || !slices.Equal(vault.RemainingActions, evmV2ActionIds()[1:]) {
 		t.Fatalf("vault2 completion: %+v", vault)
@@ -194,6 +290,15 @@ func TestEvmV2PhaseInstallsBackToBackWithReadback(t *testing.T) {
 	var record evmActionRecord
 	if err != nil || json.Unmarshal(raw, &record) != nil || record.EscrowAttempts != 1 || record.EscrowTransactionHash != escrow.TransactionHash || record.Attempts != 1 {
 		t.Fatalf("vault2 journal lost its back-to-back escrow custody: %+v %v", record, err)
+	}
+}
+
+// SV-8, A7: a back-to-back registration that the chain includes in the block
+// after vault2's completes both actions with the same readback.
+func TestEvmV2BackToBackAcrossBlocksCompletes(t *testing.T) {
+	f := newEvmV2ChainFixture(t)
+	if vault, escrow := f.completeV2BackToBack(false); vault.EscrowCollateral != nil || escrow.EscrowCollateral == nil || escrow.Receipt.EscrowUid != 7 {
+		t.Fatalf("back-to-back completions across blocks: %+v %+v", vault, escrow)
 	}
 }
 

@@ -198,17 +198,22 @@ type evmCreateFixture struct {
 
 // A second original transaction that one invocation sends right after the
 // selected one, as the settlement v2 escrow registration follows vault2.
+// With sameBlock the selected send waits for it, and one block includes both,
+// as a chain usually includes two back-to-back sends.
 type evmCreateFollow struct {
-	plan evmCreatePlan
-	tx   *types.Transaction
-	raw  []byte
+	plan      evmCreatePlan
+	tx        *types.Transaction
+	raw       []byte
+	sameBlock bool
 }
 
 // Two-action fixtures retain real execution state at each inclusion hash. The
 // legacy one-action fixture leaves this nil and retains its original behavior.
+// blocks lists the transactions of a block that includes more than one.
 type evmCreateHistory struct {
 	receipts     map[string]map[string]any
 	transactions map[string]*types.Transaction
+	blocks       map[string]types.Transactions
 	states       map[string]*state.StateDB
 	storage      map[string]map[string]string
 }
@@ -585,6 +590,9 @@ func (self *evmCreateFixture) serve(writer http.ResponseWriter, request *http.Re
 					if transaction := self.history.transactions[hash]; transaction != nil {
 						hashes = append(hashes, transaction.Hash().Hex())
 					}
+					for _, transaction := range self.history.blocks[hash][min(1, len(self.history.blocks[hash])):] {
+						hashes = append(hashes, transaction.Hash().Hex())
+					}
 				}
 				result = map[string]any{"hash": hash, "number": fmt.Sprintf("0x%x", header.Number), "transactions": hashes}
 				if call.Method == "eth_getBlockByHash" {
@@ -604,11 +612,25 @@ func (self *evmCreateFixture) serve(writer http.ResponseWriter, request *http.Re
 		if self.history != nil && call.Params[1] == "0x0" {
 			result = self.history.transactions[call.Params[0].(string)]
 		}
+		if self.history != nil {
+			for index, transaction := range self.history.blocks[call.Params[0].(string)] {
+				if call.Params[1] == fmt.Sprintf("0x%x", index) {
+					result = transaction
+				}
+			}
+		}
 	case "eth_getTransactionByHash":
 		if self.history != nil {
 			for _, transaction := range self.history.transactions {
 				if transaction.Hash().Hex() == call.Params[0] {
 					result = transaction
+				}
+			}
+			for _, transactions := range self.history.blocks {
+				for _, transaction := range transactions {
+					if transaction.Hash().Hex() == call.Params[0] {
+						result = transaction
+					}
 				}
 			}
 		}
@@ -665,9 +687,26 @@ func (self *evmCreateFixture) serve(writer http.ResponseWriter, request *http.Re
 		result = "0x" + hex.EncodeToString(value)
 	case "eth_sendRawTransaction":
 		raw, err := hex.DecodeString(call.Params[0].(string)[2:])
+		if self.follow != nil && self.follow.sameBlock && err == nil && bytes.Equal(raw, self.raw) && self.receipt == nil {
+			// The selected send waits in the pool for its follow's block.
+			self.writes = append(self.writes, raw)
+			result = self.tx.Hash().Hex()
+			break
+		}
 		if self.follow != nil && bytes.Equal(raw, self.follow.raw) {
+			held := evmCreateFollow{plan: self.plan, tx: self.tx, raw: self.raw}
+			sameBlock := self.follow.sameBlock
 			self.plan, self.tx, self.raw, self.receipt = self.follow.plan, self.follow.tx, self.follow.raw, nil
 			self.vm.GasLimit, self.follow = self.tx.Gas(), nil
+			if sameBlock {
+				self.writes = append(self.writes, raw)
+				if err := self.executeBlock(held, evmCreateFollow{plan: self.plan, tx: self.tx, raw: self.raw}); err != nil {
+					http.Error(writer, err.Error(), 400)
+					return
+				}
+				result = self.tx.Hash().Hex()
+				break
+			}
 		}
 		if err != nil || !bytes.Equal(raw, self.raw) {
 			http.Error(writer, "not original signed bytes", 400)

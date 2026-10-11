@@ -92,50 +92,50 @@ func contractVault2Payload(artifact contractReleaseArtifact, p evmPhasePlan) (co
 	return contractVault2Constructor{EscrowHotkey: common.Hash(hotkey).Hex(), DemandFeeWei: fee.String()}, runtime, nil
 }
 
-// Vault2's immutable identity plus its one-shot escrow registration and
-// coordinator binding, which are the only getters the installation changes,
-// and its empty accounting, under which conservation holds. liveEscrowStake
-// alone is not read back: anyone may transfer stake to vault2's escrow
-// position, and conservationHolds already evaluates it through the precompile.
-// Once registered, the escrow position's collateral is read back as well.
+// Vault2's immutable identity, its coordinator binding and its empty
+// accounting, under which conservation holds. liveEscrowStake alone is not
+// read back: anyone may transfer stake to vault2's escrow position, and
+// conservationHolds already evaluates it through the precompile. The escrow
+// flag, its getter and slot zero, is read back only from the escrow
+// registration's own receipt on: the back-to-back registration (A7) usually
+// executes in vault2's own block, so vault2's creation cannot pin it. Once
+// registered, the escrow position's collateral is read back as well.
 // Reviewed STSettlementVault2 layout: coordinator in the low 20 bytes of slot
 // zero with escrowRegistered at byte offset 20, the reentrancy flag in slot
 // one and totalCaptured, totalPaid and escrowAccounted in slots 14 to 16.
 func contractVault2State(vault evmCreatePlan, coordinator common.Address, registered bool) ([]contractGetter, []contractStorageWord) {
 	contract := stabi.NewSTSettlementVault2()
 	fee, _ := new(big.Int).SetString(vault.Vault2Constructor.DemandFeeWei, 10)
-	flag := common.Hash{}
+	type word struct {
+		data  []byte
+		value common.Hash
+	}
+	words := []word{
+		{data: contract.PackNetuid(), value: common.BigToHash(big.NewInt(int64(vault.Config.Plan.Netuid)))},
+		{data: contract.PackEscrowHotkey(), value: common.HexToHash(vault.Vault2Constructor.EscrowHotkey)},
+		{data: contract.PackSelfColdkey(), value: common.Hash(ss58.EvmMirrorPubkey(vault.Address))},
+		{data: contract.PackBootstrap(), value: common.BytesToHash(vault.Config.Plan.Actions[0].Sender[:])},
+		{data: contract.PackDemandFeeWei(), value: common.BigToHash(fee)},
+		{data: contract.PackCHALLENGEBLOCKS(), value: common.BigToHash(big.NewInt(contractVault2ChallengeBlocks))},
+		{data: contract.PackCoordinator(), value: common.BytesToHash(coordinator[:])},
+	}
 	if registered {
-		flag[31] = 1
+		words = append(words, word{data: contract.PackEscrowRegistered(), value: common.BigToHash(big.NewInt(1))})
 	}
+	words = append(words, word{data: contract.PackTotalCaptured()}, word{data: contract.PackTotalPaid()}, word{data: contract.PackEscrowAccounted()}, word{data: contract.PackConservationHolds(), value: common.BigToHash(big.NewInt(1))})
 	getters := []contractGetter{}
-	for _, getter := range []struct {
-		data []byte
-		word common.Hash
-	}{
-		{data: contract.PackNetuid(), word: common.BigToHash(big.NewInt(int64(vault.Config.Plan.Netuid)))},
-		{data: contract.PackEscrowHotkey(), word: common.HexToHash(vault.Vault2Constructor.EscrowHotkey)},
-		{data: contract.PackSelfColdkey(), word: common.Hash(ss58.EvmMirrorPubkey(vault.Address))},
-		{data: contract.PackBootstrap(), word: common.BytesToHash(vault.Config.Plan.Actions[0].Sender[:])},
-		{data: contract.PackDemandFeeWei(), word: common.BigToHash(fee)},
-		{data: contract.PackCHALLENGEBLOCKS(), word: common.BigToHash(big.NewInt(contractVault2ChallengeBlocks))},
-		{data: contract.PackCoordinator(), word: common.BytesToHash(coordinator[:])},
-		{data: contract.PackEscrowRegistered(), word: flag},
-		{data: contract.PackTotalCaptured(), word: common.Hash{}},
-		{data: contract.PackTotalPaid(), word: common.Hash{}},
-		{data: contract.PackEscrowAccounted(), word: common.Hash{}},
-		{data: contract.PackConservationHolds(), word: common.BigToHash(big.NewInt(1))},
-	} {
-		getters = append(getters, contractGetter{Data: "0x" + hex.EncodeToString(getter.data), Expected: getter.word.Hex()})
+	for _, getter := range words {
+		getters = append(getters, contractGetter{Data: "0x" + hex.EncodeToString(getter.data), Expected: getter.value.Hex()})
 	}
-	packed := common.BytesToHash(coordinator[:])
+	storage := []contractStorageWord{}
 	if registered {
 		netuid, hotkey, coldkey := common.BigToHash(big.NewInt(int64(vault.Config.Plan.Netuid))), common.HexToHash(vault.Vault2Constructor.EscrowHotkey), common.Hash(ss58.EvmMirrorPubkey(vault.Address))
 		data := append(append(append(crypto.Keccak256([]byte("getMinerCollateral(uint16,bytes32,bytes32)"))[:4], netuid[:]...), hotkey[:]...), coldkey[:]...)
 		getters = append(getters, contractGetter{To: contractStakingPrecompile, Data: "0x" + hex.EncodeToString(data), Expected: "0x" + strings.Repeat("00", 5*32)})
+		packed := common.BytesToHash(coordinator[:])
 		packed[11] = 1
+		storage = append(storage, contractStorageWord{Slot: (common.Hash{}).Hex(), Expected: packed.Hex()})
 	}
-	storage := []contractStorageWord{{Slot: (common.Hash{}).Hex(), Expected: packed.Hex()}}
 	for _, slot := range []int64{1, 14, 15, 16} {
 		storage = append(storage, contractStorageWord{Slot: common.BigToHash(big.NewInt(slot)).Hex(), Expected: (common.Hash{}).Hex()})
 	}

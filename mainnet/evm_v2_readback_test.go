@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -110,9 +111,11 @@ func evmV2ReadbackFlip(value string) string {
 // The canonical inclusion selector used by receipt authentication.
 var evmV2ReadbackBlock = map[string]any{"blockHash": common.Hash{7}.Hex(), "requireCanonical": true}
 
-// SV-8: completion reads back every getter the plan names for vault2 and
+// SV-8, A7: completion reads back every getter the plan names for vault2 and
 // STSettlement2, through both addresses, plus the reviewed storage words.
-// Once registered, vault2's escrow position must show no collateral (A3).
+// Vault2's escrow flag, its getter and slot zero, is pinned from the escrow
+// registration on, because the back-to-back registration can share vault2's
+// block. Once registered, vault2's escrow position must show no collateral (A3).
 func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 	f := newEvmV2Fixture(t)
 	graph := f.v2Graph()
@@ -122,7 +125,7 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 	word := func(value int64) string { return common.BigToHash(big.NewInt(value)).Hex() }
 	addressWord := func(address common.Address) string { return common.BytesToHash(address[:]).Hex() }
 	call := func(data []byte) string { return "0x" + hex.EncodeToString(data) }
-	vaultGetters := func(coordinator common.Address, registered int64) []contractGetter {
+	vaultGetters := func(coordinator common.Address, registered bool) []contractGetter {
 		getters := []contractGetter{
 			{Data: call(contract.PackNetuid()), Expected: word(25)},
 			{Data: call(contract.PackEscrowHotkey()), Expected: common.Hash(evmV2TestHotkey).Hex()},
@@ -131,13 +134,17 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 			{Data: call(contract.PackDemandFeeWei()), Expected: common.BigToHash(evmV2TestFee).Hex()},
 			{Data: call(contract.PackCHALLENGEBLOCKS()), Expected: word(14_400)},
 			{Data: call(contract.PackCoordinator()), Expected: addressWord(coordinator)},
-			{Data: call(contract.PackEscrowRegistered()), Expected: word(registered)},
+		}
+		if registered {
+			getters = append(getters, contractGetter{Data: call(contract.PackEscrowRegistered()), Expected: word(1)})
+		}
+		getters = append(getters, []contractGetter{
 			{Data: call(contract.PackTotalCaptured()), Expected: word(0)},
 			{Data: call(contract.PackTotalPaid()), Expected: word(0)},
 			{Data: call(contract.PackEscrowAccounted()), Expected: word(0)},
 			{Data: call(contract.PackConservationHolds()), Expected: word(1)},
-		}
-		if registered == 1 {
+		}...)
+		if registered {
 			getters = append(getters, contractGetter{To: "0x0000000000000000000000000000000000000805", Data: "0x" + hex.EncodeToString(crypto.Keccak256([]byte("getMinerCollateral(uint16,bytes32,bytes32)"))[:4]) + strings.TrimPrefix(word(25), "0x") + strings.TrimPrefix(common.Hash(evmV2TestHotkey).Hex(), "0x") + strings.TrimPrefix(common.Hash(ss58.EvmMirrorPubkey(vault)).Hex(), "0x"), Expected: "0x" + strings.Repeat("0", 320)})
 		}
 		return getters
@@ -145,16 +152,18 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 	slot := func(value int64) string { return common.BigToHash(big.NewInt(value)).Hex() }
 	zero := (common.Hash{}).Hex()
 	vaultStorage := func(coordinator common.Address, registered bool) []contractStorageWord {
-		packed := common.BytesToHash(coordinator[:])
+		storage := []contractStorageWord{}
 		if registered {
+			packed := common.BytesToHash(coordinator[:])
 			packed[11] = 1
+			storage = append(storage, contractStorageWord{Slot: zero, Expected: packed.Hex()})
 		}
-		return []contractStorageWord{{Slot: zero, Expected: packed.Hex()}, {Slot: slot(1), Expected: zero}, {Slot: slot(14), Expected: zero}, {Slot: slot(15), Expected: zero}, {Slot: slot(16), Expected: zero}}
+		return append(storage, contractStorageWord{Slot: slot(1), Expected: zero}, contractStorageWord{Slot: slot(14), Expected: zero}, contractStorageWord{Slot: slot(15), Expected: zero}, contractStorageWord{Slot: slot(16), Expected: zero})
 	}
 	for index, expected := range map[int]struct {
 		getters []contractGetter
 		storage []contractStorageWord
-	}{0: {vaultGetters(common.Address{}, 0), vaultStorage(common.Address{}, false)}, 1: {vaultGetters(common.Address{}, 1), vaultStorage(common.Address{}, true)}, 4: {vaultGetters(proxy, 1), vaultStorage(proxy, true)}} {
+	}{0: {vaultGetters(common.Address{}, false), vaultStorage(common.Address{}, false)}, 1: {vaultGetters(common.Address{}, true), vaultStorage(common.Address{}, true)}, 4: {vaultGetters(proxy, true), vaultStorage(proxy, true)}} {
 		if graph[index].Address != vault || rootObjectHash(graph[index].Getters) != rootObjectHash(expected.getters) || rootObjectHash(graph[index].Storage) != rootObjectHash(expected.storage) || crypto.Keccak256Hash(graph[index].Runtime) != crypto.Keccak256Hash(graph[0].Runtime) {
 			t.Fatalf("vault2 projection %d: %+v %+v", index, graph[index].Getters, graph[index].Storage)
 		}
@@ -203,10 +212,12 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 	}
 }
 
-// SV-8: every readback calls each argument-free view of the release ABI,
+// SV-8, A7: every readback calls each argument-free view of the release ABI,
 // except vault2's liveEscrowStake, which anyone can raise by transferring
-// stake to the escrow position, and the proxy's proxiableUUID, which UUPS
-// refuses through a proxy and the implementation's readback calls instead.
+// stake to the escrow position, vault2's escrowRegistered at its creation,
+// which the back-to-back registration can set in the same block, and the
+// proxy's proxiableUUID, which UUPS refuses through a proxy and the
+// implementation's readback calls instead.
 func TestEvmV2ReadbackCoversEveryArgumentFreeView(t *testing.T) {
 	f := newEvmV2Fixture(t)
 	graph := f.v2Graph()
@@ -214,8 +225,8 @@ func TestEvmV2ReadbackCoversEveryArgumentFreeView(t *testing.T) {
 	for index, check := range []struct {
 		artifact string
 		plan     *evmCreatePlan
-		skipped  string
-	}{{"SettlementVault2", graph[0], "liveEscrowStake"}, {"SettlementVault2", graph[1], "liveEscrowStake"}, {"SettlementVault2", graph[4], "liveEscrowStake"}, {"Settlement2", graph[2], ""}, {"Settlement2", graph[3], "proxiableUUID"}} {
+		skipped  []string
+	}{{"SettlementVault2", graph[0], []string{"liveEscrowStake", "escrowRegistered"}}, {"SettlementVault2", graph[1], []string{"liveEscrowStake"}}, {"SettlementVault2", graph[4], []string{"liveEscrowStake"}}, {"Settlement2", graph[2], nil}, {"Settlement2", graph[3], []string{"proxiableUUID"}}} {
 		parsed, err := abi.JSON(strings.NewReader(evmV2TestArtifactNamed(t, release, check.artifact).Abi))
 		if err != nil {
 			t.Fatal(err)
@@ -228,15 +239,18 @@ func TestEvmV2ReadbackCoversEveryArgumentFreeView(t *testing.T) {
 		}
 		views := 0
 		for name, method := range parsed.Methods {
-			if !method.IsConstant() || len(method.Inputs) != 0 || name == check.skipped {
+			if !method.IsConstant() || len(method.Inputs) != 0 {
 				continue
 			}
-			views++
-			if !read["0x"+hex.EncodeToString(method.ID)] {
-				t.Fatalf("readback %d omits %s.%s", index, check.artifact, name)
+			skipped := slices.Contains(check.skipped, name)
+			if read["0x"+hex.EncodeToString(method.ID)] == skipped {
+				t.Fatalf("readback %d of %s.%s differs from its skip list", index, check.artifact, name)
+			}
+			if !skipped {
+				views++
 			}
 		}
-		if views != len(read) || check.skipped != "" && read["0x"+hex.EncodeToString(parsed.Methods[check.skipped].ID)] {
+		if views != len(read) {
 			t.Fatalf("readback %d calls %d of %d views", index, len(read), views)
 		}
 	}

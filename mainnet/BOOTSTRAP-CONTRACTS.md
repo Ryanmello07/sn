@@ -754,19 +754,20 @@ the authenticated canonical inclusion:
 
 - `vault2-create`: the exact runtime and the getters `netuid`, `escrowHotkey`,
   `selfColdkey`, `bootstrap`, `demandFeeWei`, `CHALLENGE_BLOCKS` (14,400),
-  `coordinator` (zero), `escrowRegistered` (false), `totalCaptured`,
-  `totalPaid` and `escrowAccounted` (zero) and `conservationHolds` (true),
-  and five storage words of the reviewed layout: slot zero packs
-  `coordinator` in its low 20 bytes with `escrowRegistered` at byte offset 20,
-  the reentrancy flag in slot one and `totalCaptured`, `totalPaid` and
-  `escrowAccounted` in slots 14 to 16 stay zero. The generator pins these
-  slots to the compiler layout. That is every argument-free view except
-  `liveEscrowStake`, which anyone can raise by transferring stake to vault2's
-  escrow position; `conservationHolds` evaluates it through the staking
-  precompile.
+  `coordinator` (zero), `totalCaptured`, `totalPaid` and `escrowAccounted`
+  (zero) and `conservationHolds` (true), and four zero storage words of the
+  reviewed layout: the reentrancy flag in slot one and `totalCaptured`,
+  `totalPaid` and `escrowAccounted` in slots 14 to 16. That is every
+  argument-free view except `liveEscrowStake`, which anyone can raise by
+  transferring stake to vault2's escrow position (`conservationHolds`
+  evaluates it through the staking precompile), and `escrowRegistered`: the
+  back-to-back registration usually executes in vault2's own block, so the
+  escrow flag is pinned from `escrow2-register` on.
 - `escrow2-register`: the original escrow checks (one `EscrowRegistered` event
-  and the `getUid`/`getHotkey`/`getColdkey` mapping), the vault2 getters and
-  slot zero with `escrowRegistered` true, and the escrow position's
+  and the `getUid`/`getHotkey`/`getColdkey` mapping), the vault2 getters with
+  `escrowRegistered` true, slot zero packing `coordinator` in its low 20
+  bytes with `escrowRegistered` at byte offset 20, the four zero words, and
+  the escrow position's
   registration collateral, `getMinerCollateral(netuid, escrowHotkey,
   selfColdkey)` on the staking precompile `0x805`
   (`evm/src/interfaces/stakingCollateral.sol`). While SN25's
@@ -819,7 +820,10 @@ bytes, each after its own durable attempt within the one allowance. The status
 is `submitted-with-escrow-registration-awaiting-canonical-receipts`, or
 `escrow-registration-allowance-exhausted` when no attempt remains. Vault2's
 admission refuses both sends while the escrow hotkey already has a UID, at the
-canonical head or in pending state. Once vault2 completes, open
+canonical head or in pending state. The chain usually includes both
+transactions in one block, the registration right after vault2's creation;
+vault2's readback at that block leaves the escrow flag to the registration's
+own readback, so either inclusion completes. Once vault2 completes, open
 `escrow2-register`'s journal and import exactly the same bytes, which its
 journal adopts; any other signature is refused. Its online `resume` then finds
 the registration's receipt and completes it with the readback. Without the
