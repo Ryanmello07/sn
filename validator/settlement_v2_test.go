@@ -17,6 +17,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/stabi"
 	"gopkg.in/yaml.v3"
 )
 
@@ -210,6 +211,15 @@ func TestSettlementV2IdentityCheckReadsThreePinnedGetters(t *testing.T) {
 	}
 	if len(reader.calls) != 3 {
 		t.Fatal("identity check did not read exactly the three getters", reader.calls)
+	}
+	for _, pinned := range [][2][]byte{
+		{settlementV2VaultSelector[:], stabi.NewSTSettlement2().PackVault()},
+		{settlementV2V1CoordinatorSelector[:], stabi.NewSTSettlement2().PackV1Coordinator()},
+		{settlementV2CoordinatorSelector[:], stabi.NewSTSettlementVault2().PackCoordinator()},
+	} {
+		if !bytes.Equal(pinned[0], pinned[1]) {
+			t.Fatal("a pinned getter differs from the contract ABI", pinned)
+		}
 	}
 	for _, call := range reader.calls {
 		if _, exists := reader.answers[call]; !exists {
