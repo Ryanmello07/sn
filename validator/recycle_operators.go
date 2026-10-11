@@ -158,7 +158,7 @@ func ObserveOwnerRecycleMeasurementOperators(ctx context.Context, authority *Own
 	}
 	query := releaseDecisionChainV2Query{domain: domain, policy: authority.config.Policy,
 		boundary:     AttemptBoundary{SettlementEpoch: artifact.SettlementEpoch, EVMBlock: artifact.EVMSnapshotBlock, EVMBlockHash: artifact.EVMSnapshotHash},
-		maxOperators: options.MaxOperators, maxControlBytes: options.MaxControlBytes}
+		maxOperators: options.MaxOperators, maxControlBytes: options.MaxControlBytes, settlementV2: releaseSettlementV2Addresses(&authority.config)}
 	for _, input := range artifact.Inputs {
 		operator := releaseDecisionChainV2OperatorQuery{noID: input.NoID}
 		// The full verifier already bounded and authenticated this membership.
