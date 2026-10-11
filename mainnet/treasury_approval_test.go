@@ -519,8 +519,7 @@ func TestTreasuryApprovalPlanResignsSettlementV2Adoption(t *testing.T) {
 	if !reflect.DeepEqual(unchanged, after.Approval) {
 		t.Fatal("re-signed approval changed more than its config hash")
 	}
-	settlement, vault, ok := adopted.SettlementV2Addresses()
-	if !ok || settlement != common.HexToAddress(block.Settlement) || vault != common.HexToAddress(block.Vault) || len(adopted.ProductionAuthorityHistory) != 1 {
+	if adopted.SettlementV2 == nil || *adopted.SettlementV2 != block || len(adopted.ProductionAuthorityHistory) != 1 {
 		t.Fatal("adopted config lost its block or its predecessor")
 	}
 }

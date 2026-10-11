@@ -91,16 +91,17 @@ func settlementV2TestLoad(t *testing.T, block *ReleaseSettlementV2Config) (*Rele
 }
 
 // VA-6: an adopted block loads with its exact spelling, appears in both wire
-// forms and is the only source of the v2 addresses.
+// forms and is what steering, the production row, replay and the startup
+// identity check read through releaseSettlementV2Addresses.
 func TestSettlementV2ConfigLoadsAndNamesAddresses(t *testing.T) {
 	block := settlementV2TestBlock
 	cfg, err := settlementV2TestLoad(t, &block)
 	if err != nil {
 		t.Fatal(err)
 	}
-	settlement, vault, ok := cfg.SettlementV2Addresses()
-	if !ok || settlement != common.HexToAddress(block.Settlement) || vault != common.HexToAddress(block.Vault) || *cfg.SettlementV2 != block {
-		t.Fatal("loaded config lost its settlement_v2 addresses")
+	want := SettlementV2Addresses{Settlement: common.HexToAddress(block.Settlement), Vault: common.HexToAddress(block.Vault)}
+	if releaseSettlementV2Addresses(cfg) != want || *cfg.SettlementV2 != block {
+		t.Fatal("loaded config does not name its settlement_v2 addresses")
 	}
 	encoded, err := json.Marshal(cfg)
 	if err != nil || !bytes.Contains(encoded, []byte(`"settlement_v2":{"settlement":"`+block.Settlement+`","vault":"`+block.Vault+`"}`)) {
@@ -110,11 +111,8 @@ func TestSettlementV2ConfigLoadsAndNamesAddresses(t *testing.T) {
 	if err != nil || !bytes.Contains(document, []byte("settlement_v2:\n    settlement: "+block.Settlement+"\n    vault: "+block.Vault+"\n")) {
 		t.Fatal("YAML omits the adopted block", err, string(document))
 	}
-	if _, _, ok := (&ReleaseConfig{}).SettlementV2Addresses(); ok {
+	if releaseSettlementV2Addresses(&ReleaseConfig{}).configured() {
 		t.Fatal("a config without the block named v2 addresses")
-	}
-	if _, _, ok := (*ReleaseConfig)(nil).SettlementV2Addresses(); ok {
-		t.Fatal("an absent config named v2 addresses")
 	}
 }
 

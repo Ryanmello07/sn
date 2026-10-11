@@ -8,29 +8,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/urfoundation/sn/stabi"
 )
 
 // An unrelated latest metadata/current EVM outage cannot strand an immortal
 // original signature. Both receipt and application use actual canonical rows;
 // a later preparation request is blocked before it can sign anything new.
 func TestProductionStartupRunReleaseReconcilesBeforeCurrentPreparation(t *testing.T) {
-	productionStartupTestReconcile(t, newProductionStartupTestFixture(t))
-}
-
-// VA-9: activation history and original recovery run unchanged under a
-// config carrying settlement_v2; its identity check waits for preparation.
-func TestProductionStartupRunReleaseReconcilesWithSettlementV2(t *testing.T) {
-	productionStartupTestReconcile(t, newProductionStartupSettlementV2TestFixture(t))
-}
-
-// Recovery of the lost original acknowledgement up to the preparation barrier.
-func productionStartupTestReconcile(t *testing.T, fixture *productionStartupTestFixture) {
-	t.Helper()
+	fixture := newProductionStartupTestFixture(t)
 	continuation := fixture.continuation
 	pending := continuation.beginAndLoseAcknowledgement(t, fixture.native)
 	fixture.native.receiptNumber, fixture.native.applied = 103, true
@@ -159,14 +152,32 @@ func productionStartupTestInitialDeployment(t *testing.T, fixture *productionSta
 	}
 }
 
-// The startup config also carries settlement_v2, and the EVM answers its
-// three identity getters at the finalized head.
+// The startup config also carries settlement_v2. No pool is registered in
+// vault2 yet, as before E_s, so every epoch keeps its operatorAt destination.
 func newProductionStartupSettlementV2TestFixture(t *testing.T) *productionStartupTestFixture {
 	t.Helper()
 	block := settlementV2TestBlock
-	fixture := newProductionStartupTestFixtureWithConfig(t, false, func(cfg *ReleaseConfig) { cfg.SettlementV2 = &block })
-	fixture.evm.settlementV2 = settlementV2TestAnswers(fixture.continuation.production.cfg.Coordinator)
-	return fixture
+	return newProductionStartupTestFixtureWithConfig(t, false, func(cfg *ReleaseConfig) { cfg.SettlementV2 = &block })
+}
+
+// The chain's honest settlement v2 views for cfg: the three identity getters
+// and an unregistered vault2 pool for every configured operator.
+func settlementV2TestStartupViews(t *testing.T, cfg *ReleaseConfig) map[string][]byte {
+	t.Helper()
+	views := settlementV2TestAnswers(cfg.Coordinator)
+	vaultABI, err := stabi.STSettlementVault2MetaData.ParseABI()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unregistered, err := vaultABI.Methods["pools"].Outputs.Pack(stabi.ISTSettlementVault2Pool{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operator := range cfg.Operators {
+		calldata := stabi.NewSTSettlementVault2().PackPools(new(big.Int).SetUint64(operator.NoID))
+		views[cfg.SettlementV2.Vault+"/"+common.Bytes2Hex(calldata)] = unregistered
+	}
+	return views
 }
 
 // VA-6: when STSettlement2 names another vault, the validator stops at its

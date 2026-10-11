@@ -29,15 +29,6 @@ func (self ReleaseSettlementV2Config) validate() error {
 	return nil
 }
 
-// SettlementV2Addresses returns the STSettlement2 proxy and vault2 addresses;
-// ok is false when the config has not adopted settlement v2.
-func (self *ReleaseConfig) SettlementV2Addresses() (settlement, vault common.Address, ok bool) {
-	if self == nil || self.SettlementV2 == nil {
-		return common.Address{}, common.Address{}, false
-	}
-	return common.HexToAddress(self.SettlementV2.Settlement), common.HexToAddress(self.SettlementV2.Vault), true
-}
-
 // The pinned getters each return one address word.
 var (
 	settlementV2VaultSelector         = evmSelector("vault()")
@@ -54,8 +45,8 @@ type releaseSettlementV2Reader interface {
 // configured vault and v1 coordinator, and the vault must name STSettlement2.
 // A config without the block reads nothing.
 func verifyReleaseSettlementV2Context(ctx context.Context, chain releaseSettlementV2Reader, cfg *ReleaseConfig, block uint64, blockHash [32]byte) error {
-	settlement, vault, ok := cfg.SettlementV2Addresses()
-	if !ok {
+	v2 := releaseSettlementV2Addresses(cfg)
+	if !v2.configured() {
 		return nil
 	}
 	for _, check := range []struct {
@@ -64,9 +55,9 @@ func verifyReleaseSettlementV2Context(ctx context.Context, chain releaseSettleme
 		selector [4]byte
 		expected common.Address
 	}{
-		{name: "STSettlement2.vault()", target: settlement, selector: settlementV2VaultSelector, expected: vault},
-		{name: "STSettlement2.v1Coordinator()", target: settlement, selector: settlementV2V1CoordinatorSelector, expected: common.HexToAddress(cfg.Coordinator)},
-		{name: "STSettlementVault2.coordinator()", target: vault, selector: settlementV2CoordinatorSelector, expected: settlement},
+		{name: "STSettlement2.vault()", target: v2.Settlement, selector: settlementV2VaultSelector, expected: v2.Vault},
+		{name: "STSettlement2.v1Coordinator()", target: v2.Settlement, selector: settlementV2V1CoordinatorSelector, expected: common.HexToAddress(cfg.Coordinator)},
+		{name: "STSettlementVault2.coordinator()", target: v2.Vault, selector: settlementV2CoordinatorSelector, expected: v2.Settlement},
 	} {
 		output, err := chain.ethCallAtHashContext(ctx, check.target, check.selector[:], block, blockHash)
 		if err != nil {
