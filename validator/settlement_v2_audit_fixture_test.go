@@ -548,8 +548,15 @@ func (self *settlementV2AuditTestFixture) setPool(pending stabi.ISTSettlementVau
 // objects published. heldF records that this validator audited F.
 func (self *settlementV2AuditTestFixture) useScenario(t *testing.T, f *ledger.Ledger, pending ledger.Root, objects ledger.Objects, heldF bool, head uint64) {
 	t.Helper()
+	self.committed(t, 605, 2, pending, 0)
+	self.useScenarioAt(t, f, pending, objects, heldF, 2, 605, head)
+}
+
+// useScenarioAt has pending committed as seq at block committed instead; its
+// caller adds the commit's events.
+func (self *settlementV2AuditTestFixture) useScenarioAt(t *testing.T, f *ledger.Ledger, pending ledger.Root, objects ledger.Objects, heldF bool, seq, committed, head uint64) {
+	t.Helper()
 	self.chain.addLog(t, settlementV2VaultABI, settlementV2TestVault, "DistributionFinalized", 460, big.NewInt(settlementV2AuditTestNoID), uint64(1), big.NewInt(0), f.Commit.Epoch, f.Commit.Root, f.Commit.Total.ToBig(), f.Commit.LeafCount, [32]byte(f.Commit.LedgerHash))
-	self.chain.addLog(t, settlementV2VaultABI, settlementV2TestVault, "DistributionCommitted", 605, big.NewInt(settlementV2AuditTestNoID), uint64(2), pending.Epoch, pending.Root, pending.Total.ToBig(), pending.LeafCount, [32]byte(pending.LedgerHash), uint64(0))
 	self.objects.publish(objects)
 	if heldF {
 		self.holdF(t, f)
@@ -557,7 +564,23 @@ func (self *settlementV2AuditTestFixture) useScenario(t *testing.T, f *ledger.Le
 		self.objects.publish(f.Objects)
 	}
 	self.chain.advanceTo(head - 1)
-	self.setPool(settlementV2AuditTestPending(2, pending, 605), f.Commit)
+	self.setPool(settlementV2AuditTestPending(seq, pending, committed), f.Commit)
+}
+
+// committed adds a DistributionCommitted of root as seq at block.
+func (self *settlementV2AuditTestFixture) committed(t *testing.T, block, seq uint64, root ledger.Root, replacedSeq uint64) {
+	t.Helper()
+	self.chain.addLog(t, settlementV2VaultABI, settlementV2TestVault, "DistributionCommitted", block, big.NewInt(settlementV2AuditTestNoID), seq, root.Epoch, root.Root, root.Total.ToBig(), root.LeafCount, [32]byte(root.LedgerHash), replacedSeq)
+}
+
+// useFunding replaces pool 1's fundedThrough.
+func (self *settlementV2AuditTestFixture) useFunding(funded map[uint64]uint256.Int) {
+	self.chain.lock.Lock()
+	defer self.chain.lock.Unlock()
+	self.chain.funded[settlementV2AuditTestNoID] = map[uint64]*big.Int{}
+	for epoch, value := range funded {
+		self.chain.funded[settlementV2AuditTestNoID][epoch] = value.ToBig()
+	}
 }
 
 // holdF keeps F's objects and its epoch's valid rows in custody, as the
