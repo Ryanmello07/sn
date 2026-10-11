@@ -463,6 +463,68 @@ func TestTreasuryApprovalPlanEnvelopeLoaderRoundTrip(t *testing.T) {
 	}
 }
 
+// VA-6: settlement v2 adoption needs no new tooling. From the same input,
+// approval-plan drafts the predecessor's approval again for a config that adds
+// settlement_v2 and appends the predecessor's bundle; only config_hash
+// changes. approval-envelope assembles it and the producer loader admits it.
+func TestTreasuryApprovalPlanResignsSettlementV2Adoption(t *testing.T) {
+	f := newTreasuryApprovalTestFixture(t)
+	approve := func(name string) (*validator.TreasuryApprovalDraft, *validator.ReleaseConfig) {
+		t.Helper()
+		approvalPath := filepath.Join(f.directory, name+"-approval.json")
+		if code, _, diagnostic := f.plan(t, approvalPath); code != 0 {
+			t.Fatal("approval plan refused", name, code, diagnostic)
+		}
+		_, signature := f.sign(t, approvalPath)
+		code, result, diagnostic := treasuryApprovalTestEnvelope(t, approvalPath, signature, f.key, f.config.TreasuryApproval.Approval.Path)
+		if code != 0 {
+			t.Fatal("approval envelope refused", name, code, diagnostic)
+		}
+		f.config.TreasuryApproval = &result.TreasuryApproval
+		f.writeConfig(t)
+		loaded, err := validator.LoadReleaseConfig(f.configPath)
+		if err != nil {
+			t.Fatal("producer loader refused", name, err)
+		}
+		raw, err := os.ReadFile(approvalPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		draft, err := validator.DecodeTreasuryApprovalDraft(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return draft, loaded
+	}
+	before, predecessor := approve("predecessor")
+	bundle, err := validator.BuildOwnerRecycleProductionAuthority(t.Context(), predecessor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference, err := validator.WriteReleaseEvidenceV2File(t.Context(), filepath.Join(f.directory, "predecessor-authority.json"), bundle, uint64(len(bundle)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := validator.ReleaseSettlementV2Config{Settlement: "0x5e77000000000000000000000000000000000001", Vault: "0x5e77000000000000000000000000000000000002"}
+	f.config.SettlementV2 = &block
+	f.config.ProductionAuthorityHistory = []validator.ReleaseEvidenceV2File{reference}
+	f.config.TreasuryApproval = &validator.ReleaseTreasuryApprovalConfig{Approval: validator.ReleaseEvidenceV2File{Path: filepath.Join(f.directory, "adopted-envelope.json")}, Signer: f.key}
+	after, adopted := approve("adopted")
+	hash, err := validator.OwnerRecycleConfigHash(adopted)
+	if err != nil || after.Approval.ConfigHash != hash || after.Approval.ConfigHash == before.Approval.ConfigHash {
+		t.Fatal("adopted approval does not name the adopted config", err)
+	}
+	unchanged := before.Approval
+	unchanged.ConfigHash = after.Approval.ConfigHash
+	if !reflect.DeepEqual(unchanged, after.Approval) {
+		t.Fatal("re-signed approval changed more than its config hash")
+	}
+	settlement, vault, ok := adopted.SettlementV2Addresses()
+	if !ok || settlement != common.HexToAddress(block.Settlement) || vault != common.HexToAddress(block.Vault) || len(adopted.ProductionAuthorityHistory) != 1 {
+		t.Fatal("adopted config lost its block or its predecessor")
+	}
+}
+
 // approval-plan writes nothing when its pinned inputs, explicit input grammar
 // or the validator's own admission would refuse the approval.
 func TestTreasuryApprovalPlanRefusesInadmissibleDrafts(t *testing.T) {
