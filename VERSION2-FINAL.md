@@ -16,8 +16,12 @@ Two rules govern every choice:
 
 Pins: this repository at `56f44577`; the operator server (`server/`) at
 `0ef73084`; the app SDK (`sdk/`) at `14625631`; runtime 475 (`d1718c99`) on
-chain 964. Unprefixed paths are in this repository. Nothing in this plan was
-run against a chain.
+chain 964. Unprefixed paths are in this repository. The version 2
+implementation is on branch `snv2` in every repository (this repository at
+`2f406bac`), to be merged to `main` later. Apart from the runtime facts and
+gas figures measured on the rehearsal node
+(`scripts/runtime-rehearsal/README.md`; §7.3, §8.1), nothing in this plan
+was run against a chain.
 
 ## 1. Summary
 
@@ -37,8 +41,8 @@ expires.
   owner-admitted auditors approves it and a 14,400-block window passes. At
   launch the quorum is the validator alone. During the window anyone can
   either prove that the root lowers, replaces or hides an existing account,
-  which deletes the root, or demand that the operator open an account's path
-  on chain, which blocks finalization until it is answered.
+  which deletes the root, or demand that the operator open an existing
+  account's path on chain, which blocks finalization until it is answered.
 - **Claims are cumulative.** One claim pays everything an account accrued
   since its last claim, across any number of epochs. Anyone can claim for
   anyone; the payment always goes to the account's coldkey.
@@ -70,7 +74,7 @@ claims and migration. Later phases are listed in §16.
 | 5 | Payment promise; relayer permits | Accrual promise; no permits (§2.2) | §3 |
 | 6 | v1 leftovers and escrow surplus | vault2 can absorb stake it owns and take owner-assigned surplus; the v1 sweep pays vault2 | §7.1, §16 |
 | 7 | `STValidatorEvidence2` | Not built; approvals live in `STSettlement2`; the v1 evidence journal continues unchanged | §9.4 |
-| 8 | Apps and the switch epoch | Activation needs an honest accrual display, not app claim flows. E_s is the first epoch that starts at least two days after the last gate passes | §11, §14 |
+| 8 | Apps and the switch epoch | Activation needs an honest accrual display and v2 claims in the apps, through the SDK. E_s is the first epoch that starts at least two days after the last gate passes | §11, §14 |
 
 The owner decisions of 2026-10-09 stand. There is no retroactive compensation
 for the stopgap epochs before E_s, and the earning cutoff stays October 6 with
@@ -88,7 +92,11 @@ showed something that was not visible at decision time.
   pool. vault2 therefore lets anyone demand, during the window, the on-chain
   opening of an existing account's path. A root cannot finalize while a
   demand is open. A garbage or withheld node can never be opened, so it can
-  never be answered.
+  never be answered. The demand carries the account's leaf and its proof
+  against the latest finalized root, so a padding or otherwise unprovable
+  position, which no successor could answer, can never be demanded and
+  block every later root. Each account can be demanded once per pending
+  root, and an answer counts once.
 - **No relayer permits.** The sr25519 precompile verifies a signature over an
   exact 32-byte message (`evm/src/interfaces/sr25519Verify.sol`). Talisman
   and some WalletConnect wallets such as Nova sign `<Bytes>…</Bytes>` around
@@ -171,8 +179,9 @@ That is worth doing once the balance is large relative to the claim's gas.
 **Latency.** The provider share is about 2,070 α per epoch, about 1,450 α to
 the pool after head fleets' θ = 3/10 (VERSION2-REVIEW-RESPONSE.md:602-608).
 That is about 0.0145 α per provider per week at 100k providers. At the
-250k-gas planning figure, a 5 gwei base fee and 0.006587 TAO/α
-(VERSION2-REVIEW-RESPONSE.md:604-605), a claim costs about 0.19 α.
+250k-gas planning figure (R-6 measured 235,938 gas for a claim at depth 29),
+a 5 gwei base fee and 0.006587 TAO/α (VERSION2-REVIEW-RESPONSE.md:604-605),
+a claim costs about 0.19 α.
 That is about 13 weeks of an average 100k-population provider's earnings, and
 gas is under 10% of a claim after about 131 weeks. At 1M providers both take
 ten times longer. A claim below the runtime's 100,000-rao TAO-equivalent
@@ -205,7 +214,8 @@ vault2 is immutable. These hold whatever `STSettlement2` does.
 - **G1 Conservation.**
   - `totalCaptured == totalPaid + escrowAccounted`.
   - `escrowAccounted == Σ_pools (capturedTotal − claimedTotal)`.
-  - Live escrow stake is at least `escrowAccounted`.
+  - Live escrow stake, the escrow's movable stake (§7.3), is at least
+    `escrowAccounted`.
   - Per pool, `claimedTotal <= finalizedTotal <= capturedTotal`.
 - **G2 Accrued balances survive a bad successor.** Let F be a pool's latest
   finalized root and P its pending root.
@@ -213,8 +223,8 @@ vault2 is immutable. These hold whatever `STSettlement2` does.
     behind an inconsistent node. Then anyone holding P's tree can prove it
     (`checkPath`), and P is deleted.
   - If P's tree is not published, anyone can demand the opening of any
-    account of F (`demandPath`). P cannot finalize until each demand is
-    answered by an opening that shows no fault.
+    account of F, proven against F (`demandPath`). P cannot finalize until
+    each demand is answered by an opening that shows no fault.
   - If no account of F is faulted, every one of them is claimable in P at its
     old value or more. P adds at most `P.total` minus F's account values,
     which is the new funding whenever F is tight; approval checks tightness.
@@ -260,14 +270,17 @@ epoch 50,400 blocks and root commit window 1,200. v1's 120-block close grace
 does not apply to v2 epochs. vault2 fixes
 the challenge window at 14,400 blocks from the commit. v2 needs
 `epochBlocks >= rootCommitWindowBlocks + 14,400`; mainnet's 50,400 satisfies
-it, and testnet's 360-block cadence does not.
+it, and testnet's 360-block cadence does not. `registerOperatorPool` checks
+the rule only once, against `policyAt(firstEpoch)`. Nothing checks a later
+v1 policy, so keeping the rule for every v2 epoch is a governance constraint
+on the v1 policy schedule (§13).
 
 | Blocks after end(e) | Step | Caller |
 | --- | --- | --- |
-| 0-1,200 | `closeOperatorEpoch(e)` captures the pool hotkey's stake. The v2 close window is the commit window, not v1's 120 blocks | anyone (server) |
+| 0-1,200 | `closeOperatorEpoch(e)` captures the pool hotkey's movable stake (§7.3). The v2 close window is the commit window, not v1's 120 blocks | anyone (server) |
 | 0-1,200, after the close | `commitDistribution(e)` | root signer |
 | until end(e+1) | `approveDistribution` | auditors |
-| until commit + 14,400 | `demandPath` | anyone |
+| until commit + 14,400 | `demandPath`, at most once per account of the latest finalized root | anyone |
 | while pending | `checkPath` challenges or answers | anyone; server answers |
 | at or after commit + 14,400 | `finalizeDistribution`, once approved with no open demand | anyone (server) |
 | at or after end(e+1) | a root still unfinalized can be replaced by the next commit; vault2 refuses any commit within 14,400 blocks of the pool's previous commit | root signer |
@@ -282,6 +295,16 @@ it, and testnet's 360-block cadence does not.
 - The server always finalizes or replaces the old root, reads the latest
   finalized root from chain, then builds and commits. A late change can
   therefore never alter a root's predecessor.
+
+**Senders.**
+
+- A refusal that shows another transaction already did the work counts as
+  done: an approval refused `AlreadyApproved`, a demand `AlreadyDemanded`,
+  an answer `NoFault` or `NoPendingRoot`, a challenge or finalize
+  `NoPendingRoot`, and a claim `NothingToClaim` after a third party claimed.
+- A preflight `eth_call` or `eth_estimateGas` runs at the latest block,
+  while the transaction runs in a later one, so a window-bound call must
+  hold in both. Senders do not aim at a window's last block.
 
 ## 6. Ledger
 
@@ -319,6 +342,8 @@ Rules, all checked by the validator:
 - every row has `usage_bytes > 0`. That the rows are exactly the providers
   with positive settled bytes in the window is attested (below);
 - rows are sorted by `client_id` and unique, with no zero `client_id`;
+- the usage of all the epoch's rows, eligible or not, sums to less than
+  2^64, as v1 requires (`payoutartifact/artifact.go:161-163`);
 - `head_excluded` is 1 exactly when the provider has an active fleet binding
   at the epoch's start or end boundary;
 - a row is eligible when `coldkey != 0` and `head_excluded == 0`.
@@ -343,9 +368,9 @@ amount `A` in rao and an epoch's eligible rows. All arithmetic is exact
 integer arithmetic.
 
 1. `W_c` is the sum of `usage_bytes` over eligible rows with coldkey `c`, and
-   `ΣW` is the sum of the `W_c`. An epoch whose total usage reaches 2^64 is
-   refused, as v1 does. `ΣW = 0` is refused here; §6.4 carries such an
-   epoch.
+   `ΣW` is the sum of the `W_c`. An epoch whose rows' total usage reaches
+   2^64 is refused (§6.2), as v1 does. `ΣW = 0` is refused here; §6.4
+   carries such an epoch.
 2. `q_c = floor(A·W_c / ΣW)` and `r_c = (A·W_c) mod ΣW`.
 3. `R = A − Σ q_c`. The `R` coldkeys with the largest `r_c` each get one more
    rao, ties going to the ascending coldkey.
@@ -470,7 +495,9 @@ account count:
 - **Leaf level.** The stated node `(h, s)` is a fault if `s < v` or
   `h != leafHash(c, s)`. When `d = 0`, the leaf level is `(P.root, P.total)`.
 - **Outcome.** A fault deletes P. A complete opening with no fault answers
-  an open demand at `i`. Otherwise the call reverts.
+  an open demand at `i`, once. With no open demand at `i`, never made or
+  already answered, the call reverts and changes nothing, as it does on any
+  malformed input.
 
 **Why G2 holds.**
 
@@ -485,10 +512,13 @@ account count:
   accounts, plus every increase of F's accounts, by `P.total` minus F's
   values.
 - **Faults are found where someone looks.** A faulted account is caught by
-  a challenge when the tree is published, and by a demand when its index is
-  sampled. An inconsistent, garbage or withheld node on the path can never
-  be opened without showing the fault. An index of a withheld tree that
-  nobody demands is §4.2's residual risk.
+  a challenge when the published account rows reproduce the tree, and
+  otherwise by a demand when its index is sampled. A tree rebuilt from rows
+  is always consistent, so an inconsistent node is never reproduced from
+  published rows: watchers report such a root unverifiable and demand. An
+  inconsistent, garbage or withheld node on the path can never be opened
+  without showing the fault, so any opening under it deletes P. An index of
+  a withheld tree that nobody demands is §4.2's residual risk.
 - **The pool cap holds.** Absent an unchallenged decrease, the latest root
   dominates every older one, so `claimedTotal <= finalizedTotal` never stops
   an honest claim. V-16 covers the exception.
@@ -521,17 +551,22 @@ evidence journal are not modified or upgraded. Both use the pinned toolchain
 
 ### 7.1 `STSettlementVault2`: immutable custody
 
-**Immutables**:
+The contract is `evm/src/STSettlementVault2.sol`; its external surface is
+`evm/src/interfaces/ISTSettlementVault2.sol`.
+
+**Immutables**, each nonzero or the constructor refuses:
 
 - `netuid`;
 - `escrowHotkey`;
 - `selfColdkey`, the contract's mapped SS58 account, predicted from the
   deployer nonce as `evm/script/Deploy.s.sol:53-59,113-115` does;
 - `bootstrap`;
-- `minimumChallengeBlocks` = 14,400;
 - `demandFeeWei`, fixed at deployment at no less than twice the answer gas R-6
-  measures, priced at the planning fee.
+  measures, priced at the planning fee. It must be a multiple of 10^9 wei,
+  one rao, because the runtime moves only whole rao of a call's value
+  (§7.3).
 
+The challenge window is the constant `CHALLENGE_BLOCKS` = 14,400.
 `coordinator` is set once by the bootstrap to the `STSettlement2` proxy.
 
 **State per pool `noId`** (`noId < 2^64`):
@@ -547,57 +582,67 @@ evidence journal are not modified or upgraded. Both use the pinned toolchain
 | `commitSeq[noId]` | per-pool commit counter; never reset |
 | `lastCommitBlock[noId]` | block of the pool's latest commit; never cleared |
 | `pending[noId]` | at most one: `{seq, root, total, leafCount, epoch, ledgerHash, committedBlock, openDemands}` |
-| `demanded[noId][seq][index]` | open demands |
+| `demanded[noId][seq][index]` | the index's `DemandState` under `seq`: `None`, `Open` until a clean opening answers it, then `Answered`. An index is demanded at most once per `seq` |
 | `claimed[noId][index]` | amount already paid to account `index` |
 
 **Vault-wide state**: `totalCaptured`, `totalPaid`, `escrowAccounted`,
 `escrowRegistered`, and a reentrancy flag.
 
 **Functions.** C means coordinator only, B bootstrap only, A anyone. Every
-function that moves stake is `nonReentrant` and ends with the backing check
-from v1 (`evm/src/STSettlementVault.sol:513-515`). `checkPath` and
-`demandPath` move no stake and skip that check, so a backing deficit can
-never freeze disputes.
+state-changing function shares one `nonReentrant` guard. The functions that
+move or assign stake, `captureEmission`, `claim`, `absorbStake` and
+`assignSurplus`, end with the backing check from v1
+(`evm/src/STSettlementVault.sol:513-515`), made against the escrow's movable
+stake (§7.3). `checkPath` and `demandPath` move no stake and skip that
+check, so a backing deficit can never freeze disputes.
 
 | Function | Caller | Behaviour |
 | --- | --- | --- |
 | `setCoordinatorOnce(c)` | B | as v1 (`:178-186`) |
-| `registerEscrow(maxBurn)` | B, payable | as v1 (`:191-209`) |
+| `registerEscrow(maxBurn)` | B, payable | as v1 (`:191-209`); sent right after vault2's creation (§8.5) |
 | `registerPool(noId, hotkey, maxBurn, firstEpoch)` | C, payable | as v1 (`:219-239`); requires `firstEpoch >= 1`; sets `firstEpoch` and `lastFundedEpoch = firstEpoch − 1` |
 | `registerPoolUid(noId, maxBurn)` | A, payable | Re-registers a pool hotkey that has no UID. The caller pays the burn and gets the surplus refunded, and the call reverts if vault2's native balance would end below its balance before `msg.value` (v1's pattern, `:171-176`) |
-| `captureEmission(e, noId)` | C | Requires `e == lastFundedEpoch + 1`. Observes the pool hotkey's stake. If it is zero, the epoch funds 0. Otherwise moves it to escrow; the pool must lose exactly the observed amount, and escrow must gain the observed amount or one rao less. Adds the escrow gain to `capturedTotal`, `totalCaptured` and `escrowAccounted`, then sets `fundedThrough[e] = capturedTotal` and `lastFundedEpoch = e`. A runtime refusal reverts. |
+| `captureEmission(e, noId)` | C | Requires `e == lastFundedEpoch + 1`. Observes the pool hotkey's movable stake: `getStake` less the registration collateral locked on vault2's position (§7.3). If it is zero, the epoch funds 0 with no runtime call. Otherwise moves it to escrow; measured on whole positions, the pool must lose exactly the observed amount, and escrow must gain the observed amount or one rao less. Adds the escrow gain to `capturedTotal`, `totalCaptured` and `escrowAccounted`, then sets `fundedThrough[e] = capturedTotal` and `lastFundedEpoch = e`. A runtime refusal reverts. |
 | `deferEmission(e, noId)` | C | Same ordering. Sets `fundedThrough[e] = capturedTotal` with no capture. |
-| `commitPending(e, noId, prevRootCount, root, total, leafCount, ledgerHash)` | C | Replaces any pending root. Requires: `block.number >= lastCommitBlock + 14,400`, so a sample cannot be re-rolled; `prevRootCount == roots[noId].length`, so a finalize between build and commit cannot leave a stale predecessor; `e` above the last root's epoch and at most `lastFundedEpoch`; `total == fundedThrough[e] > finalizedTotal`; `leafCount` from the last root's count up to 2^29, and at least 1; `root != 0`. Sets `pending.seq = ++commitSeq` and `lastCommitBlock = block.number`. An honest root deleted by a fault is therefore succeeded only in a later epoch, which §6.4 allocates. |
-| `demandPath(noId, index)` | A, payable | Requires `msg.value == demandFeeWei`, a pending root with `block.number < committedBlock + 14,400`, and `index < roots[noId][last].leafCount`. Records the demand once per `seq`; vault2 keeps the fee, and it is never paid to the answerer. `checkPath` can answer at any time while the root is pending. |
-| `checkPath(noId, index, oldColdkey, oldCumulative, oldProof, newPath)` | A | The §6.5 path check. A fault deletes the pending root. A clean opening clears that index's demand. Anything else reverts. |
+| `commitPending(e, noId, prevRootCount, commitment)` | C | `commitment` is `{root, total, leafCount, ledgerHash}`. Replaces any pending root. Requires: `block.number >= lastCommitBlock + 14,400`, so a sample cannot be re-rolled; `prevRootCount == roots[noId].length`, so a finalize between build and commit cannot leave a stale predecessor; `e` above the last root's epoch and at most `lastFundedEpoch`; `total == fundedThrough[e] > finalizedTotal`; `leafCount` from the last root's count up to 2^29, and at least 1; `root != 0` and `ledgerHash != 0`. Sets `pending.seq = ++commitSeq` and `lastCommitBlock = block.number`. An honest root deleted by a fault is therefore succeeded only in a later epoch, which §6.4 allocates. |
+| `demandPath(noId, account, oldProof)` | A, payable | Requires `msg.value == demandFeeWei`, a pending root with `block.number < committedBlock + 14,400`, and a finalized root F against which `account = {index, coldkey, cumulative}` verifies with `oldProof`, so only an existing account of F can be demanded. Requires the index's state `None` and sets it `Open`, so an index is demanded once per `seq`. vault2 keeps the fee, and it is never paid to the answerer. `checkPath` can answer at any time while the root is pending. |
+| `checkPath(noId, account, oldProof, newPath)` | A | The §6.5 path check of F's `account`, proven by `oldProof`, against the pending root. A fault deletes the pending root. A clean opening answers an `Open` demand at that index and sets it `Answered`; without one it reverts `NoFault` and changes nothing. Anything else reverts. |
 | `finalizePending(noId)` | C | Requires a pending root at least 14,400 blocks old with no open demand. Appends it to `roots`. |
-| `claim(noId, rootIndex, index, coldkey, cumulative, proof)` | A | Verifies the leaf against `roots[noId][rootIndex]`. Requires `coldkey` nonzero and not `selfColdkey`, `amount = cumulative − claimed` positive, and `claimedTotal + amount <= finalizedTotal`. Then sets `claimed = cumulative`, adds `amount` to `claimedTotal` and `totalPaid`, subtracts it from `escrowAccounted`, and calls `transferStake(coldkey, escrowHotkey, netuid, netuid, amount)`. Escrow must lose exactly `amount`, and the coldkey must gain `amount` or one rao less. Any failure reverts the whole claim, which stays claimable. |
-| `absorbStake(hotkey)` | A | Moves all stake `selfColdkey` holds on `hotkey` (not the escrow, not a pool hotkey) into escrow, with the same delta rules. Refuses a zero hotkey and zero stake. No accounting change: the stake becomes surplus. |
-| `assignSurplus(noId, amount)` | C | `0 < amount <= liveEscrowStake − escrowAccounted`. Adds to `capturedTotal`, `totalCaptured` and `escrowAccounted`. Emits `SurplusAssigned(noId, lastFundedEpoch + 1, amount)`. Phase A's `STSettlement2` never calls it (§16). |
+| `claim(noId, rootIndex, account, proof)` | A | Verifies `account = {index, coldkey, cumulative}` against `roots[noId][rootIndex]`. Requires `coldkey` nonzero and not `selfColdkey`, `amount = cumulative − claimed` positive, and `claimedTotal + amount <= finalizedTotal`. Then sets `claimed = cumulative`, adds `amount` to `claimedTotal` and `totalPaid`, subtracts it from `escrowAccounted`, and calls `transferStake(coldkey, escrowHotkey, netuid, netuid, amount)`. Escrow must lose exactly `amount`, and the coldkey must gain `amount` or one rao less. Any failure reverts the whole claim, which stays claimable. |
+| `absorbStake(hotkey)` | A | Moves all the movable stake `selfColdkey` holds on `hotkey` (not the escrow, not a pool hotkey) into escrow, with the same delta rules. Refuses a zero hotkey and zero movable stake. No accounting change: the stake becomes surplus. |
+| `assignSurplus(noId, amount)` | C | `0 < amount <= liveEscrowStake − escrowAccounted`, with `liveEscrowStake` the escrow's movable stake. Adds to `capturedTotal`, `totalCaptured` and `escrowAccounted`. Emits `SurplusAssigned(noId, lastFundedEpoch + 1, amount)`. Phase A's `STSettlement2` never calls it (§16). |
 
 **Amounts.** Every amount passed to the staking precompile is below
 2^64 − 1, which the precompile would read as "the whole position".
 
 **Views**:
 
-- per pool: `pools`, `lastFundedEpoch`, `fundedThrough`, `capturedTotal`,
-  `claimedTotal`, `finalizedTotal`, `rootCount`, `roots`, `pending`;
-- per account and demand: `demanded`, `claimed`;
-- vault-wide: `coordinator`, `conservationHolds`, `liveEscrowStake`.
+- per pool: `pools`, `poolHotkeyUsed`, `lastFundedEpoch`, `fundedThrough`,
+  `capturedTotal`, `claimedTotal`, `finalizedTotal`, `rootCount`, `roots`,
+  `pending`, `commitSeq`, `lastCommitBlock`;
+- per account and demand: `demanded`, which returns the `DemandState`, and
+  `claimed`;
+- vault-wide: `coordinator`, `escrowRegistered`, `totalCaptured`,
+  `totalPaid`, `escrowAccounted`, `conservationHolds`, `liveEscrowStake`
+  (the escrow's movable stake), the immutables and `CHALLENGE_BLOCKS`.
 
-**Events**: `PoolRegistered`, `EmissionCaptured`, `EmissionDeferred`,
+**Events**: `CoordinatorFixed`, `EscrowRegistered`, `PoolRegistered`,
+`PoolUidRegistered`, `EmissionCaptured`, `EmissionDeferred`,
 `DistributionCommitted`, `PathDemanded`, `PathAnswered`, `DistributionDeleted`,
 `DistributionFinalized`, `Claimed(noId, rootIndex, index, coldkey, cumulative, amount, caller)`,
 `StakeAbsorbed`, `SurplusAssigned`.
 
-**Library.** `LedgerTree.sol` provides `leafHash`, `nodeHash`, `depth`,
+**Library.** `evm/src/LedgerTree.sol`, the twin of
+`merkle/ledger_sum_tree.go`, provides `leafHash`, `nodeHash`, `depth`,
 `verifyLeaf` and `walkPath`. All five are tested against the Go vectors
 (T-1 to T-3, X-1).
 
 ### 7.2 `STSettlement2`: settlement coordinator (owner-upgradeable UUPS)
 
+The contract is `evm/src/STSettlement2.sol`, behind an `ERC1967Proxy`.
+
 **Reads from the v1 proxy**: operators (`operatorAt`), windows (`policyAt`),
-boundaries (`epochStartBlock`, `epochEndBlock`, `currentEpoch`), the v1 vault
+boundaries (`epochEndBlock`, `currentEpoch`), the v1 vault
 (`settlementVault`) and `paused`. The owner is the governance Safe.
 
 **State**:
@@ -606,7 +651,8 @@ boundaries (`epochStartBlock`, `epochEndBlock`, `currentEpoch`), the v1 vault
 - the auditor set `auditors[]`, at most 16 addresses, with its `quorum` and
   `auditorSetVersion`;
 - per-pool approvals keyed by `(seq, auditorSetVersion)`;
-- a storage gap.
+- a storage gap. The layout is pinned in `evm/layout/STSettlement2.json`
+  (S-9).
 
 **Functions.** O means owner, R the root signer of `operatorAt(noId, e)`
 (active or not), A anyone. "Not paused" means the v1 coordinator's `paused`
@@ -614,15 +660,16 @@ is false.
 
 | Function | Caller | Behaviour |
 | --- | --- | --- |
-| `initialize(owner, v1Coordinator, vault, auditors, quorum)` | proxy | once; implementation initializers disabled |
+| `initialize(owner, v1Coordinator, vault, auditors, quorum)` | proxy | once; a nonzero owner, and a v1 coordinator and vault with code; implementation initializers disabled |
 | `setAuditors(auditors, quorum)` | O | `1 <= quorum <= n <= 16`; no zero or duplicate address; bumps the version, so earlier approvals stop counting |
-| `registerOperatorPool(noId, hotkey, maxBurn, firstEpoch)` | O, payable | Requires the v1 operator active now, `firstEpoch > currentEpoch()`, and `policyAt(firstEpoch)` with `epochBlocks >= rootCommitWindowBlocks + 14,400`. Calls `vault.registerPool`. This call is the pool's commitment to v2 from `firstEpoch`. |
+| `registerOperatorPool(noId, hotkey, maxBurn, firstEpoch)` | O, payable | Requires the v1 operator active now, `firstEpoch > currentEpoch()`, and `policyAt(firstEpoch)` with `epochBlocks >= rootCommitWindowBlocks + 14,400`, the only place the cadence is checked (§5). Calls `vault.registerPool` with `msg.value` and passes vault2's refund of the burn surplus on to the caller. This call is the pool's commitment to v2 from `firstEpoch`. |
 | `settlementAt(noId, epoch)` | view | `(vault, hotkey, 2)` if the pool is registered and `epoch >= firstEpoch`; otherwise `(v1 vault, operatorAt(noId, epoch).poolHotkey, 1)` |
 | `closeOperatorEpoch(e, noId)` | A, not paused | Requires `e >= firstEpoch` and a block in `[end(e), end(e) + rootCommitWindowBlocks]`; a deactivated operator's emission is still captured. Defers every earlier unfunded epoch, then calls `vault.captureEmission`. |
-| `commitDistribution(e, noId, prevRootCount, root, total, leafCount, ledgerHash)` | R, not paused | Requires a block in `[end(e), end(e) + rootCommitWindowBlocks]`, and either no pending root or `block.number >= end(pending.epoch + 1)`. A pending root still unfinalized by then is replaced, because no approval can arrive any more; the replacement covers its epochs. The driver finalizes a finalizable root before committing (§8.1). Calls `vault.commitPending`. |
+| `commitDistribution(e, noId, prevRootCount, commitment)` | R, not paused | Requires a block in `[end(e), end(e) + rootCommitWindowBlocks]`, and either no pending root or `block.number >= end(pending.epoch + 1)`. A pending root still unfinalized by then is replaced, because no approval can arrive any more; the replacement covers its epochs. The driver finalizes a finalizable root before committing (§8.1). Calls `vault.commitPending`. |
 | `approveDistribution(noId, seq, root, ledgerHash)` | auditor | The arguments must equal the pending root, and `block < end(pending.epoch + 1)`. Counts once per auditor per version. |
 | `finalizeDistribution(noId)` | A, not paused | Requires at least `quorum` approvals for the pending `seq` at the current version. Calls `vault.finalizePending`, which enforces the window and demands. |
 | `_authorizeUpgrade` | O | |
+| `receive()` | vault2 | Accepts native value only from vault2, as the registration refund; any other sender reverts. |
 
 **Views**: `approvalCount(noId)`, `hasApproved(noId, auditor)`, `auditors()`,
 `quorum()`, `auditorSetVersion()`, `vault()`, `v1Coordinator()`.
@@ -634,30 +681,78 @@ upgrade (§16).
 
 These come from the local subtensor sources (v451-v454) and the upstream
 runtime-475 source `d1718c99`, checked against `docs/spec/runtime-475-audit.md`.
-All of them are qualified on the real runtime before deployment (R-1 to R-6).
+The rehearsal node, built from that source by `scripts/runtime-rehearsal/`,
+measured them on 2026-10-11 (`scripts/runtime-rehearsal/README.md`). All of
+them are qualified on the real runtime before deployment (R-1 to R-6).
 
 - **Stake moves.** Capture by `moveStake` and claims by `transferStake` move
   exactly the requested amount out of the source. The destination's
   share-pool read can be one rao short (upstream `staking/move_stake.rs:131-143`).
-  The escrow hotkey earns nothing under Yuma, so its share price stays 1. The
-  rehearsal shows that third-party stake operations on the escrow hotkey
-  never lower vault2's position.
+  On the rehearsal node it was short only onto hotkeys whose share price had
+  risen above 1, and exact in 16 of 16 calls at share price 1.
+  The escrow hotkey earns nothing under Yuma while a validator sets weights,
+  so its share price stays 1. In a tempo without weight-derived emission,
+  Yuma's fallback pays validator emission by stake to the active permit
+  holders (to every UID if none is active): the rehearsal escrow earned
+  3,595,812,938 rao over two such tempos. vault2's share of that is surplus
+  that no account is owed, and claims already accept a destination one rao
+  short. R-3 runs with a weight-setting validator. Third-party stake
+  operations on the escrow hotkey never lowered vault2's position (R-3).
+- **Registration collateral.** A subnet's `CollateralLockShare` (0 by
+  default; the subnet owner or root sets it) makes each registration stake
+  that share of its price to the registered hotkey and lock it on the
+  registering coldkey's position (upstream
+  `pallets/subtensor/src/subnets/collateral.rs`). Only emission the hotkey
+  earns releases the lock. `getStake` includes it, and a move or transfer
+  that would dig into it fails `StakeUnavailable`. The staking precompile
+  reports it as `getMinerCollateral(netuid, hotkey, coldkey).locked`
+  (upstream `precompiles/src/staking.rs:1720-1745`), declared in
+  `evm/src/interfaces/stakingCollateral.sol`. vault2 therefore moves and
+  counts only movable stake, `getStake` less `locked` and 0 below it:
+  capture and `absorbStake` move exactly that, and `liveEscrowStake` is the
+  escrow's. Its delta checks still compare whole positions. On the rehearsal
+  node, at lock share 2^15/65535, a move of the free stake plus 1 rao was
+  refused, and a close moved exactly `getStake − locked` and left the lock
+  (R-2).
+- **Locked alpha.** Every account, a contract's mapped coldkey included,
+  rejects incoming conviction-locked alpha unless it opts in (`AccountFlags`;
+  upstream `staking/lock.rs:498-531`). vault2 never opts in or locks, so no
+  third party can push a lock onto its positions; the rehearsal node refused
+  such a transfer with `AccountRejectsLockedAlpha`.
+- **Call value.** The runtime moves `floor(value / 10^9)` rao of a call's
+  native value, and the sub-rao part never moves
+  (`SubtensorEvmBalanceConverter`, upstream `runtime/src/lib.rs`).
 - **Pruning.** Pruning removes only subnet membership. Stake and the hotkey's
   `Owner` entry remain, and moves need only the `Owner` entry. Only the
   owning coldkey can re-register, which vault2 does in `registerPoolUid`.
+  The escrow hotkey earns no emission, so it is among the first UIDs pruned
+  once its immunity ends. vault2 works unchanged with it pruned: on the
+  rehearsal node a close moved a pruned pool's stake into the pruned escrow
+  (R-4).
 - **Transfer floor.** A same-subnet move or transfer needs a TAO-equivalent
-  of at least 100,000 rao, or it reverts.
+  of at least 100,000 rao, or it reverts (`AmountTooLow`).
 - **Staking-hotkey caps.** Runtime 475 refuses a transfer to another
   coldkey that would add the escrow hotkey to that coldkey's
   `StakingHotkeys` list once the list holds `MAX_THIRD_PARTY_STAKING_HOTKEYS`
   entries (`TooManyStakingHotkeys`). The source is upstream `d1718c99`
   `pallets/subtensor/src/staking/stake_utils.rs:1808-1822`. A coldkey's own
   moves face the larger `MAX_STAKING_HOTKEYS` cap (`:1403-1418`). For such an
-  account the claim reverts and stays claimable.
+  account the claim reverts and stays claimable. Third parties can likewise
+  fill vault2's own list, up to `MAX_THIRD_PARTY_STAKING_HOTKEYS`, 128
+  entries. Claims and `absorbStake` keep working, but the runtime charges a
+  walk of the list: on the rehearsal node a claim then used 1,269,881 gas
+  instead of 201,559, and `absorbStake` 1,230,170 (R-3).
 - **Whole-position sentinel.** The staking precompile reads an amount of
   2^64−1 or more as "the whole position".
-- **Gas.** Runtime 475 charges a precompile dispatch's weight as gas, so gas
-  is measured on the rehearsal node (R-6).
+- **Gas.** Runtime 475 charges a precompile dispatch's actual weight as gas,
+  but admits it only if the gas forwarded covers its declared weight. For
+  `move_stake` and `transfer_stake` that includes walking a full 256-entry
+  `StakingHotkeys` list, so a transaction that moves stake uses about
+  105,000 gas but needs a gas limit of about 2.4M. A refused precompile call
+  consumes all the gas forwarded to it. Measured inside a contract:
+  `getStake` 4,748 gas, `getUid` 995, `getMinerCollateral` 1,013,
+  `moveStake` 81,753, `transferStake` 79,321, `registerLimit` 1,409,550.
+  §8.1 gives each v2 transaction's gas (R-6).
 
 ## 8. Operator server
 
@@ -673,8 +768,8 @@ Paths in this section are in `server/` unless marked.
   `v2commit:e:no`, `v2finalize:e:no` and `v2answer:no:seq:index`.
 - **Gas policy.** It binds the v1 coordinator, the policy hash and the
   accounts, not call targets (`controller/st_transaction_gas_policy.go:100-106`).
-  Its validity window and attempt and liability caps must cover v2 traffic;
-  R-6 measures the gas of a close with a gap loop.
+  Its validity window, `maximum_gas`, and attempt and liability caps must
+  cover v2 traffic, which today's policy does not (below).
 - **v1 cutoff.** Epochs below the pool's `firstEpoch` keep the v1 tasks. The
   v1 driver never closes or commits a v1 epoch at or after `firstEpoch`,
   except in the phase C sweep.
@@ -687,9 +782,40 @@ Paths in this section are in `server/` unless marked.
   6. Commit with that root count.
 - **Answering.** The server watches `PathDemanded` and answers each demand
   with `checkPath` from its cached tree. The demand fee keeps griefing at
-  least as costly to the griefer as the answers are to the operator.
+  least as costly to the griefer as the answers are to the operator. An
+  answer refused `NoFault` or `NoPendingRoot` is done (§5).
+- **Preflight.** Each new v2 operation is first simulated with `eth_call`,
+  so a call that would revert never takes a nonce.
 - **Alerts.** A missed close, a missed commit window, an open demand older
   than one day, and a root not finalized by `end(e) + 14,400 + 1,200`.
+
+**Gas.** R-6 measured each v2 transaction on ledgers of 2^29 accounts, the
+deepest vault2 takes, as gas used and the gas limit `eth_estimateGas` needs:
+
+| Transaction | Sender | Gas used | Gas limit needed |
+| --- | --- | ---: | ---: |
+| close, capturing | operator | 298,927 | 2,634,202 |
+| close, nothing to capture | operator | 131,479 | 158,120 |
+| close deferring 1 epoch | operator | 158,174 | 205,242 |
+| close deferring 144 epochs | operator | 5,459,241 | 7,049,278 |
+| commit | operator | 297,926 | 334,653 |
+| answer (`checkPath`) | operator | 159,665 | 185,590 |
+| finalize | operator | 179,386 | 239,175 |
+| approve | auditor | 134,333 | 137,389 |
+| demand | anyone | 104,867 | 128,806 |
+| claim | anyone | 235,938 | 2,514,273 |
+
+Each deferred epoch costs about 37,000 gas and 47,900 of limit. A capturing
+close and a claim need limits of about 2.6M and 2.5M because the runtime
+admits a stake move only if the forwarded gas covers its declared weight
+(§7.3). The engine signs the estimated limit plus 20%, about 3.2M for a
+capturing close. The SN25 operator gas policy
+(`local/sn25golive/sn25-mainnet-gas-params.json`) allows a `maximum_gas` of
+1,000,000, below a capturing close and below a close that defers more than
+about 17 epochs, and a per-intent liability of 5·10^16 wei, below the
+7.9·10^16 wei of a 2.63M limit at its 30 gwei fee cap. It is therefore
+re-signed for v2 (§13). Anyone can still send a close that defers more
+epochs than the policy covers.
 
 ### 8.2 Ledger build
 
@@ -720,7 +846,8 @@ Scale changes needed for a million providers:
 ### 8.3 Endpoints
 
 Both are public. A proof only reveals published data and cannot redirect a
-payment.
+payment. Clients do not trust the endpoint: the SDK checks each proof
+against vault2's on-chain root before it claims (§11).
 
 - `GET /sn/ledger/object?hash=sha256:…` returns an immutable object.
 - `GET /sn/ledger/account?coldkey=<ss58|hex>` returns, per pool:
@@ -756,10 +883,15 @@ which eight can execute (`mainnet/evm_phase.go:154,167-172`;
 v2 contract phase:
 
 1. vault2 creation;
-2. `STSettlement2` implementation creation;
-3. `registerEscrow`, with one burn;
+2. `registerEscrow`, with one burn;
+3. `STSettlement2` implementation creation;
 4. proxy creation with `initialize`;
 5. vault2 `setCoordinatorOnce`.
+
+One deployer sends all five at consecutive nonces, and the first two are
+broadcast back to back. vault2's creation reveals the escrow hotkey, and
+anyone who registers that hotkey first makes `registerEscrow` fail for good.
+That costs a redeploy, with no funds at risk.
 
 It uses the same builder checks, plan hash, approval and receipts
 (`mainnet/BOOTSTRAP-CONTRACTS.md:63-142,359-431`). Completion requires
@@ -874,19 +1006,26 @@ The validator takes one of three actions:
 - **Approve.** If every check passes, it sends
   `approveDistribution(noId, seq, root, ledgerHash)` before `end(e+1)`. The
   send is idempotent across restarts.
-- **Challenge.** If a check shows a fault that §6.5 can prove at an index of
-  the previous root, it sends `checkPath`. That covers a changed coldkey, a
-  lower value or an inconsistent node.
+- **Challenge.** If the published account rows reproduce the root and show a
+  fault that §6.5 can prove at an index of the previous root, it sends
+  `checkPath`. That covers a changed coldkey and a lower value. A tree
+  rebuilt from rows is always consistent, so a root with an inconsistent
+  node never reproduces: it takes the demand path, and any opening under the
+  bad node deletes it.
 - **Demand.** If the objects are missing or do not reproduce the root by
-  commit + 7,200, it refuses approval and sends `demandPath` calls:
-  - for every previous account whose published row is below F's value or
-    names another coldkey;
-  - for a value-weighted random sample of at least 256 previous accounts.
-    The sample doubles for each earlier pending root over the same F that
-    was replaced or deleted while a demand was open, and every unanswered
-    index of that root is demanded again.
+  commit + 7,200, it refuses approval and sends `demandPath` calls, each
+  with the account and its proof against F:
+  - for every previous account whose published row is below F's value,
+    names another coldkey or is missing;
+  - for a value-weighted random sample, drawn without replacement, of at
+    least 256 previous accounts. The sample doubles for each earlier pending
+    root over the same F that was replaced or deleted while a demand was
+    open, and every unanswered index of that root is demanded again.
   - The randomness comes from the validator's local CSPRNG, drawn after it
     sees the commit, so the operator cannot predict it.
+
+`ledger.DemandSet` computes this set for the validator and for `snclaim`. A
+send refused because another transaction already did the work is done (§5).
 
 A refused or deleted root does not change the operator's pool weight while
 there is one operator. Zeroing the pool would hand the pool channel to head
@@ -907,7 +1046,9 @@ operator's fault.
 
 The v1 daemon is keyed by epoch and hard-codes the v1 call
 (`miner/claim_daemon.go:363-382`; `miner/onchain/parse.go:21-115`). v2 adds a
-mode beside it:
+mode beside it, `provider claim-daemon-v2 --config=<path>
+[--v1-config=<path>] [--threshold-rao=<rao>] [--claim-now]`, which can also
+run the unchanged v1 daemon in the same process with the same relayer key:
 
 - **State.** A new queue schema, `urnetwork-provider-claim-queue-v2`, in its
   own `state_dir`. The v1 daemon and its queue are unchanged.
@@ -917,8 +1058,12 @@ mode beside it:
 - **One transaction at a time.** At most one claim per account is in flight.
   Signed bytes are never replaced, and the existing rebroadcast rules apply.
 - **Threshold.** The daemon claims when `claimable` is at least its
-  threshold, or on demand. The default threshold comes from measured claim
-  gas.
+  threshold, or on demand (`--claim-now`). The default of 1.9 α keeps a
+  claim's gas at most 10% of it at the §3 planning figures. A threshold
+  below the 0.0152 α transfer floor is refused.
+- **Refusals.** A claim refused because a third party claimed first is done
+  (§5). Any other refusal, such as the floor or a staking-hotkey cap, leaves
+  the unit open under a backoff.
 - **Reused as they are:** locks, durable head, nonce admission, finality
   helpers and the relayer key.
 
@@ -927,9 +1072,9 @@ mode beside it:
 | Command | Does |
 | --- | --- |
 | `v2 status --coldkey` | account, claimable, claimed, pending |
-| `v2 claim` | one claim |
-| `v2 check --all` | Rebuilds the pending root from published objects and compares every previous account. With `--challenge` it sends `checkPath` for a fault. With `--demand`, when the objects are missing or do not reproduce the root, it sends the §9.3 demand set, with the same sample size and doubling and with each demand fee paid. |
-| `withdraw --vault v1` | `withdrawClaimCredit` for v1 credits; no tool does this today |
+| `v2 claim` | one claim; a third party's earlier claim counts as done |
+| `v2 check --all` | Rebuilds the pending root from published objects and compares every previous account, reporting each as having no fault, a provable fault, or as unverifiable when the objects are missing or do not reproduce the root. With `--challenge` it sends `checkPath` for a fault. With `--demand`, in the unverifiable case, it sends the §9.3 demand set (`ledger.DemandSet`), with the same sample size and doubling, each demand carrying the account's proof against F and paying the fee. Unlike the validator, it does not wait until commit + 7,200, and a sender draws one sample per pending root. A root that has left the pending slot, or an index already demanded, counts as done (§5). |
+| `withdraw --vault v1` | `withdrawClaimCredit` for v1 credits |
 
 UR runs `snclaim v2 check --all --challenge --demand` as an independent
 watcher, on a host other than the validator's. A UR sweep relayer, and a
@@ -940,17 +1085,38 @@ added later without touching vault2.
 
 The apps reach SN25 through the shared SDK, which today reads the v1 vault
 and can sign v1 claims (`sdk/sn_claims.go:32-117,1062-1091`;
-`sdk/sn/evm/abi.go:26,92`). The app repositories are not on this machine.
+`sdk/sn/evm/abi.go:26,92`). The apps are `android/`, `apple/`, `windows/`,
+`linux/` and ur.io in `mmm/`.
 
-**At activation**, through the SDK:
+**At activation**, through the SDK, every app (decision 8):
 
-- show the v2 finalized cumulative, claimable and paid amounts, with a
-  pending root shown as pending, from `GET /sn/ledger/account`;
-- show v1 balances separately, read as today;
-- show "unavailable" when the proof service cannot be reached, never zero.
+- shows the v2 finalized cumulative, claimable and paid amounts, with a
+  pending root shown as pending, from `GET /sn/ledger/account`
+  (`SnLedgerAccounts`, `SnLedgerAccountsFor`);
+- shows v1 balances separately, read as today;
+- shows "unavailable" when the proof service cannot be reached, never zero;
+- claims v2 accounts. `SnLedgerClaim` claims each finalized account of the
+  connected coldkey with a positive claimable, one transaction per account,
+  signed by the SDK's gas key. `SnLedgerClaimTransactions` and
+  `SnLedgerClaimTransactionsFor` return the same claims unsigned, for
+  external signers. vault2's address is pinned in
+  `SnChainSettings.Vault2Address`; without it an app shows v2 balances but
+  no v2 claim.
 
-Claim flows through the SDK can follow activation, because v2 balances never
-expire (decision 8).
+**Claim rules.** The endpoint is not trusted:
+
+- an account is claimed only if its vault is the pinned vault2 and its proof
+  verifies in the SDK against `roots(noId, rootIndex)` read from vault2;
+  `claimed` is read from chain too;
+- the transaction goes only to vault2, with no value, and vault2 pays the
+  leaf's coldkey;
+- each claim is preflighted with `eth_call` from the gas key and its limit
+  taken from `eth_estimateGas`, because a claim uses about 236,000 gas but
+  needs a limit of about 2.5M (§8.1). The gas key's balance must cover the
+  limit at the gas price;
+- `NothingToClaim` after a third party's claim counts as done (§5). A claim
+  below the transfer floor or refused by a staking-hotkey cap leaves the
+  account claimable.
 
 **Not closed by v2.** App wallet connect stores a login proof that release
 settlement never pays. Provider and network consent signing exist in the SDK
@@ -966,8 +1132,9 @@ independent of phase A.
 1. Gates 1-4 of §14 are met, and the gate 5 software is released.
 2. Deploy vault2 and `STSettlement2` through the v2 contract phase (§8.5),
    with readback. This completes gate 5.
-3. Adopt the validator config (§13), re-sign the treasury approval, and ship
-   and configure the server. This completes gate 6.
+3. Adopt the validator config (§13), re-sign the treasury approval and the
+   operator gas policy, and ship and configure the server. This completes
+   gate 6.
 4. Check that the validator runs the adopted config and the server runs the
    v2 build.
 5. One to two days before E_s starts, the owner Safe calls
@@ -984,7 +1151,7 @@ independent of phase A.
    If a step fails, v1 rules apply: deferred emission, or a missed root that
    becomes carry. The phase C sweep recovers it (§16).
 8. v1 claims stay open until each v1 expiry. v1 credit withdrawal stays
-   available through `snclaim withdraw` (§10.2).
+   available through `snclaim withdraw --vault v1` (§10.2).
 
 ### 12.2 Conservation at the switch
 
@@ -1011,7 +1178,8 @@ everywhere. The v2 identities are additions.
 | **Validator successor class** | New in `validator/production_authority_history.go`: "settlement v2 adoption". It permits a predecessor without the block and a successor that adds exactly it; one appended history entry; and an approval equal to the old one except `config_hash`. It refuses re-pointing or removing the block, any other `stable()` difference (`:279-299`), and combining with the capacity, rendering or runtime classes. Today's continuity check admits only runtime renewal, including the owner-recycle-to-treasury adoption (`:309-319`), evidence rendering (`:263-272`) and capacity revision (`:260`); poll-interval changes also pass (`:287`). |
 | **Treasury production approval** | Re-signed over the new `config_hash`, nothing else changed (`validator/treasury_policy.go:131-144`), using `sn-mainnet treasury approval-plan` and `approval-envelope` (`mainnet/treasury_approval.go:20-31,192-292`). The live approval expires at native block 9,739,882, about 2026-12-17 UTC (deployment vault: `vault/main/sn25-validator/treasury-production-approval-*.json`). That renewal is a separate successor, and it comes after adoption. |
 | **Server** | Rebuild against the sn revision with the new successor class. Ship the binary before the config, because `sn.yml` is parsed with known fields only (`server/provider_payout_transition.go:55`). `vault/main/st.yml` and `config/main/sn.yml`, in the deployment vault and config repositories, add `settlement_v2_address` and `vault_v2_address`. `reserved_attempt_upload` pins the adopted validator config, with the new approval and authority files beside it (`mainnet/VALIDATOR-UPLOAD-RUNTIME.md:3-33`). |
-| **Unchanged** | `verify.yml`, `provider_work.yml`, the launch readiness digest, the policy file. The operator gas policy also stays as it is if R-6 shows its window and caps cover v2 traffic; otherwise it is re-signed with the same bindings |
+| **Operator gas policy** | Re-signed with the same bindings, because today's `maximum_gas` of 1,000,000 and per-intent liability of 5·10^16 wei are below a capturing close (§8.1). `maximum_gas` rises to about 3.5M, which covers a capturing close signed at about 3.2M with room for a few deferred epochs, and the intent and lifetime liability caps rise to match at the 30 gwei fee cap. The validity window and attempt caps are checked against v2 traffic at the same time |
+| **Unchanged** | `verify.yml`, `provider_work.yml`, the launch readiness digest, the policy file |
 | **On chain** | `registerOperatorPool`, sent by the Safe. The launch auditor set comes from `initialize` (§8.5) |
 
 **Inert for v2 epochs.** These policy v1 fields keep their v1 meaning for v1
@@ -1023,6 +1191,15 @@ epochs and the sweep:
   commit window and finalizes 14,400 blocks after the commit;
 - `deposit.usage_artifact`, and `verify.reliability_a_min` as a payment
   input.
+
+**Governance constraint on the v1 policy schedule.** Every v1 policy that
+applies to a v2 epoch must keep
+`epochBlocks >= rootCommitWindowBlocks + 14,400`. `registerOperatorPool`
+checks it only for `policyAt(firstEpoch)` (§5), and no contract checks a
+later policy, so the owner must not schedule a policy that breaks it while a
+v2 pool exists. Otherwise a root committed late in its window would not
+clear its challenge window before the next epoch ends, and vault2's commit
+spacing could block the next epoch's commit window.
 
 The deployer, guardian, Safe relayer and Safe owner keys are all on the
 owner's single Ledger (`mainnet/LAUNCH.md:161-166`). The owner's availability
@@ -1041,28 +1218,31 @@ gates hold:
    - An independent review of vault2, `LedgerTree.sol` and `STSettlement2`
      is resolved.
 2. **Runtime rehearsal (R-1 to R-6).** The exact bytecode runs on a node
-   built from runtime 475's source. No such environment exists today:
+   built from runtime 475's source. No other environment can run it:
    - the testnet campaign closed on 2026-09-28 (`FINALIZE.md:3-11`);
    - there is no localnet;
    - an Anvil fork cannot run the precompiles.
 
-   Building one is phase A work (§18). Any runtime change on mainnet repeats
-   this gate.
+   Phase A builds the node (§18): `scripts/runtime-rehearsal/build.sh`
+   builds it with `fast-runtime`, `run-node.sh` starts a one-node dev chain
+   with mainnet's EVM chain ID, and the Go harness in `rehearsal/` (build
+   tag `runtime_rehearsal`) runs the R battery on it. Any runtime change on
+   mainnet repeats this gate.
 3. **Ledger and components.** The GT, GA, GL, SV, VA and CL suites are green
    at the §15 Go coverage bar, including GL-10 and SV-6 inside their
    budgets.
 4. **End-to-end.** The E suite passes (E-1 to E-7).
 5. **Software released and contracts deployed.** The server, validator,
-   daemon, `snclaim` and SDK display changes are released, and §8.5 has run
-   with readback.
-6. **Approvals.** The validator config is adopted, the treasury approval is
-   re-signed, and the server is configured.
+   daemon, `snclaim` and SDK display and claim changes, and the apps' v2
+   display and claims (§11), are released, and §8.5 has run with readback.
+6. **Approvals.** The validator config is adopted, the treasury approval
+   and the operator gas policy are re-signed, and the server is configured.
 
 **Schedule.** E_s is the first epoch that starts at least two days after the
 last gate passes. Each epoch of delay leaves about 1,450 α of pool
 allocation to the at most 2,000 stopgap providers. Epoch 3 (block 9,348,028,
-about 2026-10-23) is not reachable: gates 2, 4 and 5 need work that does not
-exist yet.
+about 2026-10-23) is not reachable: gates 2, 4 and 5 need work that is not
+finished.
 
 ## 15. Test plan
 
@@ -1104,7 +1284,8 @@ forge coverage --ir-minimum --report lcov \
   (`evm/test/mocks/PrecompileMocks.sol`; `evm/test/utils/ReleaseBase.sol:65-72`),
   with the vault in the standalone pattern of
   `evm/test/ReleaseSettlementMinimums.t.sol:10-26`. `MockNeuron` gains a
-  reentry hook and a registration-failure knob.
+  reentry hook and a registration-failure knob, and the staking mock answers
+  `getMinerCollateral` with a settable lock.
 - **Shared vectors.** Go writes `merkle/testdata/ledger_v2_vectors.json`,
   which `evm/foundry.toml:29-30` already allows tests to read.
 - **Static analysis.** `scripts/test-solidity-static.sh` lists its analysis
@@ -1167,28 +1348,28 @@ forge coverage --ir-minimum --report lcov \
 
 | ID | Behaviour |
 | --- | --- |
-| V-1 | `setCoordinatorOnce` and `registerEscrow`: bootstrap only, once each; a zero or codeless coordinator refused; `registerEscrow`'s refund, and a failed refund refused |
+| V-1 | The constructor refuses a zero argument, and a `demandFeeWei` that is not a multiple of 10^9 wei. `setCoordinatorOnce` and `registerEscrow`: bootstrap only, once each; a zero or codeless coordinator refused; `registerEscrow`'s refund, and a failed refund refused |
 | V-2 | `registerPool`: refused for a zero or 2^64 `noId`, a zero, duplicate or escrow hotkey, a zero `maxBurn`, and a UID that is missing after registration; sets `lastFundedEpoch = firstEpoch − 1`; `firstEpoch` 0 refused |
 | V-3 | `registerPoolUid`: unknown pool refused; refused while a UID exists; the caller pays; refund; a call that would spend vault2's own native balance reverts |
 | V-4 | Capture and defer in strict order; out of order refused; unknown pool refused |
-| V-5 | Capture: zero stake funds 0; exact source delta; escrow gains the amount or one rao less, and that gain is accounted; a larger gap or a runtime refusal reverts; an amount of 2^64 − 1 or more refused |
+| V-5 | Capture: zero stake funds 0; exact source delta; escrow gains the amount or one rao less, and that gain is accounted; a larger gap or a runtime refusal reverts; an amount of 2^64 − 1 or more refused. With registration collateral on the pool position, only the movable stake moves, a position holding only its lock funds 0, and the deltas are checked on whole positions |
 | V-6 | `fundedThrough` is written once and is monotone |
-| V-7 | `commitPending` refusals, one each: epoch range; total not equal to the snapshot; total not above `finalizedTotal`; `leafCount` 0, above 2^29, or below the previous; zero root. A replaced pending root bumps `seq` and discards its demands; a commit within 14,400 blocks of the pool's previous commit refused, including after a self-proven fault; a `prevRootCount` mismatch refused; `seq` after a finalization or deletion exceeds every earlier `seq` |
+| V-7 | `commitPending` refusals, one each: epoch range; total not equal to the snapshot; total not above `finalizedTotal`; `leafCount` 0, above 2^29, or below the previous; zero root; zero `ledgerHash`. A replaced pending root bumps `seq` and discards its demands; a commit within 14,400 blocks of the pool's previous commit refused, including after a self-proven fault; a `prevRootCount` mismatch refused; `seq` after a finalization or deletion exceeds every earlier `seq` |
 | V-8 | `checkPath` deletes the pending root for each fault kind, including at depth 0 |
 | V-9 | `checkPath` reverts on an honest index (fuzzed), a malformed path, an invalid old proof, an index out of range, no pending root, or no finalized root |
-| V-10 | `demandPath`: only inside the window and for a previous index, once per `seq`. A clean `checkPath` answers it. An unanswerable demand (garbage or withheld node) blocks finalization; refused with no pending root or no finalized root; a fee other than `demandFeeWei` refused; an index at or above the finalized root's leaf count refused; a demand in the window's last block answered after the window |
+| V-10 | `demandPath`: only inside the window and for an account proven against the finalized root, once per `seq`. A clean `checkPath` answers it, once: a second clean opening, or one with no open demand, reverts `NoFault` and changes nothing; an answered index cannot be demanded again under that `seq`. An unanswerable demand (garbage or withheld node) blocks finalization; an unprovable position of the finalized root cannot be demanded; refused with no pending root or no finalized root; a fee other than `demandFeeWei` refused; an index at or above the finalized root's leaf count refused; an account that does not verify refused; a demand in the window's last block answered after the window |
 | V-11 | `finalizePending`: refused with no pending root, before 14,400 blocks, and with an open demand; appends the root and clears the slot |
-| V-12 | Claim against the latest root: pays exactly; one rao short at the destination is accepted, two is not; a refusal (floor, staking-hotkey cap) reverts and leaves the account claimable; depth-0 claim; an escrow loss other than the amount reverts |
+| V-12 | Claim against the latest root: pays exactly; one rao short at the destination is accepted, two is not; a refusal (floor, staking-hotkey cap) reverts and leaves the account claimable; depth-0 claim; an escrow loss other than the amount reverts; the escrow's own registration collateral stays in place |
 | V-13 | A repeat claim on the same root refused; after a newer root only the increment is paid |
 | V-14 | An older root after a newer claim refused; the older root first, then the newer, pays the difference |
 | V-15 | Claim refusals: an invalid proof; an unknown root index; a zero coldkey or `selfColdkey`; an amount of 2^64−1 or more |
 | V-16 | Pool cap: after an unchallenged decrease, the second claimant's claim reverts at `finalizedTotal`; with honest roots it never binds |
 | V-17 | The payment goes to the leaf's coldkey whoever calls |
-| V-18 | `absorbStake`: moves vault2-owned stake from a foreign hotkey and leaves every counter unchanged; refuses the escrow hotkey, pool hotkeys and zero; a zero hotkey and an amount of 2^64 − 1 or more refused |
-| V-19 | `assignSurplus`: refuses zero and an amount above the surplus; event attribution |
-| V-20 | Reentry through the staking and neuron mocks is refused on every function that moves stake |
+| V-18 | `absorbStake`: moves vault2-owned movable stake from a foreign hotkey and leaves every counter unchanged; refuses the escrow hotkey, pool hotkeys and zero; a zero hotkey, stake that is all collateral, and an amount of 2^64 − 1 or more refused |
+| V-19 | `assignSurplus`: refuses zero and an amount above the surplus; the escrow's collateral is never surplus; event attribution |
+| V-20 | Reentry through the staking and neuron mocks, or through a registration refund, is refused on every function that calls the runtime |
 | V-21 | Two pools: each pool's claims are capped by its own `finalizedTotal` |
-| V-22 | A backing deficit makes every stake-moving function revert `Underfunded`, never `checkPath` or `demandPath` |
+| V-22 | A backing deficit makes every stake-moving function revert `Underfunded`, never `checkPath` or `demandPath`; the escrow's collateral is not backing |
 | V-23 | Every coordinator-only and bootstrap-only function refuses other callers |
 | V-EV | Every vault2 event, with its exact fields |
 | V-SIZE | vault2's runtime size is below 24,576 bytes and its creation size below 49,152, from the release build; margins recorded |
@@ -1199,7 +1380,7 @@ forge coverage --ir-minimum --report lcov \
 | --- | --- |
 | S-1 | `initialize` runs once; the implementation's initializers are disabled |
 | S-2 | `setAuditors`: owner only; empty, too many, a zero address, duplicates and a bad quorum all refused; a version bump voids earlier approvals |
-| S-3 | `registerOperatorPool`: owner only; the v1 operator must be active; `firstEpoch` must be in the future; the cadence precondition `epochBlocks >= rootCommitWindowBlocks + 14,400` |
+| S-3 | `registerOperatorPool`: owner only; the v1 operator must be active; `firstEpoch` must be in the future; the cadence precondition `epochBlocks >= rootCommitWindowBlocks + 14,400`; exactly vault2's refund is passed on to the caller, and a failed refund reverts; `receive()` accepts native value only from vault2 |
 | S-4 | `settlementAt`: unregistered pool, and epochs before, at and after `firstEpoch` |
 | S-5 | Close: below `firstEpoch` or for an unregistered pool refused; window edges at 0 and 1,200; gap deferral; an inactive operator's epoch is still closed; paused |
 | S-6 | Commit: the root signer of the epoch's version, active or not; window edges; a pending root refused before `end(pending.epoch + 1)` and replaced after it, including an approved root with an open demand; paused |
@@ -1237,7 +1418,7 @@ handler that never reaches a claim fails instead of passing silently.
 | E-1 | The last v1 and first v2 epochs through the public readers. Weights follow §9.1; v1 claims still work; the first v2 root is approved, finalized and claimed. A permissionless v1 close at or after E_s puts reveal-lag stake into v1 funding |
 | E-2 | Ten epochs, then one claim; later only the increment |
 | E-3 | Failure drills: a missed commit; an unfinalized root replaced; a challenged root; recovery with the Alice case; a missed close |
-| E-4 | Bad successors: an omitted account, a lowered one, a garbage leaf, an over-allocation hidden in an inconsistent subtree, and a moved coldkey. `snclaim v2 check` catches each when the tree is published; when it is withheld, a demand blocks each; a re-roll drill in which the attacker self-challenges and recommits, refused by vault2's commit spacing, with the watchers' doubled sample |
+| E-4 | Bad successors: an omitted account, a lowered one, a garbage leaf, an over-allocation hidden in an inconsistent subtree, and a moved coldkey. When the tree is published, `snclaim v2 check` challenges each fault the published account rows reproduce. An over-allocation hidden in an inconsistent subtree is never reproduced from published account rows, so the watcher reports it unverifiable and demands, and any opening under the bad node deletes the root. When the tree is withheld, a demand blocks each. A re-roll drill in which the attacker self-challenges and recommits, refused by vault2's commit spacing, with the watchers' doubled sample |
 | E-5 | Daemon: threshold claim; reopen on a newer root; a newer root during an in-flight claim; a third party claiming first; v1 and v2 side by side; restart mid-claim; one claim in flight per account; signed bytes never replaced; an on-demand claim |
 | E-6 | Pause stops settlement; claims, approvals, demands and challenges continue |
 | E-7 | Sweep path on phase-A bytecode: v1 roots expired, a single-leaf v1 root paying vault2, `absorbStake` from the v1 escrow hotkey, then `assignSurplus` through a test coordinator upgrade. Conservation holds across both vaults |
@@ -1257,15 +1438,16 @@ handler that never reaches a claim fails instead of passing silently.
 | VA-1 | The shared resolver serves live steering, the production row and replay across E_s, and the production row agrees; an unregistered pool; a pruned v1 pool UID; a `settlementAt` answer that differs from `vault2.pools(noId)` is refused |
 | VA-2 | The audit accepts honest fixtures and refuses each GL-9 mutation through the full validator path |
 | VA-3 | Approval before the deadline; idempotent across restart |
-| VA-4 | A fault leads to a challenge; missing or unreproducible data leads to refusal plus a demand sample; the 64-account sample, weighted by value; the sample starts at 256 and doubles after a failed root over the same F; rows that show a fault are always demanded |
+| VA-4 | A fault in rows that reproduce the root leads to a challenge; missing or unreproducible data, an inconsistent node included, leads to refusal plus a demand set; each demand carries the account and its proof against F; the sample is weighted by value and drawn without replacement, starts at 256 and doubles after a failed root over the same F; rows that show a fault are always demanded |
 | VA-5 | No weight change after a refused root with one operator |
 | VA-6 | Config: today's config hashes identically; the adoption successor admits exactly the block and refuses every other change; load-time address checks; a non-lowercase address refused |
 | VA-7 | Custody: objects retained; findings and declarations recorded; a fresh validator re-verifies the previous root's chunks |
-| VA-8 | A challenge is idempotent: a root already deleted counts as success |
+| VA-8 | A send that another transaction made unnecessary counts as success (§5): a root already deleted or replaced, an index already demanded, an approval already counted |
 | VA-9 | The existing activation and CLOSED_CENSUS keep working under the adopted config |
 | CL-1 | `snclaim` commands, including `withdraw --vault v1` |
 | CL-2 | SDK display: every account state; v1 shown separately; "unavailable" rather than zero |
-| CL-3 | `snclaim v2 check` reports "unverifiable", never "no fault", when objects are missing; a challenge against a replaced root is refused cleanly |
+| CL-3 | `snclaim v2 check` reports "unverifiable", never "no fault", when objects are missing or do not reproduce the root; a challenge against a root that has left the pending slot counts as done |
+| CL-4 | SDK and app v2 claims (§11): an account is claimed only when its vault is the pinned vault2 and its proof verifies against vault2's root; `claimed` is read from chain; preflight, `eth_estimateGas` and the gas key's balance; a third party's earlier claim counts as done; a floor or staking-hotkey refusal leaves the account claimable; the confirmed amount comes from the `Claimed` event; each app shows v2 beside v1, offers no v2 claim without `Vault2Address`, and presents every claim outcome |
 
 ### 15.8 Runtime rehearsal (R)
 
@@ -1275,11 +1457,11 @@ bytecode.
 | ID | Behaviour |
 | --- | --- |
 | R-1 | Deploy through §8.5, with readback |
-| R-2 | Capture: exact deltas, a zero epoch, a dust refusal |
-| R-3 | Claim with a real `transferStake`; a floor refusal; a staking-hotkey cap refusal; third-party stake operations on the escrow hotkey never lower vault2's position; the escrow hotkey earns nothing across a tempo; the whole-position sentinel; the signer's own staking-hotkey cap |
-| R-4 | Pool registration; re-registration after pruning; stake on a pruned hotkey; `absorbStake` from the v1 escrow hotkey |
-| R-5 | Approvals from an auditor address; demand and answer |
-| R-6 | Gas for a claim, a demand, a close with a gap loop, a commit, an answer and a finalize, all inside the operator gas policy's `maximum_gas` |
+| R-2 | Capture: exact deltas, a zero epoch, a dust refusal; with registration collateral on the pool position, the close moves exactly `getStake − locked` and leaves the lock |
+| R-3 | Claim with a real `transferStake`; a floor refusal; a staking-hotkey cap refusal; third-party stake operations on the escrow hotkey never lower vault2's position, and a transfer of conviction-locked alpha to vault2 is refused; the escrow hotkey earns nothing across a tempo in which a validator sets weights, and by stake in one without; the whole-position sentinel; the signer's own staking-hotkey cap; third parties filling vault2's own staking-hotkey list raise the gas of claims and `absorbStake` without stopping them |
+| R-4 | Pool registration, also at a nonzero collateral lock share, whose lock vault2 never moves or counts; re-registration after pruning; stake on a pruned hotkey, the escrow's included; `absorbStake` from the v1 escrow hotkey |
+| R-5 | Approvals from an auditor address; a demand paying `demandFeeWei`, and its answer |
+| R-6 | Gas used and gas limit needed, at depth 29, for a claim, a demand, an approval, a capturing close, a close deferring one epoch and one deferring many, a commit, an answer and a finalize; the operator's transactions, a capturing close with a few deferred epochs included, fit the re-signed operator gas policy (§8.1, §13) |
 
 ### 15.9 Guarantee traceability
 
@@ -1342,33 +1524,43 @@ bytecode.
 | Risk | Mitigation |
 | --- | --- |
 | A vault2 defect is permanent for the funds it holds | Gates 1 and 2. After the first v2 finalization, claim at least one account before relying on it |
-| No environment yet runs the real precompiles | Building one is phase A work; gate 2 cannot be waived |
+| The rehearsal node is a fast-runtime dev chain, not mainnet | It keeps mainnet's call set, weight formulas and gas schedule (`scripts/runtime-rehearsal/README.md`); gate 2 cannot be waived, and any runtime change repeats it |
+| Someone registers vault2's escrow hotkey between vault2's creation, which reveals it, and `registerEscrow` | Both are broadcast back to back at consecutive nonces (§8.5). If it still happens, `registerEscrow` fails for good and vault2 is redeployed; no funds are at risk |
 | Admission bypassed (an owner upgrade, or root signer plus auditor keys) with the tree withheld | Demands block finalization (§6.5); watchers sample by value; a faulted account that is never demanded is lost |
 | A non-tight root finalized after a bypass halts honest successors | The validator refuses to build on it; recovery needs a reviewed validator release and is outside phase A |
-| Demand griefing | Each demand costs the demander gas, and each answer about twice that. Answers are automatic (§8.1) |
+| Demand griefing | Each demand costs the demander its gas and the fee. An answer costs about 1.5 times a demand's gas (R-6: 159,665 against 104,867), and the fee is at least twice the answer gas. Answers are automatic (§8.1) |
+| Stake-moving transactions need a gas limit far above the gas they use, and a refused precompile call consumes all the gas forwarded to it (§7.3) | Senders preflight with `eth_call` and size limits with `eth_estimateGas`; the operator gas policy is re-signed to cover a capturing close (§8.1, §13); anyone can send a close that defers more epochs than the policy covers |
+| Third parties fill vault2's own staking-hotkey list, up to 128 entries | Claims and `absorbStake` keep working; a claim then uses about 1.27M gas instead of 0.2M (R-3), and each entry costs the griefer a transfer above the floor, which vault2 can absorb as surplus |
 | A missed close moves an epoch's share to the next epoch's earners | The 1,200-block window and alerts |
 | App users without a paying consent stay unpaid | App consent signing (§11), independent of phase A |
 | The owner's availability for Ledger-signed steps | Plan steps 2, 3 and 5 of §12.1 with the owner |
 | Treasury approval expiry about 2026-12-17 UTC | A separate successor after adoption (§13) |
 | Small balances are uneconomic to claim | Accrual never expires; the threshold is published; an optional UR subsidy |
-| A future consensus change moves the escrow share price | Yuma pays the escrow nothing; the Null track must revisit this |
+| The escrow hotkey earns emission and its share price rises: Yuma pays by stake in a tempo in which no validator sets weights, and a future consensus change could pay it too | Yuma pays the escrow nothing while a validator sets weights, which the validator does every tempo. Escrow earnings are surplus, and claims accept a destination one rao short. The Null track must revisit this |
+| A later v1 policy breaks `epochBlocks >= rootCommitWindowBlocks + 14,400` for v2 epochs | A governance constraint on the v1 policy schedule (§13); `registerOperatorPool` checks only the first epoch's policy |
 
 ## 18. Implementation order
 
 These tracks run in parallel. Dependencies are noted.
 
-1. **Protocol** (first): the Go tree and vectors, the allocation rule, the
-   ledger codec. This unblocks tracks 2, 4 and 5.
-2. **Contracts**: `LedgerTree.sol`, vault2, `STSettlement2`, and the T, V, S
-   and I suites.
+1. **Protocol** (first): the Go tree and vectors
+   (`merkle/ledger_sum_tree.go`, `merkle/testdata/ledger_v2_vectors.json`),
+   the allocation rule (`protocol/ledger_allocation.go`), and the ledger
+   codec, builder, verifier and demand set (package `ledger`). This unblocks
+   tracks 2, 4 and 5.
+2. **Contracts**: `evm/src/LedgerTree.sol`, `evm/src/STSettlementVault2.sol`,
+   `evm/src/STSettlement2.sol`, and the T, V, S and I suites.
 3. **Runtime and deployment**: a node built from runtime 475's source with
-   fast blocks; the R battery; the v2 contract phase in
-   `sn-mainnet bootstrap-contracts`.
+   fast blocks (`scripts/runtime-rehearsal/`); the R battery (`rehearsal/`);
+   the v2 contract phase in `sn-mainnet bootstrap-contracts`.
 4. **Server**. The scale changes to bindings, wallets and resolutions can
    start now. Then the builder (needs track 1); the driver, demand answering
    and endpoints (need track 2's ABI); and the readers.
 5. **Validator**: the shared resolver, the audit, approval, challenge and
    demand sending, and the adoption successor class.
-6. **Miner and SDK**: the claim daemon v2, `snclaim`, and the SDK display.
+6. **Miner, SDK and apps**: the claim daemon v2
+   (`provider claim-daemon-v2`), `snclaim v2 status|claim|check` and
+   `snclaim withdraw --vault v1`, the SDK display and claims, and the apps'
+   v2 display and claims (§11).
 7. **End-to-end and ceremony**: the E suite, the scale fixtures, adoption,
    the re-sign, then §12.1.
