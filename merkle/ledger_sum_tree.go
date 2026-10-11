@@ -249,8 +249,9 @@ func (t *LedgerSumTree) Path(index uint64) ([]LedgerPathNode, error) {
 }
 
 // VerifyLedgerProof reports whether proof folds (coldkey, value) at index into
-// root and total, exactly as LedgerTree.verifyLeaf does. A sum that overflows
-// 256 bits fails, where LedgerTree.verifyLeaf reverts.
+// root and total, exactly as LedgerTree.verifyLeaf does. An invalid leaf count
+// gives false where LedgerTree.verifyLeaf reverts InvalidLeafCount, and a sum
+// that overflows 256 bits gives false where it reverts on the overflow.
 func VerifyLedgerProof(root [32]byte, total *uint256.Int, leafCount uint64, index uint64, coldkey [32]byte, value *uint256.Int, proof []LedgerNode) bool {
 	d, err := LedgerTreeDepth(leafCount)
 	if err != nil || index >= leafCount || len(proof) != d {
@@ -275,7 +276,9 @@ func VerifyLedgerProof(root [32]byte, total *uint256.Int, leafCount uint64, inde
 // WalkLedgerPath opens the path to index in the tree (root, total, leafCount)
 // and reports the first fault against the previous account (index, coldkey,
 // value), with the level where it was found: d at the root, 0 at the leaf. It
-// mirrors LedgerTree.walkPath; ErrLedgerMalformedPath stands for its revert.
+// mirrors LedgerTree.walkPath, whose reverts are errors here: an invalid leaf
+// count gives ErrLedgerLeafCount where walkPath reverts InvalidLeafCount, and
+// ErrLedgerMalformedPath stands for its MalformedPath revert.
 func WalkLedgerPath(root [32]byte, total *uint256.Int, leafCount uint64, index uint64, coldkey [32]byte, value *uint256.Int, path []LedgerPathNode) (LedgerFault, int, error) {
 	d, err := LedgerTreeDepth(leafCount)
 	if err != nil {
