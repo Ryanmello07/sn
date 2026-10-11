@@ -35,6 +35,15 @@ interface ISTSettlementVault2 {
         uint64 openDemands;
     }
 
+    /// @notice A path demand on one index of the pending root: none, open
+    /// until a clean opening answers it, or answered. Each index can be
+    /// demanded once per pending root.
+    enum DemandState {
+        None,
+        Open,
+        Answered
+    }
+
     /// @notice A root as committed by the coordinator.
     struct Commitment {
         bytes32 root;
@@ -158,7 +167,13 @@ interface ISTSettlementVault2 {
         returns (uint64 seq);
 
     /// A, payable with exactly demandFeeWei, inside the challenge window.
-    function demandPath(uint256 noId, uint256 index) external payable;
+    /// `account` must be proven against the latest finalized root, so only an
+    /// existing account can be demanded.
+    function demandPath(
+        uint256 noId,
+        LedgerTree.Account calldata account,
+        LedgerTree.ProofNode[] calldata oldProof
+    ) external payable;
 
     /// A. `account` is the latest finalized root's account with `oldProof`
     /// against it; `newPath` opens the pending root along account.index.
@@ -208,7 +223,7 @@ interface ISTSettlementVault2 {
     function pending(uint256 noId) external view returns (Pending memory);
     function commitSeq(uint256 noId) external view returns (uint64);
     function lastCommitBlock(uint256 noId) external view returns (uint64);
-    function demanded(uint256 noId, uint64 seq, uint256 index) external view returns (bool);
+    function demanded(uint256 noId, uint64 seq, uint256 index) external view returns (DemandState);
     function claimed(uint256 noId, uint256 index) external view returns (uint256);
 
     function totalCaptured() external view returns (uint256);
