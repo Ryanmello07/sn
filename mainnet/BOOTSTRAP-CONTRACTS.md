@@ -683,15 +683,19 @@ go run ./sim-testnet/gencontracts --release-v2-json evm/out sim-testnet/contract
 ```
 
 **Gas.** Each action's gas limit is part of the approval. Size it from the
-runtime-475 rehearsal (R-1, R-6): the runtime admits a precompile dispatch only
-if the forwarded gas covers its declared weight, while it charges the actual
-weight. `registerLimit` used about 1.41M gas there, with an `eth_estimateGas`
-limit of about 1.49M, so `escrow2-register` needs a limit well above that; no
-other v2 action calls a precompile, and none moves stake. Reasonable starting
-limits are 4,000,000 for `vault2-create` (11,798 runtime bytes), 2,500,000 for
-`escrow2-register`, 3,000,000 for `settlement2-create` (8,588 runtime bytes),
-1,000,000 for `proxy2-create` and 150,000 for `vault2-link`; `maximum_total_wei`
-covers every limit times its fee cap plus the escrow funding.
+measurements in `scripts/runtime-rehearsal/README.md`: the runtime admits a
+precompile dispatch only if the forwarded gas covers its declared weight, while
+it charges the actual weight. There `registerLimit` used about 1.41M gas with
+an `eth_estimateGas` limit of about 1.49M, and `registerPoolUid`, the closest
+measured analogue of `registerEscrow`, used 1,449,743, so `escrow2-register`
+needs a limit well above 1.5M. No other v2 action calls a precompile, and none
+moves stake, so the 2.4M to 2.6M limits of capturing closes and claims do not
+apply. Reasonable starting limits are 4,000,000 for `vault2-create` (11,798
+runtime bytes), 2,500,000 for `escrow2-register`, 3,000,000 for
+`settlement2-create` (8,588 runtime bytes), 1,000,000 for `proxy2-create` and
+150,000 for `vault2-link`; R-1 measures each action's exact use.
+`maximum_total_wei` covers every limit times its fee cap plus the escrow
+funding.
 
 **Builder checks.** Every selection, in `preview`, `plan` and every custody
 operation, rebuilds the complete graph from the approval and the release, so a
