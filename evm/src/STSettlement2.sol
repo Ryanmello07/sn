@@ -57,8 +57,10 @@ contract STSettlement2 is ISTSettlement2, Initializable, OwnableUpgradeable, UUP
         _setAuditors(auditors_, quorum_);
     }
 
-    /// @dev vault2 refunds the registration surplus here.
-    receive() external payable {}
+    /// @dev Only vault2's registration refund is accepted.
+    receive() external payable {
+        if (msg.sender != vault) revert Unauthorized();
+    }
 
     function setAuditors(address[] calldata auditors_, uint256 quorum_) external onlyOwner {
         _setAuditors(auditors_, quorum_);
@@ -187,7 +189,8 @@ contract STSettlement2 is ISTSettlement2, Initializable, OwnableUpgradeable, UUP
     }
 
     function _isAuditor(address account) private view returns (bool) {
-        for (uint256 i; i < _auditors.length; i++) {
+        uint256 count = _auditors.length;
+        for (uint256 i; i < count; i++) {
             if (_auditors[i] == account) return true;
         }
         return false;

@@ -45,6 +45,19 @@ contract V2SettlementEpochsTest is V2SettlementBase {
         assertEq(owner.balance, 0.25 ether);
     }
 
+    // S-3: native value is accepted only as vault2's registration refund.
+    function test_receiveRefusesNativeValueFromAnyoneButTheVault() public {
+        address[3] memory senders = [stranger, owner, address(coordinator)];
+        for (uint256 i; i < senders.length; i++) {
+            vm.deal(senders[i], 1 ether);
+            vm.prank(senders[i]);
+            (bool sent, bytes memory revertData) = address(settlement).call{value: 1 ether}("");
+            assertFalse(sent);
+            assertEq(revertData, abi.encodeWithSelector(ISTSettlement2.Unauthorized.selector));
+        }
+        assertEq(address(settlement).balance, 0);
+    }
+
     // S-3
     function test_registerOperatorPoolRefusesAFailedRefund() public {
         RefundRejector rejector = new RefundRejector();
