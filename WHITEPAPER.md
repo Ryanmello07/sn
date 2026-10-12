@@ -1592,7 +1592,7 @@ because the runtime admits a stake transfer only if the forwarded gas covers its
 accounts in one transaction, each capped at its own gas so that a claim the runtime refuses cannot starve
 the others, and still only to each leaf's coldkey: from ten claims on it saves 17–19% of each claim's gas,
 and a batch's gas limit grows by about 184,000 per claim where a single claim needs 2.5M. One
-transaction holds up to 331 claims at the deepest tree (`VERSION2-FINAL.md` §10.2, R-7).
+transaction holds up to 339 claims at the deepest tree (`VERSION2-FINAL.md` §10.2, R-7).
 Pausing settlement never stops claims. Claims are pull‑based, so settlement is `O(1)` on‑chain regardless of
 participant count, and each pool has its own root — **there is no global claim root**.
 

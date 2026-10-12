@@ -26,8 +26,8 @@ import (
 // ClaimBatchGasPerClaim is the default gas cap of each batched claim. A claim
 // uses about 236,000 gas, but the runtime admits its staking-precompile
 // transfer only if the gas forwarded covers the transfer's declared weight:
-// at depth 29 on runtime 475 a single claim's least gas limit was 2,505,975,
-// and eth_estimateGas, whose search stops within 10%, gave up to 2,619,950
+// at depth 29 on runtime 475 a single claim's least gas limit was 2,506,011,
+// and eth_estimateGas, whose search stops within 10%, gave up to 2,619,986
 // (R-6, R-7). Senders cap each item at this or at the largest single-claim
 // estimate of the batch, whichever is higher.
 const ClaimBatchGasPerClaim uint64 = 2_600_000
@@ -48,11 +48,12 @@ const claimBatchTolerance = 10_000
 var claimBatcher = stabi.NewSTClaimBatcher()
 
 // SizeClaimBatch sizes a batch of items for from to send through batcher:
-// how many of them, from the first, one transaction attempts at the most gas
-// it may name, the block gas limit or ClaimBatchMaxGas, the calldata claiming
-// those, and the gas limit to send it with: the least within
-// claimBatchTolerance at which an eth_call attempts them all, plus the 20%
-// headroom of every estimate, up to that most.
+// how many of them, from the first, a transaction offering them all attempts
+// at the most gas it may name, the block gas limit or ClaimBatchMaxGas (a
+// prefix that surely fits once the others' calldata is gone, and the others
+// wait for a later batch), the calldata claiming those, and the gas limit to
+// send it with: the least within claimBatchTolerance at which an eth_call
+// attempts them all, plus the 20% headroom of every estimate, up to that most.
 func SizeClaimBatch(ctx context.Context, client *ethclient.Client, from, batcher, vault common.Address, items []stabi.STClaimBatcherClaim, gasPerClaim uint64) (int, []byte, uint64, error) {
 	// Only the gas limit is read: Subtensor's EVM headers are not geth's.
 	var latest struct {

@@ -17,8 +17,9 @@ import (
 )
 
 // batchAccounts is the number of accounts R-7's root holds: enough for the
-// single claims, the fixed batches and more than one block's batch.
-const batchAccounts = 450
+// single claims, the fixed batches and more than the most one transaction
+// holds, which was 339 and grows as claims get cheaper.
+const batchAccounts = 700
 
 // claimItem is STClaimBatcher.Claim.
 type claimItem struct {
@@ -199,18 +200,29 @@ func TestR7ClaimBatch(t *testing.T) {
 		t.Logf("batch of %d: used %d (%d per claim), least limit %d", count, used, used/count, limit)
 	}
 
-	// The most one transaction holds: every remaining account offered at the
-	// most gas a transaction may name, then exactly the attempted prefix sent.
-	remaining := batchAccounts - next
-	items := make([]claimItem, remaining)
-	for i := range items {
-		index := next + uint64(i)
-		items[i] = claimItem{NoId: id(1), RootIndex: id(0), Account: l.account(index), Proof: l.proof(index)}
+	// The most one transaction holds: the longest batch of the remaining
+	// accounts that an eth_call at the most gas a transaction may name
+	// attempts in full. Offering more accounts would also spend their
+	// calldata's intrinsic gas, so the size is searched, not read off one call.
+	fits := func(count uint64) bool {
+		items := make([]claimItem, count)
+		for i := range items {
+			index := next + uint64(i)
+			items[i] = claimItem{NoId: id(1), RootIndex: id(0), Account: l.account(index), Proof: l.proof(index)}
+		}
+		data := batcherArtifact.pack(t, "claimMany", s.vault, items, id(onchain.ClaimBatchGasPerClaim))
+		return attempted(n.eth.CallContract(n.ctx, ethereum.CallMsg{From: relayer.address, To: &batcher, Data: data, Gas: maxGas}, nil)) == count
 	}
-	most := attempted(n.eth.CallContract(n.ctx, ethereum.CallMsg{From: relayer.address, To: &batcher,
-		Data: batcherArtifact.pack(t, "claimMany", s.vault, items, id(onchain.ClaimBatchGasPerClaim)), Gas: maxGas}, nil))
-	if most == 0 || most >= remaining {
-		t.Fatalf("one transaction holds a batch of %d of the %d accounts left", most, remaining)
+	most, over := uint64(1), batchAccounts-next
+	if !fits(most) || fits(over) {
+		t.Fatalf("one transaction holds all of the %d accounts left, or none", over)
+	}
+	for over-most > 1 {
+		if middle := (most + over) / 2; fits(middle) {
+			most = middle
+		} else {
+			over = middle
+		}
 	}
 	used, limit := batch(t, most, maxGas)
 	t.Logf("batch of %d, the most one transaction holds: used %d (%d per claim), least limit %d of %d", most, used, used/most, limit, maxGas)

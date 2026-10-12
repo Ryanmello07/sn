@@ -1159,8 +1159,8 @@ and add 20%. They cap each claim at the larger of 2,600,000 gas, a single
 claim's least limit with margin, and the batch's largest single-claim
 estimate. Measured on runtime 475 at depth 29 (R-7): a transaction may name at
 most 64,998,500 gas, below the 75,000,000 block gas limit, and so holds at
-most 331 claims; from ten claims on a batch saves 17 to 19% of each claim's gas
-(166,320 per claim in a batch of 20, against 202,462 alone), and its gas
+most 339 claims; from ten claims on a batch saves 17 to 19% of each claim's gas
+(166,340 per claim in a batch of 20, against 202,474 alone), and its gas
 limit grows by about 184,000 per claim where each single claim needs 2.5M.
 A batch of one costs 5% more than a claim alone, so the tools send a lone
 claim directly. The deployment phase can create the batcher (§8.5).

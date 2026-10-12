@@ -312,7 +312,7 @@ tempo of 360. Measured:
   runtime admits `moveStake` only if the forwarded gas covers its declared
   weight; it is above the policy's `maximum_gas`, as is a close deferring
   more than about 17 epochs.
-- **R-7 batched claims** (`TestR7ClaimBatch`, 263 seconds), on a root of
+- **R-7 batched claims** (`TestR7ClaimBatch`, 376 seconds), on a root of
   2^29 accounts: claims through `STClaimBatcher` (`evm/src/STClaimBatcher.sol`),
   each item capped at the tooling's default gas per claim of 2,600,000
   (`onchain.ClaimBatchGasPerClaim`), and each batch sent with exactly the
@@ -326,24 +326,26 @@ tempo of 360. Measured:
   dispatch class's extrinsic weight limit, the 75% normal share of the 4 s
   block less the 10% kept for block initialization, at 40,000 weight per
   gas, less the transaction's own extension weight
-  (`onchain.ClaimBatchMaxGas`). Single claims used 202,450 to 202,474 gas
-  (236,662 for the pool's first, which also writes its first claimed and
-  paid totals); `eth_estimateGas` gave a limit of up to 2,619,950, and the
-  least limit that paid was up to 2,505,975, below the default cap.
+  (`onchain.ClaimBatchMaxGas`). Single claims used 202,462 to 202,486 gas
+  (236,698 for the pool's first, which also writes its first claimed and
+  paid totals); `eth_estimateGas` gave a limit of up to 2,619,986, and the
+  least limit that paid was up to 2,506,011, below the default cap.
 
   | Claims | Gas used | Per claim | Least gas limit |
   | --- | ---: | ---: | ---: |
-  | 1, alone to vault2 | 202,462 | 202,462 | 2,505,975 |
-  | 1, batched | 213,384 | 213,384 | 2,704,233 |
-  | 5, batched | 868,821 | 173,764 | 3,466,377 |
-  | 10, batched | 1,688,115 | 168,811 | 4,385,170 |
-  | 20, batched | 3,326,402 | 166,320 | 6,222,458 |
-  | 331, the most one transaction holds | 54,276,531 | 163,977 | 63,361,581 |
+  | 1, alone to vault2 | 202,474 | 202,474 | 2,506,011 |
+  | 1, batched | 213,396 | 213,396 | 2,704,245 |
+  | 5, batched | 868,905 | 173,781 | 3,466,461 |
+  | 10, batched | 1,688,259 | 168,825 | 4,385,314 |
+  | 20, batched | 3,326,810 | 166,340 | 6,222,866 |
+  | 339, the most one transaction holds | 55,588,352 | 163,977 | 64,832,626 |
 
   From 10 claims on a batch saves 17 to 19% of each claim's gas: the
   21,000 intrinsic gas of a transaction and vault2's first, cold reads are
   paid once. Its least limit grows by about 184,000 gas per claim, because
   only the last item needs the 2.6M the runtime admits a transfer with; ten
   single claims need ten limits of 2.5M. A batch of one costs 5% more than
-  a claim sent alone, so the tooling sends a lone claim directly. With
-  shallower trees, and so shorter proofs, more than 331 claims fit.
+  a claim sent alone, so the tooling sends a lone claim directly. The most
+  one transaction holds is searched by batch size, since offering more
+  accounts than fit also spends their calldata's intrinsic gas; with
+  shallower trees, and so shorter proofs, more than 339 claims fit.
