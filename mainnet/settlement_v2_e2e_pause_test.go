@@ -51,14 +51,10 @@ func TestSettlementV2E2EPauseStopsSettlementOnly(t *testing.T) {
 	}
 	// Demands continue, and so does the operator's answer.
 	account, proof = e2eProof(t, root0.Tree, root0.Accounts, b)
-	receipt = f.must(f.watcher, f.vault2, e2eRao(e2eDemandFeeWei), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof))
-	f.requireLogs(receipt, f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(b), f.watcher.address))
-	path, err := p1.Tree.Path(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	receipt = f.must(f.operator, f.vault2, nil, e2eVault2Binding.PackCheckPath(e2eRao(e2eNoID), account, proof, e2ePath(path)))
-	f.requireLogs(receipt, f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(b), f.operator.address))
+	receipt = f.must(f.watcher, f.vault2, e2eRao(e2eDemandFeeWei), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), e2eRao(0), account, proof))
+	f.requireLogs(receipt, f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(b), f.watcher.address))
+	receipt = f.must(f.operator, f.vault2, nil, e2eVault2Binding.PackCheckPath(e2eRao(e2eNoID), e2eRao(0), account, proof, e2ePath(e2eOpening(t, p1.Tree, b))))
+	f.requireLogs(receipt, f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(b), f.operator.address))
 
 	// Settlement stops: a commit inside the window, a finalize once the
 	// window has passed, and the next epoch's close.
@@ -95,12 +91,12 @@ func TestSettlementV2E2EPauseStopsSettlementOnly(t *testing.T) {
 	// Paused again, the watcher's challenge still deletes it.
 	f.must(f.guardian, f.coordinator, nil, e2eCoordinatorBinding.PackSetPaused(true))
 	output, stderr, code := f.snclaim(f.snclaimArgs("v2", "check", "--all", "--no_id=1", "--challenge", "--key_file="+f.watcher.keyFile(t))...)
-	want := fmt.Sprintf("DistributionDeleted: pool 1, seq %d\n  account:     %d\n  fault:       lower_value at level 0\n  challenger:  %s\n", seq, a, f.watcher.address.Hex())
+	want := fmt.Sprintf("DistributionDeleted: pool 1, seq %d\n  account:     %d of finalized root 1\n  fault:       lower_value at level 0\n  challenger:  %s\n", seq, a, f.watcher.address.Hex())
 	if code != 0 || !strings.HasSuffix(output, want) {
 		t.Fatalf("challenge while paused (exit %d):\n%s%s", code, output, stderr)
 	}
 	sent := f.chain.sentBy(f.watcher.address)
-	f.requireLogs(f.chain.receipt(sent[len(sent)-1].Hash()), f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(a), uint8(merkle.LedgerFaultLowerValue), e2eRao(0), f.watcher.address))
+	f.requireLogs(f.chain.receipt(sent[len(sent)-1].Hash()), f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(1), e2eRao(a), uint8(merkle.LedgerFaultLowerValue), e2eRao(0), f.watcher.address))
 	if f.pending().Seq != 0 || f.rootCount() != 2 {
 		t.Fatal("the challenged root was not deleted")
 	}

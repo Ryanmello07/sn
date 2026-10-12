@@ -26,11 +26,13 @@ contract STSettlement2Surplus is STSettlement2 {
 ///      deferrals, honest and faulty commits, approvals, demands, answers,
 ///      challenges, finalizations, claims, absorption and surplus assignment,
 ///      with the runtime one rao short at the destination and refusing stake
-///      moves on demand. Pool 1's root signer commits honest successors only,
-///      so the pool cap is checked against honest roots for a whole run; pool
-///      2's may commit a lowered, moved-coldkey, garbage-leaf or
-///      inconsistent-subtree successor. Every vault2 refusal is caught: the
-///      ghosts record only what happened, measured on the staking mock.
+///      moves on demand. Demands and challenges target the accounts of any
+///      finalized root, mostly the latest one (§4.2 G2). Pool 1's root signer
+///      commits honest successors only, so the pool cap is checked against
+///      honest roots for a whole run; pool 2's may commit a lowered,
+///      moved-coldkey, garbage-leaf or inconsistent-subtree successor. Every
+///      vault2 refusal is caught: the ghosts record only what happened,
+///      measured on the staking mock.
 contract V2LifecycleHandler is Test {
     enum Kind {
         Honest,
@@ -51,6 +53,12 @@ contract V2LifecycleHandler is Test {
         uint256 victim;
         uint256 level;
         uint256 skew;
+    }
+
+    /// @dev Account `index` of finalized root `rootIndex`, demanded or opened.
+    struct Target {
+        uint256 rootIndex;
+        uint256 index;
     }
 
     /// @dev What the handler saw when a root finalized (I-4): the root's seq,
@@ -91,7 +99,7 @@ contract V2LifecycleHandler is Test {
         _commitments;
     mapping(uint256 noId => mapping(uint64 seq => uint256 epoch)) internal _committedEpoch;
     mapping(uint256 noId => mapping(uint64 seq => uint256 blockNumber)) internal _committedBlock;
-    mapping(uint256 noId => mapping(uint64 seq => uint256[] indices)) internal _demanded;
+    mapping(uint256 noId => mapping(uint64 seq => Target[] targets)) internal _demanded;
     mapping(uint256 noId => uint64[] seqs) internal _finalizedSeqs;
     mapping(uint256 noId => Finalization[] records) internal _finalizations;
     mapping(uint256 noId => uint256 minted) internal _minted;
@@ -158,35 +166,38 @@ contract V2LifecycleHandler is Test {
         if (next.seq != 0) _approve(noId, next, _auditors[auditorSeed % _auditors.length]);
     }
 
-    /// @dev Anyone pays the fee and demands the opening of an account of the
-    ///      latest finalized root, usually the one a faulty pending root hides.
+    /// @dev Anyone pays the fee and demands the opening of an account of a
+    ///      finalized root, usually the one a faulty pending root hides.
     function demand(uint256 poolSeed, uint256 kindSeed, uint256 indexSeed) external {
         uint256 noId = _pool(poolSeed);
         if (!_dispute(noId, kindSeed, indexSeed)) return;
         uint64 seq = vault.pending(noId).seq;
-        uint256 index = _aim(noId, seq, indexSeed);
-        Tree memory f = _latest(noId);
-        LedgerTree.ProofNode[] memory proof = V2TreeHelper.proof(_levels(noId, f), index);
+        Target memory target = _aim(noId, seq, indexSeed);
+        Tree memory f = _finalized(noId, target.rootIndex);
+        LedgerTree.ProofNode[] memory proof = V2TreeHelper.proof(_levels(noId, f), target.index);
         vm.deal(anyone, fee);
         vm.prank(anyone);
-        try vault.demandPath{value: fee}(noId, _accountOf(f, index), proof) {
+        try vault.demandPath{value: fee}(noId, target.rootIndex, _accountOf(f, target.index), proof) {
             openDemands[noId][seq]++;
-            _demanded[noId][seq].push(index);
+            _demanded[noId][seq].push(target);
             demands++;
         } catch {}
     }
 
-    /// @dev The operator opens a demanded index of the pending root.
+    /// @dev The operator opens a demanded account of the pending root.
     function answer(uint256 poolSeed, uint256 seed) external {
         uint256 noId = _pool(poolSeed);
         uint64 seq = vault.pending(noId).seq;
-        if (seq == 0 || _finalizedSeqs[noId].length == 0) return;
-        uint256[] storage demanded = _demanded[noId][seq];
-        uint256 index = demanded.length != 0 ? demanded[seed % demanded.length] : seed % _latestCount(noId);
-        _open(noId, seq, index);
+        uint256 count = _finalizedSeqs[noId].length;
+        if (seq == 0 || count == 0) return;
+        Target[] storage demanded = _demanded[noId][seq];
+        Target memory target = demanded.length != 0
+            ? demanded[seed % demanded.length]
+            : Target(count - 1, seed % _latestCount(noId));
+        _open(noId, seq, target);
     }
 
-    /// @dev A watcher opens an index of the pending root, usually its victim.
+    /// @dev A watcher opens an account of the pending root, usually its victim.
     function challenge(uint256 poolSeed, uint256 kindSeed, uint256 seed) external {
         uint256 noId = _pool(poolSeed);
         if (!_dispute(noId, kindSeed, seed)) return;
@@ -404,14 +415,17 @@ contract V2LifecycleHandler is Test {
         } catch {}
     }
 
-    // Opens `index` of the pending root `seq` against the latest finalized
-    // root. Returns false once the opening shows a fault, which deletes it.
-    function _open(uint256 noId, uint64 seq, uint256 index) internal returns (bool pending) {
-        Tree memory f = _latest(noId);
-        LedgerTree.ProofNode[] memory oldProof = V2TreeHelper.proof(_levels(noId, f), index);
-        LedgerTree.PathNode[] memory newPath = V2TreeHelper.path(_levels(noId, _trees[noId][seq]), index);
+    // Opens the target's account in the pending root `seq`. Returns false once
+    // the opening shows a fault, which deletes it.
+    function _open(uint256 noId, uint64 seq, Target memory target) internal returns (bool pending) {
+        Tree memory f = _finalized(noId, target.rootIndex);
+        LedgerTree.ProofNode[] memory oldProof = V2TreeHelper.proof(_levels(noId, f), target.index);
+        LedgerTree.PathNode[] memory newPath =
+            V2TreeHelper.path(_levels(noId, _trees[noId][seq]), target.index);
         vm.prank(anyone);
-        try vault.checkPath(noId, _accountOf(f, index), oldProof, newPath) returns (LedgerTree.Fault fault) {
+        try vault.checkPath(noId, target.rootIndex, _accountOf(f, target.index), oldProof, newPath) returns (
+            LedgerTree.Fault fault
+        ) {
             if (fault != LedgerTree.Fault.None) {
                 faultShown[noId][seq] = true;
                 challenges++;
@@ -451,11 +465,12 @@ contract V2LifecycleHandler is Test {
     }
 
     function _answerAll(uint256 noId, uint64 seq) internal returns (bool) {
-        uint256[] storage demanded = _demanded[noId][seq];
+        Target[] storage demanded = _demanded[noId][seq];
         for (uint256 k; k < demanded.length; k++) {
+            Target memory target = demanded[k];
             if (
-                vault.demanded(noId, seq, demanded[k]) == ISTSettlementVault2.DemandState.Open
-                    && !_open(noId, seq, demanded[k])
+                vault.demanded(noId, seq, target.rootIndex, target.index)
+                        == ISTSettlementVault2.DemandState.Open && !_open(noId, seq, target)
             ) return false;
         }
         return true;
@@ -694,21 +709,28 @@ contract V2LifecycleHandler is Test {
         return true;
     }
 
+    function _finalized(uint256 noId, uint256 rootIndex) internal view returns (Tree storage) {
+        return _trees[noId][_finalizedSeqs[noId][rootIndex]];
+    }
+
     function _latest(uint256 noId) internal view returns (Tree storage) {
-        uint64[] storage seqs = _finalizedSeqs[noId];
-        return _trees[noId][seqs[seqs.length - 1]];
+        return _finalized(noId, _finalizedSeqs[noId].length - 1);
     }
 
     function _latestCount(uint256 noId) internal view returns (uint256) {
         return _latest(noId).values.length;
     }
 
-    // An index of F to demand or open: a faulty pending root's victim three
-    // times in four, otherwise any account of F.
-    function _aim(uint256 noId, uint64 seq, uint256 seed) internal view returns (uint256) {
+    // An account to demand or open, of the latest finalized root three times
+    // in four and otherwise of any finalized root: a faulty pending root's
+    // victim three times in four when that root holds it, else any account.
+    function _aim(uint256 noId, uint64 seq, uint256 seed) internal view returns (Target memory target) {
+        uint256 count = _finalizedSeqs[noId].length;
+        target.rootIndex = (seed >> 128) % 4 == 0 ? (seed >> 130) % count : count - 1;
+        uint256 accounts = _finalized(noId, target.rootIndex).values.length;
         Tree storage p = _trees[noId][seq];
-        if (p.kind != Kind.Honest && seed % 4 != 0) return p.victim;
-        return (seed >> 2) % _latestCount(noId);
+        bool victim = p.kind != Kind.Honest && seed % 4 != 0 && p.victim < accounts;
+        target.index = victim ? p.victim : (seed >> 2) % accounts;
     }
 
     function _accountOf(Tree memory t, uint256 index) internal pure returns (LedgerTree.Account memory) {

@@ -158,19 +158,28 @@
 //
 // # Demands (validator, snclaim)
 //
-// DemandSet selects the §9.3 demand set for ActionDemand from
-// Result.PreviousAccounts and Result.Faults, the doubling count and again,
-// the earlier unanswered indexes. Both come from vault2's events since the
+// demandPath and checkPath take the index of the finalized root an account
+// is proven against, any finalized root, so a withheld newest tree cannot
+// stop demands. A watcher protects the newest finalized root whose account
+// rows it holds and has verified: normally the latest, Result.Previous and
+// Result.PreviousAccounts; when the latest root's objects are missing, an
+// older one it can still verify. Faults(previous, accounts) lists what a
+// pending root's published rows show against any such root, as Verify
+// does for the latest.
+//
+// DemandSet selects the §9.3 demand set for ActionDemand from the protected
+// root's accounts and their faults, the doubling count and again, the
+// earlier unanswered indexes. Both come from vault2's events since the
 // latest finalized root was finalized: each earlier pending root over it
 // that was replaced (DistributionCommitted.replacedSeq) or deleted
 // (DistributionDeleted) while a demand was open, PathDemanded without
-// PathAnswered, adds one doubling and its unanswered indexes. The set is
-// every fault's index, every index in again, and a sample of DemandSample
-// (256) << doublings of the remaining accounts, drawn by value without
-// replacement and never more than there are, with randomness read from a
-// CSPRNG after the commit was seen. Each demand pays exactly demandFeeWei
-// and carries PreviousAccounts[i] with Previous.Proof(i) (demandPath
-// proves the account against the finalized root). DemandSet refuses an
-// index outside the previous root (ErrDemandIndex) and returns the random
-// source's error.
+// PathAnswered (both keyed by seq, rootIndex and index), adds one doubling
+// and its unanswered indexes. The set is every fault's index, every index
+// in again, and a sample of DemandSample (256) << doublings of the
+// remaining accounts, drawn by value without replacement and never more
+// than there are, with randomness read from a CSPRNG after the commit was
+// seen. Each demand pays exactly demandFeeWei and carries the protected
+// root's index, its account i and the proof of i against it. DemandSet
+// refuses an index outside the protected root (ErrDemandIndex) and returns
+// the random source's error.
 package ledger

@@ -584,12 +584,12 @@ contract V2VaultFundingTest is V2VaultBase {
         LedgerTree.ProofNode[] memory aliceProof = V2TreeHelper.proof(finalized, 0);
         vm.deal(stranger, DEMAND_FEE);
         vm.prank(stranger);
-        vault.demandPath{value: DEMAND_FEE}(NO1, alice, aliceProof);
-        vault.checkPath(NO1, alice, aliceProof, V2TreeHelper.path(next, 0));
-        assertEq(uint8(vault.demanded(NO1, seq, 0)), uint8(ISTSettlementVault2.DemandState.Answered));
+        vault.demandPath{value: DEMAND_FEE}(NO1, 0, alice, aliceProof);
+        vault.checkPath(NO1, 0, alice, aliceProof, V2TreeHelper.path(next, 0));
+        assertEq(uint8(vault.demanded(NO1, seq, 0, 0)), uint8(ISTSettlementVault2.DemandState.Answered));
 
         LedgerTree.Fault fault = vault.checkPath(
-            NO1, _account(1, BOB, 400), V2TreeHelper.proof(finalized, 1), V2TreeHelper.path(next, 1)
+            NO1, 0, _account(1, BOB, 400), V2TreeHelper.proof(finalized, 1), V2TreeHelper.path(next, 1)
         );
         assertEq(uint8(fault), uint8(LedgerTree.Fault.LowerValue));
         assertEq(vault.pending(NO1).seq, 0);

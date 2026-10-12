@@ -2,9 +2,9 @@
 
 // The auditor sends approvals, challenges and demands to the settlement v2
 // contracts (VERSION2-FINAL.md §9, §9.3). It decides nothing: the ledger audit
-// chooses the action. A durable record per (noId, seq, action, index) keeps
-// the signed transaction from before its first broadcast, so a restart
-// reconciles that exact transaction and never signs a second one.
+// chooses the action. A durable record per (noId, seq, action, rootIndex,
+// index) keeps the signed transaction from before its first broadcast, so a
+// restart reconciles that exact transaction and never signs a second one.
 package validator
 
 import (
@@ -75,6 +75,7 @@ type settlementV2SendRecord struct {
 	NoID        uint64 `json:"no_id"`
 	Seq         uint64 `json:"seq"`
 	Action      string `json:"action"`
+	RootIndex   uint64 `json:"root_index"`
 	Index       uint64 `json:"index"`
 	Transaction string `json:"transaction"`
 	Finalized   bool   `json:"finalized"`
@@ -85,15 +86,16 @@ type settlementV2SendRecord struct {
 // action's own transaction is final and succeeded. A preflight that reverts
 // with the custom error done means another sender got there first (SPEC A6).
 type settlementV2Send struct {
-	noID     uint64
-	seq      uint64
-	action   string
-	index    uint64
-	to       common.Address
-	calldata []byte
-	value    *big.Int
-	done     [4]byte
-	evaluate func(ctx context.Context, landed bool) (done bool, err error)
+	noID      uint64
+	seq       uint64
+	action    string
+	rootIndex uint64
+	index     uint64
+	to        common.Address
+	calldata  []byte
+	value     *big.Int
+	done      [4]byte
+	evaluate  func(ctx context.Context, landed bool) (done bool, err error)
 }
 
 // NewSettlementV2Sender signs with the key of --ledger_auditor_key_file and
@@ -116,7 +118,8 @@ func NewSettlementV2Sender(chain *ChainClient, rpcs []string, chainID uint64, ad
 // Approve sends approveDistribution(noId, seq, root, ledgerHash) for the
 // pending root the audit verified. It returns nil once the auditor's approval
 // of that root counts at the current auditor set version, which is the
-// record's index, including when a preflight finds it AlreadyApproved;
+// record's index (an approval names no finalized root: its rootIndex is 0),
+// including when a preflight finds it AlreadyApproved;
 // ErrSettlementV2ApprovalClosed when the approval could not be included before
 // end(e+1); ErrSettlementV2RootNotPending when the root was replaced, deleted
 // or finalized.
@@ -152,16 +155,16 @@ func (self *SettlementV2Sender) Approve(ctx context.Context, noID uint64, pendin
 		}})
 }
 
-// Demand sends demandPath(noId, account, oldProof) with exactly demandFeeWei,
-// where account and oldProof prove an account of the latest finalized root.
-// The demand blocks the pending root's finalization until the operator opens
-// that account's path. It returns nil once the demand is final or the index
-// was already demanded, open or answered, including when a preflight finds it
-// AlreadyDemanded; ErrSettlementV2ChallengeWindowClosed when the demand could
-// not be included before commit + CHALLENGE_BLOCKS;
+// Demand sends demandPath(noId, rootIndex, account, oldProof) with exactly
+// demandFeeWei, where account and oldProof prove an account of the finalized
+// root rootIndex. The demand blocks the pending root's finalization until the
+// operator opens that account's path. It returns nil once the demand is final
+// or (rootIndex, index) was already demanded, open or answered, including when
+// a preflight finds it AlreadyDemanded; ErrSettlementV2ChallengeWindowClosed
+// when the demand could not be included before commit + CHALLENGE_BLOCKS;
 // ErrSettlementV2RootNotPending when the root was replaced, deleted or
 // finalized.
-func (self *SettlementV2Sender) Demand(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode) error {
+func (self *SettlementV2Sender) Demand(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, rootIndex uint64, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode) error {
 	if !settlementV2PathEncodable(account, oldProof, nil) {
 		return errors.New("settlement v2 demand account or proof has a missing or oversized integer")
 	}
@@ -174,7 +177,8 @@ func (self *SettlementV2Sender) Demand(ctx context.Context, noID uint64, pending
 	if err != nil {
 		return err
 	}
-	return self.send(ctx, settlementV2Send{noID: noID, seq: pending.Seq, action: "demand", index: account.Index.Uint64(), to: self.addresses.Vault, calldata: stabi.NewSTSettlementVault2().PackDemandPath(id, account, oldProof), value: fee[0].(*big.Int), done: evmSelector("AlreadyDemanded()"),
+	root := new(big.Int).SetUint64(rootIndex)
+	return self.send(ctx, settlementV2Send{noID: noID, seq: pending.Seq, action: "demand", rootIndex: rootIndex, index: account.Index.Uint64(), to: self.addresses.Vault, calldata: stabi.NewSTSettlementVault2().PackDemandPath(id, root, account, oldProof), value: fee[0].(*big.Int), done: evmSelector("AlreadyDemanded()"),
 		evaluate: func(ctx context.Context, landed bool) (bool, error) {
 			if landed {
 				return true, nil
@@ -183,7 +187,7 @@ func (self *SettlementV2Sender) Demand(ctx context.Context, noID uint64, pending
 			if err != nil {
 				return false, err
 			}
-			values, err := self.chain.settlementV2ViewAtHashContext(ctx, self.addresses.Vault, &stabi.STSettlementVault2MetaData, "demanded", []any{id, pending.Seq, account.Index}, head, headHash)
+			values, err := self.chain.settlementV2ViewAtHashContext(ctx, self.addresses.Vault, &stabi.STSettlementVault2MetaData, "demanded", []any{id, pending.Seq, root, account.Index}, head, headHash)
 			if err != nil || values[0].(uint8) != settlementV2DemandNone {
 				return err == nil, err
 			}
@@ -195,20 +199,21 @@ func (self *SettlementV2Sender) Demand(ctx context.Context, noID uint64, pending
 		}})
 }
 
-// Challenge sends checkPath(noId, account, oldProof, newPath), proving the
-// fault the audit found at account.Index of the latest finalized root. It
+// Challenge sends checkPath(noId, rootIndex, account, oldProof, newPath),
+// proving the fault the audit found at account.Index of the finalized root
+// rootIndex. It
 // returns nil once the challenged root is no longer pending and was not
 // finalized: deleted by this or another challenge, or replaced (VA-8),
 // including when a preflight finds NoPendingRoot; ErrSettlementV2RootFinalized
 // when it was finalized; and ErrSettlementV2ChallengeAnswered when the opening
 // showed no fault.
-func (self *SettlementV2Sender) Challenge(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode, newPath []stabi.LedgerTreePathNode) error {
+func (self *SettlementV2Sender) Challenge(ctx context.Context, noID uint64, pending stabi.ISTSettlementVault2Pending, rootIndex uint64, account stabi.LedgerTreeAccount, oldProof []stabi.LedgerTreeProofNode, newPath []stabi.LedgerTreePathNode) error {
 	if !settlementV2PathEncodable(account, oldProof, newPath) {
 		return errors.New("settlement v2 challenge account or path has a missing or oversized integer")
 	}
 	id := new(big.Int).SetUint64(noID)
-	calldata := stabi.NewSTSettlementVault2().PackCheckPath(id, account, oldProof, newPath)
-	return self.send(ctx, settlementV2Send{noID: noID, seq: pending.Seq, action: "challenge", index: account.Index.Uint64(), to: self.addresses.Vault, calldata: calldata, value: new(big.Int), done: evmSelector("NoPendingRoot()"),
+	calldata := stabi.NewSTSettlementVault2().PackCheckPath(id, new(big.Int).SetUint64(rootIndex), account, oldProof, newPath)
+	return self.send(ctx, settlementV2Send{noID: noID, seq: pending.Seq, action: "challenge", rootIndex: rootIndex, index: account.Index.Uint64(), to: self.addresses.Vault, calldata: calldata, value: new(big.Int), done: evmSelector("NoPendingRoot()"),
 		evaluate: func(ctx context.Context, landed bool) (bool, error) {
 			_, _, err := self.pendingRootAt(ctx, id, pending)
 			switch {
@@ -254,7 +259,7 @@ func (self *SettlementV2Sender) send(ctx context.Context, request settlementV2Se
 	}
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	path := filepath.Join(self.directory, fmt.Sprintf("%d-%d-%s-%d.json", request.noID, request.seq, request.action, request.index))
+	path := filepath.Join(self.directory, fmt.Sprintf("%d-%d-%s-%d-%d.json", request.noID, request.seq, request.action, request.rootIndex, request.index))
 	record, transaction, err := self.readRecord(path, request)
 	if err != nil {
 		return err
@@ -275,7 +280,7 @@ func (self *SettlementV2Sender) send(ctx context.Context, request settlementV2Se
 	var prepared settlementV2SendRecord
 	_, err = onchain.SubmitWithHooks(ctx, onchain.SubmitParams{Contract: request.to, Rpcs: self.rpcs, Key: self.key, Calldata: request.calldata, ChainID: self.chainID, Value: request.value}, onchain.SubmitHooks{
 		Prepared: func(_ common.Hash, raw []byte) error {
-			prepared = settlementV2SendRecord{Schema: settlementV2SendSchema, NoID: request.noID, Seq: request.seq, Action: request.action, Index: request.index, Transaction: hexutil.Encode(raw)}
+			prepared = settlementV2SendRecord{Schema: settlementV2SendSchema, NoID: request.noID, Seq: request.seq, Action: request.action, RootIndex: request.rootIndex, Index: request.index, Transaction: hexutil.Encode(raw)}
 			return writeSettlementV2SendRecord(path, prepared)
 		},
 	})
@@ -283,7 +288,7 @@ func (self *SettlementV2Sender) send(ctx context.Context, request settlementV2Se
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("settlement v2 %s no_id %d seq %d index %d: %w", request.action, request.noID, request.seq, request.index, err)
+		return fmt.Errorf("settlement v2 %s no_id %d seq %d root %d index %d: %w", request.action, request.noID, request.seq, request.rootIndex, request.index, err)
 	}
 	prepared.Finalized = true
 	if err := writeSettlementV2SendRecord(path, prepared); err != nil {
@@ -367,7 +372,7 @@ func (self *SettlementV2Sender) readRecord(path string, request settlementV2Send
 	if err == nil {
 		sender, err = types.Sender(types.LatestSignerForChainID(self.chainID), transaction)
 	}
-	if err != nil || record.Schema != settlementV2SendSchema || record.NoID != request.noID || record.Seq != request.seq || record.Action != request.action || record.Index != request.index ||
+	if err != nil || record.Schema != settlementV2SendSchema || record.NoID != request.noID || record.Seq != request.seq || record.Action != request.action || record.RootIndex != request.rootIndex || record.Index != request.index ||
 		sender != self.auditor || transaction.To() == nil || *transaction.To() != request.to {
 		return nil, nil, errors.Join(fmt.Errorf("settlement v2 send record %s is not this auditor's %s transaction", path, request.action), err)
 	}

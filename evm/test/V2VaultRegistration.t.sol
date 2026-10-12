@@ -286,6 +286,22 @@ contract V2VaultRegistrationTest is V2VaultBase {
         vault.registerPool(NO1, POOL2, BURN_LIMIT, FIRST_EPOCH);
     }
 
+    // V-2 (review L1): no pool before the escrow. Had someone else registered
+    // the escrow hotkey first (A7), its owner could swap it away with every
+    // position on it, so the installation stops at registerEscrow.
+    function test_V2_registerPoolRefusesBeforeTheEscrowIsRegistered() public {
+        STSettlementVault2 fresh = _fresh(address(this));
+        fresh.setCoordinatorOnce(address(this));
+        neuron.setUid(NETUID, POOL2, POOL2_UID);
+        vm.expectRevert(ISTSettlementVault2.InvalidConfiguration.selector);
+        fresh.registerPool(NO2, POOL2, BURN_LIMIT, FIRST_EPOCH);
+        assertFalse(fresh.pools(NO2).registered);
+
+        neuron.setUid(NETUID, FRESH_ESCROW, FRESH_ESCROW_UID);
+        fresh.registerEscrow(BURN_LIMIT);
+        assertEq(fresh.registerPool(NO2, POOL2, BURN_LIMIT, FIRST_EPOCH), POOL2_UID);
+    }
+
     // V-2
     function test_V2_registerPoolRefusesAMissingUid() public {
         vm.expectRevert(ISTSettlementVault2.UnknownPool.selector);

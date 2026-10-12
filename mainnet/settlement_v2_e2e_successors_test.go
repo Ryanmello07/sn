@@ -15,21 +15,23 @@ import (
 	"github.com/urfoundation/sn/protocol"
 )
 
-// demand sends demandPath for account index of the finalized tree, paying
-// the fee, and checks PathDemanded.
-func (f *e2eFixture) demand(actor *e2eActor, finalized *e2eTreeView, seq, index uint64) {
-	f.t.Helper()
-	account, proof := e2eProof(f.t, finalized.tree, finalized.accounts, index)
-	receipt := f.must(actor, f.vault2, e2eRao(e2eDemandFeeWei), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof))
-	f.requireLogs(receipt, f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(index), actor.address))
+// e2eOpening is tree's top-down opening along index, as checkPath takes it.
+func e2eOpening(t testing.TB, tree *merkle.LedgerSumTree, index uint64) []merkle.LedgerPathNode {
+	t.Helper()
+	path, err := tree.Path(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
-// open sends checkPath for account index of the finalized tree with path, a
-// top-down opening of the pending root: an answer or a challenge.
-func (f *e2eFixture) open(actor *e2eActor, finalized *e2eTreeView, index uint64, path []merkle.LedgerPathNode) *types.Receipt {
+// open sends checkPath for account index of finalized root rootIndex, whose
+// tree is finalized, with path, a top-down opening of the pending root: an
+// answer or a challenge.
+func (f *e2eFixture) open(actor *e2eActor, rootIndex uint64, finalized *e2eTreeView, index uint64, path []merkle.LedgerPathNode) *types.Receipt {
 	f.t.Helper()
 	account, proof := e2eProof(f.t, finalized.tree, finalized.accounts, index)
-	return f.must(actor, f.vault2, nil, e2eVault2Binding.PackCheckPath(e2eRao(e2eNoID), account, proof, e2ePath(path)))
+	return f.must(actor, f.vault2, nil, e2eVault2Binding.PackCheckPath(e2eRao(e2eNoID), e2eRao(rootIndex), account, proof, e2ePath(path)))
 }
 
 // e2eRawTree is a ledger sum tree whose nodes can be misstated.
@@ -178,9 +180,9 @@ var e2eBadSuccessors = []struct {
 
 // E-4, published: a bypassed admission commits each bad successor over F
 // with its account rows published. snclaim v2 check finds the faults and
-// challenges the first; vault2's checkPath, with F's account, its proof
-// against F and the published tree's path, deletes the root and names the
-// fault at the leaf.
+// challenges the first; vault2's checkPath, with root 0's index, F's
+// account, its proof against F and the published tree's path, deletes the
+// root and names the fault at the leaf.
 func TestSettlementV2E2EBadSuccessorsPublished(t *testing.T) {
 	for _, bad := range e2eBadSuccessors {
 		t.Run(bad.name, func(t *testing.T) {
@@ -190,19 +192,13 @@ func TestSettlementV2E2EBadSuccessorsPublished(t *testing.T) {
 			commitment, objects, tree := f.forge(s.honest, accounts)
 			f.publisher.publish(objects, accounts, tree)
 			seq := f.commit(f.operator, s.epoch, commitment)
-			faults := s.faults(t, commitment.Root, commitment.Total, commitment.LeafCount, func(i uint64) []merkle.LedgerPathNode {
-				path, err := tree.Path(i)
-				if err != nil {
-					t.Fatal(err)
-				}
-				return path
-			})
+			faults := s.faults(t, commitment.Root, commitment.Total, commitment.LeafCount, func(i uint64) []merkle.LedgerPathNode { return e2eOpening(t, tree, i) })
 			first := slices.IndexFunc(faults, func(fault merkle.LedgerFault) bool { return fault != merkle.LedgerFaultNone })
 			if first < 0 {
 				t.Fatal("the bad successor faults no account of F")
 			}
 			output, stderr, code := s.check(t)
-			want := fmt.Sprintf("DistributionDeleted: pool 1, seq %d\n  account:     %d\n  fault:       %v at level 0\n  challenger:  %s\n", seq, first, faults[first], f.watcher.address.Hex())
+			want := fmt.Sprintf("DistributionDeleted: pool 1, seq %d\n  account:     %d of finalized root 0\n  fault:       %v at level 0\n  challenger:  %s\n", seq, first, faults[first], f.watcher.address.Hex())
 			if code != 0 || !strings.Contains(output, "  audit:             challenge (accounts check: ledger: a previous ") || !strings.HasSuffix(output, want) {
 				t.Fatalf("watcher (exit %d):\n%s%s", code, output, stderr)
 			}
@@ -210,7 +206,7 @@ func TestSettlementV2E2EBadSuccessorsPublished(t *testing.T) {
 			if len(sent) != 1 {
 				t.Fatalf("the watcher sent %d transactions", len(sent))
 			}
-			f.requireLogs(f.chain.receipt(sent[0].Hash()), f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(uint64(first)), uint8(faults[first]), e2eRao(0), f.watcher.address))
+			f.requireLogs(f.chain.receipt(sent[0].Hash()), f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(uint64(first)), uint8(faults[first]), e2eRao(0), f.watcher.address))
 			if f.pending().Seq != 0 {
 				t.Fatal("the challenged root is still pending")
 			}
@@ -251,43 +247,45 @@ func TestSettlementV2E2EInconsistentSubtreePublished(t *testing.T) {
 	seq := f.commit(f.operator, s.epoch, commitment)
 	output, stderr, code := s.check(t)
 	if code != 0 || !strings.Contains(output, "  audit:             demand (tree check: ledger: account rows do not sum to the committed total: ") ||
-		!strings.Contains(output, "  previous accounts: 4, unverifiable: the published objects are missing or do not reproduce the pending root\n") ||
-		!strings.Contains(output, "demand set: 4 accounts (0 doublings, 0 forced), 0 already demanded\n") || strings.Contains(output, "no fault") {
+		!strings.Contains(output, "  previous accounts: 4 of root 0, unverifiable: the published objects are missing or do not reproduce the pending root\n") ||
+		!strings.Contains(output, "demand set: 4 accounts of root 0 (0 doublings, 0 forced), 0 already demanded\n") || strings.Contains(output, "no fault") {
 		t.Fatalf("watcher (exit %d):\n%s%s", code, output, stderr)
 	}
-	s.requireDemanded(t, seq, []uint64{0, 1, 2, 3})
-	receipt := f.open(f.operator, s.finalized, 2, committed.path(2))
-	f.requireLogs(receipt, f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(2), uint8(merkle.LedgerFaultInconsistentNode), e2eRao(2), f.operator.address))
+	s.requireDemanded(t, 0, seq, []uint64{0, 1, 2, 3})
+	receipt := f.open(f.operator, 0, s.finalized, 2, committed.path(2))
+	f.requireLogs(receipt, f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(2), uint8(merkle.LedgerFaultInconsistentNode), e2eRao(2), f.operator.address))
 	if f.pending().Seq != 0 {
 		t.Fatal("the inconsistent root is still pending")
 	}
 }
 
-// requireDemanded checks that the watcher's transactions are exactly one
-// demand of each index, each paying the fee, with PathDemanded's fields.
-func (s *e2eSuccessor) requireDemanded(t *testing.T, seq uint64, indexes []uint64) {
+// requireDemanded checks that the watcher's transactions after its first
+// skip are exactly one demand of each index of F, root 0, each paying the
+// fee with the account's proof against F, with PathDemanded's fields.
+func (s *e2eSuccessor) requireDemanded(t *testing.T, skip int, seq uint64, indexes []uint64) {
 	t.Helper()
 	f := s.f
-	sent := f.chain.sentBy(f.watcher.address)
+	sent := f.chain.sentBy(f.watcher.address)[skip:]
 	if len(sent) != len(indexes) {
 		t.Fatalf("the watcher sent %d transactions for %d demands", len(sent), len(indexes))
 	}
 	for k, tx := range sent {
 		account, proof := e2eProof(t, s.finalized.tree, s.finalized.accounts, indexes[k])
-		if tx.Value().Cmp(e2eRao(e2eDemandFeeWei)) != 0 || !slices.Equal(tx.Data(), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), account, proof)) {
-			t.Fatalf("demand %d is not account %d's, with the fee", k, indexes[k])
+		if tx.Value().Cmp(e2eRao(e2eDemandFeeWei)) != 0 || !slices.Equal(tx.Data(), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), e2eRao(0), account, proof)) {
+			t.Fatalf("demand %d is not account %d of root 0's, with the fee", k, indexes[k])
 		}
-		f.requireLogs(f.chain.receipt(tx.Hash()), f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(indexes[k]), f.watcher.address))
+		f.requireLogs(f.chain.receipt(tx.Hash()), f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(indexes[k]), f.watcher.address))
 	}
 }
 
 // E-4, withheld: when the successor's tree is not published, the watcher
 // demands every account of F (fewer than the 256 sample), each paying the
-// fee with its proof against F. The attacker approves the root and answers
-// every demand it can, the clean openings; the demand on a faulted account
-// cannot be answered, so finalize is refused once the window has passed,
-// and opening it deletes the root with its fault. The inconsistent subtree
-// is blocked the same way, its every opening crossing the bad node.
+// fee with root 0's index and its proof against F. The attacker approves the
+// root and answers every demand it can, the clean openings; the demand on a
+// faulted account cannot be answered, so finalize is refused once the
+// window has passed, and opening it deletes the root with its fault. The
+// inconsistent subtree is blocked the same way, its every opening crossing
+// the bad node.
 func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 	type successor struct {
 		name   string
@@ -298,13 +296,7 @@ func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 		cases = append(cases, successor{bad.name, func(s *e2eSuccessor) (ledger.Root, func(uint64) []merkle.LedgerPathNode) {
 			accounts := bad.mutate(s.finalized.accounts, s.honest.Accounts)
 			commitment, _, tree := s.f.forge(s.honest, accounts)
-			return commitment, func(i uint64) []merkle.LedgerPathNode {
-				path, err := tree.Path(i)
-				if err != nil {
-					s.f.t.Fatal(err)
-				}
-				return path
-			}
+			return commitment, func(i uint64) []merkle.LedgerPathNode { return e2eOpening(s.f.t, tree, i) }
 		}})
 	}
 	cases = append(cases, successor{"inconsistent subtree", func(s *e2eSuccessor) (ledger.Root, func(uint64) []merkle.LedgerPathNode) {
@@ -319,10 +311,10 @@ func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 			seq := f.commit(f.operator, s.epoch, commitment)
 			output, stderr, code := s.check(t)
 			if code != 0 || !strings.Contains(output, "  object missing:    "+ledger.Ref(commitment.LedgerHash).String()+"\n") ||
-				!strings.Contains(output, "  previous accounts: 4, unverifiable") || !strings.Contains(output, "demand set: 4 accounts (0 doublings, 0 forced), 0 already demanded\n") {
+				!strings.Contains(output, "  previous accounts: 4 of root 0, unverifiable") || !strings.Contains(output, "demand set: 4 accounts of root 0 (0 doublings, 0 forced), 0 already demanded\n") {
 				t.Fatalf("watcher (exit %d):\n%s%s", code, output, stderr)
 			}
-			s.requireDemanded(t, seq, []uint64{0, 1, 2, 3})
+			s.requireDemanded(t, 0, seq, []uint64{0, 1, 2, 3})
 			// The bypassed auditor approves; the attacker answers what it can.
 			f.approveBlind(f.auditor)
 			faults := s.faults(t, commitment.Root, commitment.Total, commitment.LeafCount, path)
@@ -332,8 +324,8 @@ func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 					faulted = i
 					continue
 				}
-				receipt := f.open(f.operator, s.finalized, uint64(i), path(uint64(i)))
-				f.requireLogs(receipt, f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(uint64(i)), f.operator.address))
+				receipt := f.open(f.operator, 0, s.finalized, uint64(i), path(uint64(i)))
+				f.requireLogs(receipt, f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(uint64(i)), f.operator.address))
 			}
 			open := uint64(0)
 			for _, fault := range faults {
@@ -352,8 +344,8 @@ func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			receipt := f.open(f.anyone, s.finalized, uint64(faulted), path(uint64(faulted)))
-			f.requireLogs(receipt, f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(uint64(faulted)), uint8(faults[faulted]), big.NewInt(int64(level)), f.anyone.address))
+			receipt := f.open(f.anyone, 0, s.finalized, uint64(faulted), path(uint64(faulted)))
+			f.requireLogs(receipt, f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(uint64(faulted)), uint8(faults[faulted]), big.NewInt(int64(level)), f.anyone.address))
 			if f.pending().Seq != 0 || f.rootCount() != 1 {
 				t.Fatal("the faulted root survived")
 			}
@@ -366,8 +358,8 @@ func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 // so a demand whose block would reach committedBlock + CHALLENGE_BLOCKS passes
 // its preflight and reverts ChallengeWindowClosed. The watcher, like the
 // validator's sender, sends a demand only while the next block is inside the
-// window: with the head two blocks before the window's last block, the two
-// demands that can land do, and nothing more is sent.
+// window (§5 Senders): with the head two blocks before the window's last
+// block, the two demands that can land do, and nothing more is sent.
 func TestSettlementV2E2EWatcherDemandsInsideWindow(t *testing.T) {
 	s := newE2ESuccessor(t)
 	f := s.f
@@ -387,8 +379,8 @@ func TestSettlementV2E2EWatcherDemandsInsideWindow(t *testing.T) {
 	}
 }
 
-// watcherDemands returns the indexes the watcher's transactions after the
-// first skip demanded on seq, checking that each paid the fee.
+// watcherDemands returns the indexes of root 0 the watcher's transactions
+// after its first skip demanded on seq, checking that each paid the fee.
 func (f *e2eFixture) watcherDemands(t *testing.T, skip int, seq uint64) []uint64 {
 	t.Helper()
 	var indexes []uint64
@@ -398,10 +390,10 @@ func (f *e2eFixture) watcherDemands(t *testing.T, skip int, seq uint64) []uint64
 			t.Fatalf("watcher transaction %s is not a paid demand", tx.Hash())
 		}
 		event, err := e2eVault2Binding.UnpackPathDemandedEvent(receipt.Logs[0])
-		if err != nil || event.NoId.Uint64() != e2eNoID || event.Seq != seq || event.Demander != f.watcher.address {
-			t.Fatalf("PathDemanded %+v (%v), want seq %d by the watcher", event, err, seq)
+		if err != nil || event.NoId.Uint64() != e2eNoID || event.Seq != seq || event.RootIndex.Sign() != 0 || event.Demander != f.watcher.address {
+			t.Fatalf("PathDemanded %+v (%v), want seq %d and root 0 by the watcher", event, err, seq)
 		}
-		f.requireLogs(receipt, f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, event.Index, f.watcher.address))
+		f.requireLogs(receipt, f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(0), event.Index, f.watcher.address))
 		indexes = append(indexes, event.Index.Uint64())
 	}
 	return indexes
@@ -450,11 +442,7 @@ func TestSettlementV2E2EReRollDrill(t *testing.T) {
 			if i == victim {
 				continue
 			}
-			path, err := tree.Path(i)
-			if err != nil {
-				t.Fatal(err)
-			}
-			f.requireLogs(f.open(f.operator, finalized, i, path), f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(i), f.operator.address))
+			f.requireLogs(f.open(f.operator, 0, finalized, i, e2eOpening(t, tree, i)), f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(i), f.operator.address))
 		}
 		if f.pending().OpenDemands != 1 {
 			t.Fatalf("%d demands open, want the victim's", f.pending().OpenDemands)
@@ -471,7 +459,7 @@ func TestSettlementV2E2EReRollDrill(t *testing.T) {
 	e1 := f.firstEpoch + 1
 	commitment, tree := attack(e1)
 	seq := f.commit(f.operator, e1, commitment)
-	if output := check(); !strings.Contains(output, "demand set: 256 accounts (0 doublings, 0 forced), 0 already demanded\n") {
+	if output := check(); !strings.Contains(output, "demand set: 256 accounts of root 0 (0 doublings, 0 forced), 0 already demanded\n") {
 		t.Fatalf("first sample:\n%s", output)
 	}
 	demanded := f.watcherDemands(t, 0, seq)
@@ -481,17 +469,13 @@ func TestSettlementV2E2EReRollDrill(t *testing.T) {
 	answer(seq, tree, demanded)
 	// The re-roll: the attacker proves its own fault, deleting the root, and
 	// recommits in the same window.
-	path, err := tree.Path(victim)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.requireLogs(f.open(f.operator, finalized, victim, path), f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(victim), uint8(merkle.LedgerFaultLowerValue), e2eRao(0), f.operator.address))
+	f.requireLogs(f.open(f.operator, 0, finalized, victim, e2eOpening(t, tree, victim)), f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(victim), uint8(merkle.LedgerFaultLowerValue), e2eRao(0), f.operator.address))
 	f.refused(f.operator, f.settlement, nil, f.commitData(e1, commitment), "CommitTooSoon")
 
 	// The next epoch's root meets the doubled sample and the victim again.
 	commitment, tree = attack(e1 + 1)
 	seq = f.commit(f.operator, e1+1, commitment)
-	if output := check(); !strings.Contains(output, "demand set: 513 accounts (1 doublings, 1 forced), 0 already demanded\n") {
+	if output := check(); !strings.Contains(output, "demand set: 513 accounts of root 0 (1 doublings, 1 forced), 0 already demanded\n") {
 		t.Fatalf("doubled sample:\n%s", output)
 	}
 	demanded = f.watcherDemands(t, 256, seq)
