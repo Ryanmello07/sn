@@ -1,5 +1,7 @@
 // Validator diagnostics have one explicit lifecycle owner. Closed scalar
 // events never format raw errors, custody records, signatures or credentials.
+// A failed steering attempt's separate cause record carries only the redacted,
+// bounded leaf text of its observed error graph (release_error_causes.go).
 package validator
 
 import (
@@ -172,6 +174,22 @@ func releaseDiagnostic(ctx context.Context, domain, code string, epoch uint64, k
 	}
 	raw := []byte(fmt.Sprintf("validator diagnostic: domain=%s code=%s native_epoch=%d epoch_known=%t attempt=%d phase=%s cause=%s operator_id=%d operator_known=%t cache_stage=%s\n", domain, code, epoch, known, attempt, phase, cause, facts.operatorId, facts.operatorKnown, cache))
 	self.exporter.Offer(domain, raw)
+}
+
+// The failed attempt's distinct leaf causes follow its scalar event on the same
+// bounded, nonblocking domain. A refused offer is counted like any other record
+// and never changes the attempt's outcome.
+func releaseDiagnosticCauses(ctx context.Context, domain, code string, attempt uint64, err error) {
+	self := releaseDiagnosticOwner(ctx)
+	if self == nil || err == nil {
+		return
+	}
+	switch domain {
+	case "startup", "steering", "progress", "operator", "runtime":
+	default:
+		domain = "runtime"
+	}
+	self.exporter.Offer(domain, formatReleaseErrorCauses(code, attempt, err))
 }
 
 // Each status snapshot copies actual exporter acknowledgments; it cannot claim

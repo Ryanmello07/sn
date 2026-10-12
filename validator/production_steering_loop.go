@@ -41,6 +41,7 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 			}
 			progress.observeSteering(readWait.nativeEpoch, readWait.epochKnown, outcome, false)
 			releaseDiagnostic(ctx, "steering", outcome, readWait.nativeEpoch, readWait.epochKnown, 0, releaseDiagnosticFacts{phase: readWait.phase, cause: releaseDiagnosticReadCause(readWait.cause)})
+			releaseDiagnosticCauses(ctx, "steering", outcome, 0, err)
 		case preparation != nil && releaseOnlyErrors(err, preparation):
 			progress.observeSteering(preparation.nativeEpoch, preparation.epochKnown, "read_wait", false)
 			releaseDiagnostic(ctx, "steering", "preparation_pending", preparation.nativeEpoch, preparation.epochKnown, 0, releaseDiagnosticFacts{phase: productionReadPreparation})
@@ -63,6 +64,7 @@ func runReleaseProductionSteeringLoopWithWait(ctx context.Context, submit func()
 			pendingErr = errors.Join(pendingErr, err)
 			progress.observeSteering(0, false, "hard_error", false)
 			releaseDiagnostic(ctx, "steering", "hard_error", 0, false, uint64(failures), releaseDiagnosticFacts{cause: releaseDiagnosticHardError})
+			releaseDiagnosticCauses(ctx, "steering", "hard_error", uint64(failures), err)
 		}
 		if failures >= releaseSteeringFailureLimit {
 			return fmt.Errorf("release steering failed %d consecutive attempts: %w", failures, pendingErr)
