@@ -383,6 +383,9 @@ A condensed, current (dTAO‑era) reference. Identifiers are from `opentensor/su
   Sr25519Verify or the alpha-price precompile (`0x…0808`): it accepts no signed
   permits, root admission uses auditor approvals sent as ordinary transactions from owner-admitted
   addresses, and a claim that the runtime's transfer floor refuses simply reverts and stays claimable.
+  Because vault2 is immutable, it depends for good on the ABIs of `getStake`, `getMinerCollateral`,
+  `moveStake` and `transferStake`: a runtime that changes one of them freezes every capture and claim
+  (`VERSION2-FINAL.md` §17).
 
   > Precompile ABIs are **not formally versioned** (issue #2455). Pin a Subtensor release tag, target
   > **Staking V2** (`0x805`, not the legacy `0x801`), and re‑verify addresses/ABIs before launch.
@@ -613,8 +616,8 @@ version 2 lifecycle (`VERSION2-FINAL.md` §5), in blocks after the epoch's end b
                      validator alone.
   < commit + 14,400  Challenge window (≈48h from the commit, fixed in vault2): anyone may prove that the root
                      lowers, replaces or hides an existing account (checkPath, which deletes the root), or demand
-                     the path opening of an account proven against the latest finalized root (demandPath, once
-                     per account), which blocks finalization until the operator answers.
+                     the path opening of an account proven against any finalized root (demandPath, once per
+                     account of each root), which blocks finalization until the operator answers.
   ≥ commit + 14,400  finalizeDistribution(n), by anyone, once a quorum has approved and no demand is open. Each
                      account's cumulative becomes claimable with no expiry; anyone may send the claim, which
                      always pays the account's coldkey.
@@ -685,9 +688,9 @@ Essential state is deliberately partitioned:
 - vault2 stores its immutable identity and the fixed 14,400-block challenge window and, per pool, the pool
   hotkey and `firstEpoch`; one cumulative funding snapshot per epoch (`fundedThrough`), written once when
   the epoch is captured or deferred; every finalized root (`root`, `total`, `leafCount`, `epoch`,
-  `ledgerHash`), append-only; at most one pending root, with each account's demand state on it (none, open
-  until answered, answered); and a `claimed` watermark per account. It has no per-epoch entitlement, expiry
-  or claim credit. Its conservation identities are
+  `ledgerHash`), append-only; at most one pending root, with the demand state on it of each account of each
+  finalized root (none, open until answered, answered); and a `claimed` watermark per account. It has no
+  per-epoch entitlement, expiry or claim credit. Its conservation identities are
   `totalCaptured = totalPaid + escrowAccounted` and `escrowAccounted = Σ_pools (capturedTotal − claimedTotal)`,
   with `claimedTotal <= finalizedTotal <= capturedTotal` per pool, and every call that moves or assigns stake
   ends by checking that the escrow's movable stake (§6.3) covers `escrowAccounted`.
@@ -734,10 +737,10 @@ finalizeDistribution(noId)
 
 // Immutable vault2: anyone may call these; none has a coordinator or pause check.
 // account = (index, coldkey, cumulative) with its (hash, sum) proof; demandPath and checkPath
-// take an account of the latest finalized root.
+// take an account of any finalized root, named by rootIndex.
 claim(noId, rootIndex, account, proof)
-demandPath(noId, account, oldProof)  // payable: the immutable demandFeeWei
-checkPath(noId, account, oldProof, newPath)
+demandPath(noId, rootIndex, account, oldProof)  // payable: the immutable demandFeeWei
+checkPath(noId, rootIndex, account, oldProof, newPath)
 absorbStake(hotkey)
 registerPoolUid(noId, maxBurn)
 ```
@@ -835,12 +838,19 @@ claw back that finalized claim.**
 Under version 2 the same boundary holds in vault2. A finalized root is kept forever and cannot be changed,
 and vault2's `claim` has no pause or admin gate, so no `STSettlement2` upgrade, pause, owner or guardian
 action can rewrite a finalized root or stop a claim. Anyone holding a successor root's tree can delete it
-with `checkPath` if it lowers an account of the latest finalized root, gives that account another coldkey
-or hides it behind an inconsistent node. If the tree is withheld, anyone can `demandPath` the on-chain
-opening of an account, proven against the latest finalized root, and the root cannot finalize until each
-demand is answered by an opening that shows no fault. An accrued v2 balance therefore survives a bad
-successor as long as someone challenges or demands during the 14,400-block window (`VERSION2-FINAL.md`
-§4.2).
+with `checkPath` if it lowers an account of a finalized root, gives that account another coldkey or hides
+it behind an inconsistent node. If the tree is withheld, anyone can `demandPath` the on-chain opening of an
+account, proven against any finalized root, and the root cannot finalize until each demand is answered by
+an opening that shows no fault. An accrued v2 balance therefore survives a bad successor as long as someone
+challenges or demands during the 14,400-block window (`VERSION2-FINAL.md` §4.2).
+
+**One runtime switch sits outside every contract.** The SN25 owner key (the `ur-owner` multisig), or the
+chain's root, can disable stake transfers on the subnet (`sudo_set_toggle_transfer`). Every `transferStake`
+then fails, so no claim of either version pays until transfers are enabled again (a v1 claim keeps its
+amount as claim credit). That freezes claims but cannot take or redirect a balance: a frozen v2 claim reverts
+and stays claimable, nothing expires, and captures, which move stake without the transfer check, continue.
+The SN25 owner key should therefore be kept under the Safe's governance; SN25 ownership itself stays with
+`ur-owner`.
 
 **Sibling invariant — the buyback reserve is one‑way.** The reserve sink has no outbound stake function,
 generic call, delegatecall, owner, proxy or upgrade path. Deposits and dividends can only enter its
@@ -1140,8 +1150,9 @@ before the next epoch ends (at launch: quorum 1, the validator, after its audit 
 §8.2) **and** a 14,400‑block (≈ 48 h) window fixed in vault2 has passed since the commit. During the
 window anyone may **challenge** — prove on chain that the root lowers, replaces or hides an existing
 account, which deletes the root — or **demand** that the operator open an account's path on chain, which
-blocks finalization until answered. A demand proves its account against the latest finalized root, so only
-an existing account can be demanded, each at most once per pending root. A withheld or garbage node can
+blocks finalization until answered. A demand proves its account against a finalized root it names, any of
+the pool's, so only an existing account can be demanded, each at most once per root and pending root, and
+withholding the newest root's ledger cannot shield an older root's accounts. A withheld or garbage node can
 never be opened, so a demanded account is protected even when the tree is not published. A root still
 unfinalized at the end of the next epoch can be replaced, and its epochs' funding stays for the replacement.
 A refused or deleted root does not change the pool's weight while there is one operator: zeroing the pool
@@ -1507,7 +1518,7 @@ therefore mandatory release gates.
 |---|---|---|
 | finalized `Deposit` / `ConvictionAdded` / `ReservePrincipalAdded` events and cap counters | coordinator + reserve sink | demand and conviction audit inputs; validators reproduce them from finalized history |
 | immutable `entitlement[e][noId]` and conservation counters (epochs before E_s) | v1 settlement vault | captured/carry total, root, artifact hash, claimed amount, expiry and exact custody accounting |
-| funding snapshots `fundedThrough[noId][e]`, every finalized root and the one pending root (each `root`, `total`, `leafCount`, `epoch`, `ledgerHash`), each account's demand state on the pending root, per-account `claimed` and conservation counters (epochs from E_s) | vault2 (`STSettlementVault2`, immutable) | each root's total is bound to captured funding; finalized roots are append-only, so accruals never expire; exact custody accounting |
+| funding snapshots `fundedThrough[noId][e]`, every finalized root and the one pending root (each `root`, `total`, `leafCount`, `epoch`, `ledgerHash`), the pending root's demand state for each account of each finalized root, per-account `claimed` and conservation counters (epochs from E_s) | vault2 (`STSettlementVault2`, immutable) | each root's total is bound to captured funding; finalized roots are append-only, so accruals never expire; exact custody accounting |
 | auditor set, quorum and per-root approvals | `STSettlement2` (owner-upgradeable) | admission: a pending root finalizes only with a quorum of approvals of its exact commit (§11.3) |
 | validator activation anchors and write-once validator/operator evidence hashes | coordinator's pool namespace | domain-bound consent and immutable closed-epoch census/audit commitments, independent of payout-root publication |
 | v1 payout artifacts, v2 ledger objects (header, provider and account chunks) and completed-trail/statistics artifacts | **server API + content-addressed `server/blob` MinIO** | canonical bulk inputs; publicly retrievable by SHA-256 and independently reproducible; the validator also retains each v2 ledger it audits |
@@ -1598,40 +1609,44 @@ allocation from on-chain funding, unchanged account positions and coldkeys, and 
 leaf count. Population, usage, window membership and wallet selection stay operator-attested in this phase.
 Approval, in the upgradeable `STSettlement2`, vouches for how new funding is allocated. The window and two
 objective, permissionless checks live in immutable vault2, so they hold whatever `STSettlement2` does; both
-protect the accounts of the latest finalized root:
+protect the accounts of every finalized root, each named by its index:
 
-- **`checkPath` — challenge.** Anyone submits an account's leaf and proof from the latest finalized root,
-  plus a top-down opening of the pending root along that index. A lowered value, a changed coldkey, a
-  garbage leaf or an inconsistent node (child sums that do not add up to the node's) deletes the pending
-  root. An opening with no fault answers an open demand on that account, once; without one it reverts and
-  changes nothing.
+- **`checkPath` — challenge.** Anyone submits an account's leaf and proof from a finalized root, any of the
+  pool's, plus a top-down opening of the pending root along that index. A lowered value, a changed coldkey,
+  a garbage leaf or an inconsistent node (child sums that do not add up to the node's) deletes the pending
+  root. An opening with no fault answers an open demand on that account of that root, once; without one it
+  reverts and changes nothing.
 - **`demandPath` — demand.** Anyone may demand, for the immutable fee, the on-chain opening of an existing
   account's path, the remedy when the ledger is withheld. The demand carries the account's leaf and proof
-  against the latest finalized root, so a padding or otherwise unprovable position, which no honest
-  successor could answer, can never be demanded, and each account can be demanded once per pending root.
-  The root cannot finalize until each demand is answered by a clean `checkPath`, which the operator sends
-  from its copy of the tree; a garbage or withheld node can never be answered.
+  against a finalized root it names, so a padding or otherwise unprovable position, which no honest
+  successor could answer, can never be demanded, and each account of each finalized root can be demanded
+  once per pending root. Any finalized root will do, not only the latest, so withholding the newest root's
+  ledger cannot stop demands on the accounts of an older one. The root cannot finalize until each demand is
+  answered by a clean `checkPath`, which the operator sends from its copies of the trees; a garbage or
+  withheld node can never be answered.
 
 The validator approves only if every check passes, challenges any fault that published account rows
 reproducing the root can prove, and, if the objects are missing or do not reproduce the root, refuses
 approval and demands two sets of accounts. A tree rebuilt from rows is always consistent, so an
 over-allocation hidden in an inconsistent subtree is never reproduced from published account rows: it takes
-the demand route, and any opening under the bad node deletes the root. One demand set is every previous
-account whose published row shows a fault. The other is a value-weighted random sample of at least 256
-previous accounts, drawn without replacement with randomness the operator cannot predict, which doubles after
-each failed root over the same predecessor. vault2 allows one commit per pool per 14,400 blocks, so the
-sample cannot be re-rolled quickly, and each demand carries an immutable fee that keeps griefing costly.
-`snclaim v2 check` lets anyone do the same, reporting the previous accounts as unverifiable, never as
-faultless, whenever the objects are missing or do not reproduce the root; UR runs it as an independent
-watcher on a host other than the validator's. Every sender treats a refusal that shows another transaction
-already did the work (an approval already counted, an account already demanded, a root already answered,
-deleted, replaced or finalized, a claim a third party already paid) as done. The residual risk is an account
-that is faulted but never demanded, under a withheld ledger *and* a bypassed approval; demands are weighted
-by value, so the larger a theft, the likelier it is caught. A pool's first root has no predecessor and rests
-on approval alone. A root still unfinalized at the end of the next epoch can be replaced by the next commit,
-and a deleted root frees the pending slot; either way no value moves, since the next root allocates their
-epochs from their own usage, and while there is one operator neither changes the pool's weight (§10).
-Pausing settlement stops finalization but never approvals, challenges or demands.
+the demand route, and any opening under the bad node deletes the root. Both sets are accounts of the newest
+finalized root whose ledger the validator holds and has verified: the latest, or an older one when the
+latest's objects are missing or do not rebuild it. One demand set is every such account whose published row
+shows a fault. The other is a value-weighted random sample of at least 256 of them, drawn without
+replacement with randomness the operator cannot predict, which doubles after each failed root over the same
+predecessor. vault2 allows one commit per pool per 14,400 blocks, so the sample cannot be re-rolled quickly,
+and each demand carries an immutable fee that keeps griefing costly. `snclaim v2 check` lets anyone do the
+same, protecting the newest finalized root whose ledger it can rebuild and reporting that root's accounts as
+unverifiable, never as faultless, whenever the objects are missing or do not reproduce the root; UR runs it
+as an independent watcher on a host other than the validator's. Every sender treats a refusal that shows
+another transaction already did the work (an approval already counted, an account already demanded, a root
+already answered, deleted, replaced or finalized, a claim a third party already paid) as done. The residual
+risk is an account that is faulted but never demanded, under a withheld ledger *and* a bypassed approval;
+demands are weighted by value, so the larger a theft, the likelier it is caught. A pool's first root has no
+predecessor and rests on approval alone. A root still unfinalized at the end of the next epoch can be
+replaced by the next commit, and a deleted root frees the pending slot; either way no value moves, since the
+next root allocates their epochs from their own usage, and while there is one operator neither changes the
+pool's weight (§10). Pausing settlement stops finalization but never approvals, challenges or demands.
 
 Otherwise the on‑chain dispute surface is deliberately small — deposits are reserved (nothing distributable
 to dispute), pool amounts are read from chain state, and effort claims do not exist yet:
@@ -1796,7 +1811,17 @@ designs, §9.3/§13.6) is an open post‑launch question, not a committed roadma
   measured 235,938 gas) costs about 13 weeks of average earnings, and gas falls under 10% of a claim only
   after ≈ 131 weeks; both take ten times longer at 1M providers (`VERSION2-FINAL.md` §3). A third party can
   also raise that cost: by filling vault2's own staking-hotkey list (up to 128 entries, each costing it a
-  transfer above the floor) it makes every claim use about 1.27M gas instead of 0.2M.
+  transfer above the floor) it makes every claim use about 1.27M gas instead of 0.2M, about 1 α at the
+  same prices.
+- **Outside any contract** (chain-level powers that the release 1.0 vault faces too): the SN25 owner key
+  or root can **freeze every claim** by disabling stake transfers (§6.4), though it cannot take or
+  redirect a balance; and SN25 can be **dissolved**. A new subnet registration at the subnet limit
+  dissolves the non-immune subnet with the lowest moving α price, and root can dissolve any subnet.
+  Dissolution turns every SN25 position into free TAO on its coldkey, which neither vault can pay out, so
+  custody would be stranded and every claim would revert. The owner accepts that risk (October 11): the
+  operator server alerts when SN25 nears the lowest moving price among non-immune subnets, and claims are
+  encouraged so that custody stays small. vault2 also depends for good on four staking-precompile ABIs
+  (§2.5).
 
 ### 12.4 The buyback reserve and the demand crossover
 
@@ -2005,12 +2030,13 @@ v2 settlement (§13.1) registers two more vault-owned identities, one burn each:
 deployment, and the v2 pool hotkey one to two days before `E_s`, so that it earns weight before its
 registration immunity ends. vault2's creation reveals the escrow hotkey, and whoever registers it first
 makes vault2's own registration fail for good, so the deployment sends `registerEscrow` at the very next
-nonce, back to back with the creation; losing that race costs a redeploy, with no funds at risk. During the
-switch a NO holds two pool UIDs. From `E_s` validators weight only the v2 one, and the v1 pool UID may be
-pruned without error: pruning removes only subnet membership, and stake moves need only the hotkey's
-`Owner` entry. The escrow hotkey earns no emission, so it is among the first UIDs pruned once its immunity
-ends, and vault2 keeps working with it pruned. Anyone can re-register a pruned v2 pool hotkey through
-`registerPoolUid`, paying the burn.
+nonce, back to back with the creation. Losing that race costs a redeploy, with no funds at risk: vault2
+registers no pool until its escrow is registered, since whoever owned the escrow hotkey could swap it away
+with every position on it. During the switch a NO holds two pool UIDs. From `E_s` validators weight only
+the v2 one, and the v1 pool UID may be pruned without error: pruning removes only subnet membership, and
+stake moves need only the hotkey's `Owner` entry. The escrow hotkey earns no emission, so it is among the
+first UIDs pruned once its immunity ends, and vault2 keeps working with it pruned. Anyone can re-register a
+pruned v2 pool hotkey through `registerPoolUid`, paying the burn.
 
 ---
 
@@ -2047,7 +2073,7 @@ ends, and vault2 keeps working with it pruned. Anyone can re-register a pruned v
 | Operator data deadline | — | +4 h (1,200 blocks) | `README.md`; the root commit window, unchanged in v2 settlement |
 | Close window | — | v1: 120 blocks after the epoch end; **v2: the 1,200-block commit window** | a v2 close missed beyond it defers the epoch with zero funding, and the next close captures its emission for later earners (§12.3) |
 | Challenge window (v2) | `CHALLENGE_BLOCKS` | **14,400 blocks** (≈ 48 h) from the commit, a constant of vault2 | no v2 root finalizes earlier or with a path demand open; needs `T_epoch` ≥ commit window + 14,400 (mainnet's 50,400 holds; testnet's 360-block cadence does not), checked at pool registration and kept by every later v1 policy (§5). v1 instead finalizes 14,400 blocks after the epoch end |
-| Demand fee (v2) | `demandFeeWei` | at least twice the gas of an answer at the planning fee, a nonzero multiple of 10^9 wei | immutable in vault2 and kept by it, never paid to the answerer; the runtime moves only whole rao of a call's value. The rehearsal measured an answer at depth 29 at 159,665 gas and a demand at 104,867 |
+| Demand fee (v2) | `demandFeeWei` | at least twice the gas of an answer at the planning fee: 2 × 159,665 gas at 5 gwei is 1,596,650 rao (1.59665·10^15 wei); a nonzero multiple of 10^9 wei | immutable in vault2 and kept by it, never paid to the answerer; the runtime moves only whole rao of a call's value. The rehearsal measured an answer at depth 29 at 159,665 gas and a demand at 104,867. Each account of each finalized root can be demanded once per pending root, so the possible demands grow with the number of roots, each paying the fee |
 | Root approval (v2) | — | owner-admitted auditor addresses (≤ 16); **quorum 1 at launch** (the validator); approve before the end of epoch `e+1` | a root still unfinalized at the end of epoch `e+1` can be replaced by the next commit, and its epochs' funding stays for that root (§13.1) |
 | Claim expiry | — | v1: `claim_ttl_epochs` 8 + `claim_grace_epochs` 1; **v2: never** | policy v1 stays in force: `claim_ttl_epochs`, `claim_grace_epochs`, `expired_claim_action`, `shares_total_bps`, `rounding` and `deposit.usage_artifact` keep their meaning for v1 epochs and the v1 carry sweep and are **inert for v2 epochs**, which allocate in rao by `coldkey_usage_largest_remainder_rao_v1` |
 | Ledger bounds (v2) | — | ≤ 96 covered epochs per root; header ≤ 256 KiB (about 3,500 chunk references); 131,072 rows per chunk (48-byte account rows, 6 MiB; 57-byte provider rows, ≈ 7.1 MiB); ≤ 2^29 accounts per pool in vault2's tree | design target and activation gate: ≥ 1,000,000 providers per pool; the validator fetches at most `--ledger_max_bytes` of new objects per root (default 2 GiB, a runtime flag) |
@@ -2136,9 +2162,10 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
    - **Validator.** From the pool's `firstEpoch` it weights the pool UID resolved through
      `STSettlement2.settlementAt`. It audits each pending root's ledger and, from its admitted auditor
      address, approves the root only if every check passes, challenges a provable fault with `checkPath`,
-     and demands a value-weighted sample of at least 256 previous accounts with `demandPath`, each with
-     the account's proof against the finalized root, when the objects are missing or do not reproduce the
-     root. The sample doubles after each failed root.
+     and demands a value-weighted sample of at least 256 previous accounts with `demandPath` when the
+     objects are missing or do not reproduce the root. Each demand names the newest finalized root whose
+     ledger the validator holds and carries the account's proof against it. The sample doubles after each
+     failed root.
    - **Claims and apps.** The miner claim daemon v2 (`provider claim-daemon-v2`), beside the unchanged v1
      daemon, claims an account whenever its claimable amount reaches the daemon's threshold (1.9 α by
      default, never below the 0.0152 α transfer floor). `snclaim v2` provides `status`, `claim`
@@ -2149,7 +2176,7 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
      separately, and "unavailable" rather than zero when the proof service cannot be reached, and from
      activation they claim v2 accounts: each claim goes only to the pinned vault2 address, after the SDK
      verifies the account's proof against vault2's on-chain root and sizes the gas limit with
-     `eth_estimateGas`.
+     `eth_estimateGas`. A v2 claim needs about 0.02 TAO of gas on the device's gas key.
 
 ### 16.2 The chain is identity + stake + weights only
 
@@ -2399,11 +2426,11 @@ starts at least two days after the last one passes.
   quorum 1) that audits a pending root's ledger and approves the exact root for epoch `e` with
   `approveDistribution` before `end(e+1)`.
 - **Challenge (`checkPath`) / demand (`demandPath`)** — while a root is pending, anyone holding its tree can
-  **challenge** it by opening its path at an index of the latest finalized root; a lowered value, a changed
-  coldkey or an inconsistent node deletes it. Anyone without the tree can instead **demand** that opening on
-  chain, proving the account against the latest finalized root, once per account and pending root; the
-  root cannot finalize until the operator answers with a clean `checkPath`, which a withheld or garbage node
-  never allows.
+  **challenge** it by opening its path at an account of a finalized root, any of the pool's, named by its
+  index; a lowered value, a changed coldkey or an inconsistent node deletes it. Anyone without the tree can
+  instead **demand** that opening on chain, proving the account against a finalized root it names, once per
+  account of each root and pending root; the root cannot finalize until the operator answers with a clean
+  `checkPath`, which a withheld or garbage node never allows.
 - **Carry** — release 1.0: an expired or unallocated remainder, or a missed root's funding, folded into the
   same NO's next finalized entitlement (§8.3). Version 2: within one root, the funding of a covered epoch
   with no eligible usage or with inputs declared unrecoverable, allocated with the next covered epoch that has
