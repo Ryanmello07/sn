@@ -27,6 +27,14 @@ const releaseGateV2InvariantCommand = "FOUNDRY_PROFILE=v2_invariant forge test -
 // The server's scale shard selects its roots by this prefix.
 const releaseGateServerScaleSelector = "^TestStV2Scale"
 
+// The E suite needs the server's database (E-1, E-3), so the aggregate job,
+// which has none, skips it by this prefix, and sn-e2e runs it on the gate's
+// private services.
+const releaseGateAggregateE2ESkip = "^TestSettlementV2E2E"
+
+// The aggregate job: every package of sn in normal mode, without the E suite.
+const releaseGateAggregateNormalCommand = "go test -parallel=4 -timeout 90m ./... -count=1 -skip '" + releaseGateAggregateE2ESkip + "'"
+
 // The database half of the scale shard and the end-to-end suite have the same
 // service-ready test as the database suites, with the unavailable owner as
 // each job's only alternative.
@@ -689,6 +697,142 @@ func TestReleaseGateSettlementV2SnSuitesRejectDrift(t *testing.T) {
 		escaped.sources[packagePath] = append(slices.Clone(group.sources[packagePath]), "package fixture\nfunc TestOmittedSettlementV2Root(t *testing.T) {}\n")
 		if err := verifyReleaseGateSnV2(script, escaped); err == nil {
 			t.Fatalf("sn v2 job accepted a %s root outside its selector", packagePath)
+		}
+	}
+}
+
+// releaseGateAggregateSkipCensus maps each package under root, as ./dir, to
+// the sources of its test files that the default build compiles and that
+// name the aggregate job's skipped prefix. Like go, it skips testdata, hidden
+// and underscore directories and nested modules.
+func releaseGateAggregateSkipCensus(root string) (map[string][]string, error) {
+	literal := strings.TrimPrefix(releaseGateAggregateE2ESkip, "^")
+	census := map[string][]string{}
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		name := entry.Name()
+		if entry.IsDir() {
+			if path == root {
+				return nil
+			}
+			if _, err := os.Stat(filepath.Join(path, "go.mod")); err == nil || name == "testdata" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(name, "_test.go") {
+			return nil
+		}
+		if matched, err := build.Default.MatchFile(filepath.Dir(path), name); err != nil || !matched {
+			return err
+		}
+		source, err := os.ReadFile(path)
+		if err != nil || !strings.Contains(string(source), literal) {
+			return err
+		}
+		relative, err := filepath.Rel(root, filepath.Dir(path))
+		if err != nil {
+			return err
+		}
+		packagePath := "./" + filepath.ToSlash(relative)
+		census[packagePath] = append(census[packagePath], string(source))
+		return nil
+	})
+	return census, err
+}
+
+// The aggregate job skips exactly the E suite: its whole body is the full
+// normal run with that one skip, and every test of sn that the skip names is
+// in ./mainnet and selected by sn-e2e.
+func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string) error {
+	commands, _, err := releaseGatePhaseCommands(script, "sn_all_normal")
+	if err != nil {
+		return err
+	}
+	if !slices.Equal(commands, []string{`cd "$sn_repo"`, releaseGateAggregateNormalCommand}) {
+		return fmt.Errorf("release_phase_sn_all_normal runs %q, want the full run without the E suite", commands)
+	}
+	selector, err := releaseConnectPolicySelectorAssignment(script, "settlement_v2_e2e_tests")
+	if err != nil {
+		return err
+	}
+	selected, err := regexp.Compile(selector)
+	if err != nil {
+		return err
+	}
+	skip := regexp.MustCompile(releaseGateAggregateE2ESkip)
+	skipped := 0
+	for _, packagePath := range slices.Sorted(maps.Keys(census)) {
+		for _, source := range census[packagePath] {
+			names, err := releaseSourceTestDeclarations(source)
+			if err != nil {
+				return err
+			}
+			for _, name := range names {
+				if !skip.MatchString(name) {
+					continue
+				}
+				if packagePath != "./mainnet" || !selected.MatchString(name) {
+					return fmt.Errorf("the aggregate job skips %s of %s, which sn-e2e does not run", name, packagePath)
+				}
+				skipped++
+			}
+		}
+	}
+	if skipped == 0 {
+		return errors.New("the aggregate job's skip names no test of the E suite")
+	}
+	return nil
+}
+
+// E-1 to E-7: the aggregate job skips exactly the E suite, which sn-e2e runs.
+func TestReleaseGateSettlementV2AggregateSkipsOnlyTheEndToEndSuite(t *testing.T) {
+	t.Parallel()
+	census, err := releaseGateAggregateSkipCensus("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyReleaseGateAggregateE2ESkip(readReleaseGateLocalScript(t), census); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// E-1 to E-7: an aggregate job without the skip, or with a wider one, fails,
+// as do a skipped test outside ./mainnet, one that sn-e2e's selector misses,
+// and a skip that names no test.
+func TestReleaseGateSettlementV2AggregateSkipRejectsDrift(t *testing.T) {
+	t.Parallel()
+	script := readReleaseGateLocalScript(t)
+	census, err := releaseGateAggregateSkipCensus("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyReleaseGateAggregateE2ESkip(script, census); err != nil {
+		t.Fatal(err)
+	}
+	const assignment = "settlement_v2_e2e_tests='^Test(SettlementV2E2E)'"
+	for _, change := range []struct{ old, new string }{
+		{releaseGateAggregateNormalCommand, "go test -parallel=4 -timeout 90m ./... -count=1"},
+		{releaseGateAggregateNormalCommand, strings.Replace(releaseGateAggregateNormalCommand, releaseGateAggregateE2ESkip, "^TestSettlementV2", 1)},
+		{releaseGateAggregateNormalCommand, releaseGateAggregateNormalCommand + " -skip '^TestValidator'"},
+		{assignment, "settlement_v2_e2e_tests='^Test(SettlementV2E2EDaemon)'"},
+	} {
+		if strings.Count(script, change.old) != 1 {
+			t.Fatalf("the mutation names no unique text: %s", change.old)
+		}
+		if err := verifyReleaseGateAggregateE2ESkip(strings.Replace(script, change.old, change.new, 1), census); err == nil {
+			t.Fatalf("aggregate skip accepted %q", change.new)
+		}
+	}
+	stray := maps.Clone(census)
+	stray["./validator"] = append(slices.Clone(census["./validator"]), "package fixture\nfunc TestSettlementV2E2EStray(t *testing.T) {}\n")
+	empty := maps.Clone(census)
+	delete(empty, "./mainnet")
+	for name, changed := range map[string]map[string][]string{"a skipped test outside ./mainnet": stray, "a skip that names no test": empty} {
+		if err := verifyReleaseGateAggregateE2ESkip(script, changed); err == nil {
+			t.Fatalf("aggregate skip accepted %s", name)
 		}
 	}
 }
