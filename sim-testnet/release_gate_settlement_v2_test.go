@@ -27,13 +27,26 @@ const releaseGateV2InvariantCommand = "FOUNDRY_PROFILE=v2_invariant forge test -
 // The server's scale shard selects its roots by this prefix.
 const releaseGateServerScaleSelector = "^TestStV2Scale"
 
-// The database half of the scale shard has the same service-ready test as the
-// database suites, with the unavailable owner as its only alternative.
-const releaseGateServerScaleAdmission = `if [[ "$release_gate_services_ready" != 1 ]]; then
+// The database half of the scale shard and the end-to-end suite have the same
+// service-ready test as the database suites, with the unavailable owner as
+// each job's only alternative.
+const releaseGateServiceShardsAdmission = `if [[ "$release_gate_services_ready" != 1 ]]; then
 release_gate_start server-scale release_gate_unavailable_services
+release_gate_start sn-e2e release_gate_unavailable_services
 else
 release_gate_start server-scale release_phase_server_scale
+release_gate_start sn-e2e release_phase_sn_e2e
 fi`
+
+// The preamble of a phase on the gate's private services: the server's test
+// environment over this gate's services, with the suite resources checked.
+var releaseGateServicePreamble = []string{
+	`cd "$workspace/server"`,
+	"export WARP_ENV=local", "export WARP_SERVICE=test", "export WARP_DOMAIN=bringyour.com",
+	"export WARP_BLOCK=test", "export WARP_VERSION=0.0.0",
+	`source "$RELEASE_GATE_SERVICE_ENV"`, `source "$workspace/server/test-env.sh"`,
+	`test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"`,
+}
 
 func readReleaseGateLocalScript(t *testing.T) string {
 	t.Helper()
@@ -160,6 +173,41 @@ func readReleaseGateScaleCensus(t *testing.T) (map[string][]string, map[string][
 	return sn, server
 }
 
+// A phase on the gate's private services whose whole body is exactly these
+// commands, admitted once, after its definition, in the services block beside
+// the database suites' own admission.
+func verifyReleaseGateServicePhase(script, job, phase string, want []string) error {
+	commands, definition, err := releaseGatePhaseCommands(script, phase)
+	if err != nil {
+		return err
+	}
+	if !slices.Equal(commands, want) {
+		return fmt.Errorf("release_phase_%s runs %q, want %q", phase, commands, want)
+	}
+	registry := releaseGateRegistryLines(script)
+	if strings.Count(registry, releaseGateServiceShardsAdmission) != 1 {
+		return fmt.Errorf("%s lacks its exact service-gated admission", job)
+	}
+	for _, function := range []string{"release_phase_" + phase, "release_gate_unavailable_services"} {
+		start := regexp.MustCompile("(?m)^" + regexp.QuoteMeta("release_gate_start "+job+" "+function) + "$")
+		if len(start.FindAllString(registry, -1)) != 1 {
+			return fmt.Errorf("%s has duplicated or foreign admission", job)
+		}
+	}
+	if strings.Index(script, "release_gate_start "+job+" release_phase_"+phase) < definition[1] {
+		return fmt.Errorf("%s is admitted before its definition", job)
+	}
+	database, err := releaseGateRegistrationConditions(script, "release_gate_start server-db release_phase_server_db")
+	if err != nil {
+		return err
+	}
+	services, err := releaseGateRegistrationConditions(script, strings.SplitN(releaseGateServiceShardsAdmission, "\n", 2)[0])
+	if err != nil || len(database) == 0 || database[len(database)-1] != `if [[ "$release_gate_services_ready" == 1 ]]; then` || !slices.Equal(services, database[:len(database)-1]) {
+		return fmt.Errorf("%s is admitted apart from the database suites: %q %q %v", job, services, database, err)
+	}
+	return nil
+}
+
 // GL-10 and SV-6 (§15 scale tests): the sn shard runs every sn package of the
 // census, verbose so that each root's time and memory are in its log, under
 // one explicit deadline, and is admitted unconditionally. Its database half
@@ -176,46 +224,13 @@ func verifyReleaseGateScaleShards(script string, sn, server map[string][]string)
 		return err
 	}
 	serverCommand := "go test -tags scale " + strings.Join(slices.Sorted(maps.Keys(server)), " ") + " -run '" + releaseGateServerScaleSelector + "' -count=1 -p 1 -v -timeout 180m"
-	commands, definition, err := releaseGatePhaseCommands(script, "server_scale")
-	if err != nil {
+	if err := verifyReleaseGateServicePhase(script, "server-scale", "server_scale", append(slices.Clone(releaseGateServicePreamble), serverCommand)); err != nil {
 		return err
-	}
-	want := []string{
-		`cd "$workspace/server"`,
-		"export WARP_ENV=local", "export WARP_SERVICE=test", "export WARP_DOMAIN=bringyour.com",
-		"export WARP_BLOCK=test", "export WARP_VERSION=0.0.0",
-		`source "$RELEASE_GATE_SERVICE_ENV"`, `source "$workspace/server/test-env.sh"`,
-		`test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"`,
-		serverCommand,
-	}
-	if !slices.Equal(commands, want) {
-		return fmt.Errorf("release_phase_server_scale runs %q, want %q", commands, want)
 	}
 	for _, packagePath := range slices.Sorted(maps.Keys(server)) {
 		if err := verifyReleaseSourceTestCoverage(releaseGateServerScaleSelector, "^Test", server[packagePath]); err != nil {
 			return fmt.Errorf("server scale package %s: %w", packagePath, err)
 		}
-	}
-	registry := releaseGateRegistryLines(script)
-	if strings.Count(registry, releaseGateServerScaleAdmission) != 1 {
-		return errors.New("the server scale shard lacks its exact service-gated admission")
-	}
-	for _, function := range []string{"release_phase_server_scale", "release_gate_unavailable_services"} {
-		start := regexp.MustCompile("(?m)^" + regexp.QuoteMeta("release_gate_start server-scale "+function) + "$")
-		if len(start.FindAllString(registry, -1)) != 1 {
-			return errors.New("the server scale shard has duplicated or foreign admission")
-		}
-	}
-	if strings.Index(script, "release_gate_start server-scale release_phase_server_scale") < definition[1] {
-		return errors.New("the server scale shard is admitted before its definition")
-	}
-	database, err := releaseGateRegistrationConditions(script, "release_gate_start server-db release_phase_server_db")
-	if err != nil {
-		return err
-	}
-	scale, err := releaseGateRegistrationConditions(script, strings.SplitN(releaseGateServerScaleAdmission, "\n", 2)[0])
-	if err != nil || len(database) == 0 || database[len(database)-1] != `if [[ "$release_gate_services_ready" == 1 ]]; then` || !slices.Equal(scale, database[:len(database)-1]) {
-		return fmt.Errorf("the server scale shard is admitted apart from the database suites: %q %q %v", scale, database, err)
 	}
 	for _, line := range strings.Split(script, "\n") {
 		line = strings.TrimSpace(line)
@@ -277,21 +292,22 @@ func releaseGateSnE2EGroup(t *testing.T) releaseEvidenceV2GateGroup {
 		packages:     []string{"./mainnet"},
 		sources:      map[string][]string{"./mainnet": releaseEvidenceV2GateSources(t, []string{"../mainnet/settlement_v2_e2e_*_test.go"})},
 		commands: []string{
-			`go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1`,
-			`go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1`,
+			`go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1 -timeout 30m`,
+			`go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1 -timeout 30m`,
 		},
 	}
 }
 
-// The job's whole body is its selector and its two commands, admitted once
-// and unconditionally.
+// The job's whole body is the services preamble, then its selector and its two
+// commands in sn, admitted once beside the database suites (§15: the E suite
+// runs in the server-database shard).
 func verifyReleaseGateSnE2E(script string, group releaseEvidenceV2GateGroup) error {
 	selector, err := releaseConnectPolicySelectorAssignment(script, group.variable)
 	if err != nil {
 		return err
 	}
-	body := []string{`cd "$sn_repo"`, group.variable + "='" + selector + "'", group.commands[0], group.commands[1]}
-	if err := verifyReleaseGateExactPhase(script, group.job, group.phase, body); err != nil {
+	body := append(slices.Clone(releaseGateServicePreamble), `cd "$sn_repo"`, group.variable+"='"+selector+"'", group.commands[0], group.commands[1])
+	if err := verifyReleaseGateServicePhase(script, group.job, group.phase, body); err != nil {
 		return err
 	}
 	return verifyReleaseEvidenceV2GateGroup(script, group)
@@ -587,8 +603,8 @@ func TestReleaseGateSettlementV2ScaleShardRejectsDrift(t *testing.T) {
 	if err := verifyReleaseGateScaleShards(early, sn, server); err == nil {
 		t.Fatal("scale shard admitted an undefined phase")
 	}
-	block := "  " + strings.ReplaceAll(releaseGateServerScaleAdmission, "\n", "\n  ") + "\n"
-	block = strings.Replace(block, "\n  release_gate_start", "\n    release_gate_start", 2)
+	block := "  " + strings.ReplaceAll(releaseGateServiceShardsAdmission, "\n", "\n  ") + "\n"
+	block = strings.ReplaceAll(block, "\n  release_gate_start", "\n    release_gate_start")
 	if strings.Count(script, block) != 1 {
 		t.Fatal("the server scale admission names no unique text")
 	}
@@ -598,7 +614,7 @@ func TestReleaseGateSettlementV2ScaleShardRejectsDrift(t *testing.T) {
 	}
 	for name, moved := range map[string]string{
 		"admission before the definition":       strings.Replace(strings.Replace(script, block, "", 1), "  release_phase_server_scale() {", block+"  release_phase_server_scale() {", 1),
-		"admission outside the database suites": strings.Replace(strings.Replace(script, block, "", 1), infrastructure, releaseGateServerScaleAdmission+"\n"+infrastructure, 1),
+		"admission outside the database suites": strings.Replace(strings.Replace(script, block, "", 1), infrastructure, releaseGateServiceShardsAdmission+"\n"+infrastructure, 1),
 	} {
 		if err := verifyReleaseGateScaleShards(moved, sn, server); err == nil {
 			t.Fatalf("scale shards accepted the %s", name)
@@ -685,36 +701,59 @@ func TestReleaseGateSettlementV2RunsTheEndToEndSuite(t *testing.T) {
 	}
 }
 
-// E-1 to E-7: a narrowed or emptied selector, a lost, masked, conditional or
-// cached mode, a lost, duplicated or conditional admission, or a root of an
-// end-to-end test file that escapes the selector fails.
+// E-1 to E-7: a narrowed or emptied selector; a lost, masked, conditional or
+// cached mode or one without its deadline; a lost services preamble, resource check or switch to sn; an
+// admission lost, duplicated, conditional, unguarded by the services, outside
+// the database suites, before its definition or without its unavailable
+// owner; or a root of an end-to-end test file that escapes the selector fails.
 func TestReleaseGateSettlementV2EndToEndSuiteRejectsDrift(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
 	group := releaseGateSnE2EGroup(t)
+	if err := verifyReleaseGateSnE2E(script, group); err != nil {
+		t.Fatal(err)
+	}
 	const assignment = "settlement_v2_e2e_tests='^Test(SettlementV2E2E)'"
 	const start = "release_gate_start sn-e2e release_phase_sn_e2e"
+	const unavailable = "release_gate_start sn-e2e release_gate_unavailable_services"
+	const ready = `if [[ "$release_gate_services_ready" != 1 ]]; then`
+	phase := regexp.MustCompile(`(?ms)^[\t ]*release_phase_sn_e2e\(\) \{\n.*?^[\t ]*\}[\t ]*\n`).FindString(script)
+	block := "  " + strings.ReplaceAll(releaseGateServiceShardsAdmission, "\n", "\n  ") + "\n"
+	block = strings.ReplaceAll(block, "\n  release_gate_start", "\n    release_gate_start")
+	const infrastructure = `echo "[release-1.0] Subtensor infrastructure regressions"`
 	type change struct{ old, new string }
 	changes := []change{
 		{assignment, "settlement_v2_e2e_tests='^Test()'"},
 		{assignment, "settlement_v2_e2e_tests='^Test(SettlementV2E2EDaemon)'"},
 		{assignment, "settlement_v2_e2e_tests='^TestSettlementV2E2E$'"},
 		{start, "# " + start},
-		{start, start + "\n" + start},
+		{start, start + "\n    " + start},
 		{start, "if false; then\n" + start + "\nfi"},
+		{unavailable, ":"},
+		{ready, `if [[ "$release_gate_services_ready" == 1 ]]; then`},
+		{infrastructure, start + "\n" + infrastructure},
+		{phase, ""},
+		{block, block + phase},
+		{"    " + start + "\n", ""},
+	}
+	for _, line := range []string{`cd "$workspace/server"`, `source "$RELEASE_GATE_SERVICE_ENV"`, `source "$workspace/server/test-env.sh"`, `test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"`, `cd "$sn_repo"`} {
+		changes = append(changes, change{phase, strings.Replace(phase, "    "+line+"\n", "", 1)})
 	}
 	for _, command := range group.commands {
-		for _, replacement := range []string{"# " + command, command + " || true", "if false; then\n  " + command + "\n  fi", strings.Replace(command, " -count=1", "", 1)} {
+		for _, replacement := range []string{"# " + command, command + " || true", "if false; then\n    " + command + "\n    fi", strings.Replace(command, " -count=1", "", 1), strings.Replace(command, " -timeout 30m", "", 1)} {
 			changes = append(changes, change{command, replacement})
 		}
 	}
 	for _, change := range changes {
-		if strings.Count(script, change.old) != 1 {
-			t.Fatalf("the mutation names no unique text: %s", change.old)
+		if strings.Count(script, change.old) != 1 || change.new == change.old {
+			t.Fatalf("the mutation names no unique text or changes nothing: %s", change.old)
 		}
 		if err := verifyReleaseGateSnE2E(strings.Replace(script, change.old, change.new, 1), group); err == nil {
 			t.Fatalf("end-to-end job accepted %q", change.new)
 		}
+	}
+	if moved := strings.Replace(strings.Replace(script, phase, "", 1), block, block+phase, 1); verifyReleaseGateSnE2E(moved, group) == nil {
+		t.Fatal("end-to-end job accepted an admission before its definition")
 	}
 	escaped := group
 	escaped.sources = map[string][]string{"./mainnet": append(slices.Clone(group.sources["./mainnet"]), "package fixture\nfunc TestOmittedSettlementV2Root(t *testing.T) {}\n")}
