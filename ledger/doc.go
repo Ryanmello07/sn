@@ -151,10 +151,10 @@
 // and Faults is not empty (send checkPath with PreviousAccounts[i],
 // Previous.Proof(i) and Tree.Path(i)); ActionDemand when objects are
 // missing or the rows do not reproduce the root and a finalized root exists
-// (demand every fault's index and a value-weighted sample of previous
-// accounts, each demand with PreviousAccounts[i] and Previous.Proof(i));
-// ActionRefuse otherwise. A budget too small to read the pending accounts
-// also leads to ActionDemand.
+// (demand, in DemandSet's order, a value-weighted sample of previous
+// accounts and every fault's index, each demand with PreviousAccounts[i]
+// and Previous.Proof(i)); ActionRefuse otherwise. A budget too small to
+// read the pending accounts also leads to ActionDemand.
 //
 // # Demands (validator, snclaim)
 //
@@ -174,12 +174,15 @@
 // that was replaced (DistributionCommitted.replacedSeq) or deleted
 // (DistributionDeleted) while a demand was open, PathDemanded without
 // PathAnswered (both keyed by seq, rootIndex and index), adds one doubling
-// and its unanswered indexes. The set is every fault's index, every index
-// in again, and a sample of DemandSample (256) << doublings of the
-// remaining accounts, drawn by value without replacement and never more
-// than there are, with randomness read from a CSPRNG after the commit was
-// seen. Each demand pays exactly demandFeeWei and carries the protected
-// root's index, its account i and the proof of i against it. DemandSet
-// refuses an index outside the protected root (ErrDemandIndex) and returns
-// the random source's error.
+// and its unanswered indexes. The set lists, in the order to send it, a
+// sample of DemandSample (256) << doublings of all of the protected root's
+// accounts, never more than there are, drawn by value without replacement
+// with randomness read from a CSPRNG after the commit was seen, in the
+// order drawn; then every index in again the sample did not draw; then
+// every other fault's index. Demands cut short by the challenge window or a
+// fee budget are therefore a value-weighted sample whatever the operator
+// published or left unanswered (§4.2 G2). Each demand pays exactly
+// demandFeeWei and carries the protected root's index, its account i and
+// the proof of i against it. DemandSet refuses an index outside the
+// protected root (ErrDemandIndex) and returns the random source's error.
 package ledger

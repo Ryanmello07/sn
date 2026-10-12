@@ -260,21 +260,22 @@ func TestSettlementV2E2EInconsistentSubtreePublished(t *testing.T) {
 }
 
 // requireDemanded checks that the watcher's transactions after its first
-// skip are exactly one demand of each index of F, root 0, each paying the
-// fee with the account's proof against F, with PathDemanded's fields.
+// skip are exactly one demand of each index of F, root 0, in the order the
+// watcher's sample drew them, each paying the fee with the account's proof
+// against F, with PathDemanded's fields.
 func (s *e2eSuccessor) requireDemanded(t *testing.T, skip int, seq uint64, indexes []uint64) {
 	t.Helper()
 	f := s.f
 	sent := f.chain.sentBy(f.watcher.address)[skip:]
-	if len(sent) != len(indexes) {
-		t.Fatalf("the watcher sent %d transactions for %d demands", len(sent), len(indexes))
+	demanded := f.watcherDemands(t, skip, seq)
+	if len(sent) != len(indexes) || !slices.Equal(slices.Sorted(slices.Values(demanded)), indexes) {
+		t.Fatalf("the watcher demanded %v, want each of %v once", demanded, indexes)
 	}
 	for k, tx := range sent {
-		account, proof := e2eProof(t, s.finalized.tree, s.finalized.accounts, indexes[k])
-		if tx.Value().Cmp(e2eRao(e2eDemandFeeWei)) != 0 || !slices.Equal(tx.Data(), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), e2eRao(0), account, proof)) {
-			t.Fatalf("demand %d is not account %d of root 0's, with the fee", k, indexes[k])
+		account, proof := e2eProof(t, s.finalized.tree, s.finalized.accounts, demanded[k])
+		if !slices.Equal(tx.Data(), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), e2eRao(0), account, proof)) {
+			t.Fatalf("demand %d is not account %d of root 0's", k, demanded[k])
 		}
-		f.requireLogs(f.chain.receipt(tx.Hash()), f.vault2Log("PathDemanded", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(indexes[k]), f.watcher.address))
 	}
 }
 
@@ -455,7 +456,8 @@ func TestSettlementV2E2EWithheldNewestRootDrill(t *testing.T) {
 // its preflight and reverts ChallengeWindowClosed. The watcher, like the
 // validator's sender, sends a demand only while the next block is inside the
 // window (§5 Senders): with the head two blocks before the window's last
-// block, the two demands that can land do, and nothing more is sent.
+// block, the two demands that can land do, and nothing more is sent. The
+// window's end stops the watcher cleanly: it says so and succeeds.
 func TestSettlementV2E2EWatcherDemandsInsideWindow(t *testing.T) {
 	s := newE2ESuccessor(t)
 	f := s.f
@@ -463,7 +465,10 @@ func TestSettlementV2E2EWatcherDemandsInsideWindow(t *testing.T) {
 	seq := f.commit(f.operator, s.epoch, commitment)
 	last := f.pending().CommittedBlock + e2eWindow - 1
 	f.chain.rollTo(last - 1)
-	output, stderr, _ := s.check(t)
+	output, stderr, code := s.check(t)
+	if want := fmt.Sprintf("challenge window closing: pending root seq %d takes demands through block %d, and the next block is %d; no more demands sent\n", seq, last, last+1); code != 0 || !strings.HasSuffix(output, want) {
+		t.Fatalf("watcher (exit %d), want it to end with %q:\n%s%s", code, want, output, stderr)
+	}
 	sent := f.chain.sentBy(f.watcher.address)
 	for k, tx := range sent {
 		if receipt := f.chain.receipt(tx.Hash()); k >= 2 || receipt == nil || receipt.Status != types.ReceiptStatusSuccessful || receipt.BlockNumber.Uint64() != last-1+uint64(k) {
@@ -501,8 +506,9 @@ func (f *e2eFixture) watcherDemands(t *testing.T, skip int, seq uint64) []uint64
 // value-weighted sample of 256, which draws the victim; the attacker answers
 // every other demand, then deletes its own root to draw a new sample and
 // recommits at once, which vault2's commit spacing refuses. Its next root,
-// in the next epoch, meets the watcher's doubled sample of 512 plus the
-// unanswered index again, and stays blocked past its window.
+// in the next epoch, meets the watcher's doubled sample of 512, drawn over
+// every account, which demands the unanswered victim again, and stays
+// blocked past its window.
 func TestSettlementV2E2EReRollDrill(t *testing.T) {
 	f := newE2EFixture(t, e2eDefaultFirst)
 	rows := make([]protocol.LedgerUsageRow, 600)
@@ -571,11 +577,11 @@ func TestSettlementV2E2EReRollDrill(t *testing.T) {
 	// The next epoch's root meets the doubled sample and the victim again.
 	commitment, tree = attack(e1 + 1)
 	seq = f.commit(f.operator, e1+1, commitment)
-	if output := check(); !strings.Contains(output, "demand set: 513 accounts of root 0 (1 doublings, 1 forced), 0 already demanded\n") {
+	if output := check(); !strings.Contains(output, "demand set: 512 accounts of root 0 (1 doublings, 1 forced), 0 already demanded\n") {
 		t.Fatalf("doubled sample:\n%s", output)
 	}
 	demanded = f.watcherDemands(t, 256, seq)
-	if len(demanded) != 513 || !slices.Contains(demanded, victim) {
+	if len(demanded) != 512 || !slices.Contains(demanded, victim) {
 		t.Fatalf("the doubled sample demanded %d accounts, the victim %t", len(demanded), slices.Contains(demanded, victim))
 	}
 	answer(seq, tree, demanded)
