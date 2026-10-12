@@ -53,7 +53,7 @@ func evmTestRelease(t testing.TB) contractReleaseArtifacts {
 }
 
 // One generated catalog list as the release file of its phase.
-func evmTestCatalog(t *testing.T, variable, schema string) contractReleaseArtifacts {
+func evmTestCatalog(t testing.TB, variable, schema string) contractReleaseArtifacts {
 	t.Helper()
 	file, err := parser.ParseFile(token.NewFileSet(), "../sim-testnet/contracts_gen.go", nil, 0)
 	if err != nil {
