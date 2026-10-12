@@ -10,6 +10,10 @@ package validator
 // processes left behind. Removal needs the same custody the store had: a
 // private directory owned by this user, an unchanged inode, an unlocked store
 // and only private single-link files. Anything else is left in place.
+//
+// Cleanup is never worth a crash: scratch left behind only costs space, while
+// a validator that exits can miss an epoch. A panic in either path is
+// recovered, reported as one bounded line and turns cleanup off for the run.
 
 import (
 	"context"
@@ -18,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -55,6 +60,13 @@ type replayScratchRetirement struct {
 	stderr   io.Writer
 	logged   atomic.Bool
 	failures atomic.Uint64
+	// Set by the first contained panic; both paths then do nothing more.
+	stopped atomic.Bool
+
+	// Ownership seams run at the real removal boundary. Production leaves
+	// them unset; they do not replace any custody check.
+	beforeRemove func(string)
+	sweepDelay   time.Duration
 }
 
 type replayScratchRetirementKey struct{}
@@ -116,9 +128,12 @@ func (self *replayScratchRetirement) retires(parent string) bool {
 // replay did not create or a removal failure leaves the replay result as is.
 func retireAttemptCutV2ReplayScratch(ctx context.Context, path string, created os.FileInfo) {
 	owner := replayScratchRetirementFrom(ctx)
-	if owner == nil || created == nil || !filepath.IsAbs(path) || filepath.Clean(path) != path || !owner.retires(filepath.Dir(path)) {
+	if owner == nil || owner.stopped.Load() || created == nil || !filepath.IsAbs(path) || filepath.Clean(path) != path || !owner.retires(filepath.Dir(path)) {
 		return
 	}
+	// A panic below stops here: this runs in the replay's deferred close
+	// path, and the replay's result and error are already decided.
+	defer owner.contain("retirement")
 	// The replay already closed; cancellation must not strand its child.
 	removalCtx := context.WithoutCancel(ctx)
 	parent, err := filepath.EvalSymlinks(filepath.Dir(path))
@@ -131,8 +146,12 @@ func retireAttemptCutV2ReplayScratch(ctx context.Context, path string, created o
 		owner.report(err)
 		return
 	}
+	defer func() { owner.report(root.Close()) }()
+	if owner.beforeRemove != nil {
+		owner.beforeRemove(filepath.Base(path))
+	}
 	_, err = removeReplayScratchChild(removalCtx, root, parent, filepath.Base(path), created, time.Time{}, owner.maxFiles)
-	owner.report(errors.Join(err, root.Close()))
+	owner.report(err)
 }
 
 // Removes one child when it is the exact private, unlocked, flat store that
@@ -302,8 +321,14 @@ func (self *replayScratchRetirement) sweepRoot(ctx context.Context, configured s
 			if err := ctx.Err(); err != nil {
 				return removed, refused, err
 			}
+			if self.stopped.Load() {
+				return removed, refused, nil
+			}
 			if !replayScratchMintedName(entry.Name()) {
 				continue
+			}
+			if self.beforeRemove != nil {
+				self.beforeRemove(entry.Name())
 			}
 			done, err := removeReplayScratchChild(ctx, root, parent, entry.Name(), nil, staleBefore, self.maxFiles)
 			switch {
@@ -330,7 +355,9 @@ func (self *replayScratchRetirement) sweepRoot(ctx context.Context, configured s
 	}
 }
 
-// Runs passes until ctx ends. The returned channel closes when it has.
+// Runs passes until ctx ends or a panic turns cleanup off. The returned
+// channel closes in either case, so the run's exit never waits on a sweep
+// that is gone.
 func (self *replayScratchRetirement) start(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 	if self == nil || len(self.roots) == 0 {
@@ -339,12 +366,16 @@ func (self *replayScratchRetirement) start(ctx context.Context) <-chan struct{} 
 	}
 	go func() {
 		defer close(done)
-		delay := replayScratchSweepDelay
+		defer self.contain("sweep")
+		delay := self.sweepDelay
+		if delay <= 0 {
+			delay = replayScratchSweepDelay
+		}
 		// A summary appears only when a pass removed something or the
 		// unverifiable count changed, so a lasting refusal logs once.
 		lastRefused := make(map[string]uint64, len(self.roots))
 		for {
-			if !waitReplayScratchSweep(ctx, delay) {
+			if !waitReplayScratchSweep(ctx, delay) || self.stopped.Load() {
 				return
 			}
 			for _, root := range self.roots {
@@ -361,7 +392,7 @@ func (self *replayScratchRetirement) start(ctx context.Context) <-chan struct{} 
 				if err != nil && ctx.Err() == nil {
 					self.report(err)
 				}
-				if ctx.Err() != nil {
+				if ctx.Err() != nil || self.stopped.Load() {
 					return
 				}
 			}
@@ -391,11 +422,59 @@ func (self *replayScratchRetirement) report(err error) {
 	if self.logged.Swap(true) {
 		return
 	}
-	text := strings.Join(strings.Fields(err.Error()), " ")
-	if len(text) > replayScratchLogBytes {
-		text = text[:replayScratchLogBytes] + "..."
+	self.printf("validator: replay scratch cleanup failed; later failures are counted, not logged: %s\n", replayScratchBounded(err.Error()))
+}
+
+// Deferred directly by each cleanup path. It recovers that path's own panic,
+// turns cleanup off for the rest of the run and logs the first one as a
+// single bounded line: its innermost frames, then the value, never a stack
+// dump. It does not recover a panic that began outside the cleanup path.
+func (self *replayScratchRetirement) contain(where string) {
+	recovered := recover()
+	if recovered == nil {
+		return
 	}
-	self.printf("validator: replay scratch cleanup failed; later failures are counted, not logged: %s\n", text)
+	// Reporting itself must not raise the panic it is containing.
+	defer func() { _ = recover() }()
+	self.failures.Add(1)
+	if self.stopped.Swap(true) {
+		return
+	}
+	self.printf("validator: replay scratch cleanup panicked in %s and is off for the rest of this run: %s\n", where, replayScratchBounded(fmt.Sprintf("%s: %v", replayScratchPanicFrames(), recovered)))
+}
+
+// The innermost frames outside the runtime, as "function:line" joined by
+// " < ". Called from contain, whose own frame is skipped.
+func replayScratchPanicFrames() string {
+	var counters [32]uintptr
+	frames := runtime.CallersFrames(counters[:runtime.Callers(3, counters[:])])
+	var names []string
+	for len(names) < 3 {
+		frame, more := frames.Next()
+		if frame.Function != "" && !strings.HasPrefix(frame.Function, "runtime.") {
+			name := frame.Function
+			if index := strings.LastIndexByte(name, '/'); index >= 0 {
+				name = name[index+1:]
+			}
+			names = append(names, fmt.Sprintf("%s:%d", name, frame.Line))
+		}
+		if !more {
+			break
+		}
+	}
+	if len(names) == 0 {
+		return "unknown frames"
+	}
+	return strings.Join(names, " < ")
+}
+
+// One line of at most replayScratchLogBytes, whatever the cause contains.
+func replayScratchBounded(text string) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if len(text) > replayScratchLogBytes {
+		text = strings.ToValidUTF8(text[:replayScratchLogBytes], "") + "..."
+	}
+	return text
 }
 
 func (self *replayScratchRetirement) printf(format string, values ...any) {

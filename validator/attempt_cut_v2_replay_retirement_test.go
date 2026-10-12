@@ -382,6 +382,137 @@ func TestReplayScratchMintedNames(t *testing.T) {
 	}
 }
 
+// One contained-panic line: where it happened, bounded, with no stack dump.
+func replayScratchTestPanicLine(t *testing.T, log *bytes.Buffer, where, frame, value string) {
+	t.Helper()
+	t.Logf("contained %s panic line: %s", where, strings.TrimSuffix(log.String(), "\n"))
+	lines := strings.Split(strings.TrimSuffix(log.String(), "\n"), "\n")
+	if len(lines) != 1 || !strings.Contains(lines[0], "panicked in "+where) || !strings.Contains(lines[0], frame) || !strings.Contains(lines[0], value) || strings.Contains(log.String(), "goroutine ") || len(lines[0]) > replayScratchLogBytes+200 {
+		t.Fatalf("contained panic report: %d lines %q", len(lines), log.String())
+	}
+}
+
+// A panic inside the sweep ends only the sweep: its channel closes, the run's
+// context stays live, nothing is removed, cleanup turns itself off and one
+// bounded line is logged.
+func TestReplayScratchSweepPanicIsContained(t *testing.T) {
+	root := t.TempDir()
+	children := []string{
+		replayScratchTestChild(t, root, replayScratchTestName(t, "intent-ordinary"), time.Hour),
+		replayScratchTestChild(t, root, replayScratchTestName(t, "intent-ordinary"), time.Hour),
+	}
+	owner, log := replayScratchTestOwner(root)
+	owner.sweepDelay = time.Millisecond
+	hooked := 0
+	owner.beforeRemove = func(string) {
+		hooked++
+		panic(strings.Repeat("injected sweep failure\n", 400))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := owner.start(ctx)
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("sweep did not end after its panic")
+	}
+	if ctx.Err() != nil || hooked != 1 || !owner.stopped.Load() {
+		t.Fatalf("contained sweep: run context=%v hook calls=%d stopped=%t", ctx.Err(), hooked, owner.stopped.Load())
+	}
+	for _, child := range children {
+		if !replayScratchTestExists(t, child) {
+			t.Fatal("sweep removed a child after its panic")
+		}
+	}
+	replayScratchTestPanicLine(t, log, "sweep", "sweepRoot", "injected sweep failure")
+
+	// Cleanup stays off: a later sweep and a later retirement do nothing.
+	select {
+	case <-owner.start(ctx):
+	case <-time.After(30 * time.Second):
+		t.Fatal("stopped sweep did not end at once")
+	}
+	if hooked != 1 || strings.Count(log.String(), "\n") != 1 {
+		t.Fatalf("stopped cleanup ran again: hook calls=%d log=%q", hooked, log.String())
+	}
+}
+
+// A panic inside a replay's own retirement never reaches the replay: no
+// panic escapes, its result and error stand, the child stays and one bounded
+// line is logged. Later replays under the same run are not retired.
+func TestReplayScratchRetirementPanicLeavesReplayResult(t *testing.T) {
+	records, key, keys := attemptReplayV2TestRecords(t, 2)
+	bounds, _ := attemptReplayV2TestBounds()
+	for _, failed := range []bool{false, true} {
+		replayed := records
+		if failed {
+			replayed = records[:15]
+		}
+		cut, recordStream, proofStream := attemptReplayV2TestCut(t, replayed, key, nil, nil)
+		want, wantErr := ReplayAttemptCutV2(context.Background(), cut, cut.Context, bounds, attemptReplayV2TestOptions(t, recordStream, proofStream, keys))
+		if failed != (wantErr != nil) {
+			t.Fatalf("baseline replay failed=%t: %v", failed, wantErr)
+		}
+		parent := t.TempDir()
+		owner, log := replayScratchTestOwner(parent)
+		hooked := 0
+		owner.beforeRemove = func(string) {
+			hooked++
+			panic(errors.New("injected retirement failure"))
+		}
+		ctx := withReplayScratchRetirement(context.Background(), owner)
+		replay := func() (result AttemptCutV2ReplayResult, err error, escaped any) {
+			options := attemptReplayV2TestOptions(t, recordStream, proofStream, keys)
+			options.ScratchDirectory = filepath.Join(parent, replayScratchTestName(t, "intent-ordinary"))
+			defer func() {
+				escaped = recover()
+				if escaped == nil && !replayScratchTestExists(t, options.ScratchDirectory) {
+					t.Fatal("a panicking or stopped retirement removed the child")
+				}
+			}()
+			result, err = ReplayAttemptCutV2(ctx, cut, cut.Context, bounds, options)
+			return result, err, nil
+		}
+		got, err, escaped := replay()
+		if escaped != nil || got != want || (err == nil) != (wantErr == nil) || err != nil && err.Error() != wantErr.Error() {
+			t.Fatalf("failed=%t: escaped=%v result=%+v want %+v error=%v want %v", failed, escaped, got, want, err, wantErr)
+		}
+		if hooked != 1 || !owner.stopped.Load() {
+			t.Fatalf("failed=%t: hook calls=%d stopped=%t", failed, hooked, owner.stopped.Load())
+		}
+		replayScratchTestPanicLine(t, log, "retirement", "retireAttemptCutV2ReplayScratch", "injected retirement failure")
+
+		got, err, escaped = replay()
+		if escaped != nil || got != want || (err == nil) != (wantErr == nil) || hooked != 1 || strings.Count(log.String(), "\n") != 1 {
+			t.Fatalf("failed=%t after stop: escaped=%v error=%v hook calls=%d log=%q", failed, escaped, err, hooked, log.String())
+		}
+	}
+}
+
+// Containment covers cleanup only. A panic that begins in the replay itself
+// still propagates, and the replay's child is retired on the way out.
+func TestReplayScratchContainmentLeavesReplayPanicsAlone(t *testing.T) {
+	records, key, keys := attemptReplayV2TestRecords(t, 1)
+	cut, recordStream, proofStream := attemptReplayV2TestCut(t, records, key, nil, nil)
+	options := attemptReplayV2TestOptions(t, recordStream, proofStream, keys)
+	parent := t.TempDir()
+	options.ScratchDirectory = filepath.Join(parent, replayScratchTestName(t, "intent-ordinary"))
+	options.VisitRecord = func(AttemptRecord) error { panic("visitor failure outside cleanup") }
+	owner, log := replayScratchTestOwner(parent)
+	bounds, _ := attemptReplayV2TestBounds()
+	var escaped any
+	func() {
+		defer func() { escaped = recover() }()
+		_, _ = ReplayAttemptCutV2(withReplayScratchRetirement(context.Background(), owner), cut, cut.Context, bounds, options)
+	}()
+	if escaped != "visitor failure outside cleanup" {
+		t.Fatalf("replay panic was swallowed or changed: %v", escaped)
+	}
+	if owner.stopped.Load() || log.Len() != 0 || replayScratchTestExists(t, options.ScratchDirectory) {
+		t.Fatalf("replay panic: cleanup stopped=%t log=%q child survives=%t", owner.stopped.Load(), log.String(), replayScratchTestExists(t, options.ScratchDirectory))
+	}
+}
+
 // The first failure is one bounded line; later ones are only counted.
 func TestReplayScratchReportsFailuresOnce(t *testing.T) {
 	owner, log := replayScratchTestOwner(t.TempDir())
