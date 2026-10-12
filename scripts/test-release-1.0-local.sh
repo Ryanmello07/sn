@@ -168,34 +168,19 @@ release_gate_start sn-simulator-history-race release_phase_sn_simulator_history_
 
 # Settlement v2 (VERSION2-FINAL.md §14 gate 3, §15): the ledger package (GL),
 # the sum tree (GT) and allocation (GA) additions, the claim daemon (E-5),
-# snclaim (CL) and the validator's v2 code (VA), in both modes, with gate 1's
-# coverage checker. The aggregate jobs above run them too; this job is gate
+# snclaim (CL) and the validator's v2 code (VA), its ledger audit and custody
+# included, in both modes, with gate 1's coverage checker. The aggregate jobs above run them too; this job is gate
 # 3's own verdict. The claim daemon's durable volumes need the umask 022 and
 # private TMPDIR that every phase gets.
 release_phase_sn_v2() {
   cd "$sn_repo"
   go test ./ledger ./scripts/solidity-coverage -count=1
   go test -race ./ledger ./scripts/solidity-coverage -count=1
-  settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2)'
+  settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2|ReleaseRuntimeRunsLedgerAudit)'
   go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
   go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
 }
 release_gate_start sn-v2 release_phase_sn_v2
-
-# E-1 to E-7 (VERSION2-FINAL.md §14 gate 4, §15.6): settlement v2 end to end in
-# geth, from the reviewed catalog and the v2 contracts to the claim daemon and
-# snclaim, in both modes. It needs no database. The suite builds the v2
-# contracts in a private directory, so it never reads the Solidity job's build
-# while it is written; the daemon's durable volumes need the same umask and
-# private TMPDIR as the job above. On 2026-10-12 the normal run took 3 minutes
-# and the race run 5.5, each with its private build.
-release_phase_sn_e2e() {
-  cd "$sn_repo"
-  settlement_v2_e2e_tests='^Test(SettlementV2E2E)'
-  go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1
-  go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1
-}
-release_gate_start sn-e2e release_phase_sn_e2e
 
 # GL-10 (VERSION2-FINAL.md §15): the scale-tagged tests, which ./... never
 # compiles, build and verify ledgers of a million providers, assert the commit
@@ -204,10 +189,13 @@ release_gate_start sn-e2e release_phase_sn_e2e
 # The server's scale-tagged tests (SV-6) are this shard's database half, below.
 # The runtime rehearsal (activation gate 2, runtime_rehearsal tag) needs a node
 # built from runtime 475's source, so it runs beside this gate, on the same
-# checkout (scripts/runtime-rehearsal/README.md):
+# checkout (scripts/runtime-rehearsal/README.md); R-1, the v2 contract phase,
+# runs from ./mainnet with the same tag:
 #   scripts/runtime-rehearsal/build.sh /path/to/subtensor-checkout
 #   RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
 #     go test -tags runtime_rehearsal ./rehearsal/ -v -timeout 60m
+#   RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
+#     go test -tags runtime_rehearsal ./mainnet/ -run TestR1SettlementV2Phase -v
 release_phase_sn_scale() {
   cd "$sn_repo"
   go test -tags scale -v -timeout 90m ./ledger -count=1
@@ -546,6 +534,30 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"
     go test -tags scale ./controller ./model -run '^TestStV2Scale' -count=1 -p 1 -v -timeout 180m
   }
+  # E-1 to E-7 (VERSION2-FINAL.md §14 gate 4, §15.6): settlement v2 end to end
+  # in geth, from the reviewed catalogs to the operator server, the validator,
+  # the claim daemon and snclaim, in both modes. E-1 and E-3 run the server's
+  # driver and builder on this gate's private services, so the suite runs in
+  # the server-database shard. It builds its test coordinator upgrade in a
+  # private directory, never reading the Solidity job's build; the daemon's
+  # durable volumes need the umask 022 and private TMPDIR every phase gets.
+  # On 2026-10-12 an idle host ran the package in 219 seconds and under race
+  # in 401, so an explicit deadline leaves a loaded gate headroom.
+  release_phase_sn_e2e() {
+    cd "$workspace/server"
+    export WARP_ENV=local
+    export WARP_SERVICE=test
+    export WARP_DOMAIN=bringyour.com
+    export WARP_BLOCK=test
+    export WARP_VERSION=0.0.0
+    source "$RELEASE_GATE_SERVICE_ENV"
+    source "$workspace/server/test-env.sh"
+    test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"
+    cd "$sn_repo"
+    settlement_v2_e2e_tests='^Test(SettlementV2E2E)'
+    go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1 -timeout 30m
+    go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1 -timeout 30m
+  }
   if [[ "$release_gate_services_ready" == 1 ]]; then
     release_gate_start server-db release_phase_server_db
     release_gate_start server-history-shared release_phase_server_history_shared
@@ -555,11 +567,14 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     release_gate_start server-history-shared release_gate_unavailable_services
     release_gate_start server-history-distinct release_gate_unavailable_services
   fi
-  # Gate 3 needs SV-6, so the scale shard runs whenever the database suites do.
+  # Gates 3 and 4 need SV-6 and the E suite, so the scale shard's database half
+  # and the end-to-end suite run whenever the database suites do.
   if [[ "$release_gate_services_ready" != 1 ]]; then
     release_gate_start server-scale release_gate_unavailable_services
+    release_gate_start sn-e2e release_gate_unavailable_services
   else
     release_gate_start server-scale release_phase_server_scale
+    release_gate_start sn-e2e release_phase_sn_e2e
   fi
 else
   echo "[release-1.0] DB suites deferred (set RUN_SERVER_DB_TESTS=1 to create private disposable PostgreSQL/Redis)"
