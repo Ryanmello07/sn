@@ -317,6 +317,21 @@ release_gate_complete
 	self.join(t, 0)
 }
 
+// Portable-mode fixtures, the settlement v2 claim daemon's among them (E-5),
+// need every phase at umask 022, whether the gate itself runs at a
+// shared-group 0002 or a private 077.
+func TestReleaseGateJobsRunEveryPhaseAtUmask022(t *testing.T) {
+	self := newReleaseGateJobsFixture(t, `
+phase_mask() { [[ "$(umask)" == 0022 ]]; }
+umask 0002
+release_gate_start shared-group phase_mask
+umask 0077
+release_gate_start private phase_mask
+release_gate_complete
+`)
+	self.join(t, 0)
+}
+
 func TestReleaseGateJobsTwoForegroundOwnersHaveDisjointMutableRoots(t *testing.T) {
 	body := `
 phase_hold() { printf '%s\n' "$release_gate_root" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; }
@@ -1060,20 +1075,28 @@ var releaseGateUncachedCommands = []struct {
 	{phase: "server_db", command: "go test -race ./model -run \"$model_db_tests\" -count=1"},
 }
 
+// The bounded phase extractor ends at the first closing brace. Refuse nested
+// declarations before an incomplete one can look executable.
+var releaseGateUncachedNestedDeclaration = regexp.MustCompile(`(?m)^[\t ]*(function[\t ]+|[A-Za-z_][A-Za-z0-9_]*[\t ]*\([\t ]*\))`)
+
 // Check the existing line-oriented command contract, not a second shell runner.
 // Fixed body commands cannot be hidden, replaced by a list, or made compile-only.
+// Several commands share a phase, whose definitions are read once per script:
+// the isolation regressions' race run must fit its deadline as the gate grows.
 func verifyReleaseGateUncachedBodies(script string) error {
+	phaseDefinitions := map[string][][]string{}
 	for _, required := range releaseGateUncachedCommands {
-		pattern := regexp.MustCompile("(?ms)^[\\t ]*release_phase_" + regexp.QuoteMeta(required.phase) + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
-		definitions := pattern.FindAllStringSubmatch(script, -1)
+		definitions, read := phaseDefinitions[required.phase]
+		if !read {
+			pattern := regexp.MustCompile("(?ms)^[\\t ]*release_phase_" + regexp.QuoteMeta(required.phase) + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
+			definitions = pattern.FindAllStringSubmatch(script, -1)
+			phaseDefinitions[required.phase] = definitions
+		}
 		if len(definitions) != 1 {
 			return fmt.Errorf("uncached gate requires one %s phase", required.phase)
 		}
 		body := definitions[0][1]
-		// The bounded phase extractor ends at the first closing brace. Refuse
-		// nested declarations before an incomplete one can look executable.
-		nested := regexp.MustCompile(`(?m)^[\t ]*(function[\t ]+|[A-Za-z_][A-Za-z0-9_]*[\t ]*\([\t ]*\))`)
-		if nested.MatchString(body) {
+		if releaseGateUncachedNestedDeclaration.MatchString(body) {
 			return fmt.Errorf("uncached gate phase contains a nested function: %s", required.phase)
 		}
 		for _, line := range strings.Split(body, "\n") {
@@ -1147,34 +1170,40 @@ func TestReleaseGateJobsRejectCachedOrHiddenAggregateBodies(t *testing.T) {
 	if err := verifyReleaseGateUncachedBodies(script); err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range releaseGateUncachedCommands {
+	for index, required := range releaseGateUncachedCommands {
 		if strings.Count(script, required.command) != 1 {
 			t.Fatalf("mutation lacks one actual %s body", required.phase)
 		}
-		for _, replacement := range []string{
-			strings.Replace(required.command, " -count=1", "", 1),
-			strings.Replace(required.command, "-count=1", "-count=0", 1),
-			required.command + " -count=2",
-			required.command + " -count=1",
-			required.command + " -run '^$'",
-			required.command + " -list '^Test'",
-			required.command + " || true",
-			"# " + required.command,
-			"if false; then\n" + required.command + "\nfi",
-			"release_unused_body() {\n" + required.command + "\n}",
-			"release_unused_body () {\n" + required.command + "\n}",
-			"function release_unused_body {\n" + required.command + "\n}",
-			"release_unused_body()\n{\n" + required.command + "\n}",
-			"(\n" + required.command + "\n)",
-			"{\n" + required.command + "\n}",
-			"cat <<'capture_body'\n" + required.command + "\ncapture_body",
-			required.command + "\n" + required.command,
-		} {
-			changed := strings.Replace(script, required.command, replacement, 1)
-			if err := verifyReleaseGateUncachedBodies(changed); err == nil {
-				t.Fatalf("uncached body admitted %s: %s", required.phase, replacement)
+		// Each mutation reads the whole gate again, so each body's mutations
+		// run in parallel: the isolation regressions' race run has three
+		// minutes.
+		t.Run(fmt.Sprintf("%02d-%s", index, required.phase), func(t *testing.T) {
+			t.Parallel()
+			for _, replacement := range []string{
+				strings.Replace(required.command, " -count=1", "", 1),
+				strings.Replace(required.command, "-count=1", "-count=0", 1),
+				required.command + " -count=2",
+				required.command + " -count=1",
+				required.command + " -run '^$'",
+				required.command + " -list '^Test'",
+				required.command + " || true",
+				"# " + required.command,
+				"if false; then\n" + required.command + "\nfi",
+				"release_unused_body() {\n" + required.command + "\n}",
+				"release_unused_body () {\n" + required.command + "\n}",
+				"function release_unused_body {\n" + required.command + "\n}",
+				"release_unused_body()\n{\n" + required.command + "\n}",
+				"(\n" + required.command + "\n)",
+				"{\n" + required.command + "\n}",
+				"cat <<'capture_body'\n" + required.command + "\ncapture_body",
+				required.command + "\n" + required.command,
+			} {
+				changed := strings.Replace(script, required.command, replacement, 1)
+				if err := verifyReleaseGateUncachedBodies(changed); err == nil {
+					t.Fatalf("uncached body admitted %s: %s", required.phase, replacement)
+				}
 			}
-		}
+		})
 	}
 	if err := verifyReleaseGateUncachedBodies(script + "\ngo test ./new-synthetic-package\n"); err == nil {
 		t.Fatal("new aggregate body omitted its fresh execution count")

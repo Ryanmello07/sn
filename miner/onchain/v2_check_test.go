@@ -893,9 +893,9 @@ func TestV2CheckDemandTopsUp(t *testing.T) {
 
 // CL-1, SPEC A6: an index demanded by another sender between the scan and
 // the preflight is done; a root that leaves the pending slot ends the
-// demands; a closed window, a mined revert, a receipt without PathDemanded,
-// a failed send, failed reads and a failed random source are refusals;
-// --dry-run sends nothing.
+// demands; a closed window, a preflight revert, a mined revert, a receipt
+// without PathDemanded, a failed send, failed reads and a failed random
+// source are refusals; --dry-run sends nothing.
 func TestV2CheckDemandRefusals(t *testing.T) {
 	t.Cleanup(func() { v2Random = crand.Reader })
 	withheld := func(t *testing.T) *v2CheckScenario {
@@ -933,7 +933,8 @@ func TestV2CheckDemandRefusals(t *testing.T) {
 		setup func(*v2CheckScenario)
 		want  string
 	}{
-		{"window closed", func(s *v2CheckScenario) { s.c.pending.CommittedBlock = v2TestHead - v2TestChallengeBlocks }, "preflight eth_call failed: execution reverted: revert ChallengeWindowClosed[]"},
+		{"window closed", func(s *v2CheckScenario) { s.c.pending.CommittedBlock = v2TestHead - v2TestChallengeBlocks }, "challenge window closing: pending root seq 2 takes demands through block 199999, and the next block is 200001; no more demands sent"},
+		{"preflight revert", func(s *v2CheckScenario) { s.c.revert["demandPath"] = "ChallengeWindowClosed" }, "preflight eth_call failed: execution reverted: revert ChallengeWindowClosed[]"},
 		{"mined revert", func(s *v2CheckScenario) {
 			s.c.before = func(key string) {
 				if key == "send:demandPath" {
@@ -944,12 +945,14 @@ func TestV2CheckDemandRefusals(t *testing.T) {
 		{"no event", func(s *v2CheckScenario) { s.c.mute = true }, " emitted no PathDemanded for seq 2 account 0"},
 		{"send refused", func(s *v2CheckScenario) { s.c.failAt["eth_gasPrice"] = 1 }, "gas price: synthetic gas price refusal"},
 		{"fee read", func(s *v2CheckScenario) { s.c.failAt["eth_call:demandFeeWei"] = 1 }, "demandFeeWei(): synthetic refusal of eth_call:demandFeeWei"},
+		{"window read", func(s *v2CheckScenario) { s.c.failAt["eth_call:CHALLENGE_BLOCKS"] = 1 }, "CHALLENGE_BLOCKS(): synthetic refusal of eth_call:CHALLENGE_BLOCKS"},
+		{"latest block read", func(s *v2CheckScenario) { s.c.failAt["eth_getBlockByNumber:latest"] = 1 }, "read the latest EVM block: synthetic block refusal"},
 		{"pending re-read", func(s *v2CheckScenario) {
-			s.c.pending.CommittedBlock = v2TestHead - v2TestChallengeBlocks
+			s.c.revert["demandPath"] = "ChallengeWindowClosed"
 			s.c.failAt["eth_call:pending"] = 2
 		}, "\npending(3): synthetic refusal of eth_call:pending"},
 		{"demanded re-read", func(s *v2CheckScenario) {
-			s.c.pending.CommittedBlock = v2TestHead - v2TestChallengeBlocks
+			s.c.revert["demandPath"] = "ChallengeWindowClosed"
 			s.c.failAt["eth_call:demanded"] = 1
 		}, "\ndemanded(3,2,0,0): synthetic refusal of eth_call:demanded"},
 		{"log refused", func(s *v2CheckScenario) { s.c.failAt["eth_getLogs"] = 3 }, "eth_getLogs [197001,198000]: synthetic log refusal"},
@@ -966,6 +969,38 @@ func TestV2CheckDemandRefusals(t *testing.T) {
 		if _, err := s.c.run(s.c.checkArgv("--demand")); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Fatalf("%s: %v, want %q", c.name, err, c.want)
 		}
+	}
+}
+
+// CL-1, E-4 (§5 Senders): a demand's preflight runs at the latest block and
+// the demand in a later one, so demands are sent only while the next block
+// is inside the challenge window. With the latest block two before the
+// window's last, each demand mined in the next block, the two that run
+// inside the window are sent and the rest of the set is refused unsent; with
+// the window's last block latest, where a preflight still passes, nothing is
+// preflighted or sent.
+func TestV2CheckDemandsOnlyInsideWindow(t *testing.T) {
+	t.Cleanup(func() { v2Random = crand.Reader })
+	s := newV2CheckScenario(t)
+	s.withhold()
+	s.c.pending.CommittedBlock = v2TestHead + 3 - v2TestChallengeBlocks
+	s.c.before = func(key string) {
+		if key == "send:demandPath" {
+			s.c.head++
+		}
+	}
+	output, err := s.c.run(s.c.checkArgv("--demand"))
+	if want := fmt.Sprintf("challenge window closing: pending root seq 2 takes demands through block %d, and the next block is %d; no more demands sent", v2TestHead+2, v2TestHead+3); err == nil || err.Error() != want ||
+		!slices.Equal(s.demandedIndexes(t, 2, 0), []uint64{0, 1}) || s.c.calls["eth_call:demandPath"] != 2 || s.c.pending.OpenDemands != 2 {
+		t.Fatalf("closing window: %v\n%s", err, output)
+	}
+	s = newV2CheckScenario(t)
+	s.withhold()
+	s.c.pending.CommittedBlock = v2TestHead + 1 - v2TestChallengeBlocks
+	output, err = s.c.run(s.c.checkArgv("--demand"))
+	if want := fmt.Sprintf("challenge window closing: pending root seq 2 takes demands through block %d, and the next block is %d; no more demands sent", v2TestHead, v2TestHead+1); err == nil || err.Error() != want ||
+		len(s.c.transactions()) != 0 || s.c.calls["eth_call:demandPath"]+s.c.calls["eth_estimateGas:demandPath"] != 0 {
+		t.Fatalf("window's last block latest: %v\n%s", err, output)
 	}
 }
 
