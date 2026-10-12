@@ -853,7 +853,14 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		if err := bridge.configure(cfg); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "validator: native gap bridge from native epoch %d (%s) to the first intent at native epoch %d or later; release idles before it\n", bridge.LastNativeEpoch, bridge.LastArtifactHash, bridge.FirstNativeEpoch)
+		// A v1 bridge prints exactly its one line; a v2 bridge prints each
+		// earlier edge, then the last one, which alone can still be pending.
+		edges := bridge.Edges()
+		for _, edge := range edges[:len(edges)-1] {
+			fmt.Fprintf(os.Stderr, "validator: native gap bridge edge from native epoch %d (%s) to the first intent at native epoch %d or later\n", edge.LastNativeEpoch, edge.LastArtifactHash, edge.FirstNativeEpoch)
+		}
+		last := edges[len(edges)-1]
+		fmt.Fprintf(os.Stderr, "validator: native gap bridge from native epoch %d (%s) to the first intent at native epoch %d or later; release idles before it\n", last.LastNativeEpoch, last.LastArtifactHash, last.FirstNativeEpoch)
 	}
 	if retainedSetup != nil {
 		if err := retainedSetup.validate(cfg, configPath); err != nil {
