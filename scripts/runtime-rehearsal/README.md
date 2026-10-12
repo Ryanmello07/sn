@@ -202,6 +202,19 @@ Measured on 2026-10-11 (the test takes about 18 s):
   (every UID by stake if none is active), so the escrow hotkey stays at share
   price 1 only while validators set weights; R-3 needs one.
 
+`TestRehearsalTransientStorage` deploys a Yul probe of EIP-1153 transient
+storage (`rehearsal/transient_test.go`). Measured on 2026-10-12: TLOAD and
+TSTORE run, and the storage is empty at the start of every transaction, but a
+write made in a call frame that reverts survives the revert, which EIP-1153
+forbids. After the probe wrote 1 and called itself to write 2 and revert, it
+read 2. Frontier keeps one transient map per transaction and rolls back only
+persistent storage (`SubstrateStackState` in
+`vendor/frontier/frame/evm/src/runner/stack.rs` of the runtime source). A
+reentrancy flag kept there would stay set after a guarded call reverts inside a
+caller that catches the revert, such as a batch of claims, and refuse every
+later call in that transaction, so the settlement contracts keep their guards
+in persistent storage.
+
 ## R battery
 
 ```sh
