@@ -11,11 +11,12 @@ package validator
 //	NewApiMultiClientGenerator                     — one registered client
 //	  -> NewRemoteUserNatClient                     — packet path to the hop
 //	  <-> connect.Tun (gVisor netstack)             — userspace TCP/IP
-//	  -> http.Transport{DialContext: tun.DialContext}
+//	  -> http.Transport{DialContext: tun.DialContext, IPv4 only}
 //
 // DNS for the API host resolves through the tunnel too (the Tun's DoH cache
 // dials through itself), so no bytes of the verify exchange leave outside
-// the hop.
+// the hop. The verify stream itself is dialed over IPv4 only
+// (transport_verify_dial.go).
 //
 // Each request owns a fresh tunnel pinned to its exact hop. One exclusively
 // leased client retains processed key registration across sequential requests;
@@ -262,7 +263,7 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 	})
 
 	httpTransport := &http.Transport{
-		DialContext:       tun.DialContext,
+		DialContext:       verifyTunnelDialContext(tun.DialContext),
 		DisableKeepAlives: true,
 		ForceAttemptHTTP2: false,
 	}
