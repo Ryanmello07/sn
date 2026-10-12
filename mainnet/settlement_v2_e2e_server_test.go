@@ -164,7 +164,7 @@ func newE2EServer(t testing.TB, f *e2eFixture) *e2eServer {
 	// The launch anchored the v1 evidence journal, which names the
 	// deployment's identity that payout epoch authority reads.
 	evidence := f.deploy(f.deployer, e2eCatalogArtifact(t, "ValidatorEvidence"), nil, f.coordinator, e2eGenesisHash, s.domain.DeploymentIDHash)
-	f.must(f.owner, f.coordinator, nil, e2eCoordinatorBinding.PackFixValidatorEvidence(evidence))
+	f.requireLogs(f.must(f.owner, f.coordinator, nil, e2eCoordinatorBinding.PackFixValidatorEvidence(evidence)), f.coordinatorLog("ValidatorEvidenceFixed", evidence))
 
 	controller.SetStConfig(cfg)
 	controller.SetStLedgerV2ObjectStore(server.NewLocalBlobStore(t.TempDir(), "e2e"))
