@@ -140,7 +140,7 @@ func (self *releaseEvidenceV2StartupHistory) replicas() int {
 
 // Every operation names a fresh child, never the configured scratch root.
 // Native private parent acquisition refuses aliases and joins actual closes.
-// Successful/failed scratch remains root-owned evidence for explicit cleanup.
+// A release run retires each closed child; other callers keep it as evidence.
 func (self *releaseEvidenceV2StartupHistory) scratch(ctx context.Context, noID uint64, purpose string) (string, error) {
 	if self.archive != nil {
 		return self.archive.scratch(ctx, noID, purpose)
