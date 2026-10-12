@@ -137,6 +137,8 @@ func TestMonitorOutputEarlyAdmissionStillJoinsBlockedSink(t *testing.T) {
 		t.Fatal(err)
 	}
 	sink := &monitorBlockedOutput{entered: make(chan struct{}), left: make(chan struct{})}
+	// The chain worker runs beside the failing role; its RPC waits locally.
+	url, _, _ := monitorServicesBlockedChain(t)
 	closed := false
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -154,7 +156,7 @@ func TestMonitorOutputEarlyAdmissionStillJoinsBlockedSink(t *testing.T) {
 			cancel()
 		}
 	}}
-	if exit := runMonitorStorageTestWithHooks(t, ctx, fixture.args("http://rpc.example"), sink, sink, fixture.clock.now, hooks); exit != 3 || !closed {
+	if exit := runMonitorStorageTestWithHooks(t, ctx, fixture.args(url), sink, sink, fixture.clock.now, hooks); exit != 3 || !closed {
 		t.Fatal("early failure leaked admitted owners", exit, closed)
 	}
 	<-sink.entered
