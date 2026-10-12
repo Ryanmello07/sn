@@ -477,11 +477,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
     go test -race . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
     # Settlement v2 (VERSION2-FINAL.md §8, §15.7): config, migration 814, the
-    # mirror, records, objects and the epoch driver, most of them on this
-    # gate's private services.
-    ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2)'
-    go test . ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
-    go test -race . ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    # mirror, records, objects, the ledger builder and its epoch commands, the
+    # epoch driver, the ledger endpoints, the v2 earnings readers and the SN25
+    # prune alert, most of them on this gate's private services.
+    ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet)'
+    go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
     # The monitor's schema contracts of the published migration suffix, from
     # 794 on, where settlement v2's migrations 814 and 815 are appended, read a
     # real database's catalog.
@@ -527,10 +528,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race ./controller -run "$server_history_distinct_tests" -count=1 -timeout 10m
   }
   # Settlement v2 scale (VERSION2-FINAL.md §15, SV-6): bulk wallet selection,
-  # batched resolutions and bounded head exclusion at 100k and 1M providers,
-  # behind the scale build tag, each inside its share of the one-hour build.
-  # It is the half of the scale shard that needs the gate's private services;
-  # on 2026-10-11 it took 11 minutes and peaked at 1.3 GiB.
+  # batched resolutions, bounded head exclusion and the ledger builder at 100k
+  # and 1M providers, behind the scale build tag, each inside its share of the
+  # one-hour build. It is the half of the scale shard that needs the gate's
+  # private services. On 2026-10-11 the wallet and head-exclusion tests took 11
+  # minutes and peaked at 1.3 GiB, and the builder's took 18 minutes and
+  # peaked at 2.4 GiB.
   release_phase_server_scale() {
     cd "$workspace/server"
     export WARP_ENV=local

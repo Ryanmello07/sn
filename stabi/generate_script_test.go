@@ -121,7 +121,7 @@ esac
 	// Tool-discovery tests own their metadata inputs. They must not depend on
 	// a concurrent release gate's mutable Foundry build directory.
 	artifactsDir := t.TempDir()
-	for _, name := range []string{"STSubnet", "STCoordinator", "STSettlementVault", "STReserveSink", "STValidatorEvidence"} {
+	for _, name := range []string{"STSubnet", "STCoordinator", "STSettlementVault", "STReserveSink", "STValidatorEvidence", "STSettlementVault2", "STSettlement2"} {
 		abi, err := os.ReadFile(filepath.Join(sourceDir, "..", "evm", "abi", name+".abi.json"))
 		if err != nil {
 			t.Fatal(err)
@@ -176,11 +176,13 @@ output=''
 while [ "$#" -gt 0 ]; do
     case "$1" in
     --type) shift; type_name="$1" ;;
+    --combined-json) shift; type_name=STSettlement2Combined ;;
     --out) shift; output="$1" ;;
     esac
     shift
 done
 case "$type_name" in
+STSettlement2Combined) source_name=stsettlement2.go ;;
 STSubnet) source_name=stsubnet.go ;;
 STCoordinator) source_name=stcoordinator.go ;;
 STSettlementVault) source_name=stsettlementvault.go ;;
@@ -288,11 +290,15 @@ func TestGenerateChecksIndependentArtifactInputs(t *testing.T) {
 			first, second := newGeneratorTestEnvironment(t), newGeneratorTestEnvironment(t)
 			for _, environment := range []*generatorTestEnvironment{first, second} {
 				installGeneratorTestAbigen(t, filepath.Join(environment.pathDir, "abigen"), "1.17.0-stable")
-				for _, name := range []string{"STSubnet", "STCoordinator", "STSettlementVault", "STReserveSink", "STValidatorEvidence"} {
+				for _, name := range []string{"STSubnet", "STCoordinator", "STSettlementVault", "STReserveSink", "STValidatorEvidence", "STSettlementVault2", "STSettlement2"} {
+					binding := strings.ToLower(name) + ".go"
+					if name == "STSettlementVault2" {
+						binding = "stsettlement2.go"
+					}
 					for _, path := range []string{
 						filepath.Join(environment.artifactsDir, name+".sol", name+".json"),
 						filepath.Join(environment.sourceDir, "..", "evm", "abi", name+".abi.json"),
-						filepath.Join(environment.sourceDir, strings.ToLower(name)+".go"),
+						filepath.Join(environment.sourceDir, binding),
 					} {
 						data, err := os.ReadFile(path)
 						if err != nil {
