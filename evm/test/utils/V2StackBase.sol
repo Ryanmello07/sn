@@ -152,14 +152,17 @@ abstract contract V2StackBase is ReleaseBase {
     }
 
     /// @dev A stranger pays the fee and demands the opening of `account`,
-    ///      proven against the finalized tree `levels`.
-    function _demandV2(uint256 noId, V2TreeHelper.Node[][] memory levels, LedgerTree.Account memory account)
-        internal
-    {
+    ///      proven against the finalized root `rootIndex`, the tree `levels`.
+    function _demandV2(
+        uint256 noId,
+        uint256 rootIndex,
+        V2TreeHelper.Node[][] memory levels,
+        LedgerTree.Account memory account
+    ) internal {
         LedgerTree.ProofNode[] memory proof = V2TreeHelper.proof(levels, account.index);
         vm.deal(stranger, DEMAND_FEE);
         vm.prank(stranger);
-        vault2.demandPath{value: DEMAND_FEE}(noId, account, proof);
+        vault2.demandPath{value: DEMAND_FEE}(noId, rootIndex, account, proof);
     }
 
     function _account(uint256 index, bytes32 coldkey, uint256 cumulative)

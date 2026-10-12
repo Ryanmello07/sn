@@ -6,6 +6,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"maps"
 	"math/big"
 	"math/rand/v2"
@@ -93,11 +94,17 @@ func (s *v2CheckScenario) setPending(seq uint64, root ledger.Root) {
 // committing their tree would, and returns the commitment and the tree.
 func (s *v2CheckScenario) publish(t *testing.T, accounts []merkle.LedgerAccount) (ledger.Root, *merkle.LedgerSumTree) {
 	t.Helper()
+	return s.publishUnder(t, s.p.Header, accounts)
+}
+
+// publishUnder publishes accounts under the covered epochs of a header.
+func (s *v2CheckScenario) publishUnder(t *testing.T, headerBytes []byte, accounts []merkle.LedgerAccount) (ledger.Root, *merkle.LedgerSumTree) {
+	t.Helper()
 	chunks, err := ledger.EncodeAccountChunks(accounts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	header, err := ledger.DecodeHeader(s.p.Header)
+	header, err := ledger.DecodeHeader(headerBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +120,7 @@ func (s *v2CheckScenario) publish(t *testing.T, accounts []merkle.LedgerAccount)
 	s.c.objects[ledger.RefOf(data)] = data
 	tree := v2TestTree(t, accounts)
 	root, total := tree.Root()
-	return ledger.Root{Epoch: 12, Root: root, Total: total, LeafCount: tree.LeafCount(), LedgerHash: ledger.RefOf(data)}, tree
+	return ledger.Root{Epoch: header.Epoch, Root: root, Total: total, LeafCount: tree.LeafCount(), LedgerHash: ledger.RefOf(data)}, tree
 }
 
 // withhold removes P's header from the endpoint.
@@ -127,32 +134,26 @@ func seedV2Random(t *testing.T, seed byte) {
 	t.Cleanup(func() { v2Random = crand.Reader })
 }
 
-// checkPathCalldata is checkPath for F's account i, packed from vault2's ABI.
-func (s *v2CheckScenario) checkPathCalldata(t *testing.T, i uint64, path []merkle.LedgerPathNode) []byte {
+// checkPathCalldata is checkPath for account i of finalized root root,
+// whose tree and accounts are given, packed from vault2's ABI.
+func checkPathCalldata(t *testing.T, root uint64, tree *merkle.LedgerSumTree, accounts []merkle.LedgerAccount, i uint64, path []merkle.LedgerPathNode) []byte {
 	t.Helper()
-	proof, err := s.f.Tree.Proof(i)
+	proof, err := tree.Proof(i)
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := v2TestABI.Pack("checkPath", big.NewInt(v2TestPool), v2LedgerAccount(i, &s.f.Accounts[i]), v2ProofNodes(proof), v2PathNodes(path))
+	data, err := v2TestABI.Pack("checkPath", big.NewInt(v2TestPool), new(big.Int).SetUint64(root), v2LedgerAccount(i, &accounts[i]), v2ProofNodes(proof), v2PathNodes(path))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return data
 }
 
-// open opens F's account i on the pending root with path, as its
-// operator answering a demand would, and returns the events.
-func (c *v2TestChain) open(t *testing.T, tree *merkle.LedgerSumTree, accounts []merkle.LedgerAccount, i uint64, path []merkle.LedgerPathNode) []*types.Log {
+// open opens account i of finalized root root on the pending root with
+// path, as its operator answering a demand would, and returns the events.
+func (c *v2TestChain) open(t *testing.T, root uint64, tree *merkle.LedgerSumTree, accounts []merkle.LedgerAccount, i uint64, path []merkle.LedgerPathNode) []*types.Log {
 	t.Helper()
-	proof, err := tree.Proof(i)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := v2TestABI.Pack("checkPath", big.NewInt(v2TestPool), v2LedgerAccount(i, &accounts[i]), v2ProofNodes(proof), v2PathNodes(path))
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := checkPathCalldata(t, root, tree, accounts, i, path)
 	var logs []*types.Log
 	c.do(func() {
 		var revert []byte
@@ -164,27 +165,27 @@ func (c *v2TestChain) open(t *testing.T, tree *merkle.LedgerSumTree, accounts []
 }
 
 // requireDeleted checks one DistributionDeleted of seq with exact fields.
-func requireDeleted(t *testing.T, logs []*types.Log, seq, index uint64, fault merkle.LedgerFault, level int64, challenger common.Address) {
+func requireDeleted(t *testing.T, logs []*types.Log, seq, root, index uint64, fault merkle.LedgerFault, level int64, challenger common.Address) {
 	t.Helper()
 	if len(logs) != 1 {
 		t.Fatalf("%d events, want one DistributionDeleted", len(logs))
 	}
 	event, err := vault2.UnpackDistributionDeletedEvent(logs[0])
-	if err != nil || logs[0].Address != common.HexToAddress(v2TestVault) || event.NoId.Cmp(big.NewInt(v2TestPool)) != 0 || event.Seq != seq || event.Index.Cmp(new(big.Int).SetUint64(index)) != 0 ||
-		event.Fault != uint8(fault) || event.Level.Cmp(big.NewInt(level)) != 0 || event.Challenger != challenger {
-		t.Fatalf("DistributionDeleted %+v (%v), want seq %d index %d fault %v level %d challenger %s", event, err, seq, index, fault, level, challenger)
+	if err != nil || logs[0].Address != common.HexToAddress(v2TestVault) || event.NoId.Cmp(big.NewInt(v2TestPool)) != 0 || event.Seq != seq || event.RootIndex.Cmp(new(big.Int).SetUint64(root)) != 0 ||
+		event.Index.Cmp(new(big.Int).SetUint64(index)) != 0 || event.Fault != uint8(fault) || event.Level.Cmp(big.NewInt(level)) != 0 || event.Challenger != challenger {
+		t.Fatalf("DistributionDeleted %+v (%v), want seq %d root %d index %d fault %v level %d challenger %s", event, err, seq, root, index, fault, level, challenger)
 	}
 }
 
 // demandedIndexes returns the indexes of the PathDemanded events snclaim's
 // transactions emitted, checking their exact fields.
-func (s *v2CheckScenario) demandedIndexes(t *testing.T, seq uint64) []uint64 {
+func (s *v2CheckScenario) demandedIndexes(t *testing.T, seq, root uint64) []uint64 {
 	t.Helper()
 	var indexes []uint64
 	for _, log := range s.c.emitted {
 		event, err := vault2.UnpackPathDemandedEvent(log)
-		if err != nil || event.NoId.Cmp(big.NewInt(v2TestPool)) != 0 || event.Seq != seq || event.Demander != common.HexToAddress(testKeyAddr) || !event.Index.IsUint64() {
-			t.Fatalf("PathDemanded %+v (%v), want pool 3 seq %d by the relayer", event, err, seq)
+		if err != nil || event.NoId.Cmp(big.NewInt(v2TestPool)) != 0 || event.Seq != seq || event.RootIndex.Cmp(new(big.Int).SetUint64(root)) != 0 || event.Demander != common.HexToAddress(testKeyAddr) || !event.Index.IsUint64() {
+			t.Fatalf("PathDemanded %+v (%v), want pool 3 seq %d root %d by the relayer", event, err, seq, root)
 		}
 		indexes = append(indexes, event.Index.Uint64())
 	}
@@ -192,8 +193,9 @@ func (s *v2CheckScenario) demandedIndexes(t *testing.T, seq uint64) []uint64 {
 }
 
 // requireDemands checks that every demand sent pays exactly the fee and
-// carries F's account and its proof against F (SPEC A2).
-func (s *v2CheckScenario) requireDemands(t *testing.T, tree *merkle.LedgerSumTree, accounts []merkle.LedgerAccount, indexes []uint64) {
+// carries the finalized root's index, the account and its proof against
+// that root (SPEC A2).
+func (s *v2CheckScenario) requireDemands(t *testing.T, root uint64, tree *merkle.LedgerSumTree, accounts []merkle.LedgerAccount, indexes []uint64) {
 	t.Helper()
 	sent := s.c.transactions()
 	if len(sent) != len(indexes) {
@@ -204,7 +206,7 @@ func (s *v2CheckScenario) requireDemands(t *testing.T, tree *merkle.LedgerSumTre
 		if err != nil {
 			t.Fatal(err)
 		}
-		data, err := v2TestABI.Pack("demandPath", big.NewInt(v2TestPool), v2LedgerAccount(i, &accounts[i]), v2ProofNodes(proof))
+		data, err := v2TestABI.Pack("demandPath", big.NewInt(v2TestPool), new(big.Int).SetUint64(root), v2LedgerAccount(i, &accounts[i]), v2ProofNodes(proof))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,7 +226,7 @@ func TestV2CheckHonestRoot(t *testing.T) {
 		fmt.Sprintf("                     root 0x%x, total 0.002500000 α (2500000 rao), 7 accounts, ledger %v\n", s.p.Commit.Root, ledger.Ref(s.p.Commit.LedgerHash)) +
 		fmt.Sprintf("  finalized root:    index 0, epoch 10, root 0x%x, total 0.001000003 α (1000003 rao), 4 accounts\n", s.f.Commit.Root) +
 		"  audit:             approve\n" +
-		"  previous accounts: 4, no fault\n"
+		"  previous accounts: 4 of root 0, no fault\n"
 	reads := "eth_call:fundedThrough=2 eth_call:pending=1 eth_call:pools=1 eth_call:rootCount=1 eth_call:roots=1 eth_chainId=1 eth_getBlockByNumber:finalized=1"
 	if err != nil || output != want || s.c.observed() != reads || len(s.c.transactions()) != 0 {
 		t.Fatalf("honest root: %v\n%s\nwant:\n%s\nobserved %s", err, output, want, s.c.observed())
@@ -288,21 +290,21 @@ func TestV2CheckChallengesPublishedFaults(t *testing.T) {
 		if err != nil || s.c.pending.Seq != 0 {
 			t.Fatalf("%s: %v; pending seq %d\n%s", c.name, err, s.c.pending.Seq, output)
 		}
-		requireDeleted(t, s.c.emitted, 2, c.index, want, 0, common.HexToAddress(testKeyAddr))
+		requireDeleted(t, s.c.emitted, 2, 0, c.index, want, 0, common.HexToAddress(testKeyAddr))
 		path, _ := tree.Path(c.index)
-		requireV2Tx(t, s.c.transactions()[0], 7, 60_000, 0, s.checkPathCalldata(t, c.index, path))
+		requireV2Tx(t, s.c.transactions()[0], 7, 60_000, 0, checkPathCalldata(t, 0, s.f.Tree, s.f.Accounts, c.index, path))
 		for _, line := range []string{
 			"  audit:             challenge (accounts check: ledger: a previous ",
 			fmt.Sprintf("    account %d:      %v\n", c.index, want),
 			fmt.Sprintf("\n  account:     %d of finalized root 0: coldkey 0x%x, cumulative ", c.index, s.f.Accounts[c.index].Coldkey),
 			fmt.Sprintf("\n  fault:       %v\n", want),
-			fmt.Sprintf("\nDistributionDeleted: pool 3, seq 2\n  account:     %d\n  fault:       %v at level 0\n  challenger:  %s\n", c.index, want, testKeyAddr),
+			fmt.Sprintf("\nDistributionDeleted: pool 3, seq 2\n  account:     %d of finalized root 0\n  fault:       %v at level 0\n  challenger:  %s\n", c.index, want, testKeyAddr),
 		} {
 			if !strings.Contains(output, line) {
 				t.Fatalf("%s: output lacks %q:\n%s", c.name, line, output)
 			}
 		}
-		if c.name == "lowered account" && !strings.Contains(output, "  previous accounts: 4, 1 with a provable fault, 3 with no fault\n") {
+		if c.name == "lowered account" && !strings.Contains(output, "  previous accounts: 4 of root 0, 1 with a provable fault, 3 with no fault\n") {
 			t.Fatalf("lowered account report:\n%s", output)
 		}
 	}
@@ -333,22 +335,22 @@ func TestV2CheckInconsistentSubtree(t *testing.T) {
 	s.setPending(2, ledger.Root{Epoch: 12, Root: root, Total: total, LeafCount: 7, LedgerHash: published.LedgerHash})
 
 	output, err := s.c.run(s.c.checkArgv("--challenge"))
-	if err == nil || err.Error() != "pending root seq 2 leaves the finalized root's accounts unverifiable; --demand sends the demand set" || len(s.c.transactions()) != 0 ||
+	if err == nil || err.Error() != "pending root seq 2 leaves the accounts of finalized root 0 unverifiable; --demand sends the demand set" || len(s.c.transactions()) != 0 ||
 		!strings.Contains(output, "  audit:             demand (tree check: ledger: account rows do not sum to the committed total: ") ||
-		!strings.HasSuffix(output, "  previous accounts: 4, unverifiable: the published objects are missing or do not reproduce the pending root\n") || strings.Contains(output, "no fault") {
+		!strings.HasSuffix(output, "  previous accounts: 4 of root 0, unverifiable: the published objects are missing or do not reproduce the pending root\n") || strings.Contains(output, "no fault") {
 		t.Fatalf("inconsistent subtree without --demand: %v\n%s", err, output)
 	}
 	seedV2Random(t, 1)
-	if output, err = s.c.run(s.c.checkArgv("--challenge", "--demand")); err != nil || !strings.Contains(output, "demand set: 4 accounts (0 doublings, 0 forced), 0 already demanded\n") {
+	if output, err = s.c.run(s.c.checkArgv("--challenge", "--demand")); err != nil || !strings.Contains(output, "demand set: 4 accounts of root 0 (0 doublings, 0 forced), 0 already demanded\n") {
 		t.Fatalf("inconsistent subtree demands: %v\n%s", err, output)
 	}
-	if got := s.demandedIndexes(t, 2); !slices.Equal(got, []uint64{0, 1, 2, 3}) || s.c.pending.OpenDemands != 4 {
+	if got := s.demandedIndexes(t, 2, 0); !slices.Equal(got, []uint64{0, 1, 2, 3}) || s.c.pending.OpenDemands != 4 {
 		t.Fatalf("demanded %v with %d open", got, s.c.pending.OpenDemands)
 	}
-	s.requireDemands(t, s.f.Tree, s.f.Accounts, []uint64{0, 1, 2, 3})
+	s.requireDemands(t, 0, s.f.Tree, s.f.Accounts, []uint64{0, 1, 2, 3})
 	// Every opening of F's accounts crosses the inconsistent node.
-	logs := s.c.open(t, s.f.Tree, s.f.Accounts, 2, committed.path(2))
-	requireDeleted(t, logs, 2, 2, merkle.LedgerFaultInconsistentNode, 2, common.Address{0x0a})
+	logs := s.c.open(t, 0, s.f.Tree, s.f.Accounts, 2, committed.path(2))
+	requireDeleted(t, logs, 2, 0, 2, merkle.LedgerFaultInconsistentNode, 2, common.Address{0x0a})
 }
 
 // E-4: when the tree is withheld, every fault kind is blocked by a demand:
@@ -388,19 +390,19 @@ func TestV2CheckWithheldFaults(t *testing.T) {
 		s.setPending(2, root)
 		s.withhold()
 		output, err := s.c.run(s.c.checkArgv("--demand"))
-		if err != nil || !strings.Contains(output, "  object missing:    "+ledger.Ref(root.LedgerHash).String()+"\n") || !strings.Contains(output, "  previous accounts: 4, unverifiable") {
+		if err != nil || !strings.Contains(output, "  object missing:    "+ledger.Ref(root.LedgerHash).String()+"\n") || !strings.Contains(output, "  previous accounts: 4 of root 0, unverifiable") {
 			t.Fatalf("%s: %v\n%s", c.name, err, output)
 		}
-		if got := s.demandedIndexes(t, 2); !slices.Equal(got, []uint64{0, 1, 2, 3}) {
+		if got := s.demandedIndexes(t, 2, 0); !slices.Equal(got, []uint64{0, 1, 2, 3}) {
 			t.Fatalf("%s: demanded %v", c.name, got)
 		}
-		s.requireDemands(t, s.f.Tree, s.f.Accounts, []uint64{0, 1, 2, 3})
+		s.requireDemands(t, 0, s.f.Tree, s.f.Accounts, []uint64{0, 1, 2, 3})
 		for i := range uint64(4) {
 			if i == c.faulty {
 				continue
 			}
 			path, _ := tree.Path(i)
-			if logs := s.c.open(t, s.f.Tree, s.f.Accounts, i, path); len(logs) != 1 || logs[0].Topics[0] != v2TestABI.Events["PathAnswered"].ID {
+			if logs := s.c.open(t, 0, s.f.Tree, s.f.Accounts, i, path); len(logs) != 1 || logs[0].Topics[0] != v2TestABI.Events["PathAnswered"].ID {
 				t.Fatalf("%s: answering %d: %v", c.name, i, logs)
 			}
 		}
@@ -408,7 +410,7 @@ func TestV2CheckWithheldFaults(t *testing.T) {
 			t.Fatalf("%s: %d demands open after the answers", c.name, s.c.pending.OpenDemands)
 		}
 		path, _ := tree.Path(c.faulty)
-		requireDeleted(t, s.c.open(t, s.f.Tree, s.f.Accounts, c.faulty, path), 2, c.faulty, c.fault, 0, common.Address{0x0a})
+		requireDeleted(t, s.c.open(t, 0, s.f.Tree, s.f.Accounts, c.faulty, path), 2, 0, c.faulty, c.fault, 0, common.Address{0x0a})
 	}
 	// The inconsistent subtree, withheld, is demanded the same way.
 	s := newV2CheckScenario(t)
@@ -418,10 +420,10 @@ func TestV2CheckWithheldFaults(t *testing.T) {
 	committed.misstate(1, 1, stated)
 	root, total := committed.root()
 	s.setPending(2, ledger.Root{Epoch: 12, Root: root, Total: total, LeafCount: 7, LedgerHash: [32]byte{0x99}})
-	if _, err := s.c.run(s.c.checkArgv("--demand")); err != nil || !slices.Equal(s.demandedIndexes(t, 2), []uint64{0, 1, 2, 3}) {
+	if _, err := s.c.run(s.c.checkArgv("--demand")); err != nil || !slices.Equal(s.demandedIndexes(t, 2, 0), []uint64{0, 1, 2, 3}) {
 		t.Fatalf("withheld inconsistent subtree: %v", err)
 	}
-	requireDeleted(t, s.c.open(t, s.f.Tree, s.f.Accounts, 3, committed.path(3)), 2, 3, merkle.LedgerFaultInconsistentNode, 1, common.Address{0x0a})
+	requireDeleted(t, s.c.open(t, 0, s.f.Tree, s.f.Accounts, 3, committed.path(3)), 2, 0, 3, merkle.LedgerFaultInconsistentNode, 1, common.Address{0x0a})
 }
 
 // lowered publishes P with F's account 0 lowered by one rao below F, a
@@ -441,8 +443,8 @@ func TestV2CheckFaultWithoutChallenge(t *testing.T) {
 	s := newV2CheckScenario(t)
 	s.lowered(t)
 	output, err := s.c.run(s.c.checkArgv("--demand"))
-	if err == nil || err.Error() != "pending root seq 2 faults 1 accounts of the finalized root; --challenge deletes it" || len(s.c.transactions()) != 0 ||
-		!strings.HasSuffix(output, "  previous accounts: 4, 1 with a provable fault, 3 with no fault\n    account 0:      lower_value\n") {
+	if err == nil || err.Error() != "pending root seq 2 faults 1 accounts of finalized root 0; --challenge deletes it" || len(s.c.transactions()) != 0 ||
+		!strings.HasSuffix(output, "  previous accounts: 4 of root 0, 1 with a provable fault, 3 with no fault\n    account 0:      lower_value\n") {
 		t.Fatalf("fault without --challenge: %v\n%s", err, output)
 	}
 	s = newV2CheckScenario(t)
@@ -523,8 +525,8 @@ func TestV2CheckReportsUnverifiable(t *testing.T) {
 		ref := missing(s)
 		delete(s.c.objects, ref)
 		output, err := s.c.run(s.c.checkArgv("--challenge"))
-		if err == nil || err.Error() != "pending root seq 2 leaves the finalized root's accounts unverifiable; --demand sends the demand set" ||
-			!strings.Contains(output, "  object missing:    "+ref.String()+"\n") || !strings.HasSuffix(output, "  previous accounts: 4, unverifiable: the published objects are missing or do not reproduce the pending root\n") ||
+		if err == nil || err.Error() != "pending root seq 2 leaves the accounts of finalized root 0 unverifiable; --demand sends the demand set" ||
+			!strings.Contains(output, "  object missing:    "+ref.String()+"\n") || !strings.HasSuffix(output, "  previous accounts: 4 of root 0, unverifiable: the published objects are missing or do not reproduce the pending root\n") ||
 			strings.Contains(output, "no fault") || len(s.c.transactions()) != 0 {
 			t.Fatalf("missing %v: %v\n%s", ref, err, output)
 		}
@@ -540,8 +542,8 @@ func TestV2CheckUnreproducedFaultyRows(t *testing.T) {
 	s.c.pending.Root, s.c.pending.Total = s.p.Commit.Root, s.p.Commit.Total.ToBig()
 	seedV2Random(t, 3)
 	output, err := s.c.run(s.c.checkArgv("--challenge", "--demand"))
-	if err != nil || !strings.Contains(output, "  previous accounts: 4, unverifiable: the published objects are missing or do not reproduce the pending root\n    account 0:      the published row shows lower_value\n") ||
-		!strings.Contains(output, "demand set: 4 accounts (0 doublings, 1 forced), 0 already demanded\n") || !slices.Equal(s.demandedIndexes(t, 2), []uint64{0, 1, 2, 3}) {
+	if err != nil || !strings.Contains(output, "  previous accounts: 4 of root 0, unverifiable: the published objects are missing or do not reproduce the pending root\n    account 0:      the published row shows lower_value\n") ||
+		!strings.Contains(output, "demand set: 4 accounts of root 0 (0 doublings, 1 forced), 0 already demanded\n") || !slices.Equal(s.demandedIndexes(t, 2, 0), []uint64{0, 1, 2, 3}) {
 		t.Fatalf("unreproduced faulty rows: %v\n%s", err, output)
 	}
 }
@@ -566,20 +568,24 @@ func TestV2CheckReceiptEvents(t *testing.T) {
 	s.lowered(t)
 	foreign(s, func() []*types.Log {
 		return []*types.Log{
-			s.c.event("PathAnswered", s.c.seqTopics(2), big.NewInt(0), common.Address{}),
-			s.c.event("DistributionDeleted", s.c.seqTopics(1), big.NewInt(0), uint8(2), big.NewInt(0), common.Address{}),
+			s.c.event("PathAnswered", s.c.seqTopics(2), big.NewInt(0), big.NewInt(0), common.Address{}),
+			s.c.event("DistributionDeleted", s.c.seqTopics(1), big.NewInt(0), big.NewInt(0), uint8(2), big.NewInt(0), common.Address{}),
 		}
 	})
-	if output, err := s.c.run(s.c.checkArgv("--challenge")); err != nil || !strings.Contains(output, "\nDistributionDeleted: pool 3, seq 2\n  account:     0\n") {
+	if output, err := s.c.run(s.c.checkArgv("--challenge")); err != nil || !strings.Contains(output, "\nDistributionDeleted: pool 3, seq 2\n  account:     0 of finalized root 0\n") {
 		t.Fatalf("challenge receipt: %v\n%s", err, output)
 	}
 	s = newV2CheckScenario(t)
 	s.withhold()
 	foreign(s, func() []*types.Log {
 		return []*types.Log{
-			s.c.event("PathAnswered", s.c.seqTopics(2), big.NewInt(0), common.Address{}),
-			s.c.event("PathDemanded", s.c.seqTopics(1), big.NewInt(0), common.Address{}),
-			s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(9), common.Address{}),
+			s.c.event("PathAnswered", s.c.seqTopics(2), big.NewInt(0), big.NewInt(0), common.Address{}),
+			s.c.event("PathDemanded", s.c.seqTopics(1), big.NewInt(0), big.NewInt(0), common.Address{}),
+			s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(0), big.NewInt(9), common.Address{}),
+			s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(1), big.NewInt(0), common.Address{}),
+			s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(1), big.NewInt(1), common.Address{}),
+			s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(1), big.NewInt(2), common.Address{}),
+			s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(1), big.NewInt(3), common.Address{}),
 		}
 	})
 	if output, err := s.c.run(s.c.checkArgv("--demand")); err != nil || strings.Count(output, "PathDemanded: pool 3, seq 2, account ") != 4 {
@@ -594,7 +600,7 @@ func TestV2CheckRefusedRootWithoutFault(t *testing.T) {
 	s := newV2CheckScenario(t)
 	s.c.funded[11] = big.NewInt(1_600_001)
 	output, err := s.c.run(s.c.checkArgv())
-	if err != nil || !strings.Contains(output, "  audit:             refuse (allocation check: ledger: an account's increase is not its coldkey's delta: ") || !strings.HasSuffix(output, "  previous accounts: 4, no fault\n") {
+	if err != nil || !strings.Contains(output, "  audit:             refuse (allocation check: ledger: an account's increase is not its coldkey's delta: ") || !strings.HasSuffix(output, "  previous accounts: 4 of root 0, no fault\n") {
 		t.Fatalf("refused root: %v\n%s", err, output)
 	}
 }
@@ -633,7 +639,7 @@ func TestV2CheckPreviousUnavailable(t *testing.T) {
 	s := newV2CheckScenario(t)
 	delete(s.c.objects, s.f.Commit.LedgerHash)
 	output, err := s.c.run(s.c.checkArgv("--challenge", "--demand"))
-	if err == nil || err.Error() != "the finalized root's objects are unavailable or do not rebuild it: its accounts cannot be checked, challenged or demanded" ||
+	if err == nil || err.Error() != "no finalized root of pool 3 has objects that rebuild it: its accounts cannot be checked, challenged or demanded" ||
 		!strings.Contains(output, "  audit:             refuse (fetch check: ") || strings.Contains(output, "previous accounts") {
 		t.Fatalf("previous unavailable: %v\n%s", err, output)
 	}
@@ -747,16 +753,17 @@ func newV2SampleScenario(t *testing.T) *v2SampleScenario {
 	return s
 }
 
-// demands records demands on seq at block by demander, open or answered.
-func (s *v2SampleScenario) demands(block, seq uint64, demander common.Address, answered bool, indexes ...uint64) {
+// demands records demands on seq, against finalized root root, at block by
+// demander, open or answered.
+func (c *v2TestChain) demands(block, seq, root uint64, demander common.Address, answered bool, indexes ...uint64) {
 	for _, i := range indexes {
-		s.c.addLog(block, s.c.event("PathDemanded", s.c.seqTopics(seq), new(big.Int).SetUint64(i), demander))
+		c.addLog(block, c.event("PathDemanded", c.seqTopics(seq), new(big.Int).SetUint64(root), new(big.Int).SetUint64(i), demander))
 		if answered {
-			s.c.addLog(block+1, s.c.event("PathAnswered", s.c.seqTopics(seq), new(big.Int).SetUint64(i), demander))
+			c.addLog(block+1, c.event("PathAnswered", c.seqTopics(seq), new(big.Int).SetUint64(root), new(big.Int).SetUint64(i), demander))
 		}
-		if seq == s.c.pending.Seq {
-			s.c.demanded[[2]uint64{seq, i}] = 1
-			s.c.pending.OpenDemands++
+		if seq == c.pending.Seq {
+			c.demanded[[3]uint64{seq, root, i}] = 1
+			c.pending.OpenDemands++
 		}
 	}
 }
@@ -769,7 +776,7 @@ func (s *v2SampleScenario) run(t *testing.T, flags ...string) ([]uint64, string)
 		t.Fatalf("demand: %v\n%s", err, output)
 	}
 	cs := &v2CheckScenario{c: s.c}
-	indexes := cs.demandedIndexes(t, 5)
+	indexes := cs.demandedIndexes(t, 5, 0)
 	if !slices.IsSorted(indexes) || len(slices.Compact(slices.Clone(indexes))) != len(indexes) {
 		t.Fatalf("demands are not ascending and distinct: %v", indexes)
 	}
@@ -783,10 +790,10 @@ func (s *v2SampleScenario) run(t *testing.T, flags ...string) ([]uint64, string)
 func TestV2CheckDemandSample(t *testing.T) {
 	s := newV2SampleScenario(t)
 	indexes, output := s.run(t)
-	if len(indexes) != 256 || !strings.Contains(output, "demand set: 256 accounts (0 doublings, 0 forced), 0 already demanded\n") || s.c.pending.OpenDemands != 256 {
+	if len(indexes) != 256 || !strings.Contains(output, "demand set: 256 accounts of root 0 (0 doublings, 0 forced), 0 already demanded\n") || s.c.pending.OpenDemands != 256 {
 		t.Fatalf("withheld root: %d demands, %d open\n%s", len(indexes), s.c.pending.OpenDemands, output)
 	}
-	(&v2CheckScenario{c: s.c}).requireDemands(t, s.tree, s.accounts, indexes)
+	(&v2CheckScenario{c: s.c}).requireDemands(t, 0, s.tree, s.accounts, indexes)
 	// Weighted by value: the upper half of the accounts holds 3/4 of it.
 	upper := 0
 	for _, i := range indexes {
@@ -803,7 +810,7 @@ func TestV2CheckDemandSample(t *testing.T) {
 	// A watcher run again on the same root draws no new sample.
 	s.c.calls, s.c.spans = map[string]int{}, nil
 	sent := len(s.c.transactions())
-	if output, err := s.c.run(s.c.checkArgv("--demand")); err != nil || len(s.c.transactions()) != sent || !strings.Contains(output, "demand set: 0 accounts (0 doublings, 0 forced), 256 already demanded\n") {
+	if output, err := s.c.run(s.c.checkArgv("--demand")); err != nil || len(s.c.transactions()) != sent || !strings.Contains(output, "demand set: 0 accounts of root 0 (0 doublings, 0 forced), 256 already demanded\n") {
 		t.Fatalf("rerun: %v\n%s", err, output)
 	}
 }
@@ -825,27 +832,27 @@ func TestV2CheckDemandDoubling(t *testing.T) {
 	}{
 		{"replaced with an open demand", func(s *v2SampleScenario) {
 			s.c.committed(130_000, 3, earlier, 0)
-			s.demands(131_000, 3, other, false, 7)
-			s.demands(131_000, 3, other, true, 9)
+			s.c.demands(131_000, 3, 0, other, false, 7)
+			s.c.demands(131_000, 3, 0, other, true, 9)
 			s.c.committed(150_000, 4, earlier, 3)
-			s.c.addLog(160_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(1), uint8(2), big.NewInt(0), other))
-		}, 513, []uint64{7}, "demand set: 513 accounts (1 doublings, 1 forced), 0 already demanded\n"},
+			s.c.addLog(160_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(0), big.NewInt(1), uint8(2), big.NewInt(0), other))
+		}, 513, []uint64{7}, "demand set: 513 accounts of root 0 (1 doublings, 1 forced), 0 already demanded\n"},
 		{"replaced and deleted with open demands", func(s *v2SampleScenario) {
 			s.c.committed(130_000, 3, earlier, 0)
-			s.demands(131_000, 3, relayer, false, 7)
+			s.c.demands(131_000, 3, 0, relayer, false, 7)
 			s.c.committed(150_000, 4, earlier, 3)
-			s.demands(151_000, 4, other, false, 11, 7)
-			s.c.addLog(160_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(11), uint8(2), big.NewInt(0), other))
+			s.c.demands(151_000, 4, 0, other, false, 11, 7)
+			s.c.addLog(160_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(0), big.NewInt(11), uint8(2), big.NewInt(0), other))
 			// A repeated log does not count a root twice.
-			s.c.addLog(160_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(11), uint8(2), big.NewInt(0), other))
-		}, 600, []uint64{7, 11}, "demand set: 600 accounts (2 doublings, 2 forced), 0 already demanded\n"},
+			s.c.addLog(160_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(0), big.NewInt(11), uint8(2), big.NewInt(0), other))
+		}, 600, []uint64{7, 11}, "demand set: 600 accounts of root 0 (2 doublings, 2 forced), 0 already demanded\n"},
 		{"answered demands and history before F", func(s *v2SampleScenario) {
-			s.demands(100_000, 1, other, false, 5)
+			s.c.demands(100_000, 1, 0, other, false, 5)
 			s.c.committed(101_000, 6, earlier, 1)
 			s.c.committed(130_000, 3, earlier, 0)
-			s.demands(131_000, 3, other, true, 9, 10)
+			s.c.demands(131_000, 3, 0, other, true, 9, 10)
 			s.c.committed(150_000, 4, earlier, 3)
-		}, 256, nil, "demand set: 256 accounts (0 doublings, 0 forced), 0 already demanded\n"},
+		}, 256, nil, "demand set: 256 accounts of root 0 (0 doublings, 0 forced), 0 already demanded\n"},
 	} {
 		s := newV2SampleScenario(t)
 		c.history(s)
@@ -871,8 +878,8 @@ func TestV2CheckDemandTopsUp(t *testing.T) {
 		mine = append(mine, i)
 		theirs = append(theirs, 599-i)
 	}
-	s.demands(v2TestHead-500, 5, common.HexToAddress(testKeyAddr), false, mine...)
-	s.demands(v2TestHead-500, 5, common.Address{0xbb}, false, theirs...)
+	s.c.demands(v2TestHead-500, 5, 0, common.HexToAddress(testKeyAddr), false, mine...)
+	s.c.demands(v2TestHead-500, 5, 0, common.Address{0xbb}, false, theirs...)
 	indexes, output := s.run(t)
 	if len(indexes) == 0 || len(indexes) > 256 || !strings.Contains(output, " (0 doublings, 0 forced), 200 already demanded\n") {
 		t.Fatalf("top-up: %d demands\n%s", len(indexes), output)
@@ -887,8 +894,10 @@ func TestV2CheckDemandTopsUp(t *testing.T) {
 // CL-1, SPEC A6: an index demanded by another sender between the scan and
 // the preflight is done; a root that leaves the pending slot ends the
 // demands; a closed window, a mined revert, a receipt without PathDemanded,
-// a failed send and failed reads are refusals; --dry-run sends nothing.
+// a failed send, failed reads and a failed random source are refusals;
+// --dry-run sends nothing.
 func TestV2CheckDemandRefusals(t *testing.T) {
+	t.Cleanup(func() { v2Random = crand.Reader })
 	withheld := func(t *testing.T) *v2CheckScenario {
 		s := newV2CheckScenario(t)
 		s.withhold()
@@ -897,11 +906,11 @@ func TestV2CheckDemandRefusals(t *testing.T) {
 	s := withheld(t)
 	s.c.before = func(key string) {
 		if key == "eth_call:demandPath" && s.c.calls[key] == 1 {
-			s.c.demanded[[2]uint64{2, 0}] = 1
+			s.c.demanded[[3]uint64{2, 0, 0}] = 1
 		}
 	}
 	output, err := s.c.run(s.c.checkArgv("--demand"))
-	if err != nil || !strings.Contains(output, "account 0: already demanded on seq 2; done\n") || !slices.Equal(s.demandedIndexes(t, 2), []uint64{1, 2, 3}) {
+	if err != nil || !strings.Contains(output, "account 0 of root 0: already demanded on seq 2; done\n") || !slices.Equal(s.demandedIndexes(t, 2, 0), []uint64{1, 2, 3}) {
 		t.Fatalf("demanded first: %v\n%s", err, output)
 	}
 	s = withheld(t)
@@ -911,7 +920,7 @@ func TestV2CheckDemandRefusals(t *testing.T) {
 		}
 	}
 	output, err = s.c.run(s.c.checkArgv("--demand"))
-	if err != nil || !strings.HasSuffix(output, "pending root seq 2 is no longer pending (deleted or replaced); no more demands\n") || !slices.Equal(s.demandedIndexes(t, 2), []uint64{0, 1}) {
+	if err != nil || !strings.HasSuffix(output, "pending root seq 2 is no longer pending (deleted or replaced); no more demands\n") || !slices.Equal(s.demandedIndexes(t, 2, 0), []uint64{0, 1}) {
 		t.Fatalf("deleted root: %v\n%s", err, output)
 	}
 	s = withheld(t)
@@ -942,18 +951,15 @@ func TestV2CheckDemandRefusals(t *testing.T) {
 		{"demanded re-read", func(s *v2CheckScenario) {
 			s.c.pending.CommittedBlock = v2TestHead - v2TestChallengeBlocks
 			s.c.failAt["eth_call:demanded"] = 1
-		}, "\ndemanded(3,2,0): synthetic refusal of eth_call:demanded"},
+		}, "\ndemanded(3,2,0,0): synthetic refusal of eth_call:demanded"},
 		{"log refused", func(s *v2CheckScenario) { s.c.failAt["eth_getLogs"] = 3 }, "eth_getLogs [197001,198000]: synthetic log refusal"},
 		{"malformed log", func(s *v2CheckScenario) {
-			log := s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(0), common.Address{})
+			log := s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(0), big.NewInt(0), common.Address{})
 			log.Data = log.Data[:10]
 			s.c.addLog(v2TestHead-10, log)
 		}, "vault2 log 3 of tx 0x7e03000000000000000000000000000000000000000000000000000000000000 at block 199990: abi: "},
 		{"no finalization", func(s *v2CheckScenario) { s.c.logs = s.c.logs[2:] }, "vault2 logs up to block 200000 hold no DistributionFinalized of root 0 of pool 3"},
-		{"unanswered index outside F", func(s *v2CheckScenario) {
-			s.c.addLog(v2TestHead-15_000, s.c.event("PathDemanded", s.c.seqTopics(9), big.NewInt(4), common.Address{0xbb}))
-			s.c.addLog(v2TestHead-10_000, s.c.event("DistributionDeleted", s.c.seqTopics(9), big.NewInt(4), uint8(3), big.NewInt(0), common.Address{0xbb}))
-		}, "ledger: demand index is not an account of the previous root: 4 of 4"},
+		{"random source", func(s *v2CheckScenario) { v2Random = io.MultiReader() }, "ledger: demand sample randomness: EOF"},
 	} {
 		s := withheld(t)
 		c.setup(s)
@@ -985,7 +991,7 @@ func TestV2CheckForeignLog(t *testing.T) {
 // name from the preflight; with the pending root still pending and the
 // index not demanded, the refusal stands and nothing is sent.
 func TestV2CheckDecodesRevert(t *testing.T) {
-	for _, reason := range []string{"NoPendingRoot", "NoFinalizedRoot", "IndexOutOfRange", "InvalidProof", "NoFault", "Reentrancy"} {
+	for _, reason := range []string{"NoPendingRoot", "UnknownRoot", "IndexOutOfRange", "InvalidProof", "NoFault", "Reentrancy"} {
 		s := newV2CheckScenario(t)
 		s.lowered(t)
 		s.c.revert["checkPath"] = reason
@@ -993,12 +999,225 @@ func TestV2CheckDecodesRevert(t *testing.T) {
 			t.Fatalf("checkPath %s: %v", reason, err)
 		}
 	}
-	for _, reason := range []string{"InvalidDemandFee", "NoPendingRoot", "NoFinalizedRoot", "ChallengeWindowClosed", "IndexOutOfRange", "InvalidProof", "AlreadyDemanded"} {
+	for _, reason := range []string{"InvalidDemandFee", "NoPendingRoot", "UnknownRoot", "ChallengeWindowClosed", "IndexOutOfRange", "InvalidProof", "AlreadyDemanded"} {
 		s := newV2CheckScenario(t)
 		s.withhold()
 		s.c.revert["demandPath"] = reason
 		if _, err := s.c.run(s.c.checkArgv("--demand")); err == nil || !strings.HasPrefix(err.Error(), "preflight eth_call failed: execution reverted: ") || !strings.HasSuffix(err.Error(), "revert "+reason+"[]") || len(s.c.transactions()) != 0 {
 			t.Fatalf("demandPath %s: %v", reason, err)
 		}
+	}
+}
+
+// newV2FallbackScenario is the check scenario a root later: F of epoch 10
+// is root 0 and P of epochs 11 and 12 is root 1, the latest, finalized by
+// seq 2 at v2TestHead − 10,000. Q, the honest root of epoch 13 over P, is
+// returned unpublished; the pending root is set by each test.
+func newV2FallbackScenario(t *testing.T) (*v2CheckScenario, *ledger.Ledger) {
+	t.Helper()
+	s := newV2CheckScenario(t)
+	s.c.roots = append(s.c.roots, v2TestRoot(s.p.Tree, 12, s.p.Commit.LedgerHash))
+	s.c.finalized(v2TestHead-10_000, 2, 1, s.p.Commit)
+	s.c.funded[13] = big.NewInt(3_000_000)
+	q, err := ledger.Build(context.Background(), ledger.BuildInput{NoID: v2TestPool, Epoch: 13, FirstEpoch: 10, FundedThrough: v2Funded(10, 1_000_003, 11, 1_600_000, 12, 2_500_000, 13, 3_000_000),
+		Previous: &ledger.Previous{Root: s.p.Commit, Accounts: s.p.Accounts},
+		Epochs:   []ledger.EpochInput{{Epoch: 13, Rows: []protocol.LedgerUsageRow{v2Row(1, 1, 100), v2Row(14, 9, 50)}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(q.Accounts) != 8 {
+		t.Fatalf("Q has %d accounts", len(q.Accounts))
+	}
+	return s, q
+}
+
+// H1, E-4: while the latest finalized root's objects are available, the
+// watcher protects its accounts, including those it added: a pending root
+// that lowers one of them is challenged against root 1.
+func TestV2CheckProtectsLatestRoot(t *testing.T) {
+	s, q := newV2FallbackScenario(t)
+	accounts := slices.Clone(q.Accounts)
+	accounts[5].Cumulative.SubUint64(&s.p.Accounts[5].Cumulative, 1)
+	root, tree := s.publishUnder(t, q.Header, accounts)
+	s.setPending(3, root)
+	output, err := s.c.run(s.c.checkArgv("--challenge"))
+	if err != nil || strings.Contains(output, "fallback") || !strings.Contains(output, "  previous accounts: 7 of root 1, 1 with a provable fault, 6 with no fault\n    account 5:      lower_value\n") ||
+		!strings.Contains(output, "\nDistributionDeleted: pool 3, seq 3\n  account:     5 of finalized root 1\n  fault:       lower_value at level 0\n") {
+		t.Fatalf("latest root: %v\n%s", err, output)
+	}
+	requireDeleted(t, s.c.emitted, 3, 1, 5, merkle.LedgerFaultLowerValue, 0, common.HexToAddress(testKeyAddr))
+	path, _ := tree.Path(5)
+	requireV2Tx(t, s.c.transactions()[0], 7, 60_000, 0, checkPathCalldata(t, 1, s.p.Tree, s.p.Accounts, 5, path))
+}
+
+// H1, E-4: when the latest finalized root's objects are withheld, the
+// watcher says so and protects the newest older root whose objects verify:
+// a withheld pending root is demanded against root 0, each demand naming
+// root 0 with its account and proof. Demands are keyed by seq, root and
+// index: one on root 0 is skipped, one on root 1 is not, and an earlier
+// failed root's unanswered demands are demanded again where root 0 holds
+// the account.
+func TestV2CheckFallbackDemands(t *testing.T) {
+	s, _ := newV2FallbackScenario(t)
+	delete(s.c.objects, s.p.Commit.LedgerHash)
+	earlier := ledger.Root{Epoch: 13, Root: [32]byte{0x33}, Total: *uint256.NewInt(1), LeafCount: 8, LedgerHash: [32]byte{0x34}}
+	s.c.committed(v2TestHead-9_000, 3, earlier, 0)
+	s.c.demands(v2TestHead-8_900, 3, 1, common.Address{0xbb}, false, 5, 2)
+	s.c.demands(v2TestHead-8_900, 3, 0, common.Address{0xbb}, true, 3)
+	s.c.committed(v2TestHead-6_000, 4, earlier, 3)
+	s.c.addLog(v2TestHead-5_000, s.c.event("DistributionDeleted", s.c.seqTopics(4), big.NewInt(1), big.NewInt(6), uint8(2), big.NewInt(0), common.Address{0xbb}))
+	s.setPending(5, ledger.Root{Epoch: 13, Root: [32]byte{0x13}, Total: *uint256.NewInt(3_000_000), LeafCount: 8, LedgerHash: [32]byte{0x31}})
+	s.c.demands(v2TestHead-900, 5, 1, common.HexToAddress(testKeyAddr), false, 2)
+	s.c.demands(v2TestHead-900, 5, 0, common.Address{0xbb}, false, 1)
+	seedV2Random(t, 4)
+	output, err := s.c.run(s.c.checkArgv("--demand"))
+	for _, line := range []string{
+		"  audit:             refuse (fetch check: ledger: object unavailable: " + ledger.Ref(s.p.Commit.LedgerHash).String(),
+		"  fallback:          finalized root 1's objects are missing or do not rebuild it; protecting finalized root 0, the newest whose objects do\n",
+		"  pending accounts:  unavailable: object " + ledger.Ref([32]byte{0x31}).String() + ": GET ",
+		"  previous accounts: 4 of root 0, unverifiable: the published objects are missing or do not reproduce the pending root\n",
+		"demand set: 4 accounts of root 0 (1 doublings, 1 forced), 1 already demanded\n  1 unanswered earlier demands name accounts that root 0 does not hold\n",
+		"\n  account:     0 of finalized root 0: coldkey ",
+	} {
+		if err != nil || !strings.Contains(output, line) {
+			t.Fatalf("fallback demands: %v; output lacks %q:\n%s", err, line, output)
+		}
+	}
+	if got := s.demandedIndexes(t, 5, 0); !slices.Equal(got, []uint64{0, 2, 3}) {
+		t.Fatalf("demanded %v on root 0", got)
+	}
+	s.requireDemands(t, 0, s.f.Tree, s.f.Accounts, []uint64{0, 2, 3})
+}
+
+// H1, E-4: with the latest root withheld, a published pending root whose
+// rows fault an account of the older root it protects is challenged against
+// that root; without --challenge the fault is reported.
+func TestV2CheckFallbackChallenge(t *testing.T) {
+	setup := func(t *testing.T) (*v2CheckScenario, *merkle.LedgerSumTree) {
+		s, q := newV2FallbackScenario(t)
+		delete(s.c.objects, s.p.Commit.LedgerHash)
+		accounts := slices.Clone(q.Accounts)
+		accounts[1].Cumulative.SubUint64(&s.f.Accounts[1].Cumulative, 1)
+		root, tree := s.publishUnder(t, q.Header, accounts)
+		s.setPending(3, root)
+		return s, tree
+	}
+	s, _ := setup(t)
+	output, err := s.c.run(s.c.checkArgv())
+	if err == nil || err.Error() != "pending root seq 3 faults 1 accounts of finalized root 0; --challenge deletes it" || len(s.c.transactions()) != 0 ||
+		!strings.Contains(output, "protecting finalized root 0, the newest whose objects do\n  previous accounts: 4 of root 0, 1 with a provable fault, 3 with no fault\n    account 1:      lower_value\n") {
+		t.Fatalf("fallback fault: %v\n%s", err, output)
+	}
+	s, tree := setup(t)
+	output, err = s.c.run(s.c.checkArgv("--challenge"))
+	if err != nil || !strings.Contains(output, "\nDistributionDeleted: pool 3, seq 3\n  account:     1 of finalized root 0\n") {
+		t.Fatalf("fallback challenge: %v\n%s", err, output)
+	}
+	requireDeleted(t, s.c.emitted, 3, 0, 1, merkle.LedgerFaultLowerValue, 0, common.HexToAddress(testKeyAddr))
+	path, _ := tree.Path(1)
+	requireV2Tx(t, s.c.transactions()[0], 7, 60_000, 0, checkPathCalldata(t, 0, s.f.Tree, s.f.Accounts, 1, path))
+}
+
+// H1: a published pending root that keeps every account of the protected
+// older root shows no fault there, but the accounts the withheld latest
+// root added cannot be checked, which fails the check.
+func TestV2CheckFallbackWithoutFault(t *testing.T) {
+	s, q := newV2FallbackScenario(t)
+	delete(s.c.objects, s.p.Commit.LedgerHash)
+	root, _ := s.publishUnder(t, q.Header, q.Accounts)
+	s.setPending(3, root)
+	output, err := s.c.run(s.c.checkArgv("--challenge", "--demand"))
+	if err == nil || err.Error() != "finalized root 1's objects are missing or do not rebuild it: the accounts added after root 0 cannot be checked" ||
+		!strings.HasSuffix(output, "  previous accounts: 4 of root 0, no fault\n") || len(s.c.transactions()) != 0 {
+		t.Fatalf("fallback without fault: %v\n%s", err, output)
+	}
+}
+
+// H1: the fallback passes over every older root whose objects cannot be
+// read or do not rebuild it, saying why: a missing header, bytes that do
+// not match their reference, a header that does not decode, a missing or
+// malformed account chunk, no accounts, and accounts of another root. With
+// no root left, nothing can be protected; a failed root read is refused.
+func TestV2CheckFallbackRefusals(t *testing.T) {
+	cases := []struct {
+		name   string
+		break1 func(s *v2CheckScenario) []byte // returns a new header for root 1, or nil
+		want   string
+	}{
+		{"header missing", func(s *v2CheckScenario) []byte { delete(s.c.objects, s.p.Commit.LedgerHash); return nil }, ": 404 Not Found"},
+		{"header bytes", func(s *v2CheckScenario) []byte { s.c.objects[s.p.Commit.LedgerHash] = []byte("{}"); return nil }, ": the bytes served do not match it"},
+		{"header decode", func(s *v2CheckScenario) []byte { return []byte(`{"schema":`) }, ": ledger: header does not decode"},
+		{"chunk missing", func(s *v2CheckScenario) []byte {
+			header, _ := ledger.DecodeHeader(s.p.Header)
+			delete(s.c.objects, header.Accounts[0])
+			return nil
+		}, ": 404 Not Found"},
+		{"chunk length", func(s *v2CheckScenario) []byte {
+			header, _ := ledger.DecodeHeader(s.p.Header)
+			chunk := []byte{1, 2, 3}
+			s.c.objects[ledger.RefOf(chunk)] = chunk
+			header.Accounts = []ledger.Ref{ledger.RefOf(chunk)}
+			data, _ := ledger.EncodeHeader(header)
+			return data
+		}, ": ledger: chunk is not 1 to 131,072 whole rows"},
+		{"no accounts", func(s *v2CheckScenario) []byte {
+			header, _ := ledger.DecodeHeader(s.p.Header)
+			header.Accounts = []ledger.Ref{}
+			data, _ := ledger.EncodeHeader(header)
+			return data
+		}, ": merkle: ledger tree needs 1 to 2^29 accounts"},
+		{"another root's accounts", func(s *v2CheckScenario) []byte { return s.f.Header }, "its published accounts do not rebuild it"},
+	}
+	for _, c := range cases {
+		s, q := newV2FallbackScenario(t)
+		// Q is root 2, the latest, finalized and withheld.
+		s.c.roots = append(s.c.roots, v2TestRoot(q.Tree, 13, q.Commit.LedgerHash))
+		s.c.finalized(v2TestHead-5_000, 3, 2, q.Commit)
+		s.c.funded[14] = big.NewInt(3_500_000)
+		s.setPending(4, ledger.Root{Epoch: 14, Root: [32]byte{0x14}, Total: *uint256.NewInt(3_500_000), LeafCount: 8, LedgerHash: [32]byte{0x41}})
+		if header := c.break1(s); header != nil {
+			s.c.objects[ledger.RefOf(header)] = header
+			s.c.roots[1].LedgerHash = ledger.RefOf(header)
+		}
+		output, err := s.c.run(s.c.checkArgv())
+		_, reason, _ := strings.Cut(output, "  fallback:          finalized root 1 is unverifiable too: ")
+		reason, rest, _ := strings.Cut(reason, "\n")
+		if err == nil || err.Error() != "pending root seq 4 leaves the accounts of finalized root 0 unverifiable; --demand sends the demand set" || !strings.Contains(reason, c.want) ||
+			!strings.HasPrefix(rest, "  fallback:          finalized root 2's objects are missing or do not rebuild it; protecting finalized root 0, the newest whose objects do\n") {
+			t.Fatalf("%s: %v\n%s", c.name, err, output)
+		}
+	}
+	// No finalized root left to protect.
+	s, _ := newV2FallbackScenario(t)
+	delete(s.c.objects, s.p.Commit.LedgerHash)
+	delete(s.c.objects, s.f.Commit.LedgerHash)
+	s.setPending(3, ledger.Root{Epoch: 13, Root: [32]byte{0x13}, Total: *uint256.NewInt(1), LeafCount: 8, LedgerHash: [32]byte{0x31}})
+	output, err := s.c.run(s.c.checkArgv("--demand"))
+	if err == nil || err.Error() != "no finalized root of pool 3 has objects that rebuild it: its accounts cannot be checked, challenged or demanded" || !strings.Contains(output, "  fallback:          finalized root 0 is unverifiable too: object ") || strings.Contains(output, "previous accounts") {
+		t.Fatalf("no root: %v\n%s", err, output)
+	}
+	s, _ = newV2FallbackScenario(t)
+	delete(s.c.objects, s.p.Commit.LedgerHash)
+	s.c.failAt["eth_call:roots"] = 2
+	if _, err := s.c.run(s.c.checkArgv()); err == nil || err.Error() != "roots(3,0): synthetic refusal of eth_call:roots" {
+		t.Fatalf("root read: %v", err)
+	}
+}
+
+// H1, CL-1: a receipt's PathDemanded must name the protected root: one of
+// the same seq and index on another root is not the demand sent.
+func TestV2CheckDemandReceiptRoot(t *testing.T) {
+	s := newV2CheckScenario(t)
+	s.withhold()
+	s.c.before = func(key string) {
+		if key == "eth_getTransactionReceipt" {
+			for _, receipt := range s.c.receipts {
+				receipt.Logs = []*types.Log{s.c.event("PathDemanded", s.c.seqTopics(2), big.NewInt(1), big.NewInt(0), common.HexToAddress(testKeyAddr))}
+			}
+		}
+	}
+	if _, err := s.c.run(s.c.checkArgv("--demand")); err == nil || !strings.HasSuffix(err.Error(), " emitted no PathDemanded for seq 2 account 0 of root 0") {
+		t.Fatalf("demand receipt on another root: %v", err)
 	}
 }
