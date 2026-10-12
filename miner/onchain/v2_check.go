@@ -654,15 +654,15 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *
 		if history.demanded[v2Key{k, index}] {
 			continue
 		}
-		latest, err := retryOnchainRead(ctx, func(ctx context.Context) (uint64, error) {
+		header, err := retryOnchainRead(ctx, func(ctx context.Context) (*types.Header, error) {
 			cctx, cancel := context.WithTimeout(ctx, callTimeout)
 			defer cancel()
-			return s.client.BlockNumber(cctx)
+			return s.client.HeaderByNumber(cctx, nil)
 		})
 		if err != nil {
-			return fmt.Errorf("eth_blockNumber: %w", err)
+			return fmt.Errorf("read the latest EVM block: %w", err)
 		}
-		if latest+1 >= end {
+		if latest := header.Number.Uint64(); latest+1 >= end {
 			return fmt.Errorf("challenge window closing: pending root seq %d takes demands through block %d, and the next block is %d; no more demands sent", seq, end-1, latest+1)
 		}
 		// The set indexes the protected root's accounts, so each has a proof.

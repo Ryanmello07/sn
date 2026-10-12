@@ -946,7 +946,7 @@ func TestV2CheckDemandRefusals(t *testing.T) {
 		{"send refused", func(s *v2CheckScenario) { s.c.failAt["eth_gasPrice"] = 1 }, "gas price: synthetic gas price refusal"},
 		{"fee read", func(s *v2CheckScenario) { s.c.failAt["eth_call:demandFeeWei"] = 1 }, "demandFeeWei(): synthetic refusal of eth_call:demandFeeWei"},
 		{"window read", func(s *v2CheckScenario) { s.c.failAt["eth_call:CHALLENGE_BLOCKS"] = 1 }, "CHALLENGE_BLOCKS(): synthetic refusal of eth_call:CHALLENGE_BLOCKS"},
-		{"latest block read", func(s *v2CheckScenario) { s.c.failAt["eth_blockNumber"] = 1 }, "eth_blockNumber: synthetic block number refusal"},
+		{"latest block read", func(s *v2CheckScenario) { s.c.failAt["eth_getBlockByNumber:latest"] = 1 }, "read the latest EVM block: synthetic block refusal"},
 		{"pending re-read", func(s *v2CheckScenario) {
 			s.c.revert["demandPath"] = "ChallengeWindowClosed"
 			s.c.failAt["eth_call:pending"] = 2

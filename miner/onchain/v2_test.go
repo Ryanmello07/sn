@@ -79,7 +79,7 @@ type v2TestChain struct {
 	calls    map[string]int
 	blocks   []string // eth_call block tags, in order
 	spans    [][2]uint64
-	head     uint64 // the latest block eth_blockNumber reports
+	head     uint64 // the latest block
 	pool     stabi.ISTSettlementVault2Pool
 	roots    []stabi.ISTSettlementVault2Root
 	pending  stabi.ISTSettlementVault2Pending
@@ -197,11 +197,6 @@ func (c *v2TestChain) answer(method string, params []json.RawMessage) (any, map[
 			return nil, rpcError(-32000, "synthetic chain id refusal", nil)
 		}
 		return hexutil.EncodeUint64(v2TestChainID), nil
-	case "eth_blockNumber":
-		if c.count(method) {
-			return nil, rpcError(-32000, "synthetic block number refusal", nil)
-		}
-		return hexutil.EncodeUint64(c.head), nil
 	case "eth_getBlockByNumber":
 		var selector string
 		if len(params) != 2 || json.Unmarshal(params[0], &selector) != nil {
@@ -211,7 +206,11 @@ func (c *v2TestChain) answer(method string, params []json.RawMessage) (any, map[
 			return nil, rpcError(-32601, "synthetic block refusal", nil)
 		}
 		number := uint64(v2TestHead)
-		if selector != "finalized" {
+		switch selector {
+		case "finalized":
+		case "latest":
+			number = c.head
+		default:
 			number = hexutil.MustDecodeUint64(selector)
 		}
 		return syntheticBlockIdentityFixture(c.t, number, v2TestBlockHash(number)), nil
