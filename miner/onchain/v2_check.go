@@ -599,6 +599,9 @@ func readV2History(ctx context.Context, s *v2Sender, noID uint64, state *v2State
 // there as the sample size, later runs demand only the forced indexes, so a
 // watcher run again does not pay for a fresh sample. A demand already made
 // is done (SPEC A6); a pending root that leaves the slot ends the demands.
+// A demand's preflight runs at the latest block and the demand in a later
+// one, so demands are sent only while the next block is inside the
+// challenge window (§5 Senders); the rest are refused unsent.
 func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *v2Assessment, head uint64) error {
 	history, err := readV2History(ctx, s, noID, state, head)
 	if err != nil {
@@ -637,6 +640,11 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *
 	if err != nil {
 		return fmt.Errorf("demandFeeWei(): %w", err)
 	}
+	window, err := v2View(ctx, &v2Reader{client: s.client, vault: s.vault}, vault2.PackCHALLENGEBLOCKS(), vault2.UnpackCHALLENGEBLOCKS)
+	if err != nil {
+		return fmt.Errorf("CHALLENGE_BLOCKS(): %w", err)
+	}
+	end := state.pending.CommittedBlock + window
 	seq, n, root := state.pending.Seq, new(big.Int).SetUint64(noID), new(big.Int).SetUint64(k)
 	fmt.Printf("demand set: %d accounts of root %d (%d doublings, %d forced), %d already demanded\n", len(set), k, history.doublings, len(forced), already)
 	if beyond := len(history.again) - len(again); beyond > 0 {
@@ -645,6 +653,17 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *
 	for _, index := range set {
 		if history.demanded[v2Key{k, index}] {
 			continue
+		}
+		latest, err := retryOnchainRead(ctx, func(ctx context.Context) (uint64, error) {
+			cctx, cancel := context.WithTimeout(ctx, callTimeout)
+			defer cancel()
+			return s.client.BlockNumber(cctx)
+		})
+		if err != nil {
+			return fmt.Errorf("eth_blockNumber: %w", err)
+		}
+		if latest+1 >= end {
+			return fmt.Errorf("challenge window closing: pending root seq %d takes demands through block %d, and the next block is %d; no more demands sent", seq, end-1, latest+1)
 		}
 		// The set indexes the protected root's accounts, so each has a proof.
 		proof, _ := a.protected.tree.Proof(index)
