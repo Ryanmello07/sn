@@ -400,7 +400,7 @@ func TestSettlementV2AuditRefusesEachMutation(t *testing.T) {
 				}
 				requireSettlementV2AuditOpening(t, calls[0], f, 0, mutation.faults[0])
 			case settlementV2DecisionDemand:
-				if len(calls) != len(f.Accounts) || record.Outcome != "sent" || !slices.Equal(record.Demands, []uint64{0, 1, 2, 3}) {
+				if len(calls) != len(f.Accounts) || record.Outcome != "sent" || !slices.Equal(record.Demands, settlementV2AuditTestWhole(t, f.Accounts)) {
 					t.Fatalf("%d demands sent for %v, outcome %q", len(calls), record.Demands, record.Outcome)
 				}
 			}

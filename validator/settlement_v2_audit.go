@@ -307,12 +307,14 @@ func (self *settlementV2Audit) remainingBytes(record *settlementV2AuditRecord) u
 }
 
 // decide records the audit's finding and, unless the audit waits for its
-// objects, its decision. A demand draws its set now: the earlier roots'
-// unanswered indexes and a value-weighted sample over all of the protected
-// root's accounts, sent first, then every other account the published rows
-// fault. Rows the operator publishes therefore cannot shrink the sample or
-// order it, even when they fault every account and fewer demands than the
-// set can be sent before the challenge window closes.
+// objects, its decision. A demand draws its set now with ledger.DemandSet: a
+// value-weighted sample over all of the protected root's accounts, in the
+// order drawn and sent first, then the earlier roots' unanswered indexes,
+// then every other account the published rows fault. Neither rows the
+// operator publishes, even faulting every account, nor demands left
+// unanswered on an earlier root can shrink the sample or move it back, so
+// the demands sent before the challenge window closes are a sample even
+// when the whole set cannot be sent.
 func (self *settlementV2Audit) decide(ctx context.Context, pool settlementV2AuditPool, state *settlementV2PoolState, record *settlementV2AuditRecord, res *ledger.Result) error {
 	record.observe(state.block, res)
 	action := res.Action()
@@ -343,16 +345,9 @@ func (self *settlementV2Audit) decide(ctx context.Context, pool settlementV2Audi
 		}
 		// An older protected root holds fewer accounts than F.
 		again = slices.DeleteFunc(again, func(index uint64) bool { return index >= uint64(len(anchor.accounts)) })
-		demands, err := ledger.DemandSet(anchor.accounts, nil, doublings, again, self.random)
+		demands, err := ledger.DemandSet(anchor.accounts, faults, doublings, again, self.random)
 		if err != nil {
 			return fmt.Errorf("settlement v2 demand set of pool %d seq %d: %w", state.noID, state.pending.Seq, err)
-		}
-		// DemandSet sorts its set, and faults come in index order.
-		sampled := len(demands)
-		for _, fault := range faults {
-			if _, found := slices.BinarySearch(demands[:sampled], fault.Index); !found {
-				demands = append(demands, fault.Index)
-			}
 		}
 		record.RootIndex, record.Doublings, record.Demands = anchor.index, doublings, demands
 	}

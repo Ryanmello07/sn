@@ -1063,8 +1063,14 @@ index and proves its account against it (§7.1).
   - The randomness comes from the validator's local CSPRNG, drawn after it
     sees the commit, so the operator cannot predict it.
 
-`ledger.DemandSet` computes this set for the validator and for `snclaim`. A
-send refused because another transaction already did the work is done (§5).
+`ledger.DemandSet` computes this set for the validator and for `snclaim`, in
+the order they send it: the sample, drawn over all of the protected root's
+accounts with faulted ones included, in the order drawn; then the unanswered
+indexes; then the faulted rows. Demands cut short by the window's end or a
+fee budget are therefore still a value-weighted sample, whatever rows the
+operator published or demands anyone left unanswered (§4.2 G2). The window's
+end stops the demands. A send refused because another transaction already
+did the work is done (§5).
 
 A refused or deleted root does not change the operator's pool weight while
 there is one operator. Zeroing the pool would hand the pool channel to head
@@ -1114,7 +1120,7 @@ run the unchanged v1 daemon in the same process with the same relayer key:
 | --- | --- |
 | `v2 status --coldkey` | account, claimable, claimed, pending |
 | `v2 claim` | one claim; a third party's earlier claim counts as done |
-| `v2 check --all` | Rebuilds the pending root from published objects and compares every account of the protected root (§9.3): the newest finalized root whose objects it fetched and verified, F or, when F's objects are missing or do not rebuild it, an older root, which it reports. Each account is reported as having no fault, a provable fault, or as unverifiable when the objects are missing or do not reproduce the root. With `--challenge` it sends `checkPath` for a fault. With `--demand`, in the unverifiable case, it sends the §9.3 demand set (`ledger.DemandSet`), with the same sample size and doubling, each demand naming the protected root, carrying the account's proof against it and paying the fee. Unlike the validator, it does not wait until commit + 7,200, and a sender draws one sample per pending root and protected root. A root that has left the pending slot, or an account already demanded, counts as done (§5). |
+| `v2 check --all` | Rebuilds the pending root from published objects and compares every account of the protected root (§9.3): the newest finalized root whose objects it fetched and verified, F or, when F's objects are missing or do not rebuild it, an older root, which it reports. Each account is reported as having no fault, a provable fault, or as unverifiable when the objects are missing or do not reproduce the root. With `--challenge` it sends `checkPath` for a fault. With `--demand`, in the unverifiable case, it sends the §9.3 demand set (`ledger.DemandSet`) in its order until the window's end, with the same sample size and doubling, each demand naming the protected root, carrying the account's proof against it and paying the fee. Unlike the validator, it does not wait until commit + 7,200, and a sender draws one sample per pending root and protected root. A root that has left the pending slot, or an account already demanded, counts as done (§5). |
 | `withdraw --vault v1` | `withdrawClaimCredit` for v1 credits |
 
 UR runs `snclaim v2 check --all --challenge --demand` as an independent
@@ -1484,7 +1490,7 @@ handler that never reaches a claim fails instead of passing silently.
 | VA-1 | The shared resolver serves live steering, the production row and replay across E_s, and the production row agrees; an unregistered pool; a pruned v1 pool UID; a `settlementAt` answer that differs from `vault2.pools(noId)` is refused |
 | VA-2 | The audit accepts honest fixtures and refuses each GL-9 mutation through the full validator path |
 | VA-3 | Approval before the deadline; idempotent across restart |
-| VA-4 | A fault in rows that reproduce the root leads to a challenge; missing or unreproducible data, an inconsistent node included, leads to refusal plus a demand set; each demand names the protected root (§9.3), F or, when F's objects are withheld or do not rebuild it, the newest older root custody holds, and carries the account and its proof against it; the sample is weighted by value and drawn without replacement, starts at 256 and doubles after a failed root over the same F; rows that show a fault are always demanded |
+| VA-4 | A fault in rows that reproduce the root leads to a challenge; missing or unreproducible data, an inconsistent node included, leads to refusal plus a demand set; each demand names the protected root (§9.3), F or, when F's objects are withheld or do not rebuild it, the newest older root custody holds, and carries the account and its proof against it; the sample is weighted by value and drawn without replacement over all of that root's accounts, starts at 256 and doubles after a failed root over the same F, and is sent first, in the order drawn; rows that show a fault are always demanded |
 | VA-5 | No weight change after a refused root with one operator |
 | VA-6 | Config: today's config hashes identically; the adoption successor admits exactly the block and refuses every other change; load-time address checks; a non-lowercase address refused |
 | VA-7 | Custody: objects retained; findings and declarations recorded; a fresh validator re-verifies the previous root's chunks |

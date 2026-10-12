@@ -158,14 +158,15 @@ func TestSettlementV2AuditFromConfigDemandsByRootIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	record := fixture.record(t, 3)
-	if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || !record.Done || record.Outcome != "sent" || !slices.Equal(record.Demands, []uint64{0, 1, 2, 3}) {
+	want := settlementV2AuditTestWhole(t, r.Accounts)
+	if record.Decision != settlementV2DecisionDemand || record.RootIndex != 0 || !record.Done || record.Outcome != "sent" || !slices.Equal(record.Demands, want) {
 		t.Fatalf("record %+v", record)
 	}
 	calls := fixture.sentCalls(t)
 	if len(calls) != 3 {
 		t.Fatalf("%d demands sent, want 3", len(calls))
 	}
-	for k, index := range []uint64{0, 1, 3} {
+	for k, index := range slices.DeleteFunc(want, func(index uint64) bool { return index == 2 }) {
 		requireSettlementV2AuditOpening(t, calls[k], r, 0, index)
 	}
 }

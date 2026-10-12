@@ -14,9 +14,10 @@ package onchain
 // fault, or as unverifiable when objects are missing or do not reproduce
 // the pending root: never "no fault" then. With --challenge it sends
 // checkPath for a provable fault, which deletes the root; with --demand it
-// sends the §9.3 demand set (ledger.DemandSet), each demand paying
-// demandFeeWei with the root's index, the account and its proof against
-// that root.
+// sends the §9.3 demand set (ledger.DemandSet) in its order, the
+// value-weighted sample first, each demand paying demandFeeWei with the
+// root's index, the account and its proof against that root, until the
+// challenge window closes.
 
 import (
 	"context"
@@ -102,13 +103,13 @@ func readV2State(ctx context.Context, r *v2Reader, noID uint64) (*v2State, error
 	return state, nil
 }
 
-// v2Objects fetches ledger objects from GET /sn/ledger/object.
+// v2Objects fetches ledger objects from GET /sn/ledger/object on the API
+// host, resolved against --api_url as the validator resolves an operator's
+// api_url: a path in it is replaced, not extended.
 type v2Objects struct{ api *url.URL }
 
 func (o v2Objects) Fetch(ctx context.Context, ref ledger.Ref) (io.ReadCloser, error) {
-	u := o.api.JoinPath("sn", "ledger", "object")
-	u.RawQuery = url.Values{"hash": {ref.String()}}.Encode()
-	return v2Get(ctx, u)
+	return v2Get(ctx, o.api.ResolveReference(&url.URL{Path: "/sn/ledger/object", RawQuery: url.Values{"hash": {ref.String()}}.Encode()}))
 }
 
 // v2ReadObject fetches an object of at most limit bytes and checks its
@@ -592,16 +593,19 @@ func readV2History(ctx context.Context, s *v2Sender, noID uint64, state *v2State
 	return history, nil
 }
 
-// v2Demand sends the §9.3 demand set against the protected root. An earlier
-// root's unanswered demand is demanded again at its account index when the
-// protected root holds that account. A sender draws its sample once per
-// pending root and protected root: once it holds as many sampled demands
-// there as the sample size, later runs demand only the forced indexes, so a
+// v2Demand sends the §9.3 demand set against the protected root in
+// ledger.DemandSet's order: the value-weighted sample first, in the order
+// drawn, then the earlier roots' unanswered indexes, then the faulted rows.
+// An earlier root's unanswered demand is demanded again at its account index
+// when the protected root holds that account. A sender draws its sample once
+// per pending root and protected root: once it holds as many demands there
+// as the sample size, later runs demand only the forced indexes, so a
 // watcher run again does not pay for a fresh sample. A demand already made
 // is done (SPEC A6); a pending root that leaves the slot ends the demands.
 // A demand's preflight runs at the latest block and the demand in a later
 // one, so demands are sent only while the next block is inside the
-// challenge window (§5 Senders); the rest are refused unsent.
+// challenge window (§5 Senders): when it closes the demands stop, and those
+// sent are the sample's first draws.
 func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *v2Assessment, head uint64) error {
 	history, err := readV2History(ctx, s, noID, state, head)
 	if err != nil {
@@ -609,29 +613,36 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *
 	}
 	k, held := a.protected.index, uint64(len(a.protected.accounts))
 	var again []uint64
+	beyond := 0
 	for _, key := range history.again {
 		if key.index < held {
 			again = append(again, key.index)
+		} else {
+			beyond++
 		}
 	}
+	// The forced indexes in DemandSet's order after its sample: the earlier
+	// unanswered ones, then the other faults, each ascending.
+	slices.Sort(again)
+	again = slices.Compact(again)
 	forced := slices.Clone(again)
 	for _, fault := range a.faults {
-		forced = append(forced, fault.Index)
+		if _, found := slices.BinarySearch(again, fault.Index); !found {
+			forced = append(forced, fault.Index)
+		}
 	}
-	slices.Sort(forced)
-	forced = slices.Compact(forced)
-	sampled, already := 0, 0
+	ours, already := 0, 0
 	for key := range history.demanded {
 		if key.root != k {
 			continue
 		}
 		already++
-		if history.ours[key] && !slices.Contains(forced, key.index) {
-			sampled++
+		if history.ours[key] {
+			ours++
 		}
 	}
 	set := forced
-	if history.doublings >= 32 || uint64(sampled) < ledger.DemandSample<<history.doublings {
+	if history.doublings >= 32 || uint64(ours) < ledger.DemandSample<<history.doublings {
 		if set, err = ledger.DemandSet(a.protected.accounts, a.faults, history.doublings, again, v2Random); err != nil {
 			return err
 		}
@@ -647,7 +658,7 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *
 	end := state.pending.CommittedBlock + window
 	seq, n, root := state.pending.Seq, new(big.Int).SetUint64(noID), new(big.Int).SetUint64(k)
 	fmt.Printf("demand set: %d accounts of root %d (%d doublings, %d forced), %d already demanded\n", len(set), k, history.doublings, len(forced), already)
-	if beyond := len(history.again) - len(again); beyond > 0 {
+	if beyond > 0 {
 		fmt.Printf("  %d unanswered earlier demands name accounts that root %d does not hold\n", beyond, k)
 	}
 	for _, index := range set {
@@ -663,7 +674,8 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *
 			return fmt.Errorf("read the latest EVM block: %w", err)
 		}
 		if latest := header.Number.Uint64(); latest+1 >= end {
-			return fmt.Errorf("challenge window closing: pending root seq %d takes demands through block %d, and the next block is %d; no more demands sent", seq, end-1, latest+1)
+			fmt.Printf("challenge window closing: pending root seq %d takes demands through block %d, and the next block is %d; no more demands sent\n", seq, end-1, latest+1)
+			return nil
 		}
 		// The set indexes the protected root's accounts, so each has a proof.
 		proof, _ := a.protected.tree.Proof(index)

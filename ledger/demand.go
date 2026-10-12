@@ -20,64 +20,74 @@ const DemandSample = 256
 // unanswered index that is not an account of the given root.
 var ErrDemandIndex = errors.New("ledger: demand index is not an account of the previous root")
 
-// DemandSet returns, in ascending order, the indexes of a finalized root's
-// accounts, previous, to demand on a pending root whose objects are missing
-// or do not reproduce it (§9.3, the residual risk of §4.2 G2). previous is
-// the newest finalized root whose accounts the caller holds and verified:
+// DemandSet returns the indexes of a finalized root's accounts, previous, to
+// demand on a pending root whose objects are missing or do not reproduce it
+// (§9.3, the residual risk of §4.2 G2), each once, in the order to send
+// them. previous is the newest finalized root whose accounts the caller
+// holds and verified:
 //
-//   - every fault: an index whose published row is below the account's
-//     value, names another coldkey or is missing (Faults, Result.Faults);
-//   - every index in again: the unanswered demands of the earlier pending
-//     roots over the latest finalized root that were replaced or deleted
-//     while a demand was open;
-//   - a sample of DemandSample << doublings of the remaining accounts,
-//     where doublings counts those earlier roots, drawn by value without
-//     replacement. When no more remaining accounts have a positive value,
-//     the sample takes them all; an account of zero value holds nothing to
-//     protect and is never drawn.
+//   - first a sample of DemandSample << doublings of previous's accounts,
+//     all of them when it holds fewer, where doublings counts the earlier
+//     pending roots over the latest finalized root that were replaced or
+//     deleted while a demand was open. It is drawn by value without
+//     replacement over every account, faulted or demanded before included,
+//     in the order drawn. An account of zero value holds nothing to protect
+//     and is never drawn: the sample ends when only such accounts remain;
+//   - then every index in again not drawn, ascending: the unanswered demands
+//     of those earlier roots;
+//   - then every other fault, ascending: an index whose published row is
+//     below the account's value, names another coldkey or is missing
+//     (Faults, Result.Faults).
+//
+// The sample comes first, in draw order, so that the demands sent before the
+// challenge window closes or a fee budget runs out are a value-weighted
+// sample whatever else the set holds: a theft of a fraction f of previous's
+// value escapes the first k demands, k at most the sample's size, with
+// probability at most (1−f)^k. Published rows that fault every account, and
+// demands anyone left unanswered on an earlier root, can neither shrink the
+// sample nor move it back.
 //
 // The sample reads its randomness from random, which must be a CSPRNG read
 // after the pending root was committed (crypto/rand.Reader), so that the
-// operator cannot predict it. The result depends only on the input and the
-// bytes read. A theft of a fraction f of the previous root's value escapes
-// m such draws with probability at most (1−f)^m.
+// operator cannot predict it. The result depends only on previous,
+// doublings, the faulted and again indexes as sets, and the bytes read.
 func DemandSet(previous []merkle.LedgerAccount, faults []Fault, doublings uint, again []uint64, random io.Reader) ([]uint64, error) {
 	n := uint64(len(previous))
-	demanded := make([]bool, n)
-	var set []uint64
-	for _, i := range slices.Concat(faultIndexes(faults), again) {
+	faulted := make([]uint64, len(faults))
+	for k := range faults {
+		faulted[k] = faults[k].Index
+	}
+	for _, i := range slices.Concat(again, faulted) {
 		if i >= n {
 			return nil, fmt.Errorf("%w: %d of %d", ErrDemandIndex, i, n)
-		}
-		if !demanded[i] {
-			demanded[i] = true
-			set = append(set, i)
 		}
 	}
 	size := n
 	if doublings < 32 {
 		size = min(n, DemandSample<<doublings)
 	}
-	weights := newWeightTree(previous, demanded)
-	for drawn := uint64(0); drawn < size && !weights.total.IsZero(); drawn++ {
+	demanded := make([]bool, n)
+	var set []uint64
+	weights := newWeightTree(previous)
+	for uint64(len(set)) < size && !weights.total.IsZero() {
 		r, err := uniform(random, &weights.total)
 		if err != nil {
 			return nil, fmt.Errorf("ledger: demand sample randomness: %w", err)
 		}
 		i := weights.find(r)
 		weights.remove(i, &previous[i].Cumulative)
+		demanded[i] = true
 		set = append(set, uint64(i))
 	}
-	slices.Sort(set)
-	return set, nil
-}
-
-func faultIndexes(faults []Fault) []uint64 {
-	indexes := make([]uint64, len(faults))
-	for k := range faults {
-		indexes[k] = faults[k].Index
+	for _, forced := range [][]uint64{again, faulted} {
+		for _, i := range slices.Sorted(slices.Values(forced)) {
+			if !demanded[i] {
+				demanded[i] = true
+				set = append(set, i)
+			}
+		}
 	}
-	return indexes
+	return set, nil
 }
 
 // weightTree is a Fenwick tree over account values, for drawing accounts
@@ -88,15 +98,13 @@ type weightTree struct {
 	total uint256.Int
 }
 
-// newWeightTree holds every account's value except the excluded ones'.
-func newWeightTree(accounts []merkle.LedgerAccount, excluded []bool) *weightTree {
+// newWeightTree holds every account's value.
+func newWeightTree(accounts []merkle.LedgerAccount) *weightTree {
 	t := &weightTree{node: make([]uint256.Int, len(accounts)+1)}
 	for i := range accounts {
 		k := i + 1
-		if !excluded[i] {
-			t.node[k].Add(&t.node[k], &accounts[i].Cumulative)
-			t.total.Add(&t.total, &accounts[i].Cumulative)
-		}
+		t.node[k].Add(&t.node[k], &accounts[i].Cumulative)
+		t.total.Add(&t.total, &accounts[i].Cumulative)
 		if parent := k + k&-k; parent < len(t.node) {
 			t.node[parent].Add(&t.node[parent], &t.node[k])
 		}
