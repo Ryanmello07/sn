@@ -511,6 +511,10 @@ type TrailError struct {
 	Kind TrailErrorKind
 	Hop  connect.Id // the implicated hop for TrailErrorHop
 	Err  error
+	// Diagnostics only: where the trail stopped and how many hops it had
+	// confirmed. Neither changes the error's text, retry or attribution.
+	stage trailStage
+	depth int
 }
 
 func (self *TrailError) Error() string {
@@ -896,11 +900,11 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 	}
 	m := min(max(requestedDepth, connect.VerifyMMin), connect.VerifyMMax)
 	if err := self.waitForSeedDiscovery(ctx); err != nil {
-		return nil, &TrailError{Kind: TrailErrorSeed, Err: fmt.Errorf("seed discovery pace: %w", err)}
+		return nil, &TrailError{Kind: TrailErrorSeed, Err: fmt.Errorf("seed discovery pace: %w", err), stage: trailStageDiscovery}
 	}
 	seedHop, err := self.pickSeed(ctx)
 	if err != nil {
-		return nil, &TrailError{Kind: TrailErrorSeed, Err: fmt.Errorf("seed pick: %w", err)}
+		return nil, &TrailError{Kind: TrailErrorSeed, Err: fmt.Errorf("seed pick: %w", err), stage: trailStagePick}
 	}
 	var attemptRecord AttemptRecord
 	attemptActive := false
@@ -913,6 +917,8 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 			self.stats.abortAttempt()
 		}
 	}()
+	// The last pre-send step an attempt reached; diagnostics only.
+	seedStage := trailStagePace
 	beforeSeed := self.waitForSeedAttempt
 	if ledgerEnabled {
 		// Reserve only after pacing, but before sending SEED: an authenticated
@@ -924,6 +930,7 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 			if attemptActive {
 				return nil
 			}
+			seedStage = trailStageReserve
 			boundary, bindings, err := self.resolve(ctx, nil, nil)
 			if err != nil {
 				return fmt.Errorf("reserve attempt boundary: %w", err)
@@ -948,11 +955,11 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 	// --- SEED (§4.1) ---
 	clientNonce := make([]byte, connect.VerifyNonceSize)
 	if _, err := rand.Read(clientNonce); err != nil {
-		return nil, &TrailError{Kind: TrailErrorSeed, Err: err}
+		return nil, &TrailError{Kind: TrailErrorSeed, Err: err, stage: trailStageInternal}
 	}
 	seedMessage, err := connect.BuildVerifySeedMessage(self.vpk, clientNonce, byte(requestedDepth))
 	if err != nil {
-		return nil, &TrailError{Kind: TrailErrorSeed, Err: err}
+		return nil, &TrailError{Kind: TrailErrorSeed, Err: err, stage: trailStageInternal}
 	}
 	seedSignature := connect.SignVerifyMessage(self.vsk, seedMessage)
 	seedBody, err := json.Marshal(&connect.VerifySeedArgs{
@@ -963,7 +970,7 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 		M:           requestedDepth,
 	})
 	if err != nil {
-		return nil, &TrailError{Kind: TrailErrorSeed, Err: err}
+		return nil, &TrailError{Kind: TrailErrorSeed, Err: err, stage: trailStageInternal}
 	}
 	if journal := self.cfg.RequestJournal; journal != nil {
 		reserve := beforeSeed
@@ -975,6 +982,7 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 			if original != nil {
 				return owner.Err()
 			}
+			seedStage = trailStageJournal
 			var err error
 			if releaseRequest == nil {
 				releaseRequest, err = journal.beginTrail(owner, attemptRecord.Boundary)
@@ -986,10 +994,17 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 			return err
 		}
 	}
-	responseBody, err := self.postStep(ctx, seedHop, seedBody, beforeSeed)
+	responseBody, err := self.postStep(ctx, seedHop, seedBody, func(owner context.Context) error {
+		seedStage = trailStagePace
+		if err := beforeSeed(owner); err != nil {
+			return err
+		}
+		seedStage = trailStageSend
+		return nil
+	})
 	if err != nil {
 		// Seed failures are the validator's own pick — not attributable.
-		return nil, &TrailError{Kind: TrailErrorSeed, Hop: seedHop, Err: err}
+		return nil, &TrailError{Kind: TrailErrorSeed, Hop: seedHop, Err: err, stage: seedStage}
 	}
 	var envelope verifyResponseEnvelope
 	if err := json.Unmarshal(responseBody, &envelope); err != nil {
@@ -1050,7 +1065,10 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 		attemptRecord.Assignments[index].LatencyBucket = uint8(latencyBucket(latencyMs))
 	}
 	failAttempt := func(kind TrailErrorKind, hop connect.Id, disposition string, cause error) (*ProofRecord, error) {
-		trailErr := &TrailError{Kind: kind, Hop: hop, Err: cause}
+		trailErr := &TrailError{Kind: kind, Hop: hop, Err: cause, depth: len(confirmed)}
+		if kind == TrailErrorHop {
+			trailErr.stage = trailStageSend
+		}
 		if err := commitFailure(disposition); err != nil {
 			return nil, errors.Join(trailErr, err)
 		}
