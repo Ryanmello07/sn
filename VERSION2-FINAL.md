@@ -793,7 +793,7 @@ Paths in this section are in `server/` unless marked.
   signed operator gas policy applies (`taskworker/work/st_work.go`;
   `controller/st_controller.go:1561-1648`).
 - **Operations.** The new logical keys are `v2close:e:no`,
-  `v2commit:e:no`, `v2finalize:e:no` and `v2answer:no:seq:index`.
+  `v2commit:e:no`, `v2finalize:e:no` and `v2answer:no:seq:rootIndex:index`.
 - **Gas policy.** It binds the v1 coordinator, the policy hash and the
   accounts, not call targets (`controller/st_transaction_gas_policy.go:100-106`).
   Its validity window, `maximum_gas`, and attempt and liability caps must
