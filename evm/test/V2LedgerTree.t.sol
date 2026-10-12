@@ -72,6 +72,26 @@ contract V2LedgerTreeTest is Test {
         }
     }
 
+    /// T-1: depth is the least d with 2^d at least the leaf count, at every
+    /// power of two up to 2^29 and next to it.
+    function test_depthAtEveryPowerOfTwo() public view {
+        assertEq(tree.depth(1), 0);
+        for (uint256 d = 1; d <= 29; d++) {
+            uint256 power = uint256(1) << d;
+            assertEq(tree.depth(power), d);
+            assertEq(tree.depth(power / 2 + 1), d);
+            if (d < 29) assertEq(tree.depth(power + 1), d + 1);
+        }
+    }
+
+    /// T-1: likewise for any leaf count.
+    function testFuzz_depthIsTheLeastDepthHoldingTheLeaves(uint256 leafCount) public view {
+        leafCount = bound(leafCount, 1, LedgerTree.MAX_LEAF_COUNT);
+        uint256 d = tree.depth(leafCount);
+        assertGe(uint256(1) << d, leafCount);
+        if (d != 0) assertLt(uint256(1) << (d - 1), leafCount);
+    }
+
     /// T-3: each GT-5 fault, stated in a tree built here, is found with its
     /// kind at its level: a lower value, a changed coldkey, a garbage leaf, an
     /// inconsistent node at every level (child sums off, exceeding, or adding

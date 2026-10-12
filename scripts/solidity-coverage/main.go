@@ -39,11 +39,9 @@ type artifact struct {
 
 // The reviewed artifacts of --ir-minimum: call statements that get no hit of
 // their own, while the report shows their function, their callee and the next
-// line of their function executed.
+// line of their function executed. vault2 has none: its backing checks take
+// an argument, and those lines get hits.
 var reviewed = []artifact{
-	// The backing check that ends captureEmission, claim, absorbStake and
-	// assignSurplus (V-22 makes each of the four revert Underfunded).
-	{file: "src/STSettlementVault2.sol", text: "_requireBacking();", count: 4},
 	// The only statement of the implementation's constructor (S-1: its
 	// initializers are disabled).
 	{file: "src/STSettlement2.sol", text: "_disableInitializers();", count: 1},

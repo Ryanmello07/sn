@@ -183,14 +183,15 @@ That is worth doing once the balance is large relative to the claim's gas.
 **Latency.** The provider share is about 2,070 α per epoch, about 1,450 α to
 the pool after head fleets' θ = 3/10 (VERSION2-REVIEW-RESPONSE.md:602-608).
 That is about 0.0145 α per provider per week at 100k providers. At the
-250k-gas planning figure (R-6 measured 235,938 gas for a claim at depth 29),
+250k-gas planning figure (R-6 measured 186,707 gas for an account's first
+claim at depth 29, and 169,606 for a later one),
 a 5 gwei base fee and 0.006587 TAO/α (VERSION2-REVIEW-RESPONSE.md:604-605),
 a claim costs about 0.19 α.
 That is about 13 weeks of an average 100k-population provider's earnings, and
 gas is under 10% of a claim after about 131 weeks. At 1M providers both take
 ten times longer. A third party can raise the cost by filling vault2's
 staking-hotkey list (§7.3), paying a transfer above the floor per entry:
-every claim then uses about 1.07M gas more (R-3: 1,269,881 against 201,559).
+every claim then uses about 1.1M gas more (R-3: 1,256,716 against 154,218).
 At the same prices a claim then costs about 1 α, about 69 weeks of that
 provider's earnings, and gas falls under 10% of a claim only above about
 10 α. A claim below the runtime's 100,000-rao TAO-equivalent transfer floor,
@@ -586,12 +587,12 @@ The contract is `evm/src/STSettlementVault2.sol`; its external surface is
 - `selfColdkey`, the contract's mapped SS58 account, predicted from the
   deployer nonce as `evm/script/Deploy.s.sol:53-59,113-115` does;
 - `bootstrap`;
-- `demandFeeWei`, fixed at deployment at 800,000 rao (8·10^14 wei): one
+- `demandFeeWei`, fixed at deployment at 750,000 rao (7.5·10^14 wei): one
   answer's gas at the planning fee, the smallest fee that still makes
   griefing cost the griefer at least what each answer costs the operator
   (owner decision, 2026-10-12: minimize the gas needed to run and use the
-  protocol). R-6 measured an answer at depth 29 at 159,665 gas, and 159,665 ×
-  5 gwei is 798,325 rao, rounded up. With the demander's own 104,867 gas, a
+  protocol). R-6 measured an answer at depth 29 at 149,074 gas, and 149,074 ×
+  5 gwei is 745,370 rao, rounded up. With the demander's own 98,268 gas, a
   demand costs at least the answer's gas at prices up to about three times
   the planning fee. It must be a multiple of 10^9 wei, one rao, because the
   runtime moves only whole rao of a call's value (§7.3).
@@ -617,6 +618,26 @@ The challenge window is the constant `CHALLENGE_BLOCKS` = 14,400.
 
 **Vault-wide state**: `totalCaptured`, `totalPaid`, `escrowAccounted`,
 `escrowRegistered`, and a reentrancy flag.
+
+**Storage.** The fields above are what the views return; vault2 packs them by
+use so that each call touches few slots. Each pool takes four: its hotkey;
+`claimedTotal` and the root count, the slot a claim reads and writes;
+`capturedTotal`, `firstEpoch` and the number of funded epochs
+(`lastFundedEpoch` is `firstEpoch` plus that number, less one), the slot a
+capture or deferral reads and writes; and `commitSeq`, `lastCommitBlock`, the
+pending root's seq and `openDemands`. A pool is registered exactly when its
+`firstEpoch` is nonzero. A root takes three slots, its total in 128 bits. The
+pending root is stored at index `rootCount` of the pool's roots, where
+finalization admits it without a copy; its `committedBlock` is
+`lastCommitBlock`, and `pending` reads zero while no root is pending. Two
+epochs' `fundedThrough` snapshots, and two accounts' `claimed` watermarks,
+share a slot. `totalCaptured` and `totalPaid` share one, and `escrowAccounted`
+is their difference; the reentrancy flag shares `coordinator`'s slot. It stays
+in persistent storage, because runtime 475's EVM keeps a transient write made
+in a call that reverts (`scripts/runtime-rehearsal/README.md`). Amounts are
+held in 128 bits: a capture moves less than 2^64, and a funding total of 2^128
+or more, which no real stake reaches, is refused (`SafeCastOverflowedUintDowncast`)
+rather than truncated.
 
 **Functions.** C means coordinator only, B bootstrap only, A anyone. Every
 state-changing function shares one `nonReentrant` guard. The functions that
@@ -772,8 +793,8 @@ them are qualified on the real runtime before deployment (R-1 to R-6).
   account the claim reverts and stays claimable. Third parties can likewise
   fill vault2's own list, up to `MAX_THIRD_PARTY_STAKING_HOTKEYS`, 128
   entries. Claims and `absorbStake` keep working, but the runtime charges a
-  walk of the list: on the rehearsal node a claim then used 1,269,881 gas
-  instead of 201,559, and `absorbStake` 1,230,170 (R-3).
+  walk of the list: on the rehearsal node a claim then used 1,256,716 gas
+  instead of 154,218, and `absorbStake` 1,220,874 (R-3).
 - **Whole-position sentinel.** The staking precompile reads an amount of
   2^64−1 or more as "the whole position".
 - **Gas.** Runtime 475 charges a precompile dispatch's actual weight as gas,
@@ -832,28 +853,31 @@ deepest vault2 takes, as gas used and the gas limit `eth_estimateGas` needs:
 
 | Transaction | Sender | Gas used | Gas limit needed |
 | --- | --- | ---: | ---: |
-| close, capturing | operator | 298,927 | 2,634,202 |
-| close, nothing to capture | operator | 131,479 | 158,120 |
-| close deferring 1 epoch | operator | 158,174 | 205,242 |
-| close deferring 144 epochs | operator | 5,459,241 | 7,049,278 |
-| commit | operator | 297,926 | 334,653 |
-| answer (`checkPath`) | operator | 159,665 | 185,590 |
-| finalize | operator | 179,386 | 239,175 |
-| approve | auditor | 134,333 | 137,389 |
-| demand | anyone | 104,867 | 128,806 |
-| claim | anyone | 235,938 | 2,514,273 |
+| close, capturing | operator | 225,430 | 2,688,632 |
+| close, nothing to capture | operator | 126,610 | 144,347 |
+| close deferring 1 epoch | operator | 131,633 | 149,526 |
+| close deferring 144 epochs | operator | 2,409,622 | 2,949,195 |
+| commit | operator | 205,288 | 225,484 |
+| answer (`checkPath`) | operator | 149,074 | 154,089 |
+| finalize | operator | 94,389 | 100,877 |
+| approve | auditor | 132,524 | 135,736 |
+| demand | anyone | 98,268 | 104,424 |
+| claim, an account's first | anyone | 186,707 | 2,572,776 |
+| claim, after the account's neighbour's first | anyone | 169,595 | 2,521,578 |
+| claim, a repeat | anyone | 169,606 | 2,521,610 |
 
-Each deferred epoch costs about 37,000 gas and 47,900 of limit. A capturing
-close and a claim need limits of about 2.6M and 2.5M because the runtime
+Each deferred epoch costs about 15,900 gas and 19,500 of limit. A capturing
+close and a claim need limits of about 2.7M and 2.5M because the runtime
 admits a stake move only if the forwarded gas covers its declared weight
-(§7.3). The engine signs the estimated limit plus 20%, about 3.2M for a
-capturing close. The SN25 operator gas policy
-(`local/sn25golive/sn25-mainnet-gas-params.json`) allows a `maximum_gas` of
-1,000,000, below a capturing close and below a close that defers more than
-about 17 epochs, and a per-intent liability of 5·10^16 wei, below the
-7.9·10^16 wei of a 2.63M limit at its 30 gwei fee cap. It is therefore
-re-signed for v2 (§13). Anyone can still send a close that defers more
-epochs than the policy covers.
+(§7.3); `eth_estimateGas` on the rehearsal node stops within 10% of the least
+sufficient limit (`scripts/runtime-rehearsal/README.md`). The engine signs the
+estimated limit plus 20%, about 3.2M for a capturing close. The SN25 operator
+gas policy (`local/sn25golive/sn25-mainnet-gas-params.json`) allows a
+`maximum_gas` of 1,000,000, below a capturing close and below a close that
+defers more than about 43 epochs, and a per-intent liability of 5·10^16
+wei, below the 8.1·10^16 wei of a 2.69M limit at its 30 gwei fee cap. It
+is therefore re-signed for v2 (§13). Anyone can still send a close that
+defers more epochs than the policy covers.
 
 ### 8.2 Ledger build
 
@@ -1405,24 +1429,24 @@ forge coverage --ir-minimum --report lcov \
 | ID | Behaviour |
 | --- | --- |
 | V-1 | The constructor refuses a zero argument, and a `demandFeeWei` that is not a multiple of 10^9 wei. `setCoordinatorOnce` and `registerEscrow`: bootstrap only, once each; a zero or codeless coordinator refused; `registerEscrow`'s refund, and a failed refund refused |
-| V-2 | `registerPool`: refused before `registerEscrow`, and for a zero or 2^64 `noId`, a zero, duplicate or escrow hotkey, a zero `maxBurn`, and a UID that is missing after registration; sets `lastFundedEpoch = firstEpoch − 1`; `firstEpoch` 0 refused |
+| V-2 | `registerPool`: refused before `registerEscrow`, and for a zero or 2^64 `noId`, a zero, duplicate or escrow hotkey, a zero `maxBurn`, and a UID that is missing after registration; sets `lastFundedEpoch = firstEpoch − 1`; `firstEpoch` 0 refused; an unregistered pool reads empty |
 | V-3 | `registerPoolUid`: unknown pool refused; refused while a UID exists; the caller pays; refund; a call that would spend vault2's own native balance reverts |
 | V-4 | Capture and defer in strict order; out of order refused; unknown pool refused |
-| V-5 | Capture: zero stake funds 0; exact source delta; escrow gains the amount or one rao less, and that gain is accounted; a larger gap or a runtime refusal reverts; an amount of 2^64 − 1 or more refused. With registration collateral on the pool position, only the movable stake moves, a position holding only its lock funds 0, and the deltas are checked on whole positions |
+| V-5 | Capture: zero stake funds 0; exact source delta; escrow gains the amount or one rao less, and that gain is accounted; a larger gap or a runtime refusal reverts; an amount of 2^64 − 1 or more refused; a funding total of 2^128 or more refused. With registration collateral on the pool position, only the movable stake moves, a position holding only its lock funds 0, and the deltas are checked on whole positions |
 | V-6 | `fundedThrough` is written once and is monotone |
 | V-7 | `commitPending` refusals, one each: epoch range; total not equal to the snapshot; total not above `finalizedTotal`; `leafCount` 0, above 2^29, or below the previous; zero root; zero `ledgerHash`. A replaced pending root bumps `seq` and discards its demands on the accounts of every finalized root; a commit within 14,400 blocks of the pool's previous commit refused, including after a self-proven fault; a `prevRootCount` mismatch refused; `seq` after a finalization or deletion exceeds every earlier `seq` |
 | V-8 | `checkPath` deletes the pending root for each fault kind, including at depth 0, against any finalized root: a value kept above an older root's but lowered below a later root's is faulted against the later root, and the clean answer of a demand against the older root neither answers nor bars a demand against the later one |
 | V-9 | `checkPath` reverts on an honest index (fuzzed), a malformed path, an invalid old proof, an index out of range of the named root, no pending root, or an unknown root index: one at or above the root count, which is every index while no root is finalized |
 | V-10 | `demandPath`: only inside the window and for an account proven against the finalized root it names, any of the pool's, once per `(seq, rootIndex, index)`. A clean `checkPath` against that root answers it, once: a second clean opening, or one with no open demand, reverts `NoFault` and changes nothing; an answered account cannot be demanded again under that `seq`. Demands on one account against two roots are two demands, each answered against its own root, and an account that a later root appended is out of range of an earlier one. An unanswerable demand (garbage or withheld node) blocks finalization; an unprovable position of a finalized root cannot be demanded; refused with no pending root or an unknown root index (every index while no root is finalized); a fee other than `demandFeeWei` refused; an index at or above the named root's leaf count refused; an account that does not verify refused; a demand in the window's last block answered after the window. Regression for the gate 1 review's H1: the newest finalized root's tree is withheld, and a successor lowers accounts of the older root; a demand against the older root still blocks finalization, and its opening deletes the successor |
-| V-11 | `finalizePending`: refused with no pending root, before 14,400 blocks, and with an open demand; appends the root and clears the slot |
+| V-11 | `finalizePending`: refused with no pending root, before 14,400 blocks, and with an open demand; appends exactly the last commit, after a deletion or a replacement, and clears the slot; `roots` refuses an index at or past the root count, a pending root's included |
 | V-12 | Claim against the latest root: pays exactly; one rao short at the destination is accepted, two is not; a refusal (floor, staking-hotkey cap) reverts and leaves the account claimable; depth-0 claim; an escrow loss other than the amount reverts; the escrow's own registration collateral stays in place |
-| V-13 | A repeat claim on the same root refused; after a newer root only the increment is paid |
+| V-13 | A repeat claim on the same root refused; after a newer root only the increment is paid; neighbouring accounts keep their own watermarks |
 | V-14 | An older root after a newer claim refused; the older root first, then the newer, pays the difference |
 | V-15 | Claim refusals: an invalid proof; an unknown root index; a zero coldkey or `selfColdkey`; an amount of 2^64−1 or more |
 | V-16 | Pool cap: after an unchallenged decrease, the second claimant's claim reverts at `finalizedTotal`; with honest roots it never binds, even for a claim against an older root once claims against a newer one exceed that older root's total |
 | V-17 | The payment goes to the leaf's coldkey whoever calls |
 | V-18 | `absorbStake`: moves vault2-owned movable stake from a foreign hotkey and leaves every counter unchanged; refuses the escrow hotkey, pool hotkeys and zero; a zero hotkey, stake that is all collateral, and an amount of 2^64 − 1 or more refused |
-| V-19 | `assignSurplus`: refuses zero and an amount above the surplus; the escrow's collateral is never surplus; event attribution |
+| V-19 | `assignSurplus`: refuses zero and an amount above the surplus, and a pool or vault funding total of 2^128 or more; the escrow's collateral is never surplus; event attribution |
 | V-20 | Reentry through the staking and neuron mocks, or through a registration refund, is refused on every function that calls the runtime |
 | V-21 | Two pools: each pool's claims are capped by its own `finalizedTotal` |
 | V-22 | A backing deficit makes every stake-moving function revert `Underfunded`, never `checkPath` or `demandPath`; the escrow's collateral is not backing |
@@ -1587,7 +1611,7 @@ bytecode.
 | Someone registers vault2's escrow hotkey between vault2's creation, which reveals it, and `registerEscrow` | Both are broadcast back to back at consecutive nonces (§8.5). If it still happens, `registerEscrow` fails for good and vault2 is redeployed. `registerPool` requires the escrow registered, so that vault2 never holds a pool, and no funds are at risk |
 | Admission bypassed (an owner upgrade, or root signer plus auditor keys) with the tree withheld | Demands block finalization (§6.5). They may name any finalized root, so withholding the newest root's tree does not stop them (§4.2). Watchers sample by value; a faulted account that is never demanded is lost |
 | A root finalized after a bypass that is not tight, or that lowered an account of an older root, halts honest successors | The validator refuses to build on a root that is not tight, and anyone can delete a successor that keeps an account below an older root's value; recovery needs a reviewed validator release and is outside phase A |
-| Demand griefing | Each demand costs the demander its gas and the fee. An answer costs about 1.5 times a demand's gas (R-6: 159,665 against 104,867), and the fee is one answer's gas at the planning fee: 800,000 rao (§7.1). Each account of each finalized root can be demanded once per pending root, so the demands possible on one pending root grow with the number of roots; each still pays the fee. Answers are automatic (§8.1) |
+| Demand griefing | Each demand costs the demander its gas and the fee. An answer costs about 1.5 times a demand's gas (R-6: 149,074 against 98,268), and the fee is one answer's gas at the planning fee: 750,000 rao (§7.1). Each account of each finalized root can be demanded once per pending root, so the demands possible on one pending root grow with the number of roots; each still pays the fee. Answers are automatic (§8.1) |
 | Stake-moving transactions need a gas limit far above the gas they use, and a refused precompile call consumes all the gas forwarded to it (§7.3) | Senders preflight with `eth_call` and size limits with `eth_estimateGas`; the operator gas policy is re-signed to cover a capturing close (§8.1, §13); anyone can send a close that defers more epochs than the policy covers |
 | Third parties fill vault2's own staking-hotkey list, up to 128 entries | Claims and `absorbStake` keep working; a claim then uses about 1.27M gas instead of 0.2M (R-3), about 1 α at the §3 figures, so the daemon's threshold should rise to match (§10.1). Each entry costs the griefer a transfer above the floor, which vault2 can absorb as surplus |
 | A missed close moves an epoch's share to the next epoch's earners | The 1,200-block window and alerts |

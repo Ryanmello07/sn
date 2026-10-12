@@ -6,6 +6,7 @@ import {V2TreeHelper} from "./utils/V2TreeHelper.sol";
 import {ISTSettlementVault2} from "../src/interfaces/ISTSettlementVault2.sol";
 import {LedgerTree} from "../src/LedgerTree.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {stdError} from "forge-std/StdError.sol";
 
 /// @dev Commits, path checks, demands and finalization (VERSION2-FINAL.md
 ///      §15.3 V-7 to V-11). The finalized root F has five accounts (depth 3,
@@ -176,6 +177,11 @@ contract V2VaultRootsTest is V2VaultBase {
         assertEq(cleared.seq, 0);
         assertEq(cleared.root, bytes32(0));
         assertEq(cleared.total, 0);
+        assertEq(cleared.leafCount, 0);
+        assertEq(cleared.epoch, 0);
+        assertEq(cleared.ledgerHash, bytes32(0));
+        assertEq(cleared.committedBlock, 0);
+        assertEq(cleared.openDemands, 0);
         assertEq(vault.rootCount(NO1), 1);
         assertEq(vault.finalizedTotal(NO1), F_TOTAL);
         assertEq(vault.lastCommitBlock(NO1), committedBlock, "a deletion keeps the commit spacing");
@@ -497,6 +503,25 @@ contract V2VaultRootsTest is V2VaultBase {
         vm.roll(block.number + WINDOW);
         vm.expectRevert(ISTSettlementVault2.NoPendingRoot.selector);
         vault.finalizePending(NO1);
+    }
+
+    // V-8, V-10: demands still open on a deleted root block nothing after it.
+    // The next pending root starts with none and finalizes.
+    function test_V8_demandsOnADeletedRootNeverBlockTheNextRoot() public {
+        V2TreeHelper.Node[][] memory f = _publishF();
+        uint64 deleted = _propose(NO1, _loweredP(), 6);
+        _demand(0);
+        _demand(CAROL_INDEX);
+        _checkCarol(f, _loweredP());
+
+        vm.roll(block.number + WINDOW);
+        uint64 seq = _commit(NO1, _honestP(), 6);
+        assertEq(seq, deleted + 1);
+        assertEq(vault.pending(NO1).openDemands, 0);
+        assertEq(_demandState(seq, F_ROOT, 0), uint8(ISTSettlementVault2.DemandState.None));
+        assertEq(_demandState(seq, F_ROOT, CAROL_INDEX), uint8(ISTSettlementVault2.DemandState.None));
+        assertEq(_finalize(NO1), 1);
+        assertEq(vault.rootCount(NO1), 2);
     }
 
     // V-8: at depth 0 the leaf is (root, total). A lower value cannot occur
@@ -1167,6 +1192,67 @@ contract V2VaultRootsTest is V2VaultBase {
         vm.roll(block.number + WINDOW);
         vm.expectRevert(ISTSettlementVault2.DemandOpen.selector);
         vault.finalizePending(NO1);
+    }
+
+    // V-7, V-11: each commit replaces every field of the pending root, after
+    // a deleted root and while another is pending, and finalization appends
+    // exactly the last one.
+    function test_V11_finalizeAppendsTheLastCommitAfterADeletionAndAReplacement() public {
+        V2TreeHelper.Node[][] memory f = _publishF();
+        _propose(NO1, _loweredP(), 6);
+        _checkCarol(f, _loweredP());
+
+        // Seven accounts and 210 rao for the next epoch, committed...
+        vm.roll(block.number + WINDOW);
+        uint256 seventh = _capture(NO1, 10);
+        bytes32[] memory keys = new bytes32[](7);
+        uint256[] memory values = new uint256[](7);
+        (keys[0], keys[1], keys[2], keys[3], keys[4], keys[5], keys[6]) =
+        (ALICE, BOB, CAROL, DAVE, ERIN, FRANK, MALLORY);
+        (values[0], values[1], values[2], values[3], values[4], values[5], values[6]) =
+        (15, 20, 35, 40, 60, 30, 10);
+        vault.commitPending(seventh, NO1, 1, _commitment(V2TreeHelper.build(keys, values), 7));
+
+        // ...then replaced by six accounts for the epoch after.
+        vm.roll(block.number + WINDOW);
+        uint256 eighth = _defer(NO1);
+        uint256[] memory sixValues = _values(15, 20, 35, 40, 60, 40);
+        ISTSettlementVault2.Commitment memory last = _commitment(V2TreeHelper.build(_newKeys(), sixValues), 6);
+        uint64 seq = vault.commitPending(eighth, NO1, 1, last);
+
+        ISTSettlementVault2.Pending memory next = vault.pending(NO1);
+        assertEq(next.seq, seq);
+        assertEq(next.root, last.root);
+        assertEq(next.total, 210);
+        assertEq(next.leafCount, 6);
+        assertEq(next.epoch, eighth);
+        assertEq(next.ledgerHash, last.ledgerHash);
+        assertEq(next.committedBlock, block.number);
+        assertEq(next.openDemands, 0);
+
+        assertEq(_finalize(NO1), 1);
+        ISTSettlementVault2.Root memory root = vault.roots(NO1, 1);
+        assertEq(root.root, last.root);
+        assertEq(root.total, 210);
+        assertEq(root.leafCount, 6);
+        assertEq(root.epoch, eighth);
+        assertEq(root.ledgerHash, last.ledgerHash);
+        assertEq(vault.finalizedTotal(NO1), 210);
+    }
+
+    // V-11: roots reads finalized roots only. An index at or past the root
+    // count fails as a read past the end of an array, also while a pending
+    // root waits to take that index.
+    function test_V11_rootsRefusesAnIndexPastTheFinalizedRoots() public {
+        vm.expectRevert(stdError.indexOOBError);
+        vault.roots(NO1, 0);
+        _publishF();
+        _propose(NO1, _honestP(), 6);
+        vm.expectRevert(stdError.indexOOBError);
+        vault.roots(NO1, 1);
+        vm.expectRevert(stdError.indexOOBError);
+        vault.roots(NO1, type(uint256).max);
+        assertEq(vault.roots(NO1, 0).total, F_TOTAL);
     }
 
     // V-11: the finalized total of a pool with no root is zero.

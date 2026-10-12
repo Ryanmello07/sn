@@ -6,6 +6,7 @@ import {V2TreeHelper} from "./utils/V2TreeHelper.sol";
 import {ISTSettlementVault2} from "../src/interfaces/ISTSettlementVault2.sol";
 import {LedgerTree} from "../src/LedgerTree.sol";
 import {IStaking, ISTAKING_ADDRESS} from "../src/interfaces/stakingV2.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /// @dev Capture, deferral, absorption, surplus and backing (VERSION2-FINAL.md
 ///      §15.3 V-4, V-5, V-6, V-18, V-19, V-22).
@@ -474,6 +475,43 @@ contract V2VaultFundingTest is V2VaultBase {
         staking.setStake(ESCROW, SELF, 300);
         vm.expectRevert(ISTSettlementVault2.UnknownPool.selector);
         vault.assignSurplus(NO2, 300);
+    }
+
+    // V-5, V-19: funding is counted in 128 bits, far above any real stake: a
+    // capture moves less than 2^64. A pool total beyond them is refused, not
+    // truncated, whether surplus or a capture would reach it.
+    function test_V19_aPoolTotalBeyond128BitsIsRefused() public {
+        uint256 limit = type(uint128).max;
+        staking.setStake(ESCROW, SELF, limit + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, limit + 1)
+        );
+        vault.assignSurplus(NO1, limit + 1);
+        vault.assignSurplus(NO1, limit);
+        assertEq(vault.capturedTotal(NO1), limit);
+        assertEq(vault.totalCaptured(), limit);
+
+        _accrue(1);
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, limit + 1)
+        );
+        vault.captureEmission(FIRST_EPOCH, NO1);
+    }
+
+    // V-19: likewise the vault's total over its pools.
+    function test_V19_aVaultTotalBeyond128BitsIsRefused() public {
+        _registerPool2();
+        uint256 half = uint256(1) << 127;
+        staking.setStake(ESCROW, SELF, 2 * half);
+        vault.assignSurplus(NO1, half);
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, 2 * half)
+        );
+        vault.assignSurplus(NO2, half);
+        vault.assignSurplus(NO2, half - 1);
+        assertEq(vault.totalCaptured(), 2 * half - 1);
+        assertEq(vault.escrowAccounted(), 2 * half - 1);
+        _assertConserved();
     }
 
     // Registration locked collateral on the escrow position itself.

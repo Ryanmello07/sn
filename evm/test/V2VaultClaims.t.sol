@@ -204,6 +204,31 @@ contract V2VaultClaimsTest is V2VaultBase {
         _assertConserved();
     }
 
+    // V-13: neighbouring accounts keep their own watermarks, whichever of
+    // them claims first, and each later claim pays only its own increment.
+    function test_V13_neighbouringAccountsAreClaimedIndependently() public {
+        V2TreeHelper.Node[][] memory old = _root0();
+        assertEq(_claim(NO1, 0, old, 1, BOB, 400), 400);
+        assertEq(vault.claimed(NO1, 0), 0);
+        assertEq(vault.claimed(NO1, 1), 400);
+        assertEq(_claim(NO1, 0, old, 0, ALICE, 600), 600);
+        assertEq(vault.claimed(NO1, 0), 600);
+        assertEq(vault.claimed(NO1, 1), 400);
+
+        V2TreeHelper.Node[][] memory levels = _publish(NO1, _keys(ALICE, BOB, CAROL), _values(900, 600, 500));
+        assertEq(_claim(NO1, 1, levels, 1, BOB, 600), 200);
+        assertEq(vault.claimed(NO1, 0), 600);
+        assertEq(_claim(NO1, 1, levels, 0, ALICE, 900), 300);
+        assertEq(vault.claimed(NO1, 1), 600);
+        assertEq(vault.claimed(NO1, 2), 0);
+        assertEq(vault.claimed(NO1, 3), 0);
+        LedgerTree.Account memory bob = _account(1, BOB, 600);
+        LedgerTree.ProofNode[] memory proof = V2TreeHelper.proof(levels, 1);
+        vm.expectRevert(ISTSettlementVault2.NothingToClaim.selector);
+        vault.claim(NO1, 1, bob, proof);
+        _assertConserved();
+    }
+
     // V-14
     function test_V14_anOlderRootAfterANewerClaimIsRefused() public {
         V2TreeHelper.Node[][] memory old = _root0();
