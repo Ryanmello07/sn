@@ -568,6 +568,12 @@ type TrailEngineConfig struct {
 	// Zero disables the gate for single-trail callers and unit tests; the
 	// release runner derives a positive value from the locked policy.
 	SeedAttemptInterval time.Duration
+	// ConfirmedSeedHorizon keeps a provider as a preferred seed for this long
+	// after this process last received a server-authenticated answer through
+	// it (trail_seed_pool.go). Zero follows SeedAttemptInterval: the release
+	// runner's gate enables the default horizon, while single-trail callers and
+	// unit tests keep the picker's own choice. A negative value disables it.
+	ConfirmedSeedHorizon time.Duration
 	// AttemptLedger and AttemptBoundaryResolver are an all-or-nothing release
 	// measurement seam. Legacy/unit callers may omit both.
 	AttemptLedger           *AttemptLedger
@@ -620,6 +626,8 @@ type TrailEngine struct {
 
 	seedDiscoverySchedule attemptSchedule
 	seedPostSchedule      attemptSchedule
+	// Providers this process has seen answer; nil keeps the picker's choice.
+	seedPool *trailSeedPool
 
 	completed atomic.Uint64
 	failed    atomic.Uint64
@@ -701,6 +709,7 @@ func NewTrailEngine(
 		transport:        transport,
 		keys:             keys,
 		pickSeed:         pickSeed,
+		seedPool:         newTrailSeedPool(cfg, clientId, stats),
 		stats:            stats,
 		store:            store,
 		epochFn:          epochFn,
@@ -898,10 +907,12 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 	if err := self.waitForSeedDiscovery(ctx); err != nil {
 		return nil, &TrailError{Kind: TrailErrorSeed, Err: fmt.Errorf("seed discovery pace: %w", err)}
 	}
-	seedHop, err := self.pickSeed(ctx)
+	seedHop, err := self.pickTrailSeed(ctx)
 	if err != nil {
 		return nil, &TrailError{Kind: TrailErrorSeed, Err: fmt.Errorf("seed pick: %w", err)}
 	}
+	seedTry := self.beginSeedTry(seedHop)
+	defer seedTry.finish(ctx)
 	var attemptRecord AttemptRecord
 	attemptActive := false
 	var releaseRequest func()
@@ -986,6 +997,7 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 			return err
 		}
 	}
+	beforeSeed = seedTry.metered(beforeSeed)
 	responseBody, err := self.postStep(ctx, seedHop, seedBody, beforeSeed)
 	if err != nil {
 		// Seed failures are the validator's own pick — not attributable.
@@ -1006,6 +1018,8 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 	if err := self.verifyAssign(&assign, confirmed); err != nil {
 		return nil, &TrailError{Kind: TrailErrorProtocol, Err: err}
 	}
+	// The seed answered with an authenticated ASSIGN; a later refusal is not its.
+	seedTry.confirm()
 	// Bind the authenticated response before assigned-hop evidence. Any
 	// pre-SEED settlement reservation is released by the owner defer on error.
 	if assign.M != m {
@@ -1040,6 +1054,7 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 		return err
 	}
 	recordConfirmation := func(latencyMs float64) {
+		self.observeConfirmedHop(assign.NextHop)
 		if !ledgerEnabled {
 			self.stats.RecordConfirmation(assign.NextHop, latencyMs)
 			return
