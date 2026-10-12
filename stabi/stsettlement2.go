@@ -83,7 +83,7 @@ type LedgerTreeProofNode struct {
 
 // STSettlement2MetaData contains all meta data concerning the STSettlement2 contract.
 var STSettlement2MetaData = bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"approvalCount\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"name\":\"approveDistribution\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"auditorSetVersion\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"auditors\",\"outputs\":[{\"internalType\":\"address[]\",\"name\":\"\",\"type\":\"address[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"closeOperatorEpoch\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"prevRootCount\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"internalType\":\"structISTSettlementVault2.Commitment\",\"name\":\"commitment\",\"type\":\"tuple\"}],\"name\":\"commitDistribution\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"finalizeDistribution\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"auditor\",\"type\":\"address\"}],\"name\":\"hasApproved\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner_\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"v1Coordinator_\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"vault_\",\"type\":\"address\"},{\"internalType\":\"address[]\",\"name\":\"auditors_\",\"type\":\"address[]\"},{\"internalType\":\"uint256\",\"name\":\"quorum_\",\"type\":\"uint256\"}],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"quorum\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint64\",\"name\":\"maximumBurnRao\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"firstEpoch\",\"type\":\"uint64\"}],\"name\":\"registerOperatorPool\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address[]\",\"name\":\"auditors_\",\"type\":\"address[]\"},{\"internalType\":\"uint256\",\"name\":\"quorum_\",\"type\":\"uint256\"}],\"name\":\"setAuditors\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"}],\"name\":\"settlementAt\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"vault_\",\"type\":\"address\"},{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint8\",\"name\":\"version\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"v1Coordinator\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"vault\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"version\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"address[]\",\"name\":\"auditors\",\"type\":\"address[]\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"quorum\",\"type\":\"uint256\"}],\"name\":\"AuditorsSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"auditor\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"auditorSetVersion\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"approvals\",\"type\":\"uint256\"}],\"name\":\"DistributionApproved\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"AlreadyApproved\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ApprovalClosed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"CadenceTooShort\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InactiveOperator\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidAuditors\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidConfiguration\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidEpoch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidWindow\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NativeRefundFailed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NoPendingRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PendingMismatch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PendingRootLive\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"QuorumNotReached\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"SettlementPaused\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"Unauthorized\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UnknownPool\",\"type\":\"error\"}]",
+	ABI: "[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"},{\"inputs\":[],\"name\":\"UPGRADE_INTERFACE_VERSION\",\"outputs\":[{\"internalType\":\"string\",\"name\":\"\",\"type\":\"string\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"approvalCount\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"name\":\"approveDistribution\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"auditorSetVersion\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"auditors\",\"outputs\":[{\"internalType\":\"address[]\",\"name\":\"\",\"type\":\"address[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"closeOperatorEpoch\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"prevRootCount\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"internalType\":\"structISTSettlementVault2.Commitment\",\"name\":\"commitment\",\"type\":\"tuple\"}],\"name\":\"commitDistribution\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"finalizeDistribution\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"auditor\",\"type\":\"address\"}],\"name\":\"hasApproved\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner_\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"v1Coordinator_\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"vault_\",\"type\":\"address\"},{\"internalType\":\"address[]\",\"name\":\"auditors_\",\"type\":\"address[]\"},{\"internalType\":\"uint256\",\"name\":\"quorum_\",\"type\":\"uint256\"}],\"name\":\"initialize\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"proxiableUUID\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"quorum\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint64\",\"name\":\"maximumBurnRao\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"firstEpoch\",\"type\":\"uint64\"}],\"name\":\"registerOperatorPool\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address[]\",\"name\":\"auditors_\",\"type\":\"address[]\"},{\"internalType\":\"uint256\",\"name\":\"quorum_\",\"type\":\"uint256\"}],\"name\":\"setAuditors\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"}],\"name\":\"settlementAt\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"vault_\",\"type\":\"address\"},{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint8\",\"name\":\"version\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newImplementation\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"data\",\"type\":\"bytes\"}],\"name\":\"upgradeToAndCall\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"v1Coordinator\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"vault\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"version\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"address[]\",\"name\":\"auditors\",\"type\":\"address[]\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"quorum\",\"type\":\"uint256\"}],\"name\":\"AuditorsSet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"auditor\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"auditorSetVersion\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"approvals\",\"type\":\"uint256\"}],\"name\":\"DistributionApproved\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"version\",\"type\":\"uint64\"}],\"name\":\"Initialized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"previousOwner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"OwnershipTransferred\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"implementation\",\"type\":\"address\"}],\"name\":\"Upgraded\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"target\",\"type\":\"address\"}],\"name\":\"AddressEmptyCode\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"AlreadyApproved\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ApprovalClosed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"CadenceTooShort\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"implementation\",\"type\":\"address\"}],\"name\":\"ERC1967InvalidImplementation\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ERC1967NonPayable\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"FailedCall\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InactiveOperator\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidAuditors\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidConfiguration\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidEpoch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidInitialization\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidWindow\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NativeRefundFailed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NoPendingRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NotInitializing\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"OwnableInvalidOwner\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"OwnableUnauthorizedAccount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PendingMismatch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PendingRootLive\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"QuorumNotReached\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"SettlementPaused\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UUPSUnauthorizedCallContext\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"slot\",\"type\":\"bytes32\"}],\"name\":\"UUPSUnsupportedProxiableUUID\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"Unauthorized\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UnknownPool\",\"type\":\"error\"}]",
 	ID:  "0dbf989ae40f9803f9164a8286da92b2b5",
 }
 
@@ -105,6 +105,41 @@ func NewSTSettlement2() *STSettlement2 {
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *STSettlement2) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}
+
+// PackUPGRADEINTERFACEVERSION is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xad3cb1cc.  This method will panic if any
+// invalid/nil inputs are passed.
+//
+// Solidity: function UPGRADE_INTERFACE_VERSION() view returns(string)
+func (sTSettlement2 *STSettlement2) PackUPGRADEINTERFACEVERSION() []byte {
+	enc, err := sTSettlement2.abi.Pack("UPGRADE_INTERFACE_VERSION")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// TryPackUPGRADEINTERFACEVERSION is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xad3cb1cc.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function UPGRADE_INTERFACE_VERSION() view returns(string)
+func (sTSettlement2 *STSettlement2) TryPackUPGRADEINTERFACEVERSION() ([]byte, error) {
+	return sTSettlement2.abi.Pack("UPGRADE_INTERFACE_VERSION")
+}
+
+// UnpackUPGRADEINTERFACEVERSION is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xad3cb1cc.
+//
+// Solidity: function UPGRADE_INTERFACE_VERSION() view returns(string)
+func (sTSettlement2 *STSettlement2) UnpackUPGRADEINTERFACEVERSION(data []byte) (string, error) {
+	out, err := sTSettlement2.abi.Unpack("UPGRADE_INTERFACE_VERSION", data)
+	if err != nil {
+		return *new(string), err
+	}
+	out0 := *abi.ConvertType(out[0], new(string)).(*string)
+	return out0, nil
 }
 
 // PackApprovalCount is the Go binding used to pack the parameters required for calling
@@ -396,6 +431,76 @@ func (sTSettlement2 *STSettlement2) TryPackInitialize(owner common.Address, v1Co
 	return sTSettlement2.abi.Pack("initialize", owner, v1Coordinator, vault, auditors, quorum)
 }
 
+// PackOwner is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x8da5cb5b.  This method will panic if any
+// invalid/nil inputs are passed.
+//
+// Solidity: function owner() view returns(address)
+func (sTSettlement2 *STSettlement2) PackOwner() []byte {
+	enc, err := sTSettlement2.abi.Pack("owner")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// TryPackOwner is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x8da5cb5b.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function owner() view returns(address)
+func (sTSettlement2 *STSettlement2) TryPackOwner() ([]byte, error) {
+	return sTSettlement2.abi.Pack("owner")
+}
+
+// UnpackOwner is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x8da5cb5b.
+//
+// Solidity: function owner() view returns(address)
+func (sTSettlement2 *STSettlement2) UnpackOwner(data []byte) (common.Address, error) {
+	out, err := sTSettlement2.abi.Unpack("owner", data)
+	if err != nil {
+		return *new(common.Address), err
+	}
+	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+	return out0, nil
+}
+
+// PackProxiableUUID is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x52d1902d.  This method will panic if any
+// invalid/nil inputs are passed.
+//
+// Solidity: function proxiableUUID() view returns(bytes32)
+func (sTSettlement2 *STSettlement2) PackProxiableUUID() []byte {
+	enc, err := sTSettlement2.abi.Pack("proxiableUUID")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// TryPackProxiableUUID is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x52d1902d.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function proxiableUUID() view returns(bytes32)
+func (sTSettlement2 *STSettlement2) TryPackProxiableUUID() ([]byte, error) {
+	return sTSettlement2.abi.Pack("proxiableUUID")
+}
+
+// UnpackProxiableUUID is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x52d1902d.
+//
+// Solidity: function proxiableUUID() view returns(bytes32)
+func (sTSettlement2 *STSettlement2) UnpackProxiableUUID(data []byte) ([32]byte, error) {
+	out, err := sTSettlement2.abi.Unpack("proxiableUUID", data)
+	if err != nil {
+		return *new([32]byte), err
+	}
+	out0 := *abi.ConvertType(out[0], new([32]byte)).(*[32]byte)
+	return out0, nil
+}
+
 // PackQuorum is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x1703a018.  This method will panic if any
 // invalid/nil inputs are passed.
@@ -466,6 +571,28 @@ func (sTSettlement2 *STSettlement2) UnpackRegisterOperatorPool(data []byte) (uin
 	return out0, nil
 }
 
+// PackRenounceOwnership is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x715018a6.  This method will panic if any
+// invalid/nil inputs are passed.
+//
+// Solidity: function renounceOwnership() returns()
+func (sTSettlement2 *STSettlement2) PackRenounceOwnership() []byte {
+	enc, err := sTSettlement2.abi.Pack("renounceOwnership")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// TryPackRenounceOwnership is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x715018a6.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function renounceOwnership() returns()
+func (sTSettlement2 *STSettlement2) TryPackRenounceOwnership() ([]byte, error) {
+	return sTSettlement2.abi.Pack("renounceOwnership")
+}
+
 // PackSetAuditors is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xe800843a.  This method will panic if any
 // invalid/nil inputs are passed.
@@ -532,6 +659,50 @@ func (sTSettlement2 *STSettlement2) UnpackSettlementAt(data []byte) (SettlementA
 	outstruct.Hotkey = *abi.ConvertType(out[1], new([32]byte)).(*[32]byte)
 	outstruct.Version = *abi.ConvertType(out[2], new(uint8)).(*uint8)
 	return *outstruct, nil
+}
+
+// PackTransferOwnership is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xf2fde38b.  This method will panic if any
+// invalid/nil inputs are passed.
+//
+// Solidity: function transferOwnership(address newOwner) returns()
+func (sTSettlement2 *STSettlement2) PackTransferOwnership(newOwner common.Address) []byte {
+	enc, err := sTSettlement2.abi.Pack("transferOwnership", newOwner)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// TryPackTransferOwnership is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xf2fde38b.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function transferOwnership(address newOwner) returns()
+func (sTSettlement2 *STSettlement2) TryPackTransferOwnership(newOwner common.Address) ([]byte, error) {
+	return sTSettlement2.abi.Pack("transferOwnership", newOwner)
+}
+
+// PackUpgradeToAndCall is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x4f1ef286.  This method will panic if any
+// invalid/nil inputs are passed.
+//
+// Solidity: function upgradeToAndCall(address newImplementation, bytes data) payable returns()
+func (sTSettlement2 *STSettlement2) PackUpgradeToAndCall(newImplementation common.Address, data []byte) []byte {
+	enc, err := sTSettlement2.abi.Pack("upgradeToAndCall", newImplementation, data)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// TryPackUpgradeToAndCall is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x4f1ef286.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function upgradeToAndCall(address newImplementation, bytes data) payable returns()
+func (sTSettlement2 *STSettlement2) TryPackUpgradeToAndCall(newImplementation common.Address, data []byte) ([]byte, error) {
+	return sTSettlement2.abi.Pack("upgradeToAndCall", newImplementation, data)
 }
 
 // PackV1Coordinator is the Go binding used to pack the parameters required for calling
@@ -692,9 +863,136 @@ func (sTSettlement2 *STSettlement2) UnpackDistributionApprovedEvent(log *types.L
 	return out, nil
 }
 
+// STSettlement2Initialized represents a Initialized event raised by the STSettlement2 contract.
+type STSettlement2Initialized struct {
+	Version uint64
+	Raw     *types.Log // Blockchain specific contextual infos
+}
+
+const STSettlement2InitializedEventName = "Initialized"
+
+// ContractEventName returns the user-defined event name.
+func (STSettlement2Initialized) ContractEventName() string {
+	return STSettlement2InitializedEventName
+}
+
+// UnpackInitializedEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event Initialized(uint64 version)
+func (sTSettlement2 *STSettlement2) UnpackInitializedEvent(log *types.Log) (*STSettlement2Initialized, error) {
+	event := "Initialized"
+	if len(log.Topics) == 0 || log.Topics[0] != sTSettlement2.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(STSettlement2Initialized)
+	if len(log.Data) > 0 {
+		if err := sTSettlement2.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range sTSettlement2.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}
+
+// STSettlement2OwnershipTransferred represents a OwnershipTransferred event raised by the STSettlement2 contract.
+type STSettlement2OwnershipTransferred struct {
+	PreviousOwner common.Address
+	NewOwner      common.Address
+	Raw           *types.Log // Blockchain specific contextual infos
+}
+
+const STSettlement2OwnershipTransferredEventName = "OwnershipTransferred"
+
+// ContractEventName returns the user-defined event name.
+func (STSettlement2OwnershipTransferred) ContractEventName() string {
+	return STSettlement2OwnershipTransferredEventName
+}
+
+// UnpackOwnershipTransferredEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)
+func (sTSettlement2 *STSettlement2) UnpackOwnershipTransferredEvent(log *types.Log) (*STSettlement2OwnershipTransferred, error) {
+	event := "OwnershipTransferred"
+	if len(log.Topics) == 0 || log.Topics[0] != sTSettlement2.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(STSettlement2OwnershipTransferred)
+	if len(log.Data) > 0 {
+		if err := sTSettlement2.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range sTSettlement2.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}
+
+// STSettlement2Upgraded represents a Upgraded event raised by the STSettlement2 contract.
+type STSettlement2Upgraded struct {
+	Implementation common.Address
+	Raw            *types.Log // Blockchain specific contextual infos
+}
+
+const STSettlement2UpgradedEventName = "Upgraded"
+
+// ContractEventName returns the user-defined event name.
+func (STSettlement2Upgraded) ContractEventName() string {
+	return STSettlement2UpgradedEventName
+}
+
+// UnpackUpgradedEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event Upgraded(address indexed implementation)
+func (sTSettlement2 *STSettlement2) UnpackUpgradedEvent(log *types.Log) (*STSettlement2Upgraded, error) {
+	event := "Upgraded"
+	if len(log.Topics) == 0 || log.Topics[0] != sTSettlement2.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(STSettlement2Upgraded)
+	if len(log.Data) > 0 {
+		if err := sTSettlement2.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range sTSettlement2.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}
+
 // UnpackError attempts to decode the provided error data using user-defined
 // error definitions.
 func (sTSettlement2 *STSettlement2) UnpackError(raw []byte) (any, error) {
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["AddressEmptyCode"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackAddressEmptyCodeError(raw[4:])
+	}
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["AlreadyApproved"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackAlreadyApprovedError(raw[4:])
 	}
@@ -703,6 +1001,15 @@ func (sTSettlement2 *STSettlement2) UnpackError(raw []byte) (any, error) {
 	}
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["CadenceTooShort"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackCadenceTooShortError(raw[4:])
+	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["ERC1967InvalidImplementation"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackERC1967InvalidImplementationError(raw[4:])
+	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["ERC1967NonPayable"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackERC1967NonPayableError(raw[4:])
+	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["FailedCall"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackFailedCallError(raw[4:])
 	}
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["InactiveOperator"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackInactiveOperatorError(raw[4:])
@@ -716,6 +1023,9 @@ func (sTSettlement2 *STSettlement2) UnpackError(raw []byte) (any, error) {
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["InvalidEpoch"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackInvalidEpochError(raw[4:])
 	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["InvalidInitialization"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackInvalidInitializationError(raw[4:])
+	}
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["InvalidWindow"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackInvalidWindowError(raw[4:])
 	}
@@ -724,6 +1034,15 @@ func (sTSettlement2 *STSettlement2) UnpackError(raw []byte) (any, error) {
 	}
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["NoPendingRoot"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackNoPendingRootError(raw[4:])
+	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["NotInitializing"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackNotInitializingError(raw[4:])
+	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["OwnableInvalidOwner"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackOwnableInvalidOwnerError(raw[4:])
+	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["OwnableUnauthorizedAccount"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackOwnableUnauthorizedAccountError(raw[4:])
 	}
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["PendingMismatch"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackPendingMismatchError(raw[4:])
@@ -737,6 +1056,12 @@ func (sTSettlement2 *STSettlement2) UnpackError(raw []byte) (any, error) {
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["SettlementPaused"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackSettlementPausedError(raw[4:])
 	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["UUPSUnauthorizedCallContext"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackUUPSUnauthorizedCallContextError(raw[4:])
+	}
+	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["UUPSUnsupportedProxiableUUID"].ID.Bytes()[:4]) {
+		return sTSettlement2.UnpackUUPSUnsupportedProxiableUUIDError(raw[4:])
+	}
 	if bytes.Equal(raw[:4], sTSettlement2.abi.Errors["Unauthorized"].ID.Bytes()[:4]) {
 		return sTSettlement2.UnpackUnauthorizedError(raw[4:])
 	}
@@ -744,6 +1069,30 @@ func (sTSettlement2 *STSettlement2) UnpackError(raw []byte) (any, error) {
 		return sTSettlement2.UnpackUnknownPoolError(raw[4:])
 	}
 	return nil, errors.New("Unknown error")
+}
+
+// STSettlement2AddressEmptyCode represents a AddressEmptyCode error raised by the STSettlement2 contract.
+type STSettlement2AddressEmptyCode struct {
+	Target common.Address
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error AddressEmptyCode(address target)
+func STSettlement2AddressEmptyCodeErrorID() common.Hash {
+	return common.HexToHash("0x9996b315c842ff135b8fc4a08ad5df1c344efbc03d2687aecc0678050d2aac89")
+}
+
+// UnpackAddressEmptyCodeError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error AddressEmptyCode(address target)
+func (sTSettlement2 *STSettlement2) UnpackAddressEmptyCodeError(raw []byte) (*STSettlement2AddressEmptyCode, error) {
+	out := new(STSettlement2AddressEmptyCode)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "AddressEmptyCode", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // STSettlement2AlreadyApproved represents a AlreadyApproved error raised by the STSettlement2 contract.
@@ -810,6 +1159,76 @@ func STSettlement2CadenceTooShortErrorID() common.Hash {
 func (sTSettlement2 *STSettlement2) UnpackCadenceTooShortError(raw []byte) (*STSettlement2CadenceTooShort, error) {
 	out := new(STSettlement2CadenceTooShort)
 	if err := sTSettlement2.abi.UnpackIntoInterface(out, "CadenceTooShort", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// STSettlement2ERC1967InvalidImplementation represents a ERC1967InvalidImplementation error raised by the STSettlement2 contract.
+type STSettlement2ERC1967InvalidImplementation struct {
+	Implementation common.Address
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error ERC1967InvalidImplementation(address implementation)
+func STSettlement2ERC1967InvalidImplementationErrorID() common.Hash {
+	return common.HexToHash("0x4c9c8ce3ceb3130f17f7cdba48d89b5b0129f266a8bac114e6e315a41879b617")
+}
+
+// UnpackERC1967InvalidImplementationError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error ERC1967InvalidImplementation(address implementation)
+func (sTSettlement2 *STSettlement2) UnpackERC1967InvalidImplementationError(raw []byte) (*STSettlement2ERC1967InvalidImplementation, error) {
+	out := new(STSettlement2ERC1967InvalidImplementation)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "ERC1967InvalidImplementation", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// STSettlement2ERC1967NonPayable represents a ERC1967NonPayable error raised by the STSettlement2 contract.
+type STSettlement2ERC1967NonPayable struct {
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error ERC1967NonPayable()
+func STSettlement2ERC1967NonPayableErrorID() common.Hash {
+	return common.HexToHash("0xb398979fa84f543c8e222f17890372c487baf85e062276c127fef521eea7224b")
+}
+
+// UnpackERC1967NonPayableError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error ERC1967NonPayable()
+func (sTSettlement2 *STSettlement2) UnpackERC1967NonPayableError(raw []byte) (*STSettlement2ERC1967NonPayable, error) {
+	out := new(STSettlement2ERC1967NonPayable)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "ERC1967NonPayable", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// STSettlement2FailedCall represents a FailedCall error raised by the STSettlement2 contract.
+type STSettlement2FailedCall struct {
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error FailedCall()
+func STSettlement2FailedCallErrorID() common.Hash {
+	return common.HexToHash("0xd6bda27508c0fb6d8a39b4b122878dab26f731a7d4e4abe711dd3731899052a4")
+}
+
+// UnpackFailedCallError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error FailedCall()
+func (sTSettlement2 *STSettlement2) UnpackFailedCallError(raw []byte) (*STSettlement2FailedCall, error) {
+	out := new(STSettlement2FailedCall)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "FailedCall", raw); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -907,6 +1326,29 @@ func (sTSettlement2 *STSettlement2) UnpackInvalidEpochError(raw []byte) (*STSett
 	return out, nil
 }
 
+// STSettlement2InvalidInitialization represents a InvalidInitialization error raised by the STSettlement2 contract.
+type STSettlement2InvalidInitialization struct {
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error InvalidInitialization()
+func STSettlement2InvalidInitializationErrorID() common.Hash {
+	return common.HexToHash("0xf92ee8a957075833165f68c320933b1a1294aafc84ee6e0dd3fb178008f9aaf5")
+}
+
+// UnpackInvalidInitializationError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error InvalidInitialization()
+func (sTSettlement2 *STSettlement2) UnpackInvalidInitializationError(raw []byte) (*STSettlement2InvalidInitialization, error) {
+	out := new(STSettlement2InvalidInitialization)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "InvalidInitialization", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // STSettlement2InvalidWindow represents a InvalidWindow error raised by the STSettlement2 contract.
 type STSettlement2InvalidWindow struct {
 }
@@ -971,6 +1413,77 @@ func STSettlement2NoPendingRootErrorID() common.Hash {
 func (sTSettlement2 *STSettlement2) UnpackNoPendingRootError(raw []byte) (*STSettlement2NoPendingRoot, error) {
 	out := new(STSettlement2NoPendingRoot)
 	if err := sTSettlement2.abi.UnpackIntoInterface(out, "NoPendingRoot", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// STSettlement2NotInitializing represents a NotInitializing error raised by the STSettlement2 contract.
+type STSettlement2NotInitializing struct {
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error NotInitializing()
+func STSettlement2NotInitializingErrorID() common.Hash {
+	return common.HexToHash("0xd7e6bcf8597daa127dc9f0048d2f08d5ef140a2cb659feabd700beff1f7a8302")
+}
+
+// UnpackNotInitializingError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error NotInitializing()
+func (sTSettlement2 *STSettlement2) UnpackNotInitializingError(raw []byte) (*STSettlement2NotInitializing, error) {
+	out := new(STSettlement2NotInitializing)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "NotInitializing", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// STSettlement2OwnableInvalidOwner represents a OwnableInvalidOwner error raised by the STSettlement2 contract.
+type STSettlement2OwnableInvalidOwner struct {
+	Owner common.Address
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error OwnableInvalidOwner(address owner)
+func STSettlement2OwnableInvalidOwnerErrorID() common.Hash {
+	return common.HexToHash("0x1e4fbdf7f3ef8bcaa855599e3abf48b232380f183f08f6f813d9ffa5bd585188")
+}
+
+// UnpackOwnableInvalidOwnerError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error OwnableInvalidOwner(address owner)
+func (sTSettlement2 *STSettlement2) UnpackOwnableInvalidOwnerError(raw []byte) (*STSettlement2OwnableInvalidOwner, error) {
+	out := new(STSettlement2OwnableInvalidOwner)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "OwnableInvalidOwner", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// STSettlement2OwnableUnauthorizedAccount represents a OwnableUnauthorizedAccount error raised by the STSettlement2 contract.
+type STSettlement2OwnableUnauthorizedAccount struct {
+	Account common.Address
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error OwnableUnauthorizedAccount(address account)
+func STSettlement2OwnableUnauthorizedAccountErrorID() common.Hash {
+	return common.HexToHash("0x118cdaa7a341953d1887a2245fd6665d741c67c8c50581daa59e1d03373fa188")
+}
+
+// UnpackOwnableUnauthorizedAccountError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error OwnableUnauthorizedAccount(address account)
+func (sTSettlement2 *STSettlement2) UnpackOwnableUnauthorizedAccountError(raw []byte) (*STSettlement2OwnableUnauthorizedAccount, error) {
+	out := new(STSettlement2OwnableUnauthorizedAccount)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "OwnableUnauthorizedAccount", raw); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -1068,6 +1581,53 @@ func (sTSettlement2 *STSettlement2) UnpackSettlementPausedError(raw []byte) (*ST
 	return out, nil
 }
 
+// STSettlement2UUPSUnauthorizedCallContext represents a UUPSUnauthorizedCallContext error raised by the STSettlement2 contract.
+type STSettlement2UUPSUnauthorizedCallContext struct {
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error UUPSUnauthorizedCallContext()
+func STSettlement2UUPSUnauthorizedCallContextErrorID() common.Hash {
+	return common.HexToHash("0xe07c8dba242a06571ac65fe4bbe20522c9fb111cb33599b799ff8039c1ed18f4")
+}
+
+// UnpackUUPSUnauthorizedCallContextError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error UUPSUnauthorizedCallContext()
+func (sTSettlement2 *STSettlement2) UnpackUUPSUnauthorizedCallContextError(raw []byte) (*STSettlement2UUPSUnauthorizedCallContext, error) {
+	out := new(STSettlement2UUPSUnauthorizedCallContext)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "UUPSUnauthorizedCallContext", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// STSettlement2UUPSUnsupportedProxiableUUID represents a UUPSUnsupportedProxiableUUID error raised by the STSettlement2 contract.
+type STSettlement2UUPSUnsupportedProxiableUUID struct {
+	Slot [32]byte
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error UUPSUnsupportedProxiableUUID(bytes32 slot)
+func STSettlement2UUPSUnsupportedProxiableUUIDErrorID() common.Hash {
+	return common.HexToHash("0xaa1d49a4c084bfa9aeeee2a0be65267a7f19ba7e1476b114dac513d2c14cb563")
+}
+
+// UnpackUUPSUnsupportedProxiableUUIDError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error UUPSUnsupportedProxiableUUID(bytes32 slot)
+func (sTSettlement2 *STSettlement2) UnpackUUPSUnsupportedProxiableUUIDError(raw []byte) (*STSettlement2UUPSUnsupportedProxiableUUID, error) {
+	out := new(STSettlement2UUPSUnsupportedProxiableUUID)
+	if err := sTSettlement2.abi.UnpackIntoInterface(out, "UUPSUnsupportedProxiableUUID", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // STSettlement2Unauthorized represents a Unauthorized error raised by the STSettlement2 contract.
 type STSettlement2Unauthorized struct {
 }
@@ -1116,7 +1676,7 @@ func (sTSettlement2 *STSettlement2) UnpackUnknownPoolError(raw []byte) (*STSettl
 
 // STSettlementVault2MetaData contains all meta data concerning the STSettlementVault2 contract.
 var STSettlementVault2MetaData = bind.MetaData{
-	ABI: "[{\"inputs\":[],\"name\":\"CHALLENGE_BLOCKS\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"}],\"name\":\"absorbStake\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"assignSurplus\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"bootstrap\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"captureEmission\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"capturedTotal\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"coldkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"cumulative\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.Account\",\"name\":\"account\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"sum\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.ProofNode[]\",\"name\":\"oldProof\",\"type\":\"tuple[]\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"leftHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"leftSum\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"rightHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"rightSum\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.PathNode[]\",\"name\":\"newPath\",\"type\":\"tuple[]\"}],\"name\":\"checkPath\",\"outputs\":[{\"internalType\":\"enumLedgerTree.Fault\",\"name\":\"fault\",\"type\":\"uint8\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"coldkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"cumulative\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.Account\",\"name\":\"account\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"sum\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.ProofNode[]\",\"name\":\"proof\",\"type\":\"tuple[]\"}],\"name\":\"claim\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"}],\"name\":\"claimed\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"claimedTotal\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"prevRootCount\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"internalType\":\"structISTSettlementVault2.Commitment\",\"name\":\"commitment\",\"type\":\"tuple\"}],\"name\":\"commitPending\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"commitSeq\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"conservationHolds\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"coordinator\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"deferEmission\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"demandFeeWei\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"coldkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"cumulative\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.Account\",\"name\":\"account\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"sum\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.ProofNode[]\",\"name\":\"oldProof\",\"type\":\"tuple[]\"}],\"name\":\"demandPath\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"}],\"name\":\"demanded\",\"outputs\":[{\"internalType\":\"enumISTSettlementVault2.DemandState\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowAccounted\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowHotkey\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowRegistered\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"finalizePending\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"finalizedTotal\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"}],\"name\":\"fundedThrough\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"lastCommitBlock\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"lastFundedEpoch\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"liveEscrowStake\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"netuid\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"\",\"type\":\"uint16\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"pending\",\"outputs\":[{\"components\":[{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint64\",\"name\":\"committedBlock\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"openDemands\",\"type\":\"uint64\"}],\"internalType\":\"structISTSettlementVault2.Pending\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"}],\"name\":\"poolHotkeyUsed\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"pools\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint64\",\"name\":\"firstEpoch\",\"type\":\"uint64\"},{\"internalType\":\"bool\",\"name\":\"registered\",\"type\":\"bool\"}],\"internalType\":\"structISTSettlementVault2.Pool\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint64\",\"name\":\"maximumBurnRao\",\"type\":\"uint64\"}],\"name\":\"registerEscrow\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint64\",\"name\":\"maximumBurnRao\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"firstEpoch\",\"type\":\"uint64\"}],\"name\":\"registerPool\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"maximumBurnRao\",\"type\":\"uint64\"}],\"name\":\"registerPoolUid\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"rootCount\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"}],\"name\":\"roots\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"internalType\":\"structISTSettlementVault2.Root\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"selfColdkey\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"coordinator_\",\"type\":\"address\"}],\"name\":\"setCoordinatorOnce\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalCaptured\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalPaid\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"coldkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"cumulative\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"}],\"name\":\"Claimed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"coordinator\",\"type\":\"address\"}],\"name\":\"CoordinatorFixed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"replacedSeq\",\"type\":\"uint64\"}],\"name\":\"DistributionCommitted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"enumLedgerTree.Fault\",\"name\":\"fault\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"level\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"challenger\",\"type\":\"address\"}],\"name\":\"DistributionDeleted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"name\":\"DistributionFinalized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"observed\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fundedThrough\",\"type\":\"uint256\"}],\"name\":\"EmissionCaptured\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fundedThrough\",\"type\":\"uint256\"}],\"name\":\"EmissionDeferred\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"name\":\"EscrowRegistered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"answerer\",\"type\":\"address\"}],\"name\":\"PathAnswered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"demander\",\"type\":\"address\"}],\"name\":\"PathDemanded\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"firstEpoch\",\"type\":\"uint64\"}],\"name\":\"PoolRegistered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"payer\",\"type\":\"address\"}],\"name\":\"PoolUidRegistered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"observed\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"}],\"name\":\"StakeAbsorbed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"SurplusAssigned\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"AlreadyDemanded\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"AlreadyInitialized\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"AmountTooLarge\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ChallengeWindowClosed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ChallengeWindowOpen\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"CommitTooSoon\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"DemandOpen\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"EpochOutOfRange\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"IndexOutOfRange\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidColdkey\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidConfiguration\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidDemandFee\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidHotkey\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidLeafCount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidProof\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidSurplus\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidTransition\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NativeBalanceDecreased\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NativeRefundFailed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NoFault\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NoFinalizedRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NoPendingRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NothingToAbsorb\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NothingToClaim\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PoolCapExceeded\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"Reentrancy\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"RuntimeAccountingMismatch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"StaleRootCount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"TotalMismatch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"TotalNotIncreased\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UidExists\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"Unauthorized\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"Underfunded\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UnknownPool\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UnknownRoot\",\"type\":\"error\"}]",
+	ABI: "[{\"inputs\":[{\"internalType\":\"uint16\",\"name\":\"netuid_\",\"type\":\"uint16\"},{\"internalType\":\"bytes32\",\"name\":\"escrowHotkey_\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"selfColdkey_\",\"type\":\"bytes32\"},{\"internalType\":\"address\",\"name\":\"bootstrap_\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"demandFeeWei_\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"CHALLENGE_BLOCKS\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"}],\"name\":\"absorbStake\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"assignSurplus\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"bootstrap\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"captureEmission\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"capturedTotal\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"coldkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"cumulative\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.Account\",\"name\":\"account\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"sum\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.ProofNode[]\",\"name\":\"oldProof\",\"type\":\"tuple[]\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"leftHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"leftSum\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"rightHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"rightSum\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.PathNode[]\",\"name\":\"newPath\",\"type\":\"tuple[]\"}],\"name\":\"checkPath\",\"outputs\":[{\"internalType\":\"enumLedgerTree.Fault\",\"name\":\"fault\",\"type\":\"uint8\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"coldkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"cumulative\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.Account\",\"name\":\"account\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"sum\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.ProofNode[]\",\"name\":\"proof\",\"type\":\"tuple[]\"}],\"name\":\"claim\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"}],\"name\":\"claimed\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"claimedTotal\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"prevRootCount\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"internalType\":\"structISTSettlementVault2.Commitment\",\"name\":\"commitment\",\"type\":\"tuple\"}],\"name\":\"commitPending\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"commitSeq\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"conservationHolds\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"coordinator\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"deferEmission\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"demandFeeWei\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"coldkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"cumulative\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.Account\",\"name\":\"account\",\"type\":\"tuple\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"hash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"sum\",\"type\":\"uint256\"}],\"internalType\":\"structLedgerTree.ProofNode[]\",\"name\":\"oldProof\",\"type\":\"tuple[]\"}],\"name\":\"demandPath\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"}],\"name\":\"demanded\",\"outputs\":[{\"internalType\":\"enumISTSettlementVault2.DemandState\",\"name\":\"state\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowAccounted\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowHotkey\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowRegistered\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"finalizePending\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"finalizedTotal\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"}],\"name\":\"fundedThrough\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"lastCommitBlock\",\"outputs\":[{\"internalType\":\"uint64\",\"name\":\"blockNumber\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"lastFundedEpoch\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"liveEscrowStake\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"netuid\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"\",\"type\":\"uint16\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"pending\",\"outputs\":[{\"components\":[{\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint64\",\"name\":\"committedBlock\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"openDemands\",\"type\":\"uint64\"}],\"internalType\":\"structISTSettlementVault2.Pending\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"}],\"name\":\"poolHotkeyUsed\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"used\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"pools\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint64\",\"name\":\"firstEpoch\",\"type\":\"uint64\"},{\"internalType\":\"bool\",\"name\":\"registered\",\"type\":\"bool\"}],\"internalType\":\"structISTSettlementVault2.Pool\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint64\",\"name\":\"maximumBurnRao\",\"type\":\"uint64\"}],\"name\":\"registerEscrow\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"internalType\":\"uint64\",\"name\":\"maximumBurnRao\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"firstEpoch\",\"type\":\"uint64\"}],\"name\":\"registerPool\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"maximumBurnRao\",\"type\":\"uint64\"}],\"name\":\"registerPoolUid\",\"outputs\":[{\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"}],\"name\":\"rootCount\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"}],\"name\":\"roots\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"},{\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"internalType\":\"structISTSettlementVault2.Root\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"selfColdkey\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"coordinator_\",\"type\":\"address\"}],\"name\":\"setCoordinatorOnce\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalCaptured\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalPaid\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"coldkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"cumulative\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"}],\"name\":\"Claimed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"coordinator\",\"type\":\"address\"}],\"name\":\"CoordinatorFixed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"replacedSeq\",\"type\":\"uint64\"}],\"name\":\"DistributionCommitted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"enumLedgerTree.Fault\",\"name\":\"fault\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"level\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"challenger\",\"type\":\"address\"}],\"name\":\"DistributionDeleted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"epoch\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"total\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"leafCount\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"ledgerHash\",\"type\":\"bytes32\"}],\"name\":\"DistributionFinalized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"observed\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fundedThrough\",\"type\":\"uint256\"}],\"name\":\"EmissionCaptured\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fundedThrough\",\"type\":\"uint256\"}],\"name\":\"EmissionDeferred\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"}],\"name\":\"EscrowRegistered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"answerer\",\"type\":\"address\"}],\"name\":\"PathAnswered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint64\",\"name\":\"seq\",\"type\":\"uint64\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"rootIndex\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"demander\",\"type\":\"address\"}],\"name\":\"PathDemanded\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"firstEpoch\",\"type\":\"uint64\"}],\"name\":\"PoolRegistered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint16\",\"name\":\"uid\",\"type\":\"uint16\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"payer\",\"type\":\"address\"}],\"name\":\"PoolUidRegistered\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"hotkey\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"observed\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"}],\"name\":\"StakeAbsorbed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"noId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"epoch\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"SurplusAssigned\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"AlreadyDemanded\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"AlreadyInitialized\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"AmountTooLarge\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ChallengeWindowClosed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ChallengeWindowOpen\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"CommitTooSoon\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"DemandOpen\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"EpochOutOfRange\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"IndexOutOfRange\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidColdkey\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidConfiguration\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidDemandFee\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidHotkey\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidLeafCount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidLeafCount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidProof\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidSurplus\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidTransition\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"MalformedPath\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NativeBalanceDecreased\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NativeRefundFailed\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NoFault\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NoFinalizedRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NoPendingRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NothingToAbsorb\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"NothingToClaim\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PoolCapExceeded\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"Reentrancy\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"RuntimeAccountingMismatch\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"bits\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"SafeCastOverflowedUintDowncast\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"StaleRootCount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"TotalMismatch\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"TotalNotIncreased\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UidExists\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"Unauthorized\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"Underfunded\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UnknownPool\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"UnknownRoot\",\"type\":\"error\"}]",
 	ID:  "92d3f3ace1a953d2a491cc7b5b5a1fa65c",
 }
 
@@ -1138,6 +1698,18 @@ func NewSTSettlementVault2() *STSettlementVault2 {
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *STSettlementVault2) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}
+
+// PackConstructor is the Go binding used to pack the parameters required for
+// contract deployment.
+//
+// Solidity: constructor(uint16 netuid_, bytes32 escrowHotkey_, bytes32 selfColdkey_, address bootstrap_, uint256 demandFeeWei_) returns()
+func (sTSettlementVault2 *STSettlementVault2) PackConstructor(netuid_ uint16, escrowHotkey_ [32]byte, selfColdkey_ [32]byte, bootstrap_ common.Address, demandFeeWei_ *big.Int) []byte {
+	enc, err := sTSettlementVault2.abi.Pack("", netuid_, escrowHotkey_, selfColdkey_, bootstrap_, demandFeeWei_)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // PackCHALLENGEBLOCKS is the Go binding used to pack the parameters required for calling
@@ -1306,7 +1878,7 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackCaptureEmission(data []byte)
 // the contract method with ID 0x9e2a3bc2.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function capturedTotal(uint256 noId) view returns(uint256)
+// Solidity: function capturedTotal(uint256 noId) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) PackCapturedTotal(noId *big.Int) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("capturedTotal", noId)
 	if err != nil {
@@ -1319,7 +1891,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackCapturedTotal(noId *big.Int) [
 // the contract method with ID 0x9e2a3bc2.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function capturedTotal(uint256 noId) view returns(uint256)
+// Solidity: function capturedTotal(uint256 noId) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) TryPackCapturedTotal(noId *big.Int) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("capturedTotal", noId)
 }
@@ -1327,7 +1899,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackCapturedTotal(noId *big.Int
 // UnpackCapturedTotal is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0x9e2a3bc2.
 //
-// Solidity: function capturedTotal(uint256 noId) view returns(uint256)
+// Solidity: function capturedTotal(uint256 noId) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) UnpackCapturedTotal(data []byte) (*big.Int, error) {
 	out, err := sTSettlementVault2.abi.Unpack("capturedTotal", data)
 	if err != nil {
@@ -1411,7 +1983,7 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackClaim(data []byte) (*big.Int
 // the contract method with ID 0xa54ab457.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function claimed(uint256 noId, uint256 index) view returns(uint256)
+// Solidity: function claimed(uint256 noId, uint256 index) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) PackClaimed(noId *big.Int, index *big.Int) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("claimed", noId, index)
 	if err != nil {
@@ -1424,7 +1996,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackClaimed(noId *big.Int, index *
 // the contract method with ID 0xa54ab457.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function claimed(uint256 noId, uint256 index) view returns(uint256)
+// Solidity: function claimed(uint256 noId, uint256 index) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) TryPackClaimed(noId *big.Int, index *big.Int) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("claimed", noId, index)
 }
@@ -1432,7 +2004,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackClaimed(noId *big.Int, inde
 // UnpackClaimed is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0xa54ab457.
 //
-// Solidity: function claimed(uint256 noId, uint256 index) view returns(uint256)
+// Solidity: function claimed(uint256 noId, uint256 index) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) UnpackClaimed(data []byte) (*big.Int, error) {
 	out, err := sTSettlementVault2.abi.Unpack("claimed", data)
 	if err != nil {
@@ -1446,7 +2018,7 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackClaimed(data []byte) (*big.I
 // the contract method with ID 0xff6ad927.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function claimedTotal(uint256 noId) view returns(uint256)
+// Solidity: function claimedTotal(uint256 noId) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) PackClaimedTotal(noId *big.Int) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("claimedTotal", noId)
 	if err != nil {
@@ -1459,7 +2031,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackClaimedTotal(noId *big.Int) []
 // the contract method with ID 0xff6ad927.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function claimedTotal(uint256 noId) view returns(uint256)
+// Solidity: function claimedTotal(uint256 noId) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) TryPackClaimedTotal(noId *big.Int) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("claimedTotal", noId)
 }
@@ -1467,7 +2039,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackClaimedTotal(noId *big.Int)
 // UnpackClaimedTotal is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0xff6ad927.
 //
-// Solidity: function claimedTotal(uint256 noId) view returns(uint256)
+// Solidity: function claimedTotal(uint256 noId) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) UnpackClaimedTotal(data []byte) (*big.Int, error) {
 	out, err := sTSettlementVault2.abi.Unpack("claimedTotal", data)
 	if err != nil {
@@ -1516,7 +2088,7 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackCommitPending(data []byte) (
 // the contract method with ID 0x9e6d81f9.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function commitSeq(uint256 noId) view returns(uint64)
+// Solidity: function commitSeq(uint256 noId) view returns(uint64 seq)
 func (sTSettlementVault2 *STSettlementVault2) PackCommitSeq(noId *big.Int) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("commitSeq", noId)
 	if err != nil {
@@ -1529,7 +2101,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackCommitSeq(noId *big.Int) []byt
 // the contract method with ID 0x9e6d81f9.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function commitSeq(uint256 noId) view returns(uint64)
+// Solidity: function commitSeq(uint256 noId) view returns(uint64 seq)
 func (sTSettlementVault2 *STSettlementVault2) TryPackCommitSeq(noId *big.Int) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("commitSeq", noId)
 }
@@ -1537,7 +2109,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackCommitSeq(noId *big.Int) ([
 // UnpackCommitSeq is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0x9e6d81f9.
 //
-// Solidity: function commitSeq(uint256 noId) view returns(uint64)
+// Solidity: function commitSeq(uint256 noId) view returns(uint64 seq)
 func (sTSettlementVault2 *STSettlementVault2) UnpackCommitSeq(data []byte) (uint64, error) {
 	out, err := sTSettlementVault2.abi.Unpack("commitSeq", data)
 	if err != nil {
@@ -1700,7 +2272,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackDemandPath(noId *big.Int, r
 // the contract method with ID 0xac7c72bb.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function demanded(uint256 noId, uint64 seq, uint256 rootIndex, uint256 index) view returns(uint8)
+// Solidity: function demanded(uint256 noId, uint64 seq, uint256 rootIndex, uint256 index) view returns(uint8 state)
 func (sTSettlementVault2 *STSettlementVault2) PackDemanded(noId *big.Int, seq uint64, rootIndex *big.Int, index *big.Int) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("demanded", noId, seq, rootIndex, index)
 	if err != nil {
@@ -1713,7 +2285,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackDemanded(noId *big.Int, seq ui
 // the contract method with ID 0xac7c72bb.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function demanded(uint256 noId, uint64 seq, uint256 rootIndex, uint256 index) view returns(uint8)
+// Solidity: function demanded(uint256 noId, uint64 seq, uint256 rootIndex, uint256 index) view returns(uint8 state)
 func (sTSettlementVault2 *STSettlementVault2) TryPackDemanded(noId *big.Int, seq uint64, rootIndex *big.Int, index *big.Int) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("demanded", noId, seq, rootIndex, index)
 }
@@ -1721,7 +2293,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackDemanded(noId *big.Int, seq
 // UnpackDemanded is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0xac7c72bb.
 //
-// Solidity: function demanded(uint256 noId, uint64 seq, uint256 rootIndex, uint256 index) view returns(uint8)
+// Solidity: function demanded(uint256 noId, uint64 seq, uint256 rootIndex, uint256 index) view returns(uint8 state)
 func (sTSettlementVault2 *STSettlementVault2) UnpackDemanded(data []byte) (uint8, error) {
 	out, err := sTSettlementVault2.abi.Unpack("demanded", data)
 	if err != nil {
@@ -1910,7 +2482,7 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackFinalizedTotal(data []byte) 
 // the contract method with ID 0xcccbd0b7.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function fundedThrough(uint256 noId, uint256 epoch) view returns(uint256)
+// Solidity: function fundedThrough(uint256 noId, uint256 epoch) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) PackFundedThrough(noId *big.Int, epoch *big.Int) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("fundedThrough", noId, epoch)
 	if err != nil {
@@ -1923,7 +2495,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackFundedThrough(noId *big.Int, e
 // the contract method with ID 0xcccbd0b7.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function fundedThrough(uint256 noId, uint256 epoch) view returns(uint256)
+// Solidity: function fundedThrough(uint256 noId, uint256 epoch) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) TryPackFundedThrough(noId *big.Int, epoch *big.Int) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("fundedThrough", noId, epoch)
 }
@@ -1931,7 +2503,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackFundedThrough(noId *big.Int
 // UnpackFundedThrough is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0xcccbd0b7.
 //
-// Solidity: function fundedThrough(uint256 noId, uint256 epoch) view returns(uint256)
+// Solidity: function fundedThrough(uint256 noId, uint256 epoch) view returns(uint256 amount)
 func (sTSettlementVault2 *STSettlementVault2) UnpackFundedThrough(data []byte) (*big.Int, error) {
 	out, err := sTSettlementVault2.abi.Unpack("fundedThrough", data)
 	if err != nil {
@@ -1945,7 +2517,7 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackFundedThrough(data []byte) (
 // the contract method with ID 0x82c50e4c.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function lastCommitBlock(uint256 noId) view returns(uint64)
+// Solidity: function lastCommitBlock(uint256 noId) view returns(uint64 blockNumber)
 func (sTSettlementVault2 *STSettlementVault2) PackLastCommitBlock(noId *big.Int) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("lastCommitBlock", noId)
 	if err != nil {
@@ -1958,7 +2530,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackLastCommitBlock(noId *big.Int)
 // the contract method with ID 0x82c50e4c.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function lastCommitBlock(uint256 noId) view returns(uint64)
+// Solidity: function lastCommitBlock(uint256 noId) view returns(uint64 blockNumber)
 func (sTSettlementVault2 *STSettlementVault2) TryPackLastCommitBlock(noId *big.Int) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("lastCommitBlock", noId)
 }
@@ -1966,7 +2538,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackLastCommitBlock(noId *big.I
 // UnpackLastCommitBlock is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0x82c50e4c.
 //
-// Solidity: function lastCommitBlock(uint256 noId) view returns(uint64)
+// Solidity: function lastCommitBlock(uint256 noId) view returns(uint64 blockNumber)
 func (sTSettlementVault2 *STSettlementVault2) UnpackLastCommitBlock(data []byte) (uint64, error) {
 	out, err := sTSettlementVault2.abi.Unpack("lastCommitBlock", data)
 	if err != nil {
@@ -1980,7 +2552,7 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackLastCommitBlock(data []byte)
 // the contract method with ID 0xc63bc9d4.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function lastFundedEpoch(uint256 noId) view returns(uint256)
+// Solidity: function lastFundedEpoch(uint256 noId) view returns(uint256 epoch)
 func (sTSettlementVault2 *STSettlementVault2) PackLastFundedEpoch(noId *big.Int) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("lastFundedEpoch", noId)
 	if err != nil {
@@ -1993,7 +2565,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackLastFundedEpoch(noId *big.Int)
 // the contract method with ID 0xc63bc9d4.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function lastFundedEpoch(uint256 noId) view returns(uint256)
+// Solidity: function lastFundedEpoch(uint256 noId) view returns(uint256 epoch)
 func (sTSettlementVault2 *STSettlementVault2) TryPackLastFundedEpoch(noId *big.Int) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("lastFundedEpoch", noId)
 }
@@ -2001,7 +2573,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackLastFundedEpoch(noId *big.I
 // UnpackLastFundedEpoch is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0xc63bc9d4.
 //
-// Solidity: function lastFundedEpoch(uint256 noId) view returns(uint256)
+// Solidity: function lastFundedEpoch(uint256 noId) view returns(uint256 epoch)
 func (sTSettlementVault2 *STSettlementVault2) UnpackLastFundedEpoch(data []byte) (*big.Int, error) {
 	out, err := sTSettlementVault2.abi.Unpack("lastFundedEpoch", data)
 	if err != nil {
@@ -2120,7 +2692,7 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackPending(data []byte) (ISTSet
 // the contract method with ID 0x411e90d5.  This method will panic if any
 // invalid/nil inputs are passed.
 //
-// Solidity: function poolHotkeyUsed(bytes32 hotkey) view returns(bool)
+// Solidity: function poolHotkeyUsed(bytes32 hotkey) view returns(bool used)
 func (sTSettlementVault2 *STSettlementVault2) PackPoolHotkeyUsed(hotkey [32]byte) []byte {
 	enc, err := sTSettlementVault2.abi.Pack("poolHotkeyUsed", hotkey)
 	if err != nil {
@@ -2133,7 +2705,7 @@ func (sTSettlementVault2 *STSettlementVault2) PackPoolHotkeyUsed(hotkey [32]byte
 // the contract method with ID 0x411e90d5.  This method will return an error
 // if any inputs are invalid/nil.
 //
-// Solidity: function poolHotkeyUsed(bytes32 hotkey) view returns(bool)
+// Solidity: function poolHotkeyUsed(bytes32 hotkey) view returns(bool used)
 func (sTSettlementVault2 *STSettlementVault2) TryPackPoolHotkeyUsed(hotkey [32]byte) ([]byte, error) {
 	return sTSettlementVault2.abi.Pack("poolHotkeyUsed", hotkey)
 }
@@ -2141,7 +2713,7 @@ func (sTSettlementVault2 *STSettlementVault2) TryPackPoolHotkeyUsed(hotkey [32]b
 // UnpackPoolHotkeyUsed is the Go binding that unpacks the parameters returned
 // from invoking the contract method with ID 0x411e90d5.
 //
-// Solidity: function poolHotkeyUsed(bytes32 hotkey) view returns(bool)
+// Solidity: function poolHotkeyUsed(bytes32 hotkey) view returns(bool used)
 func (sTSettlementVault2 *STSettlementVault2) UnpackPoolHotkeyUsed(data []byte) (bool, error) {
 	out, err := sTSettlementVault2.abi.Unpack("poolHotkeyUsed", data)
 	if err != nil {
@@ -3171,6 +3743,9 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackError(raw []byte) (any, erro
 	if bytes.Equal(raw[:4], sTSettlementVault2.abi.Errors["InvalidTransition"].ID.Bytes()[:4]) {
 		return sTSettlementVault2.UnpackInvalidTransitionError(raw[4:])
 	}
+	if bytes.Equal(raw[:4], sTSettlementVault2.abi.Errors["MalformedPath"].ID.Bytes()[:4]) {
+		return sTSettlementVault2.UnpackMalformedPathError(raw[4:])
+	}
 	if bytes.Equal(raw[:4], sTSettlementVault2.abi.Errors["NativeBalanceDecreased"].ID.Bytes()[:4]) {
 		return sTSettlementVault2.UnpackNativeBalanceDecreasedError(raw[4:])
 	}
@@ -3200,6 +3775,9 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackError(raw []byte) (any, erro
 	}
 	if bytes.Equal(raw[:4], sTSettlementVault2.abi.Errors["RuntimeAccountingMismatch"].ID.Bytes()[:4]) {
 		return sTSettlementVault2.UnpackRuntimeAccountingMismatchError(raw[4:])
+	}
+	if bytes.Equal(raw[:4], sTSettlementVault2.abi.Errors["SafeCastOverflowedUintDowncast"].ID.Bytes()[:4]) {
+		return sTSettlementVault2.UnpackSafeCastOverflowedUintDowncastError(raw[4:])
 	}
 	if bytes.Equal(raw[:4], sTSettlementVault2.abi.Errors["StaleRootCount"].ID.Bytes()[:4]) {
 		return sTSettlementVault2.UnpackStaleRootCountError(raw[4:])
@@ -3642,6 +4220,29 @@ func (sTSettlementVault2 *STSettlementVault2) UnpackInvalidTransitionError(raw [
 	return out, nil
 }
 
+// STSettlementVault2MalformedPath represents a MalformedPath error raised by the STSettlementVault2 contract.
+type STSettlementVault2MalformedPath struct {
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error MalformedPath()
+func STSettlementVault2MalformedPathErrorID() common.Hash {
+	return common.HexToHash("0xd6c3bc107eef83b8b04413a351dfefde20c3fb502fa06bf319c327cc232ad475")
+}
+
+// UnpackMalformedPathError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error MalformedPath()
+func (sTSettlementVault2 *STSettlementVault2) UnpackMalformedPathError(raw []byte) (*STSettlementVault2MalformedPath, error) {
+	out := new(STSettlementVault2MalformedPath)
+	if err := sTSettlementVault2.abi.UnpackIntoInterface(out, "MalformedPath", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // STSettlementVault2NativeBalanceDecreased represents a NativeBalanceDecreased error raised by the STSettlementVault2 contract.
 type STSettlementVault2NativeBalanceDecreased struct {
 }
@@ -3867,6 +4468,31 @@ func STSettlementVault2RuntimeAccountingMismatchErrorID() common.Hash {
 func (sTSettlementVault2 *STSettlementVault2) UnpackRuntimeAccountingMismatchError(raw []byte) (*STSettlementVault2RuntimeAccountingMismatch, error) {
 	out := new(STSettlementVault2RuntimeAccountingMismatch)
 	if err := sTSettlementVault2.abi.UnpackIntoInterface(out, "RuntimeAccountingMismatch", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// STSettlementVault2SafeCastOverflowedUintDowncast represents a SafeCastOverflowedUintDowncast error raised by the STSettlementVault2 contract.
+type STSettlementVault2SafeCastOverflowedUintDowncast struct {
+	Bits  uint8
+	Value *big.Int
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error SafeCastOverflowedUintDowncast(uint8 bits, uint256 value)
+func STSettlementVault2SafeCastOverflowedUintDowncastErrorID() common.Hash {
+	return common.HexToHash("0x6dfcc6503a32754ce7a89698e18201fc5294fd4aad43edefee786f88423b1a12")
+}
+
+// UnpackSafeCastOverflowedUintDowncastError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error SafeCastOverflowedUintDowncast(uint8 bits, uint256 value)
+func (sTSettlementVault2 *STSettlementVault2) UnpackSafeCastOverflowedUintDowncastError(raw []byte) (*STSettlementVault2SafeCastOverflowedUintDowncast, error) {
+	out := new(STSettlementVault2SafeCastOverflowedUintDowncast)
+	if err := sTSettlementVault2.abi.UnpackIntoInterface(out, "SafeCastOverflowedUintDowncast", raw); err != nil {
 		return nil, err
 	}
 	return out, nil
