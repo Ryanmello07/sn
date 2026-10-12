@@ -1075,20 +1075,28 @@ var releaseGateUncachedCommands = []struct {
 	{phase: "server_db", command: "go test -race ./model -run \"$model_db_tests\" -count=1"},
 }
 
+// The bounded phase extractor ends at the first closing brace. Refuse nested
+// declarations before an incomplete one can look executable.
+var releaseGateUncachedNestedDeclaration = regexp.MustCompile(`(?m)^[\t ]*(function[\t ]+|[A-Za-z_][A-Za-z0-9_]*[\t ]*\([\t ]*\))`)
+
 // Check the existing line-oriented command contract, not a second shell runner.
 // Fixed body commands cannot be hidden, replaced by a list, or made compile-only.
+// Several commands share a phase, whose definitions are read once per script:
+// the isolation regressions' race run must fit its deadline as the gate grows.
 func verifyReleaseGateUncachedBodies(script string) error {
+	phaseDefinitions := map[string][][]string{}
 	for _, required := range releaseGateUncachedCommands {
-		pattern := regexp.MustCompile("(?ms)^[\\t ]*release_phase_" + regexp.QuoteMeta(required.phase) + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
-		definitions := pattern.FindAllStringSubmatch(script, -1)
+		definitions, read := phaseDefinitions[required.phase]
+		if !read {
+			pattern := regexp.MustCompile("(?ms)^[\\t ]*release_phase_" + regexp.QuoteMeta(required.phase) + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
+			definitions = pattern.FindAllStringSubmatch(script, -1)
+			phaseDefinitions[required.phase] = definitions
+		}
 		if len(definitions) != 1 {
 			return fmt.Errorf("uncached gate requires one %s phase", required.phase)
 		}
 		body := definitions[0][1]
-		// The bounded phase extractor ends at the first closing brace. Refuse
-		// nested declarations before an incomplete one can look executable.
-		nested := regexp.MustCompile(`(?m)^[\t ]*(function[\t ]+|[A-Za-z_][A-Za-z0-9_]*[\t ]*\([\t ]*\))`)
-		if nested.MatchString(body) {
+		if releaseGateUncachedNestedDeclaration.MatchString(body) {
 			return fmt.Errorf("uncached gate phase contains a nested function: %s", required.phase)
 		}
 		for _, line := range strings.Split(body, "\n") {
