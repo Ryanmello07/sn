@@ -1170,34 +1170,40 @@ func TestReleaseGateJobsRejectCachedOrHiddenAggregateBodies(t *testing.T) {
 	if err := verifyReleaseGateUncachedBodies(script); err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range releaseGateUncachedCommands {
+	for index, required := range releaseGateUncachedCommands {
 		if strings.Count(script, required.command) != 1 {
 			t.Fatalf("mutation lacks one actual %s body", required.phase)
 		}
-		for _, replacement := range []string{
-			strings.Replace(required.command, " -count=1", "", 1),
-			strings.Replace(required.command, "-count=1", "-count=0", 1),
-			required.command + " -count=2",
-			required.command + " -count=1",
-			required.command + " -run '^$'",
-			required.command + " -list '^Test'",
-			required.command + " || true",
-			"# " + required.command,
-			"if false; then\n" + required.command + "\nfi",
-			"release_unused_body() {\n" + required.command + "\n}",
-			"release_unused_body () {\n" + required.command + "\n}",
-			"function release_unused_body {\n" + required.command + "\n}",
-			"release_unused_body()\n{\n" + required.command + "\n}",
-			"(\n" + required.command + "\n)",
-			"{\n" + required.command + "\n}",
-			"cat <<'capture_body'\n" + required.command + "\ncapture_body",
-			required.command + "\n" + required.command,
-		} {
-			changed := strings.Replace(script, required.command, replacement, 1)
-			if err := verifyReleaseGateUncachedBodies(changed); err == nil {
-				t.Fatalf("uncached body admitted %s: %s", required.phase, replacement)
+		// Each mutation reads the whole gate again, so each body's mutations
+		// run in parallel: the isolation regressions' race run has three
+		// minutes.
+		t.Run(fmt.Sprintf("%02d-%s", index, required.phase), func(t *testing.T) {
+			t.Parallel()
+			for _, replacement := range []string{
+				strings.Replace(required.command, " -count=1", "", 1),
+				strings.Replace(required.command, "-count=1", "-count=0", 1),
+				required.command + " -count=2",
+				required.command + " -count=1",
+				required.command + " -run '^$'",
+				required.command + " -list '^Test'",
+				required.command + " || true",
+				"# " + required.command,
+				"if false; then\n" + required.command + "\nfi",
+				"release_unused_body() {\n" + required.command + "\n}",
+				"release_unused_body () {\n" + required.command + "\n}",
+				"function release_unused_body {\n" + required.command + "\n}",
+				"release_unused_body()\n{\n" + required.command + "\n}",
+				"(\n" + required.command + "\n)",
+				"{\n" + required.command + "\n}",
+				"cat <<'capture_body'\n" + required.command + "\ncapture_body",
+				required.command + "\n" + required.command,
+			} {
+				changed := strings.Replace(script, required.command, replacement, 1)
+				if err := verifyReleaseGateUncachedBodies(changed); err == nil {
+					t.Fatalf("uncached body admitted %s: %s", required.phase, replacement)
+				}
 			}
-		}
+		})
 	}
 	if err := verifyReleaseGateUncachedBodies(script + "\ngo test ./new-synthetic-package\n"); err == nil {
 		t.Fatal("new aggregate body omitted its fresh execution count")
