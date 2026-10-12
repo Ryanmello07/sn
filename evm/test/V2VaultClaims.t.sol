@@ -381,6 +381,37 @@ contract V2VaultClaimsTest is V2VaultBase {
         _assertConserved();
     }
 
+    // V-16: the cap is the latest finalized total also while a successor is
+    // pending. vault2 keeps the pending root at index rootCount, beside the
+    // finalized roots (§7.1), and its larger total lifts the cap only once it
+    // is finalized: Carol's 1,500 is refused under root 1's 2,000 while root
+    // 2 is pending with 2,500, and paid after root 2 is finalized.
+    function test_V16_theCapIsTheFinalizedTotalWhileASuccessorIsPending() public {
+        V2TreeHelper.Node[][] memory old = _root0();
+        _claim(NO1, 0, old, 0, ALICE, 600);
+        V2TreeHelper.Node[][] memory levels = _unchallengedDecrease(NO1, CAROL);
+
+        bytes32[] memory keys = new bytes32[](4);
+        uint256[] memory values = new uint256[](4);
+        (keys[0], keys[1], keys[2], keys[3]) = (ALICE, BOB, CAROL, DAVE);
+        (values[0], values[1], values[2], values[3]) = (100, 400, 1_500, 500);
+        _propose(NO1, V2TreeHelper.build(keys, values), 4);
+        assertEq(vault.pending(NO1).total, 2_500);
+        assertEq(vault.finalizedTotal(NO1), 2_000);
+
+        LedgerTree.Account memory carol = _account(2, CAROL, 1_500);
+        LedgerTree.ProofNode[] memory proof = V2TreeHelper.proof(levels, 2);
+        vm.expectRevert(ISTSettlementVault2.PoolCapExceeded.selector);
+        vault.claim(NO1, 1, carol, proof);
+        assertEq(vault.claimedTotal(NO1), 600);
+
+        _finalize(NO1);
+        assertEq(vault.finalizedTotal(NO1), 2_500);
+        assertEq(_claim(NO1, 1, levels, 2, CAROL, 1_500), 1_500);
+        assertEq(vault.claimedTotal(NO1), 2_100);
+        _assertConserved();
+    }
+
     // V-21: each pool's claims are capped by its own finalized total, however
     // much escrow holds for other pools.
     function test_V21_eachPoolIsCappedByItsOwnFinalizedTotal() public {
