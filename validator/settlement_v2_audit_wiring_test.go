@@ -17,6 +17,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/urfoundation/sn/protocol"
+	"github.com/urfoundation/sn/stabi"
 )
 
 // config is a release configuration carrying the settlement_v2 block for the
@@ -200,5 +203,75 @@ func TestSettlementV2AuditFromConfigRefusals(t *testing.T) {
 	if err != nil || audit == nil || audit.sender != nil || audit.maxBytes != DefaultLedgerMaxBytes || len(audit.pools) != 1 || audit.pools[0].noID != settlementV2AuditTestNoID ||
 		audit.pools[0].objects.(*settlementV2Objects).endpoint.String() != fixture.objects.url+"/sn/ledger/object" {
 		t.Fatalf("an audit without an auditor key: %v", err)
+	}
+}
+
+// VA-9: under the adopted configuration the ledger audit takes the
+// confirmation the runtime's first advance made, reading no contract
+// identity itself, and its pass over pools vault2 has not registered keeps
+// its custody beside the evidence state. The runtime then restarts on that
+// disk, and CLOSED_CENSUS still reads both closed epochs back under the
+// original activations.
+func TestSettlementV2AuditBesideClosedCensusAfterAdoption(t *testing.T) {
+	fixture := newReleaseRuntimeV2TestFixture(t)
+	closed := map[uint64]uint64{7: 1501, 8: 2001}
+	advance := func(epoch uint64) {
+		t.Helper()
+		block := closed[epoch]
+		if err := fixture.runtime.advance(t.Context(), &ReleaseSnapshot{Epoch: new(big.Int).SetUint64(epoch + 1), BlockNumber: block, BlockHash: fixture.startup.blocks[block]}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	advance(7)
+	fixture.startup.reopen(t)
+	block := settlementV2TestBlock
+	fixture.startup.cfg.SettlementV2 = &block
+	answers := settlementV2TestAnswers(fixture.startup.cfg.Coordinator)
+	unregistered, err := settlementV2VaultABI.Methods["pools"].Outputs.Pack(stabi.ISTSettlementVault2Pool{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operator := range fixture.startup.cfg.Operators {
+		answers[block.Vault+"/"+common.Bytes2Hex(settlementV2Vault.PackPools(new(big.Int).SetUint64(operator.NoID)))] = unregistered
+	}
+	fixture.evm.serveSettlementV2(answers)
+	fixture.start(t)
+	advance(8)
+	audit, err := newReleaseSettlementV2Audit(t.Context(), &fixture.startup.cfg, fixture.startup.chain, fixture.runtime.settlementV2Confirmed)
+	if err != nil || audit == nil {
+		t.Fatal("the adopted configuration builds no audit", err)
+	}
+	if err := audit.confirmed(t.Context()); err != nil || fixture.evm.settlementV2ReadCount() != 3 {
+		t.Fatal("the audit did not take the runtime's confirmation", err, fixture.evm.settlementV2ReadCount())
+	}
+	for _, pool := range audit.pools {
+		if err := audit.audit(t.Context(), pool); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fixture.evm.settlementV2ReadCount() != 3+len(audit.pools) {
+		t.Fatal("the audit did not read each pool once", fixture.evm.settlementV2ReadCount())
+	}
+	if info, err := os.Stat(filepath.Join(fixture.startup.cfg.StateDir, "settlement-v2-ledger")); err != nil || !info.IsDir() {
+		t.Fatal("no custody under state_dir", err)
+	}
+	fixture.startup.reopen(t)
+	fixture.start(t)
+	for epoch, finalized := range closed {
+		path, err := ValidatorEvidencePublicationV2ManifestPath(fixture.startup.cfg.StateDir, epoch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifest, err := ReadValidatorEvidencePublicationV2Manifest(t.Context(), path, fixture.startup.cfg.EvidenceV2.Bounds.MaxClosureBytes, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		options := ValidatorEvidencePublicationV2ReadOptions{Origins: fixture.origins, Bounds: fixture.startup.cfg.EvidenceV2.Bounds, Window: protocol.ValidatorEvidenceWindow{Epoch: epoch, StartBlock: 1001 + 500*(epoch-7), EndBlock: 1501 + 500*(epoch-7), FinalizedBlock: finalized}}
+		for _, input := range fixture.startup.inputs {
+			options.Activations = append(options.Activations, input.Context.Activation)
+		}
+		if publication, err := ReadValidatorEvidencePublicationV2(t.Context(), manifest, options); err != nil || len(publication.Members) != 2 {
+			t.Fatalf("epoch %d closed census beside the audit: %v", epoch, err)
+		}
 	}
 }
