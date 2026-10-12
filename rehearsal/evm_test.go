@@ -184,6 +184,30 @@ func (self *node) transact(t *testing.T, from evmKey, to *common.Address, value 
 	}
 }
 
+// sendTx signs and sends a transaction without value, naming gas, and
+// returns the pool's answer; an accepted one is sealed.
+func (self *node) sendTx(t *testing.T, from evmKey, to *common.Address, data []byte, gas uint64) error {
+	t.Helper()
+	nonce, err := self.eth.NonceAt(self.ctx, from.address, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	price, err := self.eth.SuggestGasPrice(self.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := gethtypes.SignNewTx(from.private, gethtypes.LatestSignerForChainID(big.NewInt(evmChainID)),
+		&gethtypes.LegacyTx{Nonce: nonce, GasPrice: price, Gas: gas, To: to, Data: data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := self.eth.SendTransaction(self.ctx, tx); err != nil {
+		return err
+	}
+	self.seal(t)
+	return nil
+}
+
 // deploy runs creation bytecode (with any constructor arguments appended)
 // and returns the new contract's address.
 func (self *node) deploy(t *testing.T, from evmKey, creation []byte) common.Address {
