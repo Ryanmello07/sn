@@ -342,13 +342,15 @@ func verifyReleaseGateV2InvariantCampaign(script, foundry, invariant string) err
 // gate's private services; every root of a v2 test file is selected.
 func releaseGateLedgerV2ServerGroup(t *testing.T) releaseEvidenceV2GateGroup {
 	t.Helper()
-	packages := ". ./controller ./model ./startifact ./taskworker ./taskworker/work"
+	packages := ". ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work"
 	return releaseEvidenceV2GateGroup{
 		phase: "server_db", job: "server-db", variable: "ledger_v2_tests",
-		alternatives: "StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2",
+		alternatives: "StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet",
 		packages:     strings.Fields(packages),
 		sources: map[string][]string{
 			".":                 releaseEvidenceV2GateSources(t, []string{"../../server/*ledger_v2*_test.go"}),
+			"./api":             releaseEvidenceV2GateSources(t, []string{"../../server/api/*ledger_v2*_test.go", "../../server/api/sn_ledger*_test.go"}),
+			"./bringyourctl":    releaseEvidenceV2GateSources(t, []string{"../../server/bringyourctl/*ledger_v2*_test.go"}),
 			"./controller":      releaseEvidenceV2GateSources(t, []string{"../../server/controller/*ledger_v2*_test.go"}),
 			"./model":           releaseEvidenceV2GateSources(t, []string{"../../server/model/*ledger_v2*_test.go"}),
 			"./startifact":      releaseEvidenceV2GateSources(t, []string{"../../server/startifact/*ledger_v2*_test.go"}),
