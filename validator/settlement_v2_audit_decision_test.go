@@ -297,6 +297,26 @@ func TestSettlementV2AuditDemandSampleDoublesAfterFailedRoot(t *testing.T) {
 	requireSettlementV2AuditDemands(t, sender, f, 0, want)
 }
 
+// VA-4: a pending root over the same F replaced while one of its demands was
+// open doubles the sample as a deleted one does, and its unanswered index is
+// demanded again.
+func TestSettlementV2AuditDemandSampleDoublesAfterReplacedRoot(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2AuditTestFixture(t)
+	f, p, sender := fixture.useLargeScenario(t, 600)
+	fixture.committed(t, 605, 2, p.Commit, 0)
+	fixture.chain.addLog(t, settlementV2VaultABI, settlementV2TestVault, "PathDemanded", 610, big.NewInt(settlementV2AuditTestNoID), uint64(2), big.NewInt(0), big.NewInt(7), common.Address{0xd1})
+	fixture.committed(t, 1405, 3, p.Commit, 2)
+	fixture.useScenarioAt(t, f, p.Commit, ledger.Objects{}, true, 3, 1405, 1430)
+	fixture.mustPass(t)
+	want := settlementV2AuditTestDemandSet(t, f.Accounts, 1, []uint64{7})
+	record := fixture.record(t, 3)
+	if record.Doublings != 1 || !slices.Equal(record.Demands, want) || !slices.Contains(want, 7) || len(want) < 2*ledger.DemandSample {
+		t.Fatalf("doublings %d, %d demanded", record.Doublings, len(record.Demands))
+	}
+	requireSettlementV2AuditDemands(t, sender, f, 0, want)
+}
+
 // settlementV2AuditTestDemandSet is the demand set the audit draws with its
 // random stream: again and the value-weighted sample over all of accounts,
 // as ledger.DemandSet returns them, then each faulted index the sample did
