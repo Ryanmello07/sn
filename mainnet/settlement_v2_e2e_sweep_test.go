@@ -155,7 +155,7 @@ func TestSettlementV2E2ESweepPath(t *testing.T) {
 	// The test coordinator upgrade, the I suite's STSettlement2Surplus with
 	// the phase C wrapper, assigns it: only through the owner, and never more
 	// than the surplus.
-	wrapper := e2eForgeArtifact(t, "V2LifecycleHandler.sol", "STSettlement2Surplus")
+	wrapper := e2eForgeArtifact(t, "STSettlement2Surplus")
 	upgrade := f.deploy(f.deployer, wrapper, nil)
 	upgradeABI := wrapper.abi
 	pack := func(method string, args ...any) []byte {

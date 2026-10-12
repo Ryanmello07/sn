@@ -104,41 +104,72 @@ func e2eCatalogArtifact(t *testing.T, name string) *e2eArtifact {
 	return nil
 }
 
-// e2eForgeArtifact reads a contract from the Foundry build of sn/evm
-// (FOUNDRY_OUT when set): the settlement v2 contracts until the reviewed
-// catalog lists them, and the test coordinator upgrade.
-func e2eForgeArtifact(t testing.TB, file, name string) *e2eArtifact {
+// e2eForgeSources are the contracts the suite reads from a Foundry build of
+// sn/evm: the settlement v2 contracts until the reviewed catalog lists them,
+// and the test coordinator upgrade.
+var e2eForgeSources = []struct{ source, name string }{
+	{"src/STSettlementVault2.sol", "STSettlementVault2"},
+	{"src/STSettlement2.sol", "STSettlement2"},
+	{"test/utils/V2LifecycleHandler.sol", "STSettlement2Surplus"},
+}
+
+// e2eForgeBuild builds those sources once per test binary in a private
+// directory and removes it once their artifacts are read, so the suite never
+// reads another build, such as a release gate's that is still being written.
+var e2eForgeBuild = sync.OnceValue(func() error {
+	root, err := os.MkdirTemp("", "sn-e2e-forge-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+	arguments := []string{"build"}
+	for _, contract := range e2eForgeSources {
+		arguments = append(arguments, contract.source)
+	}
+	build := exec.Command("forge", arguments...)
+	build.Dir = filepath.Join("..", "evm")
+	build.Env = append(os.Environ(), "FOUNDRY_OUT="+filepath.Join(root, "out"), "FOUNDRY_CACHE_PATH="+filepath.Join(root, "cache"))
+	if output, err := build.CombinedOutput(); err != nil {
+		return fmt.Errorf("forge build in sn/evm: %v\n%s", err, output)
+	}
+	for _, contract := range e2eForgeSources {
+		raw, err := os.ReadFile(filepath.Join(root, "out", filepath.Base(contract.source), contract.name+".json"))
+		if err != nil {
+			return err
+		}
+		var artifact struct {
+			ABI      json.RawMessage `json:"abi"`
+			Bytecode struct {
+				Object string `json:"object"`
+			} `json:"bytecode"`
+		}
+		if err := json.Unmarshal(raw, &artifact); err != nil {
+			return err
+		}
+		parsed, err := abi.JSON(bytes.NewReader(artifact.ABI))
+		if err != nil {
+			return err
+		}
+		loaded := &e2eArtifact{abi: parsed, creation: common.FromHex(artifact.Bytecode.Object)}
+		if len(loaded.creation) == 0 {
+			return fmt.Errorf("forge artifact %s has no creation bytecode", contract.name)
+		}
+		e2eArtifacts.Store("forge/"+contract.name, loaded)
+	}
+	return nil
+})
+
+// e2eForgeArtifact reads one of e2eForgeSources' contracts.
+func e2eForgeArtifact(t testing.TB, name string) *e2eArtifact {
 	t.Helper()
-	if cached, ok := e2eArtifacts.Load("forge/" + name); ok {
-		return cached.(*e2eArtifact)
-	}
-	out := os.Getenv("FOUNDRY_OUT")
-	if out == "" {
-		out = filepath.Join("..", "evm", "out")
-	}
-	raw, err := os.ReadFile(filepath.Join(out, file, name+".json"))
-	if err != nil {
-		t.Fatalf("forge artifact %s (run forge build in sn/evm): %v", name, err)
-	}
-	var artifact struct {
-		ABI      json.RawMessage `json:"abi"`
-		Bytecode struct {
-			Object string `json:"object"`
-		} `json:"bytecode"`
-	}
-	if err := json.Unmarshal(raw, &artifact); err != nil {
+	if err := e2eForgeBuild(); err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := abi.JSON(bytes.NewReader(artifact.ABI))
-	if err != nil {
-		t.Fatal(err)
+	loaded, ok := e2eArtifacts.Load("forge/" + name)
+	if !ok {
+		t.Fatalf("the suite builds no %s", name)
 	}
-	loaded := &e2eArtifact{abi: parsed, creation: common.FromHex(artifact.Bytecode.Object)}
-	if len(loaded.creation) == 0 {
-		t.Fatalf("forge artifact %s has no creation bytecode", name)
-	}
-	e2eArtifacts.Store("forge/"+name, loaded)
-	return loaded
+	return loaded.(*e2eArtifact)
 }
 
 // e2eActor is an EVM key.
@@ -327,8 +358,8 @@ func (f *e2eFixture) deployV1() {
 // coordinator.
 func (f *e2eFixture) deployV2() {
 	f.t.Helper()
-	vault2 := e2eForgeArtifact(f.t, "STSettlementVault2.sol", "STSettlementVault2")
-	settlement := e2eForgeArtifact(f.t, "STSettlement2.sol", "STSettlement2")
+	vault2 := e2eForgeArtifact(f.t, "STSettlementVault2")
+	settlement := e2eForgeArtifact(f.t, "STSettlement2")
 	f.vault2ABI, f.settlementABI = vault2.abi, settlement.abi
 	f.vault2Coldkey = ss58.EvmMirrorPubkey(crypto.CreateAddress(f.deployer.address, f.chain.nonce(f.deployer.address)))
 	f.vault2 = f.deploy(f.deployer, vault2, nil, uint16(e2eNetuid), f.escrowV2, f.vault2Coldkey, f.deployer.address, e2eRao(e2eDemandFeeWei))
