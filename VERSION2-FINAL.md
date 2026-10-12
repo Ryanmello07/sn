@@ -1188,9 +1188,9 @@ claim's least limit with margin, and the batch's largest single-claim
 estimate. Measured on runtime 475 at depth 29 (R-7): a transaction may name at
 most 64,998,500 gas, below the 75,000,000 block gas limit, and so holds at
 most 418 claims; from ten claims on a batch uses 15 to 18% less gas than the
-same claims alone (148,569 per claim in a batch of 20, against 169,944 to
-187,078 alone), and its gas limit grows by about 149,000 per claim where each
-single claim needs about 2.45M. A batch of one costs 6% more than a claim
+same claims alone (148,596 per claim in a batch of 20, against 169,968 to
+187,102 alone), and its gas limit grows by about 149,000 per claim where each
+single claim needs about 2.44M. A batch of one costs 6% more than a claim
 alone, so the tools send a lone claim directly. The deployment phase can
 create the batcher (§8.5).
 
@@ -1581,7 +1581,7 @@ bytecode.
 | R-4 | Pool registration, also at a nonzero collateral lock share, whose lock vault2 never moves or counts; re-registration after pruning; stake on a pruned hotkey, the escrow's included; `absorbStake` from the v1 escrow hotkey |
 | R-5 | Approvals from an auditor address; a demand paying `demandFeeWei`, and its answer |
 | R-6 | Gas used and gas limit needed, at depth 29, for a claim, a demand, an approval, a capturing close, a close deferring one epoch and one deferring many, a commit, an answer and a finalize; the operator's transactions, a capturing close with a few deferred epochs included, fit the re-signed operator gas policy (§8.1, §13) |
-| R-7 | Batched claims (§10.2), at depth 29: the block gas limit and the most gas one transaction may name; the gas used and the least gas limit of single claims and of batches of 1, 5, 10, 20 and the most one transaction holds, each batch capped at the default gas per claim and paying every item |
+| R-7 | Batched claims (§10.2), at depth 29: the block gas limit and the most gas one transaction may name; the gas used and the least gas limit of single claims and of batches of 1, 5, 10, 20 and the most one transaction holds, each batch capped at the default gas per claim and paying every item; a batch whose broken proof and claim below the transfer floor are each refused alone, with exact events, while the claims around them pay |
 
 ### 15.9 Guarantee traceability
 

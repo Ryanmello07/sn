@@ -3,6 +3,7 @@
 package rehearsal
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -17,8 +18,9 @@ import (
 )
 
 // batchAccounts is the number of accounts R-7's root holds: enough for the
-// single claims, the fixed batches and more than the most one transaction
-// holds, which was 418 and grows as claims get cheaper.
+// single claims, the fixed batches, more than the most one transaction holds,
+// which was 418 and grows as claims get cheaper, and a mixed batch. The last
+// account holds less than the runtime's transfer floor.
 const batchAccounts = 700
 
 // claimItem is STClaimBatcher.Claim.
@@ -36,7 +38,8 @@ type claimItem struct {
 // and for the most one block holds, the gas used and the least gas limit at
 // which the batch attempts every item. Each batch caps each claim at the
 // tooling's default gas per claim, is sent with exactly its least limit, and
-// pays every item.
+// pays every item. A last batch mixes two refusals, a broken proof and a
+// claim below the transfer floor, with claims that pay.
 func TestR7ClaimBatch(t *testing.T) {
 	t.Parallel()
 	n := startNode(t)
@@ -53,13 +56,20 @@ func TestR7ClaimBatch(t *testing.T) {
 	n.stakeFor(t, alice, s.vaultColdkey, operator.pool, s.netuid, 1_000*tao)
 	s.close(t, 1, 1)
 	funded := s.vaultUint(t, "fundedThrough", id(1), id(1)).Uint64()
+	alpha := forgeArtifact(t, "src/interfaces/alpha.sol", "IAlpha")
+	priceQ9 := new(big.Int).Quo(n.read(t, alphaAddress, alpha, "getAlphaPrice", s.netuid)[0].(*big.Int), big.NewInt(tao)).Uint64()
+	dust := minimumTransferTaoRao * tao / priceQ9 / 2
+	share := (funded - dust) / (batchAccounts - 1)
 	accounts := make([]merkle.LedgerAccount, batchAccounts)
 	for i := range accounts {
-		share := funded / batchAccounts
-		if i == len(accounts)-1 {
-			share = funded - share*(batchAccounts-1)
+		amount := share
+		switch i {
+		case 0:
+			amount = funded - dust - share*(batchAccounts-2)
+		case batchAccounts - 1:
+			amount = dust
 		}
-		accounts[i] = ledgerAccount(newAccount(t), share)
+		accounts[i] = ledgerAccount(newAccount(t), amount)
 	}
 	l := newLedger(t, accounts, deepLeafCount)
 	committed := l.commitment("ledger header epoch 1")
@@ -226,4 +236,70 @@ func TestR7ClaimBatch(t *testing.T) {
 	}
 	used, limit := batch(t, most, maxGas)
 	t.Logf("batch of %d, the most one transaction holds: used %d (%d per claim), least limit %d of %d", most, used, used/most, limit, maxGas)
+
+	// A batch whose second claim has a broken proof and whose third is below
+	// the runtime's transfer floor: each is refused alone, vault2 reverting
+	// with InvalidProof and the runtime's refusal, which returns nothing,
+	// reported as selector zero; the claims around them pay. vault2's
+	// reentrancy flag is persistent, so the revert leaves it clear: runtime
+	// 475 would keep a transient one (transient_test.go).
+	broken := l.proof(next + 1)
+	broken[0].Hash[0] ^= 1
+	items := []claimItem{
+		{NoId: id(1), RootIndex: id(0), Account: l.account(next), Proof: l.proof(next)},
+		{NoId: id(1), RootIndex: id(0), Account: l.account(next + 1), Proof: broken},
+		{NoId: id(1), RootIndex: id(0), Account: l.account(batchAccounts - 1), Proof: l.proof(batchAccounts - 1)},
+		{NoId: id(1), RootIndex: id(0), Account: l.account(next + 2), Proof: l.proof(next + 2)},
+	}
+	data := batcherArtifact.pack(t, "claimMany", s.vault, items, id(onchain.ClaimBatchGasPerClaim))
+	limit = least(batcher, data, maxGas, func(out []byte, err error) bool { return attempted(out, err) == uint64(len(items)) })
+	receipt := n.transact(t, relayer, &batcher, nil, data, limit)
+	if receipt.Status != gethtypes.ReceiptStatusSuccessful {
+		t.Fatalf("the mixed batch sent with its least limit %d failed", limit)
+	}
+	var invalidProof [4]byte
+	invalidProofId := s.vaultArtifact.abi.Errors["InvalidProof"].ID
+	copy(invalidProof[:], invalidProofId[:4])
+	want := []struct {
+		event  string
+		fields map[string]any
+	}{
+		{"ClaimPaid", map[string]any{"item": id(0), "amount": items[0].Account.Cumulative}},
+		{"ClaimRefused", map[string]any{"item": id(1), "selector": invalidProof}},
+		{"ClaimRefused", map[string]any{"item": id(2), "selector": [4]byte{}}},
+		{"ClaimPaid", map[string]any{"item": id(3), "amount": items[3].Account.Cumulative}},
+	}
+	var got []map[string]any
+	for _, log := range receipt.Logs {
+		if log.Address != batcher {
+			continue
+		}
+		event, err := batcherArtifact.abi.EventByID(log.Topics[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		fields := map[string]any{"event": event.Name}
+		if err := event.Inputs.UnpackIntoMap(fields, log.Data); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, fields)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("the mixed batch's events: %v", got)
+	}
+	for i, w := range want {
+		w.fields["event"] = w.event
+		if fmt.Sprint(got[i]) != fmt.Sprint(w.fields) {
+			t.Fatalf("the mixed batch's event %d: %v, want %v", i, got[i], w.fields)
+		}
+	}
+	paid(t, next)
+	paid(t, next+2)
+	for _, index := range []uint64{next + 1, batchAccounts - 1} {
+		if claimed := s.vaultUint(t, "claimed", id(1), id(index)); claimed.Sign() != 0 {
+			t.Fatalf("refused account %d claimed %s", index, claimed)
+		}
+	}
+	s.requireConservation(t)
+	t.Logf("batch of 4, the second with a broken proof and the third a %d rao claim below the transfer floor: used %d, least limit %d", dust, receipt.GasUsed, limit)
 }

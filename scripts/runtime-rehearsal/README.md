@@ -224,7 +224,7 @@ RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
 
 The whole package, the smoke test, the transient-storage probe and R-2 to
 R-6 each on its own node in parallel, took 8 minutes 22 seconds on
-2026-10-12 (R-7, added the same day, takes about 8 minutes on its own node).
+2026-10-12 (R-7, added the same day, takes about 7 minutes on its own node).
 Sealing runs at about 110 to 125 blocks a second whether or not blocks
 finalize or several callers seal at once, so a 14,400-block challenge window
 takes about 2 minutes.
@@ -336,7 +336,7 @@ tempo of 360. Measured:
   `rpc-binary-search-estimate`: its search stops once a step moves the bound
   by less than 10%, so a limit can exceed the least sufficient one by up to
   that much and need not fall with the gas used.
-- **R-7 batched claims** (`TestR7ClaimBatch`, 465 seconds), on a root of
+- **R-7 batched claims** (`TestR7ClaimBatch`, 423 seconds), on a root of
   2^29 accounts: claims through `STClaimBatcher` (`evm/src/STClaimBatcher.sol`),
   each item capped at the tooling's default gas per claim of 2,600,000
   (`onchain.ClaimBatchGasPerClaim`), and each batch sent with exactly the
@@ -353,25 +353,25 @@ tempo of 360. Measured:
   (`onchain.ClaimBatchMaxGas`). Two accounts' claimed watermarks share a
   slot of vault2, so consecutive accounts alternate between a claim that
   writes its slot's first value and one after its neighbour's: alone they
-  used 187,043 to 187,078 and 169,944 to 169,967 gas; `eth_estimateGas` gave
-  a limit of up to 2,573,886, and the least limit that paid was up to
-  2,443,905, below the default cap. Each batch claims consecutive accounts,
-  half of each kind.
+  used 187,067 to 187,102 and 169,968 to 169,991 gas; `eth_estimateGas` gave
+  a limit of up to 2,573,957, and the least limit that paid was up to
+  2,443,929, below the default cap. Each batch claims consecutive accounts,
+  so about half of each kind.
 
   | Claims | Gas used | Per claim | Least gas limit |
   | --- | ---: | ---: | ---: |
-  | 1, batched | 180,878 | 180,878 | 2,704,233 |
-  | 5, batched | 783,263 | 156,652 | 3,319,025 |
-  | 10, batched | 1,508,596 | 150,859 | 4,058,357 |
-  | 20, batched | 2,971,386 | 148,569 | 5,549,148 |
-  | 418, the most one transaction holds | 61,186,350 | 146,378 | 64,878,579 |
+  | 1, batched | 180,890 | 180,890 | 2,704,245 |
+  | 5, batched | 783,371 | 156,674 | 3,319,133 |
+  | 10, batched | 1,508,764 | 150,876 | 4,058,525 |
+  | 20, batched | 2,971,926 | 148,596 | 5,549,688 |
+  | 418, the most one transaction holds | 61,206,546 | 146,427 | 64,898,775 |
 
   Against the same claims sent alone, a batch of 10 uses 15.5% less gas, a
   batch of 20 16.8% and the largest 18.0%: the 21,000 intrinsic gas of a
   transaction and vault2's first, cold reads are paid once. Its least limit
   grows by about 149,000 gas per claim, because only the last item needs
   the 2.6M the runtime admits a transfer with; ten single claims need ten
-  limits of about 2.45M. A batch of one, an account after its neighbour's,
+  limits of about 2.44M. A batch of one, an account after its neighbour's,
   used 6% more than such a claim alone, so the tooling sends a lone claim
   directly. The most one transaction holds is searched by batch size, since
   offering more accounts than fit also spends their calldata's intrinsic
@@ -379,3 +379,13 @@ tempo of 360. Measured:
   fit. Against vault2 before its gas reduction (snv2 `7202d7cb`) single
   claims used about 202,500 gas, a batch of 20 166,340 per claim, and one
   transaction held 339 claims.
+
+  A last batch of four, whose second claim had a broken proof and whose third
+  was below the transfer floor, paid the first and the fourth and reported
+  the second's `InvalidProof` and the third's runtime refusal, which returns
+  nothing, as selector zero; both accounts stayed claimable. It used
+  2,974,684 gas: the runtime consumes all the gas forwarded to a precompile
+  call it refuses, so the refused claim used nearly all of its 2.6M cap, and
+  the tools preflight each claim to keep refusals out of a batch. vault2's
+  reentrancy flag, persistent storage, was clear again for the claim after
+  each refusal.

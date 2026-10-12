@@ -1591,7 +1591,7 @@ because the runtime admits a stake transfer only if the forwarded gas covers its
 (`VERSION2-FINAL.md` §7.3, §8.1). An optional, stateless claim batcher (`STClaimBatcher`) claims many
 accounts in one transaction, each capped at its own gas so that a claim the runtime refuses cannot starve
 the others, and still only to each leaf's coldkey: from ten claims on it saves 15–18% of their gas, and
-a batch's gas limit grows by about 149,000 per claim where a single claim needs about 2.45M. One
+a batch's gas limit grows by about 149,000 per claim where a single claim needs about 2.44M. One
 transaction holds up to 418 claims at the deepest tree (`VERSION2-FINAL.md` §10.2, R-7).
 Pausing settlement never stops claims. Claims are pull‑based, so settlement is `O(1)` on‑chain regardless of
 participant count, and each pool has its own root — **there is no global claim root**.
