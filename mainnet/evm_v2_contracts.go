@@ -206,6 +206,17 @@ func contractSettlement2Payload(artifact contractReleaseArtifact, action evmPhas
 	return runtime, getters, append(storage, contractSettlement2Storage(contractSettlement2Initializer{}, 0)...), nil
 }
 
+// The optional claim batcher is the exact argument-free release creation. It
+// has no immutables and no state, so its exact runtime is its whole readback.
+func contractClaimBatcherPayload(artifact contractReleaseArtifact, action evmPhaseAction) ([]byte, error) {
+	creation, creationErr := contractCode(artifact.Creation, 48*1024)
+	parsed, abiErr := abi.JSON(strings.NewReader(artifact.Abi))
+	if err := errors.Join(creationErr, abiErr); err != nil || artifact.Name != "ClaimBatcher" || len(parsed.Constructor.Inputs) != 0 || action.Data != "0x"+hex.EncodeToString(creation) {
+		return nil, errors.Join(errors.New("approved claim batcher differs from the exact argument-free release creation"), err)
+	}
+	return artifact.withImmutables(map[string][]byte{})
+}
+
 // Action two calls the derived vault2 with one exact uint64 burn cap and its
 // wei funding, the original registration's 10^9 rao conversion.
 func contractEscrow2Action(p evmPhasePlan, vault evmCreatePlan) (contractEscrowRegistration, error) {

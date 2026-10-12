@@ -231,16 +231,17 @@ from epoch 2, R-5 from epoch 3). R-2, R-4 and R-5 stop subnet epochs (tempo
 0) so that no dividend moves a position between two reads; R-3 runs SN25's
 tempo of 360. Measured:
 
-- **R-1 deployment** (`TestR1SettlementV2Phase`, 86 seconds). The settlement
+- **R-1 deployment** (`TestR1SettlementV2Phase`, 72 seconds). The settlement
   v2 phase of `bootstrap-contracts` deployed the final vault2 and its escrow
   registration, sent back to back and sealed into one block, then the
-  STSettlement2 implementation, the initialized proxy and vault2's binding.
-  Each completed only after its readback against the real precompiles, and
-  the escrow position held no registration collateral. Gas used of the
-  approved limits: `vault2-create` 2,600,537 of 4,000,000,
-  `escrow2-register` 1,465,892 of 2,500,000, `settlement2-create` 1,935,622
-  of 3,000,000, `proxy2-create` 310,486 of 1,000,000 and `vault2-link`
-  33,523 of 150,000.
+  STSettlement2 implementation, the initialized proxy and vault2's binding,
+  and, as the optional sixth action, the claim batcher. Each completed only
+  after its readback against the real precompiles, and the escrow position
+  held no registration collateral. Gas used of the approved limits:
+  `vault2-create` 2,600,537 of 4,000,000, `escrow2-register` 1,465,892 of
+  2,500,000, `settlement2-create` 1,935,622 of 3,000,000, `proxy2-create`
+  310,486 of 1,000,000, `vault2-link` 33,523 of 150,000 and `batcher-create`
+  285,209 of 400,000.
 - **R-2 capture.** A pool holding nothing funded 0 without a runtime call
   (gas 131,987). With 88,974,634,979 rao on the pool, the close moved exactly
   that and escrow gained exactly that (gas 287,215). A pool registered at a

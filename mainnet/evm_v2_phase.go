@@ -1,7 +1,8 @@
 // The settlement v2 contract phase is a separate five-action graph under one
-// independent approval. It reuses the original phase's envelopes, approval,
-// journals, owner and owned receipt adapter; completion reads back all three
-// installed contracts at the binding's canonical inclusion.
+// independent approval, which may add a sixth action creating the claim
+// batcher. It reuses the original phase's envelopes, approval, journals,
+// owner and owned receipt adapter; completion reads back all three installed
+// contracts at the binding's canonical inclusion.
 package main
 
 import (
@@ -41,6 +42,25 @@ var evmV2Actions = []evmV2Action{
 	{"vault2-link", "vault2-link.json", "urnetwork-mainnet-evm-vault2-link-state-v1", "vault2 coordinator binding", "vault2-coordinator-bound", "vault-binding-reverted-nonce-consumed"},
 }
 
+// An approval may add one optional sixth action after the binding: the
+// argument-free CREATE of the claim batcher (VERSION2-FINAL.md §10.2) at the
+// deployer's next nonce. Nothing depends on it, and it changes no other
+// action.
+var evmV2BatcherAction = evmV2Action{"batcher-create", "batcher-create.json", "urnetwork-mainnet-evm-batcher-state-v1", "claim batcher", "batcher-created", "create-reverted-nonce-consumed"}
+
+// The settlement v2 action at a graph index, the claim batcher's included.
+func evmV2ActionAt(index int) evmV2Action {
+	if index == len(evmV2Actions) {
+		return evmV2BatcherAction
+	}
+	return evmV2Actions[index]
+}
+
+// A settlement v2 graph has its five actions, or six with the claim batcher.
+func evmV2GraphSize(actions int) bool {
+	return actions == len(evmV2Actions) || actions == len(evmV2Actions)+1
+}
+
 // The schema alone selects the phase; the original plan never carries it.
 func (self evmPhasePlan) settlementV2() bool {
 	return self.Schema == evmPhase2Schema
@@ -55,18 +75,22 @@ func evmV2ActionIds() []string {
 	return ids
 }
 
-// The graph index of a settlement v2 action id, or -1.
+// The graph index of a settlement v2 action id, the claim batcher's
+// included, or -1.
 func evmV2ActionIndex(id string) int {
+	if id == evmV2BatcherAction.id {
+		return len(evmV2Actions)
+	}
 	return slices.IndexFunc(evmV2Actions, func(action evmV2Action) bool { return action.id == id })
 }
 
 // Predecessor projections in graph order: vault2, its escrow registration,
-// the implementation and the initialized proxy.
+// the implementation, the initialized proxy and the binding.
 func (self evmCreatePlan) v2Prior() []*evmCreatePlan {
-	return []*evmCreatePlan{self.Vault, self.Escrow, self.Coordinator, self.Proxy}
+	return []*evmCreatePlan{self.Vault, self.Escrow, self.Coordinator, self.Proxy, self.VaultLink}
 }
 
-// One bootstrap deployer sends all five at consecutive nonces. The three
+// One bootstrap deployer sends all of them at consecutive nonces. The
 // CREATEs carry no value; both calls are checked by their own builders.
 func evmV2GraphEdges(p evmPhasePlan) error {
 	first := p.Actions[0]
@@ -74,7 +98,7 @@ func evmV2GraphEdges(p evmPhasePlan) error {
 		return errors.New("settlement v2 nonces overflow")
 	}
 	for index, action := range p.Actions {
-		create := index == 0 || index == 2 || index == 3
+		create := index == 0 || index == 2 || index == 3 || index == 5
 		if action.Sender != first.Sender || action.Nonce != first.Nonce+uint64(index) || create && (action.To != nil || action.ValueWei != "0") {
 			return errors.New("settlement v2 actions must be one deployer's consecutive nonces with zero-value CREATEs")
 		}
@@ -87,10 +111,10 @@ func evmV2GraphEdges(p evmPhasePlan) error {
 // first send. Predecessors are shared objects, as in the original graph.
 func buildEvmV2Graph(ctx context.Context, config evmPhaseConfig, configPath string) ([]*evmCreatePlan, error) {
 	p := config.Plan
-	if !p.settlementV2() || len(p.Actions) != len(evmV2Actions) {
+	if !p.settlementV2() || !evmV2GraphSize(len(p.Actions)) {
 		return nil, errors.New("contract config is not the five-action settlement v2 phase")
 	}
-	for _, action := range evmV2Actions {
+	for _, action := range append(slices.Clone(evmV2Actions), evmV2BatcherAction) {
 		statePath := filepath.Join(p.RunDirectory, action.file)
 		for _, input := range []string{configPath, p.Artifacts.Path} {
 			if input == statePath || input == statePath+".lock" {
@@ -101,7 +125,7 @@ func buildEvmV2Graph(ctx context.Context, config evmPhaseConfig, configPath stri
 	if err := evmV2GraphEdges(p); err != nil {
 		return nil, err
 	}
-	release, err := loadContractReleaseOf(ctx, p.Artifacts, contractReleaseV2Schema, "SettlementVault2", "Settlement2", "ERC1967Proxy")
+	release, err := loadContractReleaseOf(ctx, p.Artifacts, contractReleaseV2Schema, "SettlementVault2", "Settlement2", "ERC1967Proxy", "ClaimBatcher")
 	if err != nil {
 		return nil, err
 	}
@@ -140,10 +164,20 @@ func buildEvmV2Graph(ctx context.Context, config evmPhaseConfig, configPath stri
 	}
 	link := evmCreatePlan{Config: config, ActionIndex: 4, Vault: &vault, Escrow: &escrow, Coordinator: &implementation, Proxy: &proxy, Vault2Constructor: &constructor, EscrowRegistration: &registration, Settlement2Initializer: &initializer, VaultBinding: &binding, Address: vault.Address, Runtime: append([]byte(nil), vault.Runtime...)}
 	link.Getters, link.Storage = contractVault2State(vault, proxy.Address, true)
-	return []*evmCreatePlan{&vault, &escrow, &implementation, &proxy, &link}, ctx.Err()
+	plans := []*evmCreatePlan{&vault, &escrow, &implementation, &proxy, &link}
+	if len(p.Actions) > len(evmV2Actions) {
+		runtime, err := contractClaimBatcherPayload(artifacts["ClaimBatcher"], p.Actions[5])
+		if err != nil {
+			return nil, err
+		}
+		// Its readback is its exact runtime: it has no immutables and no state.
+		batcher := evmCreatePlan{Config: config, ActionIndex: 5, Vault: &vault, Escrow: &escrow, Coordinator: &implementation, Proxy: &proxy, VaultLink: &link, Vault2Constructor: &constructor, EscrowRegistration: &registration, Settlement2Initializer: &initializer, VaultBinding: &binding, Address: crypto.CreateAddress(first.Sender, first.Nonce+5), Runtime: runtime}
+		plans = append(plans, &batcher)
+	}
+	return plans, ctx.Err()
 }
 
-// Only the five approved ids select a settlement v2 action.
+// Only the approved ids select a settlement v2 action.
 var errEvmV2Action = errors.New("contract action is not a settlement v2 action")
 
 // Selection names one action of the complete, already validated graph.
@@ -156,6 +190,9 @@ func selectEvmV2Plan(ctx context.Context, config evmPhaseConfig, actionId, confi
 	if err != nil {
 		return evmCreatePlan{}, err
 	}
+	if index >= len(plans) {
+		return evmCreatePlan{}, errors.New("the approved settlement v2 graph has no claim batcher action")
+	}
 	selected := *plans[index]
 	return selected, selected.validateSelection()
 }
@@ -163,7 +200,7 @@ func selectEvmV2Plan(ctx context.Context, config evmPhaseConfig, actionId, confi
 // A selection binds one index to its exact approved predecessors in graph
 // order and carries exactly the review values its prefix has decoded.
 func (self evmCreatePlan) validateV2Selection() error {
-	if self.ActionIndex < 0 || self.ActionIndex >= len(evmV2Actions) || len(self.Config.Plan.Actions) != len(evmV2Actions) || self.Reserve != nil || self.ReserveLink != nil || self.VaultLink != nil || self.VaultConstructor != nil || self.ProxyConstructor != nil || self.ReserveBinding != nil || self.EvidenceConstructor != nil {
+	if self.ActionIndex < 0 || self.ActionIndex >= len(self.Config.Plan.Actions) || !evmV2GraphSize(len(self.Config.Plan.Actions)) || self.Reserve != nil || self.ReserveLink != nil || self.VaultConstructor != nil || self.ProxyConstructor != nil || self.ReserveBinding != nil || self.EvidenceConstructor != nil {
 		return errors.New("settlement v2 selection differs from its five-action graph")
 	}
 	hash := rootObjectHash(self.Config)
@@ -172,7 +209,7 @@ func (self evmCreatePlan) validateV2Selection() error {
 			return errors.New("settlement v2 selection lacks its exact approved predecessors")
 		}
 	}
-	if self.Vault2Constructor == nil || (self.ActionIndex >= 1) != (self.EscrowRegistration != nil) || (self.ActionIndex >= 3) != (self.Settlement2Initializer != nil) || (self.ActionIndex == 4) != (self.VaultBinding != nil) {
+	if self.Vault2Constructor == nil || (self.ActionIndex >= 1) != (self.EscrowRegistration != nil) || (self.ActionIndex >= 3) != (self.Settlement2Initializer != nil) || (self.ActionIndex >= 4) != (self.VaultBinding != nil) {
 		return errors.New("settlement v2 selection review values differ from its action")
 	}
 	return nil
@@ -190,13 +227,13 @@ func openEvmV2ActionStores(ctx context.Context, plan evmCreatePlan, create bool)
 		}
 		store, err := openEvmV2ActionStore(current, prior, create && index == plan.ActionIndex, nil, ctx)
 		if err != nil {
-			return stores, fmt.Errorf("%s custody: %w", evmV2Actions[index].name, err)
+			return stores, fmt.Errorf("%s custody: %w", evmV2ActionAt(index).name, err)
 		}
 		stores = append(stores, store)
 		if index < plan.ActionIndex {
 			record, err := store.load()
 			if err != nil {
-				return stores, fmt.Errorf("%s prerequisite: %w", evmV2Actions[index].name, err)
+				return stores, fmt.Errorf("%s prerequisite: %w", evmV2ActionAt(index).name, err)
 			}
 			prior = append(prior, record)
 		}
@@ -290,18 +327,25 @@ func (self *evmCreateOwner) submitEscrowFollow(ctx context.Context, plan evmCrea
 }
 
 // Results name the phase's own contracts. Installation completes only with
-// the binding's successful receipt, which retention admits after readback.
+// the binding's successful receipt, which retention admits after readback;
+// the claim batcher's action, which requires it, reports it with its own.
 // The escrow collateral is reported where a retained receipt read it back.
 func evmV2CreateResult(plan evmCreatePlan, result evmCreateResult) evmCreateResult {
 	plans := append(plan.v2Prior(), &plan)
 	plans[plan.ActionIndex] = &plan
-	result.Address, result.ExecutableAction, result.RemainingActions = "", evmV2Actions[plan.ActionIndex].id, evmV2ActionIds()[plan.ActionIndex+1:]
+	result.Address, result.ExecutableAction, result.RemainingActions = "", evmV2ActionAt(plan.ActionIndex).id, []string{}
+	for _, action := range plan.Config.Plan.Actions[plan.ActionIndex+1:] {
+		result.RemainingActions = append(result.RemainingActions, action.Id)
+	}
 	result.Vault2Address = plans[0].Address.Hex()
 	if plan.ActionIndex >= 2 {
 		result.Settlement2ImplementationAddress = plans[2].Address.Hex()
 	}
 	if plan.ActionIndex >= 3 {
 		result.Settlement2Address = plans[3].Address.Hex()
+	}
+	if plan.ActionIndex == 5 {
+		result.ClaimBatcherAddress = plan.Address.Hex()
 	}
 	if plan.actionIs("escrow2-register", "vault2-link") && result.Receipt != nil && result.Receipt.Status == 1 {
 		collateral := contractEscrowCollateralExpected
@@ -325,17 +369,18 @@ func evmV2CreateResult(plan evmCreatePlan, result evmCreateResult) evmCreateResu
 	if result.Receipt != nil {
 		result.ReceiptObservation = "retained"
 	}
-	result.InstallationComplete = plan.ActionIndex == len(evmV2Actions)-1 && result.Receipt != nil && result.Receipt.Status == 1
+	result.InstallationComplete = plan.ActionIndex >= 4 && result.Receipt != nil && result.Receipt.Status == 1
 	return result
 }
 
-// The journal names that signed-byte inputs must never alias.
+// The journal names that signed-byte inputs must never alias, the claim
+// batcher's included.
 func evmV2JournalNames() []string {
 	names := []string{}
 	for _, action := range evmV2Actions {
 		names = append(names, action.file)
 	}
-	return names
+	return append(names, evmV2BatcherAction.file)
 }
 
 // The exact readback expectations of one installed contract at completion.
@@ -360,6 +405,7 @@ type evmV2PhasePreview struct {
 	Vault2                       evmV2PreviewContract            `json:"vault2"`
 	Settlement2Implementation    evmV2PreviewContract            `json:"settlement2_implementation"`
 	Settlement2                  evmV2PreviewContract            `json:"settlement2"`
+	ClaimBatcher                 *evmV2PreviewContract           `json:"claim_batcher,omitempty"`
 	Vault2Constructor            *contractVault2Constructor      `json:"vault2_constructor"`
 	EscrowRegistration           *contractEscrowRegistration     `json:"escrow_registration"`
 	Settlement2Initializer       *contractSettlement2Initializer `json:"settlement2_initializer"`
@@ -388,6 +434,9 @@ func loadEvmV2PhasePreview(ctx context.Context, path, actionId string) (evmV2Pha
 	if err != nil {
 		return result, err
 	}
+	if evmV2ActionIndex(actionId) >= len(plans) {
+		return result, errors.New("the approved settlement v2 graph has no claim batcher action")
+	}
 	message, _ := config.Plan.signingBytes()
 	digest := sha256.Sum256(message)
 	contract := func(plan *evmCreatePlan) evmV2PreviewContract {
@@ -396,5 +445,9 @@ func loadEvmV2PhasePreview(ctx context.Context, path, actionId string) (evmV2Pha
 	link := plans[4]
 	result = evmV2PhasePreview{Schema: evmPhase2PreviewSchema, Plan: config.Plan, PlanHash: config.Plan.hash(), ApprovalPublicKey: config.ApprovalPublicKey, ApprovalSigningMessageHex: hex.EncodeToString(message), ApprovalSigningMessageSha256: "sha256:" + hex.EncodeToString(digest[:]), ExecutableAction: actionId,
 		Vault2: contract(link), Settlement2Implementation: contract(plans[2]), Settlement2: contract(plans[3]), Vault2Constructor: link.Vault2Constructor, EscrowRegistration: link.EscrowRegistration, Settlement2Initializer: link.Settlement2Initializer, VaultBinding: link.VaultBinding}
+	if len(plans) > len(evmV2Actions) {
+		batcher := contract(plans[5])
+		result.ClaimBatcher = &batcher
+	}
 	return result, ctx.Err()
 }

@@ -83,6 +83,7 @@ type evmCreateResult struct {
 	Vault2Address                    string                          `json:"vault2_address,omitempty"`
 	Settlement2ImplementationAddress string                          `json:"settlement2_implementation_address,omitempty"`
 	Settlement2Address               string                          `json:"settlement2_address,omitempty"`
+	ClaimBatcherAddress              string                          `json:"claim_batcher_address,omitempty"`
 	Vault2Constructor                *contractVault2Constructor      `json:"vault2_constructor,omitempty"`
 	Settlement2Initializer           *contractSettlement2Initializer `json:"settlement2_initializer,omitempty"`
 	EscrowCollateral                 *contractEscrowCollateral       `json:"escrow_collateral,omitempty"`

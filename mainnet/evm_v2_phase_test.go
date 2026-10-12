@@ -147,10 +147,16 @@ func TestEvmV2BuilderRefusesEachCheck(t *testing.T) {
 		{"four-actions", structure, func(f *evmCreateFixture, _ contractReleaseArtifacts) {
 			f.config.Plan.Actions = f.config.Plan.Actions[:4]
 		}},
-		{"six-actions", structure, func(f *evmCreateFixture, _ contractReleaseArtifacts) {
+		{"unknown-sixth-action", "contract phase action sequence differs", func(f *evmCreateFixture, _ contractReleaseArtifacts) {
 			extra := *action(f, 4)
 			extra.Id, extra.Nonce = "vault2-extra", 5
 			f.config.Plan.Actions = append(f.config.Plan.Actions, extra)
+		}},
+		{"seven-actions", structure, func(f *evmCreateFixture, current contractReleaseArtifacts) {
+			batcher := evmV2TestBatcherAction(t, current, sender(f), 5)
+			extra := batcher
+			extra.Id, extra.Nonce = "batcher-extra", 6
+			f.config.Plan.Actions = append(f.config.Plan.Actions, batcher, extra)
 		}},
 		{"action-order", "contract phase action sequence differs", func(f *evmCreateFixture, _ contractReleaseArtifacts) {
 			action(f, 1).Id, action(f, 3).Id = action(f, 3).Id, action(f, 1).Id
@@ -191,7 +197,7 @@ func TestEvmV2BuilderRefusesEachCheck(t *testing.T) {
 		{"unknown-artifact", "contract release has an unknown or duplicated artifact", func(f *evmCreateFixture, current contractReleaseArtifacts) {
 			unknown := current.Artifacts[1]
 			unknown.Name = "Coordinator"
-			f.writeV2Release(contractReleaseArtifacts{Schema: current.Schema, Artifacts: []contractReleaseArtifact{current.Artifacts[0], unknown, current.Artifacts[2]}})
+			f.writeV2Release(contractReleaseArtifacts{Schema: current.Schema, Artifacts: []contractReleaseArtifact{current.Artifacts[0], unknown, current.Artifacts[2], current.Artifacts[3]}})
 		}},
 		{"vault2-creation", vaultPayload, func(f *evmCreateFixture, _ contractReleaseArtifacts) {
 			editData(f, 0, func(data []byte) []byte { data[0] ^= 1; return data })

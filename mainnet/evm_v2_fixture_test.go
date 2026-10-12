@@ -31,6 +31,8 @@ var (
 	evmV2TestBurnCap  = uint64(2)
 	evmV2TestFeeCap   = "10"
 	evmV2TestMaxTotal = "2106500000"
+	// The five limits and the escrow funding, plus the batcher's 400,000 gas.
+	evmV2TestBatcherMaxTotal = "2110500000"
 )
 
 // The reviewed settlement v2 catalog entries as their release file.
@@ -99,6 +101,13 @@ func evmV2TestActions(t *testing.T, release contractReleaseArtifacts, sender com
 	}
 }
 
+// The optional sixth envelope: the claim batcher's argument-free CREATE at
+// the deployer's nonce after the binding.
+func evmV2TestBatcherAction(t *testing.T, release contractReleaseArtifacts, sender common.Address, nonce uint64) evmPhaseAction {
+	t.Helper()
+	return evmPhaseAction{Id: "batcher-create", Sender: sender, Nonce: nonce, Data: "0x" + evmV2TestArtifactNamed(t, release, "ClaimBatcher").Creation, ValueWei: "0", Gas: 400_000, FeeCapWei: evmV2TestFeeCap, TipCapWei: "1"}
+}
+
 // Publish a release file and pin it in the fixture's unsigned plan.
 func (self *evmCreateFixture) writeV2Release(release contractReleaseArtifacts) {
 	self.t.Helper()
@@ -133,12 +142,32 @@ func newEvmV2Fixture(t *testing.T) *evmCreateFixture {
 	return f
 }
 
-// The complete approved graph, built through the production selection.
+// The v2 fixture whose approval adds the claim batcher's CREATE.
+func newEvmV2BatcherFixture(t *testing.T) *evmCreateFixture {
+	t.Helper()
+	f := newEvmV2Fixture(t)
+	sender := f.config.Plan.Actions[0].Sender
+	f.config.Plan.Actions = append(f.config.Plan.Actions, evmV2TestBatcherAction(t, evmV2TestRelease(t), sender, 5))
+	f.config.Plan.MaximumTotalWei = evmV2TestBatcherMaxTotal
+	f.publishConfig()
+	return f
+}
+
+// The complete approved graph, built through the production selection: the
+// five actions, then the claim batcher's when the plan approves it.
 func (self *evmCreateFixture) v2Graph() []*evmCreatePlan {
 	self.t.Helper()
 	link, err := selectEvmCreatePlan(self.t.Context(), self.plan, "vault2-link", self.configPath)
 	if err != nil {
 		self.t.Fatal(err)
 	}
-	return append(link.v2Prior(), &link)
+	graph := append(link.v2Prior()[:4], &link)
+	if len(self.config.Plan.Actions) > len(evmV2Actions) {
+		batcher, err := selectEvmCreatePlan(self.t.Context(), self.plan, "batcher-create", self.configPath)
+		if err != nil {
+			self.t.Fatal(err)
+		}
+		graph = append(graph, &batcher)
+	}
+	return graph
 }

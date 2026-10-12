@@ -65,6 +65,7 @@ type artifactDefinition struct {
 	// requireEmptyLinearStorage prevents the deliberately minimal testnet UUPS
 	// drill implementation from acquiring coordinator storage slots. It reads
 	// only OpenZeppelin's shared namespaced owner slot and the ERC1967 slot.
+	// The stateless claim batcher must keep an empty layout too.
 	requireEmptyLinearStorage bool
 	// requiredStorageSlots binds any deliberately hard-coded upgrade-drill
 	// coordinate to the release coordinator's compiler layout.
@@ -85,6 +86,8 @@ var artifactDefinitions = []artifactDefinition{
 	{"FleetBatcher", "STFleetBatcher.sol/STFleetBatcher.json", false, "TestnetFleetBatcherArtifact", []string{"coordinator", "oracle"}, []string{"src/STFleetBatcher.sol"}, false, nil, false},
 	{"SettlementVault2", "STSettlementVault2.sol/STSettlementVault2.json", false, "", []string{"netuid", "escrowHotkey", "selfColdkey", "bootstrap", "demandFeeWei"}, []string{"src/STSettlementVault2.sol"}, false, map[string]string{"coordinator": "0", "escrowRegistered": "0", "_entered": "1", "totalCaptured": "14", "totalPaid": "15", "escrowAccounted": "16"}, true},
 	{"Settlement2", "STSettlement2.sol/STSettlement2.json", false, "", []string{"__self"}, []string{"lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol"}, false, map[string]string{"v1Coordinator": "0", "vault": "1", "_auditors": "2", "quorum": "3", "auditorSetVersion": "4"}, true},
+	// The optional claim batcher holds no storage, which its layout must show.
+	{"ClaimBatcher", "STClaimBatcher.sol/STClaimBatcher.json", false, "", nil, nil, true, nil, true},
 }
 
 // Remove compiler IDs without collapsing two declarations that share a short
@@ -276,9 +279,10 @@ func renderReleaseJson(items []item) ([]byte, error) {
 	return renderRelease(items, "urnetwork-contract-release-artifacts-v1", func(contract item) bool { return contract.Release }, "ReserveSink", "SettlementVault", "Coordinator", "ERC1967Proxy", "ValidatorEvidence")
 }
 
-// The settlement v2 phase deploys its own two contracts behind the same proxy.
+// The settlement v2 phase deploys its own two contracts behind the same proxy,
+// and optionally the claim batcher.
 func renderReleaseV2Json(items []item) ([]byte, error) {
-	return renderRelease(items, "urnetwork-settlement-v2-contract-release-artifacts-v1", func(contract item) bool { return contract.ReleaseV2 }, "SettlementVault2", "Settlement2", "ERC1967Proxy")
+	return renderRelease(items, "urnetwork-settlement-v2-contract-release-artifacts-v1", func(contract item) bool { return contract.ReleaseV2 }, "SettlementVault2", "Settlement2", "ERC1967Proxy", "ClaimBatcher")
 }
 
 // One release schema holds exactly its named members, sorted by name.

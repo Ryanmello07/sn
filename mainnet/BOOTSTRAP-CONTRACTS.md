@@ -649,9 +649,10 @@ approval budget, original journal or public send authority changes here.
 
 ## Settlement v2 contract phase
 
-`bootstrap-contracts` also runs the separate five-action settlement v2 graph
-(`VERSION2-FINAL.md` §8.5, step 2 of §12.1). One independent approval covers
-all five actions, sent by one bootstrap deployer at consecutive nonces:
+`bootstrap-contracts` also runs the separate settlement v2 graph of five
+actions, or six with the optional claim batcher (`VERSION2-FINAL.md` §8.5,
+§10.2, step 2 of §12.1). One independent approval covers them all, sent by
+one bootstrap deployer at consecutive nonces:
 
 | Index | `--action` | Transaction | Journal | Completed status |
 | --- | --- | --- | --- | --- |
@@ -660,22 +661,23 @@ all five actions, sent by one bootstrap deployer at consecutive nonces:
 | 2 | `settlement2-create` | `STSettlement2` implementation CREATE | `settlement2-create.json` | `settlement2-created` |
 | 3 | `proxy2-create` | `ERC1967Proxy(implementation, initialize(owner, v1Coordinator, vault2, auditors, quorum))` CREATE | `proxy2-create.json` | `proxy2-created-initialized` |
 | 4 | `vault2-link` | vault2 `setCoordinatorOnce(proxy)` | `vault2-link.json` | `vault2-coordinator-bound` |
+| 5 | `batcher-create` | `STClaimBatcher` CREATE, optional | `batcher-create.json` | `batcher-created` |
 
 The config schema is `urnetwork-mainnet-settlement-v2-contract-phase-config-v1`
 and the plan schema `urnetwork-mainnet-settlement-v2-contract-phase-v1`. The
-plan has the original fields without `reserve_hotkey` and exactly these five
-actions. The approval signs `urnetwork-mainnet-settlement-v2-contract-phase-approval-v1`,
+plan has the original fields without `reserve_hotkey` and exactly the first
+five of these actions, or all six. The approval signs `urnetwork-mainnet-settlement-v2-contract-phase-approval-v1`,
 a zero byte and the canonical plan JSON, and the plan hash uses the v2 plan
 schema as its domain, so neither phase's approval or hash verifies the other's
-plan. A v2 config selects only the five v2 ids and an original config only the
-original ones. Signature encoding, key provisioning, `preview`/`plan`/`apply`/`resume`,
+plan. A v2 config selects only the v2 ids it approves and an original config
+only the original ones. Signature encoding, key provisioning, `preview`/`plan`/`apply`/`resume`,
 `--accept-plan-hash`, `--run-dir`, signed-byte import, `--online`, `--submit`,
 the per-sender funding admission and the cumulative `maximum_attempts` (at most
-eight across all five actions, the back-to-back escrow send included) are the
+eight across all its actions, the back-to-back escrow send included) are the
 original phase's. `artifacts` pins a release file of schema
 `urnetwork-settlement-v2-contract-release-artifacts-v1` holding exactly
-`SettlementVault2`, `Settlement2` and `ERC1967Proxy`, checked like the original
-release. The same generator exports it from the reviewed catalog, whose
+`SettlementVault2`, `Settlement2`, `ERC1967Proxy` and `ClaimBatcher`, whether
+or not the plan creates the batcher, checked like the original release. The same generator exports it from the reviewed catalog, whose
 `SettlementV2ReleaseArtifacts` list stays apart from the original release:
 
 ```sh
@@ -683,9 +685,10 @@ go run ./sim-testnet/gencontracts --release-v2-json evm/out sim-testnet/contract
 ```
 
 The catalog holds the final reviewed contracts: vault2 with the contract
-review's fix (11,780 runtime bytes) and `STSettlement2` (8,588). After a full
-`forge build`, `go generate ./sim-testnet` rebuilds the catalog, and
-`stabi/generate.sh` binds both contracts in one combined abigen pass and
+review's fix (11,780 runtime bytes), `STSettlement2` (8,588) and the claim
+batcher (1,073), whose storage layout the generator requires to stay empty.
+After a full `forge build`, `go generate ./sim-testnet` rebuilds the catalog,
+and `stabi/generate.sh` binds the three in one combined abigen pass and
 exports their ABIs to `evm/abi/`. `go run ./sim-testnet/gencontracts --check
 evm/out sim-testnet/contracts_gen.go` and `stabi/generate.sh --check` confirm
 that the catalog, the bindings and the ABIs match that build.
@@ -700,18 +703,18 @@ needs a limit well above 1.5M. No other v2 action calls a precompile, and none
 moves stake, so the 2.4M to 2.6M limits of capturing closes and claims do not
 apply. Reasonable starting limits are 4,000,000 for `vault2-create`, 2,500,000
 for `escrow2-register`, 3,000,000 for `settlement2-create`, 1,000,000 for
-`proxy2-create` and 150,000 for `vault2-link`. With them R-1 (below) completed
-every action of the final contracts, using 2,600,537, 1,465,892, 1,935,622,
-310,486 and 33,523 gas (2026-10-12; the figures vary by a few gas with the
-random addresses in calldata, and the README records them with the R
-battery). `maximum_total_wei` covers every limit times its fee cap plus the
+`proxy2-create`, 150,000 for `vault2-link` and 400,000 for the optional
+`batcher-create`. With them R-1 (below) completed every action of the final
+contracts, using 2,600,537, 1,465,892, 1,935,622, 310,486, 33,523 and 285,209
+gas (2026-10-12; the figures vary by a few gas with the random addresses in
+calldata, and the README records them with the R battery). `maximum_total_wei` covers every limit times its fee cap plus the
 escrow funding.
 
 **Builder checks.** Every selection, in `preview`, `plan` and every custody
 operation, rebuilds the complete graph from the approval and the release, so a
 fault in any action refuses even the first one, before any journal or route
-opens. One sender sends all five at consecutive nonces, and the three CREATEs
-carry no value.
+opens. One sender sends them all at consecutive nonces, and the CREATEs carry
+no value.
 
 - Vault2 is the exact release creation and five constructor words. Netuid 25,
   `selfColdkey` and `bootstrap` are rebuilt: `selfColdkey` is the mapped
@@ -741,6 +744,9 @@ carry no value.
   live Safe authority.
 - The binding is the exact 36-byte `setCoordinatorOnce(proxy)` call to vault2,
   with zero value.
+- The optional claim batcher is the exact argument-free release creation, at
+  the deployer's nonce after the binding. It has no constructor argument, no
+  immutables and no state, and nothing else depends on it.
 
 `plan` exports the decoded `vault2_constructor` (escrow hotkey and demand fee),
 `escrow_registration`, `settlement2_initializer` and `vault_binding` of the
@@ -748,14 +754,16 @@ selected prefix. `preview` (schema
 `urnetwork-mainnet-settlement-v2-contract-phase-preview-v1`) exports the
 approval bytes and plan hash with, for vault2, the implementation and the
 proxy, the predicted address, runtime hash and the exact completion readback:
-every getter and storage word.
+every getter and storage word; and, when the plan creates it, the claim
+batcher's predicted address and runtime hash (`claim_batcher`).
 
 **Custody.** Each action has its own journal and schema
 (`urnetwork-mainnet-evm-vault2-state-v1`, `…-escrow2-state-v1`,
-`…-settlement2-state-v1`, `…-proxy2-state-v1`, `…-vault2-link-state-v1`),
-and each seals the exact completed record of the action before it, while every
-earlier journal stays locked. Prepare five `mainnet-evm-action` snapshots with
-these file names in the approved run directory. An action opens only after each
+`…-settlement2-state-v1`, `…-proxy2-state-v1`, `…-vault2-link-state-v1` and
+`…-batcher-state-v1`), and each seals the exact completed record of the action
+before it, while every earlier journal stays locked. Prepare a
+`mainnet-evm-action` snapshot with each approved action's file name in the
+approved run directory. An action opens only after each
 predecessor's receipt is retained with its readback, and every online operation
 reauthenticates them, as in the original chain.
 
@@ -809,9 +817,14 @@ the authenticated canonical inclusion:
   unbound vault2, the proxy and the implementation at both the canonical head
   and pending state. A coordinator already fixed, even to the proxy, prevents
   the send.
+- `batcher-create`: the exact runtime at the canonical inclusion, the whole
+  readback of a contract without getters to check or state. Its journal opens
+  only after the binding's completed record, and its admission, like every
+  CREATE's, refuses an address that already has code.
 
 `installation_complete` becomes true only with a retained successful
-`vault2-link` receipt; `activation_ready` stays false, because activation is the
+`vault2-link` receipt, and the claim batcher's retained receipt reports it
+again; `activation_ready` stays false, because activation is the
 Safe's `registerOperatorPool` (§12.1 step 5). The five journals' receipts are
 the v2 deployment record. v1's launch skipped installation readback
 (`LAUNCH.md:50-58`); the v2 phase cannot complete without it. The launch
@@ -865,8 +878,9 @@ sn-mainnet bootstrap-contracts resume --action escrow2-register --config /secure
 ```
 
 Then repeat `apply`, signed-byte import, `resume --online --submit` and
-`resume --online` for `settlement2-create`, `proxy2-create` and `vault2-link`,
-in that order, each after the previous action's completed status.
+`resume --online` for `settlement2-create`, `proxy2-create`, `vault2-link` and,
+when approved, `batcher-create`, in that order, each after the previous
+action's completed status.
 
 **Runtime rehearsal (R-1).** `TestR1SettlementV2Phase`
 (`evm_v2_rehearsal_test.go`, build tag `runtime_rehearsal`) drives exactly
@@ -892,8 +906,8 @@ transaction is signed outside the command; vault2 and its escrow registration
 go out back to back and are sealed into one block, and each later action is
 sealed into its own. Every action completes only after its readback against
 the real precompiles. The custody declaration is the synthetic one of every
-`bootstrap-contracts` test; a production run instead prepares the five
-journals with `storage-prepare` as `mainnet-evm-action` and passes the
+`bootstrap-contracts` test; a production run instead prepares the approved
+actions' journals with `storage-prepare` as `mainnet-evm-action` and passes the
 binary's global `--durable-volumes` and `--durable-volumes-sha256`. Manual
 sealing advances the chain one 250 ms slot per block, faster than real time,
 and the node builds the pending block that admission reads at the wall-clock
@@ -901,4 +915,6 @@ slot, which Aura refuses unless it increases, so the test waits for real time
 to pass the latest block before each online command. The whole run takes
 about 80 seconds. On 2026-10-12 it passed on the final contracts in 86
 seconds, with the escrow registration in vault2's block and no registration
-collateral on the escrow position.
+collateral on the escrow position; with the claim batcher's creation added as
+the sixth action, it passed in 72 seconds, the batcher read back at its own
+block.

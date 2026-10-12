@@ -80,9 +80,9 @@ func (self evmActionRecord) validateForAction(config evmPhaseConfig, actionIndex
 	}
 	maximum := 7
 	if p.settlementV2() {
-		maximum = len(evmV2Actions) - 1
+		maximum = len(evmV2Actions)
 		if actionIndex >= 0 && actionIndex <= maximum {
-			schema = evmV2Actions[actionIndex].schema
+			schema = evmV2ActionAt(actionIndex).schema
 		}
 	}
 	if actionIndex < 0 || actionIndex > maximum || actionIndex >= len(p.Actions) || actionIndex == 0 && self.PredecessorHash != "" || actionIndex > 0 && !planSha256(self.PredecessorHash) {
@@ -272,7 +272,7 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 	}
 	maximum := 7
 	if config.Plan.settlementV2() {
-		maximum = len(evmV2Actions) - 1
+		maximum = len(evmV2Actions)
 	}
 	if actionIndex < 0 || actionIndex > maximum || actionIndex >= len(config.Plan.Actions) || actionIndex == 0 && predecessorHash != "" || actionIndex > 0 && !planSha256(predecessorHash) {
 		return nil, errors.New("EVM store action or prerequisite differs")
@@ -301,7 +301,7 @@ func openEvmSelectedActionStore(config evmPhaseConfig, actionIndex int, predeces
 		name, schema = evmEvidenceCreateStateFile, evmEvidenceActionStateSchema
 	}
 	if config.Plan.settlementV2() {
-		name, schema = evmV2Actions[actionIndex].file, evmV2Actions[actionIndex].schema
+		name, schema = evmV2ActionAt(actionIndex).file, evmV2ActionAt(actionIndex).schema
 	}
 	if actionIndex > 0 {
 		marker = rootObjectHash(struct{ ConfigHash, ActionId, PredecessorHash string }{ConfigHash: rootObjectHash(config), ActionId: config.Plan.Actions[actionIndex].Id, PredecessorHash: predecessorHash}) + "\n"
