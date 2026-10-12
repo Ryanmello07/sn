@@ -40,7 +40,8 @@ const (
 	v2TestVault   = "0x2222222222222222222222222222222222222222"
 	v2TestChainID = 945
 	v2TestPool    = 3
-	// v2TestHead is the finalized and the latest block.
+	// v2TestHead is the finalized block, and the latest block unless a test
+	// moves v2TestChain.head.
 	v2TestHead = 200_000
 	// v2TestFee is demandFeeWei: 3 gwei, a multiple of one rao (SPEC A5).
 	v2TestFee = 3_000_000_000
@@ -78,6 +79,7 @@ type v2TestChain struct {
 	calls    map[string]int
 	blocks   []string // eth_call block tags, in order
 	spans    [][2]uint64
+	head     uint64 // the latest block
 	pool     stabi.ISTSettlementVault2Pool
 	roots    []stabi.ISTSettlementVault2Root
 	pending  stabi.ISTSettlementVault2Pending
@@ -115,6 +117,7 @@ func newV2TestChain(t *testing.T) *v2TestChain {
 		keyFile:  filepath.Join(t.TempDir(), "relayer.key"),
 		vault:    common.HexToAddress(v2TestVault),
 		calls:    map[string]int{},
+		head:     v2TestHead,
 		pool:     stabi.ISTSettlementVault2Pool{Hotkey: [32]byte{0x77}, FirstEpoch: 10, Registered: true},
 		funded:   map[uint64]*big.Int{},
 		claimed:  map[[2]uint64]*big.Int{},
@@ -203,7 +206,11 @@ func (c *v2TestChain) answer(method string, params []json.RawMessage) (any, map[
 			return nil, rpcError(-32601, "synthetic block refusal", nil)
 		}
 		number := uint64(v2TestHead)
-		if selector != "finalized" {
+		switch selector {
+		case "finalized":
+		case "latest":
+			number = c.head
+		default:
 			number = hexutil.MustDecodeUint64(selector)
 		}
 		return syntheticBlockIdentityFixture(c.t, number, v2TestBlockHash(number)), nil
@@ -379,6 +386,8 @@ func (c *v2TestChain) execute(from common.Address, value *big.Int, input []byte,
 		return pack(c.demanded[[3]uint64{args[1].(uint64), args[2].(*big.Int).Uint64(), args[3].(*big.Int).Uint64()}]), nil, nil
 	case "demandFeeWei":
 		return pack(c.fee), nil, nil
+	case "CHALLENGE_BLOCKS":
+		return pack(uint64(v2TestChallengeBlocks)), nil, nil
 	case "claim":
 		account := *abi.ConvertType(args[2], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
 		proof := *abi.ConvertType(args[3], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
