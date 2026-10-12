@@ -614,3 +614,20 @@ func TestV2ClaimAllBatchLastClaimFails(t *testing.T) {
 		t.Fatalf("last claim: %v\n%s", err, output)
 	}
 }
+
+// CL-1: --all parses with and without --batch, and the usage refuses --batch
+// without --all, and --all with a selected account.
+func TestV2ClaimAllUsage(t *testing.T) {
+	c := newV2TestChain(t)
+	for _, flags := range [][]string{{"--all"}, {"--all", "--batch=" + v2TestBatcher, "--gas_limit=90000", "--dry-run"}} {
+		opts, err := parseArgv(t, c.claimArgv(flags...))
+		if err != nil || !boolOpt(opts, "--all") || len(flags) > 1 && strOpt(opts, "--batch") != v2TestBatcher {
+			t.Fatalf("%q: %v %v", flags, opts, err)
+		}
+	}
+	for _, flags := range [][]string{{"--batch=" + v2TestBatcher}, {"--all", "--no_id=3"}, {"--all", "--index=1"}} {
+		if _, err := parseArgv(t, c.claimArgv(flags...)); err == nil {
+			t.Fatalf("usage accepted %q", flags)
+		}
+	}
+}
