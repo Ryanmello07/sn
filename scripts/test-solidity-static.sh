@@ -69,6 +69,9 @@ contracts=(
   src/STSettlement2.sol
   src/STSettlementVault2.sol
 )
+# Every root is analyzed even after another fails, so that one root's finding
+# cannot hide the next root's; any failure still fails the gate at the end.
+failed=()
 for contract in "${contracts[@]}"; do
   rm -f -- "$report"
   if ! FOUNDRY_OUT="$slither_foundry_out" FOUNDRY_CACHE_PATH="$slither_foundry_cache" "$slither_bin" "$contract" \
@@ -81,12 +84,13 @@ for contract in "${contracts[@]}"; do
     if [[ -s "$report" ]]; then
       jq -r '.results.detectors[]? | "[\(.impact)] \(.check): \(.description)"' "$report" >&2
     fi
-    exit 1
+    failed+=("$contract")
+    continue
   fi
 
   if [[ "$(jq '[.results.detectors[]? | select(.impact == "High" or .impact == "Medium")] | length' "$report")" != "0" ]]; then
     echo "Slither emitted a high/medium finding despite a successful exit for $contract" >&2
-    exit 1
+    failed+=("$contract")
   fi
 done
 
@@ -97,7 +101,11 @@ if ! FOUNDRY_OUT="$slither_foundry_out" FOUNDRY_CACHE_PATH="$slither_foundry_cac
   forge inspect STSettlement2 storageLayout --json | jq -S 'del(.storage[].astId)' |
   diff -u layout/STSettlement2.json -; then
   echo "STSettlement2 storage layout differs from layout/STSettlement2.json" >&2
-  exit 1
+  failed+=(layout/STSettlement2.json)
 fi
 
+if (( ${#failed[@]} != 0 )); then
+  echo "release Solidity static gate failed for: ${failed[*]}" >&2
+  exit 1
+fi
 echo "release Solidity static gate passed for all ${#contracts[@]} deployable roots (Slither 0.11.6; no high/medium findings; STSettlement2 storage layout pinned)"

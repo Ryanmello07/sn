@@ -166,6 +166,54 @@ release_gate_start sn-simulator-supplements-race release_phase_sn_simulator_supp
 release_gate_start sn-simulator-final-race release_phase_sn_simulator_final_race
 release_gate_start sn-simulator-history-race release_phase_sn_simulator_history_race
 
+# Settlement v2 (VERSION2-FINAL.md §14 gate 3, §15): the ledger package (GL),
+# the sum tree (GT) and allocation (GA) additions, the claim daemon (E-5),
+# snclaim (CL) and the validator's v2 code (VA), in both modes, with gate 1's
+# coverage checker. The aggregate jobs above run them too; this job is gate
+# 3's own verdict. The claim daemon's durable volumes need the umask 022 and
+# private TMPDIR that every phase gets.
+release_phase_sn_v2() {
+  cd "$sn_repo"
+  go test ./ledger ./scripts/solidity-coverage -count=1
+  go test -race ./ledger ./scripts/solidity-coverage -count=1
+  settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2)'
+  go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
+  go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
+}
+release_gate_start sn-v2 release_phase_sn_v2
+
+# E-1 to E-7 (VERSION2-FINAL.md §14 gate 4, §15.6): settlement v2 end to end in
+# geth, from the reviewed catalog and the v2 contracts to the claim daemon and
+# snclaim, in both modes. It needs no database. The suite builds the v2
+# contracts in a private directory, so it never reads the Solidity job's build
+# while it is written; the daemon's durable volumes need the same umask and
+# private TMPDIR as the job above. On 2026-10-12 the normal run took 3 minutes
+# and the race run 5.5, each with its private build.
+release_phase_sn_e2e() {
+  cd "$sn_repo"
+  settlement_v2_e2e_tests='^Test(SettlementV2E2E)'
+  go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1
+  go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1
+}
+release_gate_start sn-e2e release_phase_sn_e2e
+
+# GL-10 (VERSION2-FINAL.md §15): the scale-tagged tests, which ./... never
+# compiles, build and verify ledgers of a million providers, assert the commit
+# and challenge windows' budgets, and log time, peak memory and bytes fetched.
+# On 2026-10-11 the package took 170 seconds on four CPUs and peaked at 2.7 GiB.
+# The server's scale-tagged tests (SV-6) are this shard's database half, below.
+# The runtime rehearsal (activation gate 2, runtime_rehearsal tag) needs a node
+# built from runtime 475's source, so it runs beside this gate, on the same
+# checkout (scripts/runtime-rehearsal/README.md):
+#   scripts/runtime-rehearsal/build.sh /path/to/subtensor-checkout
+#   RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
+#     go test -tags runtime_rehearsal ./rehearsal/ -v -timeout 60m
+release_phase_sn_scale() {
+  cd "$sn_repo"
+  go test -tags scale -v -timeout 90m ./ledger -count=1
+}
+release_gate_start sn-scale release_phase_sn_scale
+
 echo "[release-1.0] deployable Solidity static analysis"
 release_phase_solidity_static() {
   "$sn_repo/scripts/test-solidity-static.sh"
@@ -176,8 +224,14 @@ echo "[release-1.0] Solidity format, build, and tests"
 release_phase_solidity() {
   cd "$sn_repo/evm"
   forge fmt --check
+  # Gate 1 (VERSION2-FINAL.md §14): this release build fails on a contract over
+  # a size limit, and its table of sizes and margins stays in this job's log.
   forge build --deny warnings --sizes
   forge test --summary
+  # I-1 to I-6 (VERSION2-FINAL.md §15.5): the plain suite ran the settlement v2
+  # lifecycle campaign short; its own profile runs it deep, with metrics, on
+  # the same build.
+  FOUNDRY_PROFILE=v2_invariant forge test --match-path test/V2Invariant.t.sol
 
   echo "[release-1.0] generated contract payload and storage-layout lock"
   cd "$sn_repo"
@@ -191,6 +245,23 @@ release_phase_solidity() {
   "$sn_repo/stabi/generate.sh" --check --artifacts "$FOUNDRY_OUT"
 }
 release_gate_start solidity release_phase_solidity
+
+echo "[release-1.0] settlement v2 Solidity coverage"
+# Activation gate 1 (VERSION2-FINAL.md §14, §15) pins this coverage command:
+# the default mode stops on a stack-too-deep in STCoordinator and
+# --ir-minimum fails on the v1 evidence library. Its build stays in this job's
+# private directory; contract sizes come from the release build above. Forge
+# writes the report even when a test fails, so the settlement v2 bar is checked
+# either way, and a failing test still fails this phase.
+release_phase_solidity_coverage() {
+  cd "$sn_repo/evm"
+  coverage_status=0
+  FOUNDRY_OUT="$TMPDIR/coverage-out" FOUNDRY_CACHE_PATH="$TMPDIR/coverage-cache" forge coverage --ir-minimum --report lcov --skip STValidatorEvidence.sol --skip ValidatorEvidenceStorage.t.sol --skip ValidatorEvidenceActivation.t.sol --report-file "$TMPDIR/lcov.info" || coverage_status=$?
+  cd "$sn_repo"
+  go run ./scripts/solidity-coverage evm "$TMPDIR/lcov.info"
+  return "$coverage_status"
+}
+release_gate_start solidity-coverage release_phase_solidity_coverage
 
 echo "[release-1.0] operator pure/unit suites"
 release_phase_server_unit() {
@@ -310,6 +381,12 @@ release_phase_sdk() {
   sdk_lifecycle_tests='^Test(ApiCloseAndWaitJoinsRefreshWorker|NetworkSpaceCloseJoinsClientStrategyRelease|NetworkSpaceManagerReplacementDoesNotHoldStateLockDuringClose|NetworkSpaceManagerStaleRemovePreservesReplacement|NetworkSpaceManagerStaleActiveSelectionPreservesReplacement|NetworkSpaceCloseJoinsAsyncLocalStateAndRejectsLateJob|NetworkSpaceManagerCloseRejectsRacingUpdate|SimProviderDisconnectJoinsPendingTransportDial|SimProviderCloseJoinsPendingTransportDial|DeviceLocalProviderCloseAndWaitJoinsAdmittedMigration|DeviceLocalCloseAndWaitJoinsOwnedApiRefresh|DeviceLocalCloseAndWaitJoinsDestinationGeneration|SecurityPolicyMonitorCloseAndWaitJoinsRun|DeviceLocalRpcManagerCloseAndWaitJoinsAccept|DeviceRemoteRpcCloseAndWaitJoinsAdmittedCallback|DeviceRemoteCloseAndWaitJoinsBlockedDial|DeviceRemoteSetRpcServerRejectsAfterClose|RpcClientCallParentCancellationClosesTransport|DeviceLocalAppliesApiRefreshAndLogout|DeviceRemoteAppliesStandaloneApiRefreshAndLogout|ApiSubnetHeadlessBindings|ApiHeadlessAuthAndProviderBindings|ApiSubnetPoolClaimEscapesNoUserInputIntoQuery|SubscriptionBalanceDecode|CheckBalanceCode|CheckBalanceCodeUnknownCode|RedeemBalanceCodeDecodeAndClassify|Stripe.*|VerifyPlayPurchase|VerifyAppleTransaction)$'
   go test . -run "$sdk_lifecycle_tests" -count=1
   go test -race . -run "$sdk_lifecycle_tests" -count=1
+  # CL-2 and CL-4 (VERSION2-FINAL.md §11, §15.7): the settlement v2 balances
+  # the apps show, in every account state and beside the v1 claims, and the
+  # v2 claims with their vault2 bindings and ledger proofs.
+  sdk_ledger_v2_tests='^Test(SnLedger|BuildTestLedgerTreeMatchesTheVectors|SnChainSettingsVault2Address|Ledger|PackLedger|DecodeLedger|EthCallFrom|TransactionReceiptLogs)'
+  go test . ./sn/evm ./sn/merkle -run "$sdk_ledger_v2_tests" -count=1
+  go test -race . ./sn/evm ./sn/merkle -run "$sdk_ledger_v2_tests" -count=1
 }
 release_gate_start sdk release_phase_sdk
 release_phase_sdk_build() {
@@ -399,6 +476,18 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race ./connect -run '^TestConnectionVerifyEgressUsesControllerHashNamespace$' -count=1
     go test . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
     go test -race . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
+    # Settlement v2 (VERSION2-FINAL.md §8, §15.7): config, migration 814, the
+    # mirror, records, objects and the epoch driver, most of them on this
+    # gate's private services.
+    ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2)'
+    go test . ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    go test -race . ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    # The monitor's schema contracts of the published migration suffix, from
+    # 794 on, where settlement v2's migrations 814 and 815 are appended, read a
+    # real database's catalog.
+    migration_suffix_tests='^Test(MigrationsCurrentSuffix)'
+    go test ./monitor -run "$migration_suffix_tests" -count=1
+    go test -race ./monitor -run "$migration_suffix_tests" -count=1
     # Run the complete operator proxy surface. Its real network/DB roots have a
     # measured lower bound above Go's implicit ten-minute package deadline, so
     # the explicit deadline supplies deterministic headroom without changing
@@ -440,7 +529,8 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
   # Settlement v2 scale (VERSION2-FINAL.md §15, SV-6): bulk wallet selection,
   # batched resolutions and bounded head exclusion at 100k and 1M providers,
   # behind the scale build tag, each inside its share of the one-hour build.
-  # The shard runs on the gate's private services when RUN_SERVER_SCALE_TESTS=1.
+  # It is the half of the scale shard that needs the gate's private services;
+  # on 2026-10-11 it took 11 minutes and peaked at 1.3 GiB.
   release_phase_server_scale() {
     cd "$workspace/server"
     export WARP_ENV=local
@@ -451,7 +541,7 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     source "$RELEASE_GATE_SERVICE_ENV"
     source "$workspace/server/test-env.sh"
     test_env_validate_suite_resource_manifest "$TEST_ENV_SUITE_RESOURCE_MANIFEST" "$WARP_VAULT_HOME" "$WARP_CONFIG_HOME"
-    go test -tags scale ./model ./controller -run '^TestStV2Scale' -count=1 -p 1 -v -timeout 180m
+    go test -tags scale ./controller ./model -run '^TestStV2Scale' -count=1 -p 1 -v -timeout 180m
   }
   if [[ "$release_gate_services_ready" == 1 ]]; then
     release_gate_start server-db release_phase_server_db
@@ -462,12 +552,11 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     release_gate_start server-history-shared release_gate_unavailable_services
     release_gate_start server-history-distinct release_gate_unavailable_services
   fi
-  if [[ "${RUN_SERVER_SCALE_TESTS:-0}" == "1" && "$release_gate_services_ready" == 1 ]]; then
-    release_gate_start server-scale release_phase_server_scale
-  elif [[ "${RUN_SERVER_SCALE_TESTS:-0}" == "1" ]]; then
+  # Gate 3 needs SV-6, so the scale shard runs whenever the database suites do.
+  if [[ "$release_gate_services_ready" != 1 ]]; then
     release_gate_start server-scale release_gate_unavailable_services
   else
-    echo "[release-1.0] scale suites deferred (set RUN_SERVER_SCALE_TESTS=1 with RUN_SERVER_DB_TESTS=1)"
+    release_gate_start server-scale release_phase_server_scale
   fi
 else
   echo "[release-1.0] DB suites deferred (set RUN_SERVER_DB_TESTS=1 to create private disposable PostgreSQL/Redis)"
