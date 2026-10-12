@@ -493,7 +493,7 @@ func readReleaseEvidenceV2StartupHistoryWithRuntime(ctx context.Context, cfg *Re
 		owned.cfg.historyAdoptionV2 = &request
 	}
 	if cfg.nativeGapBridge != nil {
-		bridge := *cfg.nativeGapBridge
+		bridge := cfg.nativeGapBridge.clone()
 		owned.cfg.nativeGapBridge = &bridge
 	}
 	owned.cfg.Policy.Deposit.Tiers = slices.Clone(cfg.Policy.Deposit.Tiers)
