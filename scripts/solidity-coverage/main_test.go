@@ -8,15 +8,17 @@ import (
 	"testing"
 )
 
-// Three contracts that meet the bar with exactly the reviewed artifacts: an
+// Four contracts that meet the bar with exactly the reviewed artifacts: an
 // untracked file's unexecuted line does not count.
 var fixtureSources = map[string]string{
 	"src/LedgerTree.sol":         "library LedgerTree {\n    function f() internal {\n        g();\n    }\n}\n",
+	"src/STClaimBatcher.sol":     "contract STClaimBatcher {\n    function c() external {\n        uint256 i;\n        if (i == 0) i++;\n    }\n}\n",
 	"src/STSettlement2.sol":      "contract STSettlement2 {\n    constructor() {\n        _disableInitializers();\n    }\n}\n",
 	"src/STSettlementVault2.sol": "contract STSettlementVault2 {\n    function a() external {\n        emit E();\n    }\n}\n",
 }
 
 const fixtureReport = "TN:\nSF:src/LedgerTree.sol\nFN:2,LedgerTree.f\nFNDA:5,LedgerTree.f\nDA:2,5\nDA:3,5\nBRDA:3,0,0,5\nBRDA:3,0,1,2\nLF:2\nLH:2\nend_of_record\n" +
+	"TN:\nSF:src/STClaimBatcher.sol\nDA:2,3\nDA:4,3\nBRDA:4,0,0,3\nBRDA:4,0,1,3\nend_of_record\n" +
 	"TN:\nSF:src/STSettlement2.sol\nDA:2,1\nDA:3,0\nend_of_record\n" +
 	"TN:\nSF:src/STSettlementVault2.sol\nDA:2,1\nDA:3,1\nBRDA:3,0,0,1\nend_of_record\n" +
 	"TN:\nSF:src/Other.sol\nDA:1,0\nBRDA:1,0,0,-\nend_of_record\n"
@@ -52,6 +54,7 @@ func runReport(t *testing.T, root, report string) (int, string, string) {
 func TestRunAcceptsTheBarWithTheReviewedArtifacts(t *testing.T) {
 	status, stdout, stderr := runReport(t, fixture(t), fixtureReport)
 	want := "src/LedgerTree.sol: lines 2/2 executed (0 reviewed artifacts), branches 2/2 taken\n" +
+		"src/STClaimBatcher.sol: lines 2/2 executed (0 reviewed artifacts), branches 2/2 taken\n" +
 		"src/STSettlement2.sol: lines 1/2 executed (1 reviewed artifacts), branches 0/0 taken\n" +
 		"src/STSettlementVault2.sol: lines 2/2 executed (0 reviewed artifacts), branches 1/1 taken\n"
 	if status != 0 || stdout != want || stderr != "" {
@@ -138,6 +141,8 @@ func TestCheckRefusesEachShortfall(t *testing.T) {
 			want: []string{"src/LedgerTree.sol:3: branch 0,1 not taken"}},
 		{name: "a branch never evaluated", old: "BRDA:3,0,0,1\n", new: "BRDA:3,0,0,-\n",
 			want: []string{"src/STSettlementVault2.sol:3: branch 0,0 not taken"}},
+		{name: "a claim batcher branch not taken", old: "BRDA:4,0,1,3\n", new: "BRDA:4,0,1,0\n",
+			want: []string{"src/STClaimBatcher.sol:4: branch 0,1 not taken"}},
 		{name: "a contract missing from the report", old: "TN:\nSF:src/STSettlement2.sol\nDA:2,1\nDA:3,0\nend_of_record\n", new: "",
 			want: []string{"src/STSettlement2.sol: no lines in the report"}},
 		{name: "a contract without lines", old: "DA:2,1\nDA:3,0\nend_of_record", new: "end_of_record",
