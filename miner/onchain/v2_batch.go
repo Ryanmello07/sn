@@ -26,7 +26,8 @@ import (
 // ClaimBatchGasPerClaim is the default gas cap of each batched claim. A claim
 // uses about 236,000 gas, but the runtime admits its staking-precompile
 // transfer only if the gas forwarded covers the transfer's declared weight:
-// eth_estimateGas gives a single claim about 2.51M at depth 29 on runtime 475
+// at depth 29 on runtime 475 a single claim's least gas limit was 2,505,975,
+// and eth_estimateGas, whose search stops within 10%, gave up to 2,619,950
 // (R-6, R-7). Senders cap each item at this or at the largest single-claim
 // estimate of the batch, whichever is higher.
 const ClaimBatchGasPerClaim uint64 = 2_600_000
