@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
 /// @title LedgerTree
 /// @notice The position-binding Merkle sum tree `urnetwork-ledger-sum-tree-v1`
 /// (VERSION2-FINAL.md §6.5). Account i of a pool's ledger is the leaf
@@ -66,12 +68,11 @@ library LedgerTree {
         return keccak256(abi.encodePacked(bytes1(0x01), leftHash, leftSum, rightHash, rightSum));
     }
 
-    /// @notice The depth of a tree with `leafCount` accounts.
-    function depth(uint256 leafCount) internal pure returns (uint256 d) {
+    /// @notice The depth of a tree with `leafCount` accounts: the least d with
+    /// 2^d >= leafCount, which is log2(leafCount) rounded up.
+    function depth(uint256 leafCount) internal pure returns (uint256) {
         if (leafCount == 0 || leafCount > MAX_LEAF_COUNT) revert InvalidLeafCount();
-        while ((uint256(1) << d) < leafCount) {
-            d++;
-        }
+        return Math.log2(leafCount, Math.Rounding.Ceil);
     }
 
     /// @notice True exactly when `proof` folds `account` at its index into
