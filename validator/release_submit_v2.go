@@ -169,6 +169,7 @@ func newReleaseSteererV2Context(ctx context.Context, cfg *ReleaseConfig, chain *
 	}
 	ema.v2.provisionalEpochGaps = runtime.history != nil && runtime.history.retainedStartup && provisionalClosedNativeInputEnabled(&ownedCfg)
 	ema.v2.historyAdoption = runtime.history.historyAdoption
+	ema.v2.nativeGapBridge = runtime.history.nativeGapBridge
 	self := &ReleaseSteerer{cfg: &ownedCfg, chain: chain, native: native, hotkey: runtime.hotkey, contexts: byNo, operators: operators, intents: intents, headEMA: ema, runtimeV2: runtime}
 	if err := requireReleaseEvidenceV2Runtime(self); err != nil {
 		return nil, err
@@ -395,6 +396,9 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 		return err
 	}
 	if err := self.intents.v2.historyAdoption.requireFirstEpoch(current, nativeState.SubnetEpochIndex); err != nil {
+		return err
+	}
+	if err := self.intents.v2.nativeGapBridge.requireFirstEpoch(current, nativeState.SubnetEpochIndex); err != nil {
 		return err
 	}
 	if err := self.restoreHeadEmaV2(ctx, current); err != nil {

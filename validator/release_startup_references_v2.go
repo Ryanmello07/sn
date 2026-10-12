@@ -140,6 +140,10 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 		if err != nil {
 			return nil, err
 		}
+		// A bridge always names a retained predecessor, so absence refuses it.
+		if self.nativeGapBridge, err = self.cfg.nativeGapBridge.matchHistory(ctx, nil); err != nil {
+			return nil, err
+		}
 		return owned, owned.check()
 	}
 	var file steeringIntentFile
@@ -161,6 +165,10 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 	if file.Current != nil {
 		all = append(all, file.Current)
 	}
+	self.nativeGapBridge, err = self.cfg.nativeGapBridge.matchHistory(ctx, all)
+	if err != nil {
+		return nil, err
+	}
 	seen := map[string]bool{}
 	var previous *SteeringIntent
 	var priorArtifact *ReleaseMeasurementArtifact
@@ -171,7 +179,7 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 	// that already authenticated retained history too early.
 	allowProvisionalGaps := self.retainedStartup && provisionalClosedNativeInputEnabled(&self.cfg)
 	for index, intent := range all {
-		allowGap := allowProvisionalGaps || self.historyAdoption.allowsIntentEdge(previous, intent)
+		allowGap := allowProvisionalGaps || self.historyAdoption.allowsIntentEdge(previous, intent) || self.nativeGapBridge.allowsIntentEdge(previous, intent)
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -232,20 +240,8 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 			if artifact.PreviousArtifactHash != "" {
 				return nil, errors.New("startup intent history omits its first predecessor")
 			}
-		} else {
-			if artifact.PreviousArtifactHash != previous.MeasurementArtifactHash {
-				return nil, errors.New("startup intent artifact predecessor differs")
-			}
-			if priorArtifact.Schema == ReleaseMeasurementSchemaV2 && artifact.Schema != ReleaseMeasurementSchemaV2 ||
-				artifact.SettlementEpoch < priorArtifact.SettlementEpoch ||
-				!allowGap && !consecutiveNativeSettlementGapV2(priorArtifact, artifact) && priorArtifact.SettlementEpoch != ^uint64(0) && artifact.SettlementEpoch > priorArtifact.SettlementEpoch+1 ||
-				!releaseBlockAtOrBefore(priorArtifact.NativeSnapshotBlock, priorArtifact.NativeSnapshotHash, artifact.NativeSnapshotBlock, artifact.NativeSnapshotHash) ||
-				!releaseBlockAtOrBefore(priorArtifact.EVMSnapshotBlock, priorArtifact.EVMSnapshotHash, artifact.EVMSnapshotBlock, artifact.EVMSnapshotHash) {
-				return nil, errors.New("startup signed artifact lineage regresses or skips a boundary")
-			}
-			if err := verifyReleaseMeasurementHeadLineage(priorArtifact, artifact); err != nil {
-				return nil, err
-			}
+		} else if err := verifyStartupArtifactSuccessorV2(previous, priorArtifact, artifact, allowGap); err != nil {
+			return nil, err
 		}
 		if !self.retainedStartup {
 			if err := self.authenticateIntentChainReferenceWithKeyCustody(ctx, chain, native, runtime, intent, artifact, owned); err != nil {
@@ -263,6 +259,23 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 		previous, priorArtifact = intent, artifact
 	}
 	return owned, owned.check()
+}
+
+// Signed artifact clocks never regress. A settlement boundary may be skipped
+// only across an admitted gap edge or a consecutive native successor, and the
+// head EMA prior state must equal the predecessor's output in every case.
+func verifyStartupArtifactSuccessorV2(previous *SteeringIntent, priorArtifact, artifact *ReleaseMeasurementArtifact, allowGap bool) error {
+	if artifact.PreviousArtifactHash != previous.MeasurementArtifactHash {
+		return errors.New("startup intent artifact predecessor differs")
+	}
+	if priorArtifact.Schema == ReleaseMeasurementSchemaV2 && artifact.Schema != ReleaseMeasurementSchemaV2 ||
+		artifact.SettlementEpoch < priorArtifact.SettlementEpoch ||
+		!allowGap && !consecutiveNativeSettlementGapV2(priorArtifact, artifact) && priorArtifact.SettlementEpoch != ^uint64(0) && artifact.SettlementEpoch > priorArtifact.SettlementEpoch+1 ||
+		!releaseBlockAtOrBefore(priorArtifact.NativeSnapshotBlock, priorArtifact.NativeSnapshotHash, artifact.NativeSnapshotBlock, artifact.NativeSnapshotHash) ||
+		!releaseBlockAtOrBefore(priorArtifact.EVMSnapshotBlock, priorArtifact.EVMSnapshotHash, artifact.EVMSnapshotBlock, artifact.EVMSnapshotHash) {
+		return errors.New("startup signed artifact lineage regresses or skips a boundary")
+	}
+	return verifyReleaseMeasurementHeadLineage(priorArtifact, artifact)
 }
 
 // Hash-derived namespace grammar precedes the first parent lookup; a declared

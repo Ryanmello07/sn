@@ -29,6 +29,7 @@ type releaseIntentV2Owner struct {
 	// Invocation authority comes only from the validated retained startup owner.
 	provisionalEpochGaps bool
 	historyAdoption      *releaseHistoryAdoptionV2
+	nativeGapBridge      *releaseNativeGapBridgeV2
 	productionPrepared   *ownerRecyclePreparedAuthorization
 	// Fault observers run after physical reference operations, never instead.
 	referenceReadHooks releaseMeasurementInputV2ReadHooks
@@ -232,7 +233,7 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 				return result, errors.New("V2 intent history omits a predecessor")
 			}
 		} else {
-			if err := validateSteeringIntentSuccessorWithGapsV2(previous, intent, self.v2.provisionalEpochGaps || self.v2.historyAdoption.allowsIntentEdge(previous, intent)); err != nil {
+			if err := validateSteeringIntentSuccessorWithGapsV2(previous, intent, self.v2.allowsIntentGap(previous, intent)); err != nil {
 				return result, err
 			}
 			previousReplay, err := self.v2.runtime.measurementReplayOptionsV2(ctx, result.lastOptions, "history-lineage-previous")
@@ -448,6 +449,9 @@ func (self *IntentStore) beginV2(ctx context.Context, intent SteeringIntent) (re
 	if err := self.v2.historyAdoption.requireFirstEpoch(current, intent.SubnetEpoch); err != nil {
 		return nil, err
 	}
+	if err := self.v2.nativeGapBridge.requireFirstEpoch(current, intent.SubnetEpoch); err != nil {
+		return nil, err
+	}
 	if current != nil && current.SubnetEpoch == intent.SubnetEpoch {
 		if current.Status == "pending" {
 			return nil, ErrSteeringIntentPending
@@ -465,7 +469,7 @@ func (self *IntentStore) beginV2(ctx context.Context, intent SteeringIntent) (re
 			return nil, errors.New("first V2 intent invents a predecessor")
 		}
 	} else {
-		if err := validateSteeringIntentSuccessorWithGapsV2(current, &intent, self.v2.provisionalEpochGaps || self.v2.historyAdoption.allowsIntentEdge(current, &intent)); err != nil {
+		if err := validateSteeringIntentSuccessorWithGapsV2(current, &intent, self.v2.allowsIntentGap(current, &intent)); err != nil {
 			return nil, err
 		}
 		previousReplay, err := self.v2.runtime.measurementReplayOptionsV2(ctx, read.lastOptions, "begin-lineage-previous")
@@ -540,7 +544,13 @@ func newReleaseIntentStoreV2(runtime *releaseRuntimeV2) (*IntentStore, error) {
 		return nil, errors.New("V2 intent state path is not absolute")
 	}
 	return &IntentStore{path: filepath.Join(runtime.cfg.StateDir, "steering-intents.json"), stateDir: runtime.cfg.StateDir, v2: &releaseIntentV2Owner{ctx: runtime.ctx, runtime: runtime,
-		provisionalEpochGaps: runtime.history.retainedStartup && provisionalClosedNativeInputEnabled(&runtime.cfg), historyAdoption: runtime.history.historyAdoption}}, nil
+		provisionalEpochGaps: runtime.history.retainedStartup && provisionalClosedNativeInputEnabled(&runtime.cfg), historyAdoption: runtime.history.historyAdoption,
+		nativeGapBridge: runtime.history.nativeGapBridge}}, nil
+}
+
+// Replay and Begin admit the same gap edges; every other edge is consecutive.
+func (self *releaseIntentV2Owner) allowsIntentGap(previous, current *SteeringIntent) bool {
+	return self.provisionalEpochGaps || self.historyAdoption.allowsIntentEdge(previous, current) || self.nativeGapBridge.allowsIntentEdge(previous, current)
 }
 
 func (self *IntentStore) markFinalizedV2(ctx context.Context, vectorHash, extrinsicHash string, block uint64, blockHash string, revealBlock uint64, values []uint16) error {
