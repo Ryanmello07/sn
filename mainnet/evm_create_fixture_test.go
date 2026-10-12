@@ -47,7 +47,7 @@ import (
 
 // Read the maintained reviewed catalog directly, without copying bytecode into
 // another fixture or importing the simulator's package-main transaction manager.
-func evmTestRelease(t *testing.T) contractReleaseArtifacts {
+func evmTestRelease(t testing.TB) contractReleaseArtifacts {
 	t.Helper()
 	file, err := parser.ParseFile(token.NewFileSet(), "../sim-testnet/contracts_gen.go", nil, 0)
 	if err != nil {

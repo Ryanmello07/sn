@@ -83,7 +83,7 @@ type e2eArtifact struct {
 var e2eArtifacts sync.Map
 
 // e2eCatalogArtifact reads a contract from the reviewed release catalog.
-func e2eCatalogArtifact(t *testing.T, name string) *e2eArtifact {
+func e2eCatalogArtifact(t testing.TB, name string) *e2eArtifact {
 	t.Helper()
 	if cached, ok := e2eArtifacts.Load("catalog/" + name); ok {
 		return cached.(*e2eArtifact)
@@ -217,7 +217,7 @@ func e2eWei(tao uint64) *big.Int {
 
 // e2eFixture is the deployed stack and its actors.
 type e2eFixture struct {
-	t     *testing.T
+	t     testing.TB
 	chain *e2eChain
 	// Actors: the deployer is both bootstraps; the operator is pool 1's v1
 	// root signer and the server's sender; the auditor is the validator.
@@ -241,7 +241,7 @@ type e2eFixture struct {
 
 // newE2EFixture deploys v1 and v2 and registers pool 1 for v2 from
 // firstEpoch.
-func newE2EFixture(t *testing.T, firstEpoch uint64, extra ...*e2eActor) *e2eFixture {
+func newE2EFixture(t testing.TB, firstEpoch uint64, extra ...*e2eActor) *e2eFixture {
 	t.Helper()
 	f := &e2eFixture{t: t, deployer: newE2EActor("deployer"), owner: newE2EActor("owner"), guardian: newE2EActor("guardian"), oracle: newE2EActor("oracle"),
 		operator: newE2EActor("operator"), depositSigner: newE2EActor("deposit-signer"), auditor: newE2EActor("auditor"), anyone: newE2EActor("anyone"), watcher: newE2EActor("watcher"),
@@ -691,7 +691,7 @@ type e2eTreeView struct {
 // the objects published and, for vault2's latest finalized root and pending
 // root at the finalized block, the accounts of the trees it published.
 type e2ePublisher struct {
-	t       *testing.T
+	t       testing.TB
 	f       *e2eFixture
 	lock    sync.Mutex
 	objects map[ledger.Ref][]byte
@@ -699,7 +699,7 @@ type e2ePublisher struct {
 	server  *httptest.Server
 }
 
-func newE2EPublisher(t *testing.T, f *e2eFixture) *e2ePublisher {
+func newE2EPublisher(t testing.TB, f *e2eFixture) *e2ePublisher {
 	publisher := &e2ePublisher{t: t, f: f, objects: map[ledger.Ref][]byte{}, views: map[[32]byte]*e2eTreeView{}}
 	publisher.server = httptest.NewServer(publisher)
 	t.Cleanup(publisher.server.Close)

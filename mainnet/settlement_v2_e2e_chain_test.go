@@ -4,9 +4,10 @@
 // precompiles. Stake lives in the StateDB journal, so a Solidity revert rolls
 // a runtime move back exactly. geth hands a precompile no caller, so a tracer
 // OnEnter hook attributes each runtime call to its contract's mapped coldkey.
-// The chain serves the JSON-RPC the claim daemon and snclaim read. Every mined
-// block is final at once; blocks without transactions are virtual, so time can
-// jump a whole epoch.
+// The chain serves the JSON-RPC the claim daemon, snclaim, the operator server
+// and the validator read, with EIP-1898 block selectors and the native
+// genesis hash. Every mined block is final at once; blocks without
+// transactions are virtual, so time can jump a whole epoch.
 package main
 
 import (
@@ -105,6 +106,10 @@ var e2eRuntimeDeclaredGas = map[string]uint64{"moveStake": 2_366_000, "transferS
 func e2eBlockHash(number uint64) common.Hash {
 	return crypto.Keccak256Hash([]byte("urnetwork-e2e-block"), binary.BigEndian.AppendUint64(nil, number))
 }
+
+// e2eGenesisHash is the native chain's genesis hash, which the deployment's
+// identity names and chain_getBlockHash(0) answers.
+var e2eGenesisHash = crypto.Keccak256Hash([]byte("urnetwork-e2e-native-genesis"))
 
 func e2eBlockTime(number uint64) uint64 { return e2eGenesisTime + e2eBlockSeconds*number }
 
@@ -376,7 +381,10 @@ type e2eChain struct {
 	// nonceView answers eth_getTransactionCount with a stale nonce.
 	nonceView map[common.Address]uint64
 	// sent counts every transaction accepted from each sender over RPC.
-	sent   map[common.Address][]*types.Transaction
+	sent map[common.Address][]*types.Transaction
+	// hashes maps each block hash the chain has served, in a block or a
+	// receipt, to its number, for EIP-1898 hash selectors.
+	hashes map[common.Hash]uint64
 	server *httptest.Server
 }
 
@@ -391,7 +399,7 @@ func newE2EChain(t testing.TB, funded map[common.Address]*big.Int) *e2eChain {
 	config.PragueTime, config.OsakaTime = nil, nil
 	config.BlobScheduleConfig = &params.BlobScheduleConfig{Cancun: params.DefaultCancunBlobConfig}
 	chain := &e2eChain{t: t, config: &config, signer: types.LatestSignerForChainID(config.ChainID), database: state.NewDatabaseForTesting(),
-		included: map[common.Hash]*e2eIncluded{}, nonceView: map[common.Address]uint64{}, sent: map[common.Address][]*types.Transaction{}}
+		included: map[common.Hash]*e2eIncluded{}, nonceView: map[common.Address]uint64{}, sent: map[common.Address][]*types.Transaction{}, hashes: map[common.Hash]uint64{}}
 	db, err := state.New(types.EmptyRootHash, chain.database)
 	if err != nil {
 		t.Fatal(err)
@@ -456,6 +464,7 @@ func (self *e2eChain) commitLocked(db *state.StateDB, number uint64, txs types.T
 	block := &e2eBlock{number: number, root: root, txs: txs, receipts: receipts}
 	self.blocks = append(self.blocks, block)
 	self.head = number
+	self.hashes[e2eBlockHash(number)] = number
 	for index, tx := range txs {
 		self.included[tx.Hash()] = &e2eIncluded{block: block, index: index}
 		self.logs = append(self.logs, receipts[index].Logs...)
@@ -814,10 +823,31 @@ func e2eInvalidParams(err error) *e2eRPCError {
 }
 
 // blockLocked resolves a block selector to a number at or below the head;
-// ok is false for a block beyond it.
+// ok is false for a block beyond it. An EIP-1898 selector names a block by a
+// hash the chain served, or by its number.
 func (self *e2eChain) blockLocked(raw json.RawMessage) (uint64, bool, error) {
 	if len(raw) == 0 {
 		return self.head, true, nil
+	}
+	if trimmed := bytes.TrimSpace(raw); len(trimmed) > 0 && trimmed[0] == '{' {
+		var object struct {
+			BlockNumber *hexutil.Uint64 `json:"blockNumber"`
+			BlockHash   *common.Hash    `json:"blockHash"`
+		}
+		if err := json.Unmarshal(trimmed, &object); err != nil {
+			return 0, false, err
+		}
+		if object.BlockHash != nil {
+			number, known := self.hashes[*object.BlockHash]
+			if !known {
+				return 0, false, fmt.Errorf("header for hash %s not found", object.BlockHash)
+			}
+			return number, true, nil
+		}
+		if object.BlockNumber == nil {
+			return 0, false, errors.New("block selector names neither a hash nor a number")
+		}
+		return uint64(*object.BlockNumber), uint64(*object.BlockNumber) <= self.head, nil
 	}
 	var selector string
 	if err := json.Unmarshal(raw, &selector); err != nil {
@@ -852,8 +882,12 @@ func (self *e2eChain) rpc(method string, params []json.RawMessage) (any, *e2eRPC
 	switch method {
 	case "eth_chainId":
 		return hexutil.EncodeUint64(e2eChainID), nil
+	case "eth_blockNumber":
+		return hexutil.EncodeUint64(self.head), nil
 	case "eth_gasPrice":
 		return hexutil.EncodeUint64(e2eGasPrice), nil
+	case "eth_maxPriorityFeePerGas":
+		return hexutil.EncodeUint64(e2eGasPrice - e2eBaseFee), nil
 	case "eth_getBlockByNumber":
 		number, ok, err := block(0)
 		if err != nil {
@@ -930,6 +964,12 @@ func (self *e2eChain) rpc(method string, params []json.RawMessage) (any, *e2eRPC
 		return nil, nil
 	case "eth_getLogs":
 		return self.logsLocked(params)
+	case "chain_getBlockHash":
+		var number uint64
+		if err := param(0, &number); err != nil || number != 0 {
+			return nil, e2eInvalidParams(fmt.Errorf("only the native genesis block hash is served: %v", err))
+		}
+		return e2eGenesisHash, nil
 	}
 	return nil, &e2eRPCError{Code: -32601, Message: "the method " + method + " does not exist/is not available"}
 }
@@ -1000,13 +1040,14 @@ func (self *e2eChain) blockJSONLocked(number uint64) map[string]any {
 	if number > 0 {
 		parent = e2eBlockHash(number - 1)
 	}
+	self.hashes[e2eBlockHash(number)] = number
 	return map[string]any{
 		"number": hexutil.EncodeUint64(number), "hash": e2eBlockHash(number), "parentHash": parent, "nonce": types.BlockNonce{},
 		"sha3Uncles": types.EmptyUncleHash, "logsBloom": types.MergeBloom(receipts), "transactionsRoot": txRoot, "stateRoot": mined.root,
 		"receiptsRoot": receiptRoot, "miner": common.Address{}, "difficulty": "0x0", "totalDifficulty": "0x0", "extraData": "0x",
 		"size": "0x0", "gasLimit": hexutil.EncodeUint64(e2eBlockGas), "gasUsed": hexutil.EncodeUint64(gasUsed),
 		"timestamp": hexutil.EncodeUint64(e2eBlockTime(number)), "baseFeePerGas": hexutil.EncodeUint64(e2eBaseFee), "mixHash": common.Hash{},
-		"uncles": []any{}, "transactions": transactions,
+		"withdrawalsRoot": types.EmptyWithdrawalsHash, "uncles": []any{}, "transactions": transactions,
 	}
 }
 
