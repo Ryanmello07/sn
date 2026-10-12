@@ -13,12 +13,12 @@ import (
 var fixtureSources = map[string]string{
 	"src/LedgerTree.sol":         "library LedgerTree {\n    function f() internal {\n        g();\n    }\n}\n",
 	"src/STSettlement2.sol":      "contract STSettlement2 {\n    constructor() {\n        _disableInitializers();\n    }\n}\n",
-	"src/STSettlementVault2.sol": "contract STSettlementVault2 {\n    function a() external {\n        _requireBacking();\n        _requireBacking();\n        _requireBacking();\n        _requireBacking();\n        emit E();\n    }\n}\n",
+	"src/STSettlementVault2.sol": "contract STSettlementVault2 {\n    function a() external {\n        emit E();\n    }\n}\n",
 }
 
 const fixtureReport = "TN:\nSF:src/LedgerTree.sol\nFN:2,LedgerTree.f\nFNDA:5,LedgerTree.f\nDA:2,5\nDA:3,5\nBRDA:3,0,0,5\nBRDA:3,0,1,2\nLF:2\nLH:2\nend_of_record\n" +
 	"TN:\nSF:src/STSettlement2.sol\nDA:2,1\nDA:3,0\nend_of_record\n" +
-	"TN:\nSF:src/STSettlementVault2.sol\nDA:2,1\nDA:3,0\nDA:4,0\nDA:5,0\nDA:6,0\nDA:7,1\nBRDA:7,0,0,1\nend_of_record\n" +
+	"TN:\nSF:src/STSettlementVault2.sol\nDA:2,1\nDA:3,1\nBRDA:3,0,0,1\nend_of_record\n" +
 	"TN:\nSF:src/Other.sol\nDA:1,0\nBRDA:1,0,0,-\nend_of_record\n"
 
 // fixture writes the sources into a new Foundry project and returns it.
@@ -53,7 +53,7 @@ func TestRunAcceptsTheBarWithTheReviewedArtifacts(t *testing.T) {
 	status, stdout, stderr := runReport(t, fixture(t), fixtureReport)
 	want := "src/LedgerTree.sol: lines 2/2 executed (0 reviewed artifacts), branches 2/2 taken\n" +
 		"src/STSettlement2.sol: lines 1/2 executed (1 reviewed artifacts), branches 0/0 taken\n" +
-		"src/STSettlementVault2.sol: lines 2/6 executed (4 reviewed artifacts), branches 1/1 taken\n"
+		"src/STSettlementVault2.sol: lines 2/2 executed (0 reviewed artifacts), branches 1/1 taken\n"
 	if status != 0 || stdout != want || stderr != "" {
 		t.Fatalf("status %d\nstdout %q\nstderr %q", status, stdout, stderr)
 	}
@@ -136,17 +136,20 @@ func TestCheckRefusesEachShortfall(t *testing.T) {
 			want: []string{"src/LedgerTree.sol:3: unexecuted: g();"}},
 		{name: "a branch taken 0 times", old: "BRDA:3,0,1,2\n", new: "BRDA:3,0,1,0\n",
 			want: []string{"src/LedgerTree.sol:3: branch 0,1 not taken"}},
-		{name: "a branch never evaluated", old: "BRDA:7,0,0,1\n", new: "BRDA:7,0,0,-\n",
-			want: []string{"src/STSettlementVault2.sol:7: branch 0,0 not taken"}},
+		{name: "a branch never evaluated", old: "BRDA:3,0,0,1\n", new: "BRDA:3,0,0,-\n",
+			want: []string{"src/STSettlementVault2.sol:3: branch 0,0 not taken"}},
 		{name: "a contract missing from the report", old: "TN:\nSF:src/STSettlement2.sol\nDA:2,1\nDA:3,0\nend_of_record\n", new: "",
 			want: []string{"src/STSettlement2.sol: no lines in the report"}},
 		{name: "a contract without lines", old: "DA:2,1\nDA:3,0\nend_of_record", new: "end_of_record",
 			want: []string{"src/STSettlement2.sol: no lines in the report"}},
-		{name: "a reviewed artifact executed", old: "DA:4,0\n", new: "DA:4,1\n",
-			want: []string{`src/STSettlementVault2.sol: 3 unexecuted "_requireBacking();" lines, 4 reviewed`}},
-		{name: "an unreviewed artifact", old: "DA:7,1\n", new: "DA:7,0\n", edit: func(root string) error {
-			return os.WriteFile(filepath.Join(root, "src/STSettlementVault2.sol"), []byte(strings.Replace(fixtureSources["src/STSettlementVault2.sol"], "emit E();", "_requireBacking();", 1)), 0o644)
-		}, want: []string{`src/STSettlementVault2.sol: 5 unexecuted "_requireBacking();" lines, 4 reviewed`}},
+		{name: "a reviewed artifact executed", old: "DA:2,1\nDA:3,0\n", new: "DA:2,1\nDA:3,1\n",
+			want: []string{`src/STSettlement2.sol: 0 unexecuted "_disableInitializers();" lines, 1 reviewed`}},
+		{name: "an unreviewed artifact", old: "DA:2,1\nDA:3,0\n", new: "DA:2,1\nDA:3,0\nDA:4,0\n", edit: func(root string) error {
+			return os.WriteFile(filepath.Join(root, "src/STSettlement2.sol"), []byte(strings.Replace(fixtureSources["src/STSettlement2.sol"], "_disableInitializers();", "_disableInitializers();\n        _disableInitializers();", 1)), 0o644)
+		}, want: []string{`src/STSettlement2.sol: 2 unexecuted "_disableInitializers();" lines, 1 reviewed`}},
+		{name: "an artifact of another contract", old: "DA:3,1\nBRDA:3,0,0,1\n", new: "DA:3,0\nBRDA:3,0,0,1\n", edit: func(root string) error {
+			return os.WriteFile(filepath.Join(root, "src/STSettlementVault2.sol"), []byte(strings.Replace(fixtureSources["src/STSettlementVault2.sol"], "emit E();", "_disableInitializers();", 1)), 0o644)
+		}, want: []string{"src/STSettlementVault2.sol:3: unexecuted: _disableInitializers();"}},
 		{name: "an unexecuted line outside the source", old: "DA:3,0\nend_of_record\nTN:\nSF:src/STSettlementVault2.sol", new: "DA:3,0\nDA:99,0\nend_of_record\nTN:\nSF:src/STSettlementVault2.sol",
 			want: []string{"src/STSettlement2.sol:99: unexecuted line outside the source"}},
 		{name: "an unreadable source", edit: func(root string) error {

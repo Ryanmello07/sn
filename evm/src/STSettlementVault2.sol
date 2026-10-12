@@ -174,15 +174,18 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         returns (uint256 amount)
     {
         bytes32 hotkey = _advance(epoch, noId);
-        uint256 observed = _movable(hotkey);
+        (uint256 staked, uint256 observed) = _movable(hotkey);
+        uint256 escrowStake;
         if (observed != 0) {
-            amount = _moveToEscrow(hotkey, observed);
+            (amount, escrowStake) = _moveToEscrow(hotkey, staked, observed);
             capturedTotal[noId] += amount;
             totalCaptured += amount;
             escrowAccounted += amount;
+        } else {
+            escrowStake = _stake(escrowHotkey, selfColdkey);
         }
         uint256 funded = _snapshot(epoch, noId);
-        _requireBacking();
+        _requireBacking(escrowStake);
         emit EmissionCaptured(epoch, noId, observed, amount, funded);
     }
 
@@ -363,8 +366,7 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         claimedTotal[noId] += amount;
         totalPaid += amount;
         escrowAccounted -= amount;
-        _payFromEscrow(coldkey, amount);
-        _requireBacking();
+        _requireBacking(_payFromEscrow(coldkey, amount));
         emit Claimed(noId, rootIndex, account.index, coldkey, account.cumulative, amount, msg.sender);
     }
 
@@ -373,10 +375,11 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     /// stake becomes surplus that the coordinator may assign to a pool.
     function absorbStake(bytes32 hotkey) external nonReentrant returns (uint256 amount) {
         if (hotkey == bytes32(0) || hotkey == escrowHotkey || poolHotkeyUsed[hotkey]) revert InvalidHotkey();
-        uint256 observed = _movable(hotkey);
+        (uint256 staked, uint256 observed) = _movable(hotkey);
         if (observed == 0) revert NothingToAbsorb();
-        amount = _moveToEscrow(hotkey, observed);
-        _requireBacking();
+        uint256 escrowStake;
+        (amount, escrowStake) = _moveToEscrow(hotkey, staked, observed);
+        _requireBacking(escrowStake);
         emit StakeAbsorbed(hotkey, observed, amount, msg.sender);
     }
 
@@ -391,7 +394,7 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         capturedTotal[noId] += amount;
         totalCaptured += amount;
         escrowAccounted += amount;
-        _requireBacking();
+        _requireBacking(_stake(escrowHotkey, selfColdkey));
         emit SurplusAssigned(noId, lastFundedEpoch[noId] + 1, amount);
     }
 
@@ -461,35 +464,40 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         fundedThrough[noId][epoch] = funded;
     }
 
-    // Moves `observed` of the vault's stake on `hotkey` into escrow and returns
-    // escrow's gain. The runtime moves exactly the requested amount out of the
-    // source, and escrow's share-pool read can be one rao short (§7.3).
-    // Anything else reverts. The deltas compare whole positions, locks included.
-    function _moveToEscrow(bytes32 hotkey, uint256 observed) private returns (uint256) {
+    // Moves `observed` of the vault's stake on `hotkey`, whose whole position
+    // read `sourceBefore`, into escrow, and returns escrow's gain and its whole
+    // position after the move. The runtime moves exactly the requested amount
+    // out of the source, and escrow's share-pool read can be one rao short
+    // (§7.3). Anything else reverts. The deltas compare whole positions, locks
+    // included.
+    function _moveToEscrow(bytes32 hotkey, uint256 sourceBefore, uint256 observed)
+        private
+        returns (uint256, uint256 escrowAfter)
+    {
         if (observed >= WHOLE_POSITION) revert AmountTooLarge();
-        uint256 sourceBefore = _stake(hotkey, selfColdkey);
         uint256 escrowBefore = _stake(escrowHotkey, selfColdkey);
         IStaking(ISTAKING_ADDRESS).moveStake(hotkey, escrowHotkey, uint256(netuid), uint256(netuid), observed);
-        uint256 escrowAfter = _stake(escrowHotkey, selfColdkey);
+        escrowAfter = _stake(escrowHotkey, selfColdkey);
         if (
             _stake(hotkey, selfColdkey) + observed != sourceBefore || escrowAfter > escrowBefore + observed
                 || escrowAfter + 1 < escrowBefore + observed
         ) revert RuntimeAccountingMismatch();
-        return escrowAfter - escrowBefore;
+        return (escrowAfter - escrowBefore, escrowAfter);
     }
 
-    // Transfers `amount` of escrow stake to `coldkey`, on the escrow hotkey.
-    // Escrow must lose exactly `amount`; the destination's read can be one rao
-    // short (§7.3). Anything else reverts.
-    function _payFromEscrow(bytes32 coldkey, uint256 amount) private {
+    // Transfers `amount` of escrow stake to `coldkey`, on the escrow hotkey, and
+    // returns escrow's whole position after it. Escrow must lose exactly
+    // `amount`; the destination's read can be one rao short (§7.3). Anything
+    // else reverts.
+    function _payFromEscrow(bytes32 coldkey, uint256 amount) private returns (uint256 escrowAfter) {
         uint256 escrowBefore = _stake(escrowHotkey, selfColdkey);
         uint256 destinationBefore = _stake(escrowHotkey, coldkey);
         IStaking(ISTAKING_ADDRESS)
             .transferStake(coldkey, escrowHotkey, uint256(netuid), uint256(netuid), amount);
         uint256 destinationAfter = _stake(escrowHotkey, coldkey);
+        escrowAfter = _stake(escrowHotkey, selfColdkey);
         if (
-            _stake(escrowHotkey, selfColdkey) + amount != escrowBefore
-                || destinationAfter > destinationBefore + amount
+            escrowAfter + amount != escrowBefore || destinationAfter > destinationBefore + amount
                 || destinationAfter + 1 < destinationBefore + amount
         ) revert RuntimeAccountingMismatch();
     }
@@ -526,11 +534,18 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         return IStaking(ISTAKING_ADDRESS).getStake(hotkey, coldkey, uint256(netuid));
     }
 
-    // The stake this vault can move off `hotkey`: its position less the
-    // registration collateral that runtime 475 locks on it. getStake includes
-    // the lock, and a move that digs into it fails StakeUnavailable.
-    function _movable(bytes32 hotkey) private view returns (uint256) {
-        uint256 staked = _stake(hotkey, selfColdkey);
+    // The vault's whole position on `hotkey` and the stake it can move off it:
+    // the position less the registration collateral that runtime 475 locks on
+    // it. getStake includes the lock, and a move that digs into it fails
+    // StakeUnavailable.
+    function _movable(bytes32 hotkey) private view returns (uint256 staked, uint256 movable) {
+        staked = _stake(hotkey, selfColdkey);
+        movable = _unlocked(hotkey, staked);
+    }
+
+    // `staked`, the vault's whole position on `hotkey`, less the lock on it, or
+    // 0 below the lock.
+    function _unlocked(bytes32 hotkey, uint256 staked) private view returns (uint256) {
         // Only the locked amount limits a move; the other fields say how it drains.
         // slither-disable-next-line unused-return
         (, uint64 locked,,,) =
@@ -540,10 +555,13 @@ contract STSettlementVault2 is ISTSettlementVault2 {
 
     // Escrow's movable stake: the backing of everything the vault accounts for.
     function _liveEscrowStake() private view returns (uint256) {
-        return _movable(escrowHotkey);
+        return _unlocked(escrowHotkey, _stake(escrowHotkey, selfColdkey));
     }
 
-    function _requireBacking() private view {
-        if (_liveEscrowStake() < escrowAccounted) revert Underfunded();
+    // Requires escrow's movable stake to back everything the vault accounts
+    // for. `escrowStake` is escrow's whole position as read after the call's
+    // last runtime call; nothing moves stake between that read and this check.
+    function _requireBacking(uint256 escrowStake) private view {
+        if (_unlocked(escrowHotkey, escrowStake) < escrowAccounted) revert Underfunded();
     }
 }
