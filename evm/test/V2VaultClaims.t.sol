@@ -338,6 +338,24 @@ contract V2VaultClaimsTest is V2VaultBase {
         _assertConserved();
     }
 
+    // V-16, G4 (review M1): the cap is the latest finalized total, not the
+    // total of the root a claim is proven against. Once Carol and Alice have
+    // claimed 1,400 from root 1, more than root 0's whole total of 1,000, Bob
+    // still claims his root-0 balance, and then root 1's increment.
+    function test_V16_theCapIsTheLatestFinalizedTotalWhicheverRootIsClaimed() public {
+        V2TreeHelper.Node[][] memory old = _root0();
+        V2TreeHelper.Node[][] memory levels = _publish(NO1, _keys(ALICE, BOB, CAROL), _values(900, 600, 500));
+        assertEq(_claim(NO1, 1, levels, 2, CAROL, 500), 500);
+        assertEq(_claim(NO1, 1, levels, 0, ALICE, 900), 900);
+        assertGt(vault.claimedTotal(NO1), vault.roots(NO1, 0).total);
+
+        assertEq(_claim(NO1, 0, old, 1, BOB, 400), 400);
+        assertEq(_claim(NO1, 1, levels, 1, BOB, 600), 200);
+        assertEq(vault.claimedTotal(NO1), vault.finalizedTotal(NO1));
+        assertEq(vault.escrowAccounted(), 0);
+        _assertConserved();
+    }
+
     // V-21: each pool's claims are capped by its own finalized total, however
     // much escrow holds for other pools.
     function test_V21_eachPoolIsCappedByItsOwnFinalizedTotal() public {

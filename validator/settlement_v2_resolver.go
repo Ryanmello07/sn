@@ -33,10 +33,13 @@ func (self SettlementV2Addresses) configured() bool {
 }
 
 // releaseSettlementV2Addresses is the one place a release configuration's
-// `settlement_v2` block reaches steering and replay. The block is wired in
-// with its configuration loader; until then no configuration names it.
+// `settlement_v2` block reaches steering, replay and the startup identity
+// check. The loader admitted both addresses as nonzero lowercase hex.
 func releaseSettlementV2Addresses(cfg *ReleaseConfig) SettlementV2Addresses {
-	return SettlementV2Addresses{}
+	if cfg.SettlementV2 == nil {
+		return SettlementV2Addresses{}
+	}
+	return SettlementV2Addresses{Settlement: common.HexToAddress(cfg.SettlementV2.Settlement), Vault: common.HexToAddress(cfg.SettlementV2.Vault)}
 }
 
 // settlementAt's identity version for a pool from its first v2 epoch.
