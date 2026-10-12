@@ -243,9 +243,9 @@ func (self *settlementV2Audit) confirmed(ctx context.Context) error {
 // audit takes one step on the pool's pending root: it audits the root until
 // the audit decides, then sends what the decision calls for until nothing is
 // left to send. An approval stays open: it counts only at the auditor set
-// version it was sent at, so every pass approves again, sending only after
-// the set changed, until the root leaves the pending slot or end(e+1)
-// passes.
+// version it was sent at, so every pass approves again while the root is
+// pending, sending only after the set changed; a change after end(e+1) ends
+// the decision.
 func (self *settlementV2Audit) audit(ctx context.Context, pool settlementV2AuditPool) error {
 	state, err := self.reader.poolState(ctx, pool.noID)
 	if err != nil {
