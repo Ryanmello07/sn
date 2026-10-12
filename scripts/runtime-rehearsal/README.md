@@ -224,7 +224,7 @@ RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
 
 The whole package, the smoke test, the transient-storage probe and R-2 to
 R-6 each on its own node in parallel, took 8 minutes 22 seconds on
-2026-10-12 (R-7, added the same day, takes about 6 minutes on its own node).
+2026-10-12 (R-7, added the same day, takes about 8 minutes on its own node).
 Sealing runs at about 110 to 125 blocks a second whether or not blocks
 finalize or several callers seal at once, so a 14,400-block challenge window
 takes about 2 minutes.
@@ -245,14 +245,14 @@ from epoch 2, R-5 from epoch 3). R-2, R-4 and R-5 stop subnet epochs (tempo
 0) so that no dividend moves a position between two reads; R-3 runs SN25's
 tempo of 360. Measured:
 
-- **R-1 deployment** (`TestR1SettlementV2Phase`, 80 seconds). The settlement
+- **R-1 deployment** (`TestR1SettlementV2Phase`, 100 seconds). The settlement
   v2 phase of `bootstrap-contracts` deployed the final vault2 and its escrow
   registration, sent back to back and sealed into one block, then the
   STSettlement2 implementation, the initialized proxy and vault2's binding,
   and, as the optional sixth action, the claim batcher. Each completed only
   after its readback against the real precompiles, and the escrow position
   held no registration collateral. Gas used of the approved limits:
-  `vault2-create` 2,821,678 of 4,000,000, `escrow2-register` 1,463,833 of
+  `vault2-create` 2,821,690 of 4,000,000, `escrow2-register` 1,463,833 of
   2,500,000, `settlement2-create` 1,935,622 of 3,000,000, `proxy2-create`
   310,486 of 1,000,000, `vault2-link` 31,329 of 150,000 and `batcher-create`
   285,209 of 400,000.
@@ -336,7 +336,7 @@ tempo of 360. Measured:
   `rpc-binary-search-estimate`: its search stops once a step moves the bound
   by less than 10%, so a limit can exceed the least sufficient one by up to
   that much and need not fall with the gas used.
-- **R-7 batched claims** (`TestR7ClaimBatch`, 376 seconds), on a root of
+- **R-7 batched claims** (`TestR7ClaimBatch`, 465 seconds), on a root of
   2^29 accounts: claims through `STClaimBatcher` (`evm/src/STClaimBatcher.sol`),
   each item capped at the tooling's default gas per claim of 2,600,000
   (`onchain.ClaimBatchGasPerClaim`), and each batch sent with exactly the
@@ -350,26 +350,32 @@ tempo of 360. Measured:
   dispatch class's extrinsic weight limit, the 75% normal share of the 4 s
   block less the 10% kept for block initialization, at 40,000 weight per
   gas, less the transaction's own extension weight
-  (`onchain.ClaimBatchMaxGas`). Single claims used 202,462 to 202,486 gas
-  (236,698 for the pool's first, which also writes its first claimed and
-  paid totals); `eth_estimateGas` gave a limit of up to 2,619,986, and the
-  least limit that paid was up to 2,506,011, below the default cap.
+  (`onchain.ClaimBatchMaxGas`). Two accounts' claimed watermarks share a
+  slot of vault2, so consecutive accounts alternate between a claim that
+  writes its slot's first value and one after its neighbour's: alone they
+  used 187,043 to 187,078 and 169,944 to 169,967 gas; `eth_estimateGas` gave
+  a limit of up to 2,573,886, and the least limit that paid was up to
+  2,443,905, below the default cap. Each batch claims consecutive accounts,
+  half of each kind.
 
   | Claims | Gas used | Per claim | Least gas limit |
   | --- | ---: | ---: | ---: |
-  | 1, alone to vault2 | 202,474 | 202,474 | 2,506,011 |
-  | 1, batched | 213,396 | 213,396 | 2,704,245 |
-  | 5, batched | 868,905 | 173,781 | 3,466,461 |
-  | 10, batched | 1,688,259 | 168,825 | 4,385,314 |
-  | 20, batched | 3,326,810 | 166,340 | 6,222,866 |
-  | 339, the most one transaction holds | 55,588,352 | 163,977 | 64,832,626 |
+  | 1, batched | 180,878 | 180,878 | 2,704,233 |
+  | 5, batched | 783,263 | 156,652 | 3,319,025 |
+  | 10, batched | 1,508,596 | 150,859 | 4,058,357 |
+  | 20, batched | 2,971,386 | 148,569 | 5,549,148 |
+  | 418, the most one transaction holds | 61,186,350 | 146,378 | 64,878,579 |
 
-  From 10 claims on a batch saves 17 to 19% of each claim's gas: the
-  21,000 intrinsic gas of a transaction and vault2's first, cold reads are
-  paid once. Its least limit grows by about 184,000 gas per claim, because
-  only the last item needs the 2.6M the runtime admits a transfer with; ten
-  single claims need ten limits of 2.5M. A batch of one costs 5% more than
-  a claim sent alone, so the tooling sends a lone claim directly. The most
-  one transaction holds is searched by batch size, since offering more
-  accounts than fit also spends their calldata's intrinsic gas; with
-  shallower trees, and so shorter proofs, more than 339 claims fit.
+  Against the same claims sent alone, a batch of 10 uses 15.5% less gas, a
+  batch of 20 16.8% and the largest 18.0%: the 21,000 intrinsic gas of a
+  transaction and vault2's first, cold reads are paid once. Its least limit
+  grows by about 149,000 gas per claim, because only the last item needs
+  the 2.6M the runtime admits a transfer with; ten single claims need ten
+  limits of about 2.45M. A batch of one, an account after its neighbour's,
+  used 6% more than such a claim alone, so the tooling sends a lone claim
+  directly. The most one transaction holds is searched by batch size, since
+  offering more accounts than fit also spends their calldata's intrinsic
+  gas; with shallower trees, and so shorter proofs, more than 418 claims
+  fit. Against vault2 before its gas reduction (snv2 `7202d7cb`) single
+  claims used about 202,500 gas, a batch of 20 166,340 per claim, and one
+  transaction held 339 claims.

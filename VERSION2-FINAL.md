@@ -189,11 +189,11 @@ a 5 gwei base fee and 0.006587 TAO/α (VERSION2-REVIEW-RESPONSE.md:604-605),
 a claim costs about 0.19 α.
 That is about 13 weeks of an average 100k-population provider's earnings, and
 gas is under 10% of a claim after about 131 weeks. At 1M providers both take
-ten times longer. A third party can raise the cost by filling vault2's
+ten times longer. Claimed through the claim batcher (§10.2), twenty or more
+claims in one transaction use 146,000 to 149,000 gas each, 17 to 18% less
+than alone (R-7). A third party can raise the cost by filling vault2's
 staking-hotkey list (§7.3), paying a transfer above the floor per entry:
 every claim then uses about 1.1M gas more (R-3: 1,256,716 against 154,218).
-Claimed through the claim batcher (§10.2), twenty or more claims in one
-transaction use about 166,000 gas each, 18% less than alone (R-7).
 At the same prices a claim then costs about 1 α, about 69 weeks of that
 provider's earnings, and gas falls under 10% of a claim only above about
 10 α. A claim below the runtime's 100,000-rao TAO-equivalent transfer floor,
@@ -1187,11 +1187,12 @@ and add 20%. They cap each claim at the larger of 2,600,000 gas, a single
 claim's least limit with margin, and the batch's largest single-claim
 estimate. Measured on runtime 475 at depth 29 (R-7): a transaction may name at
 most 64,998,500 gas, below the 75,000,000 block gas limit, and so holds at
-most 339 claims; from ten claims on a batch saves 17 to 19% of each claim's gas
-(166,340 per claim in a batch of 20, against 202,474 alone), and its gas
-limit grows by about 184,000 per claim where each single claim needs 2.5M.
-A batch of one costs 5% more than a claim alone, so the tools send a lone
-claim directly. The deployment phase can create the batcher (§8.5).
+most 418 claims; from ten claims on a batch uses 15 to 18% less gas than the
+same claims alone (148,569 per claim in a batch of 20, against 169,944 to
+187,078 alone), and its gas limit grows by about 149,000 per claim where each
+single claim needs about 2.45M. A batch of one costs 6% more than a claim
+alone, so the tools send a lone claim directly. The deployment phase can
+create the batcher (§8.5).
 
 ## 11. Apps and SDK
 

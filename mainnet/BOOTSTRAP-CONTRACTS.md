@@ -705,7 +705,7 @@ apply. Reasonable starting limits are 4,000,000 for `vault2-create`, 2,500,000
 for `escrow2-register`, 3,000,000 for `settlement2-create`, 1,000,000 for
 `proxy2-create`, 150,000 for `vault2-link` and 400,000 for the optional
 `batcher-create`. With them R-1 (below) completed every action of the final
-contracts, using 2,600,537, 1,465,892, 1,935,622, 310,486, 33,523 and 285,209
+contracts, using 2,821,690, 1,463,833, 1,935,622, 310,486, 31,329 and 285,209
 gas (2026-10-12; the figures vary by a few gas with the random addresses in
 calldata, and the README records them with the R battery). `maximum_total_wei` covers every limit times its fee cap plus the
 escrow funding.
@@ -916,5 +916,6 @@ to pass the latest block before each online command. The whole run takes
 about 80 seconds. On 2026-10-12 it passed on the final contracts in 86
 seconds, with the escrow registration in vault2's block and no registration
 collateral on the escrow position; with the claim batcher's creation added as
-the sixth action, it passed in 72 seconds, the batcher read back at its own
-block.
+the sixth action, it passed in 72 seconds, and in 100 seconds on a loaded
+machine against vault2 after its gas reduction, the batcher read back at its
+own block.

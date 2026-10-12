@@ -1586,13 +1586,13 @@ still treat that endpoint as untrusted and check each proof against vault2's on-
 (§16.1). A runtime refusal (a transfer below the `DefaultMinTransfer` floor of 100,000 rao TAO-equivalent,
 or a destination coldkey whose staking-hotkey list is full) reverts the claim and leaves the balance
 claimable; since balances never expire, a provider, its app or the miner claim daemon simply claims once the
-balance is large relative to gas. A claim uses about 236,000 gas but needs a gas limit of about 2.5M,
+balance is large relative to gas. A claim uses about 170,000 to 187,000 gas but needs a gas limit of about 2.5M,
 because the runtime admits a stake transfer only if the forwarded gas covers its declared weight
 (`VERSION2-FINAL.md` §7.3, §8.1). An optional, stateless claim batcher (`STClaimBatcher`) claims many
 accounts in one transaction, each capped at its own gas so that a claim the runtime refuses cannot starve
-the others, and still only to each leaf's coldkey: from ten claims on it saves 17–19% of each claim's gas,
-and a batch's gas limit grows by about 184,000 per claim where a single claim needs 2.5M. One
-transaction holds up to 339 claims at the deepest tree (`VERSION2-FINAL.md` §10.2, R-7).
+the others, and still only to each leaf's coldkey: from ten claims on it saves 15–18% of their gas, and
+a batch's gas limit grows by about 149,000 per claim where a single claim needs about 2.45M. One
+transaction holds up to 418 claims at the deepest tree (`VERSION2-FINAL.md` §10.2, R-7).
 Pausing settlement never stops claims. Claims are pull‑based, so settlement is `O(1)` on‑chain regardless of
 participant count, and each pool has its own root — **there is no global claim root**.
 

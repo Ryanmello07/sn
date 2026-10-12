@@ -18,7 +18,7 @@ import (
 
 // batchAccounts is the number of accounts R-7's root holds: enough for the
 // single claims, the fixed batches and more than the most one transaction
-// holds, which was 339 and grows as claims get cheaper.
+// holds, which was 418 and grows as claims get cheaper.
 const batchAccounts = 700
 
 // claimItem is STClaimBatcher.Claim.
