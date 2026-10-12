@@ -176,7 +176,7 @@ release_phase_sn_v2() {
   cd "$sn_repo"
   go test ./ledger ./scripts/solidity-coverage -count=1
   go test -race ./ledger ./scripts/solidity-coverage -count=1
-  settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2)'
+  settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2)'
   go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
   go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
 }
@@ -366,11 +366,12 @@ release_phase_sdk() {
   sdk_lifecycle_tests='^Test(ApiCloseAndWaitJoinsRefreshWorker|NetworkSpaceCloseJoinsClientStrategyRelease|NetworkSpaceManagerReplacementDoesNotHoldStateLockDuringClose|NetworkSpaceManagerStaleRemovePreservesReplacement|NetworkSpaceManagerStaleActiveSelectionPreservesReplacement|NetworkSpaceCloseJoinsAsyncLocalStateAndRejectsLateJob|NetworkSpaceManagerCloseRejectsRacingUpdate|SimProviderDisconnectJoinsPendingTransportDial|SimProviderCloseJoinsPendingTransportDial|DeviceLocalProviderCloseAndWaitJoinsAdmittedMigration|DeviceLocalCloseAndWaitJoinsOwnedApiRefresh|DeviceLocalCloseAndWaitJoinsDestinationGeneration|SecurityPolicyMonitorCloseAndWaitJoinsRun|DeviceLocalRpcManagerCloseAndWaitJoinsAccept|DeviceRemoteRpcCloseAndWaitJoinsAdmittedCallback|DeviceRemoteCloseAndWaitJoinsBlockedDial|DeviceRemoteSetRpcServerRejectsAfterClose|RpcClientCallParentCancellationClosesTransport|DeviceLocalAppliesApiRefreshAndLogout|DeviceRemoteAppliesStandaloneApiRefreshAndLogout|ApiSubnetHeadlessBindings|ApiHeadlessAuthAndProviderBindings|ApiSubnetPoolClaimEscapesNoUserInputIntoQuery|SubscriptionBalanceDecode|CheckBalanceCode|CheckBalanceCodeUnknownCode|RedeemBalanceCodeDecodeAndClassify|Stripe.*|VerifyPlayPurchase|VerifyAppleTransaction)$'
   go test . -run "$sdk_lifecycle_tests" -count=1
   go test -race . -run "$sdk_lifecycle_tests" -count=1
-  # CL-2 (VERSION2-FINAL.md §11, §15.7): the settlement v2 balances the apps
-  # show, in every account state and beside the v1 claims.
-  sdk_ledger_v2_tests='^Test(SnLedger)'
-  go test . -run "$sdk_ledger_v2_tests" -count=1
-  go test -race . -run "$sdk_ledger_v2_tests" -count=1
+  # CL-2 and CL-4 (VERSION2-FINAL.md §11, §15.7): the settlement v2 balances
+  # the apps show, in every account state and beside the v1 claims, and the
+  # v2 claims with their vault2 bindings and ledger proofs.
+  sdk_ledger_v2_tests='^Test(SnLedger|BuildTestLedgerTreeMatchesTheVectors|SnChainSettingsVault2Address|Ledger|PackLedger|DecodeLedger|EthCallFrom|TransactionReceiptLogs)'
+  go test . ./sn/evm ./sn/merkle -run "$sdk_ledger_v2_tests" -count=1
+  go test -race . ./sn/evm ./sn/merkle -run "$sdk_ledger_v2_tests" -count=1
 }
 release_gate_start sdk release_phase_sdk
 release_phase_sdk_build() {

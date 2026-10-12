@@ -2,8 +2,8 @@ package main
 
 // Settlement v2 in the aggregate gate (VERSION2-FINAL.md §14 gates 1 and 3,
 // §15): sn's v2 suites, the scale shard, the Solidity coverage bar, the deep
-// invariant campaign and the operator's v2 suites, each executed by an
-// admitted phase.
+// invariant campaign, and the operator's and the SDK's v2 suites, each
+// executed by an admitted phase.
 
 import (
 	"errors"
@@ -235,14 +235,14 @@ func releaseGateSnV2Group(t *testing.T) releaseEvidenceV2GateGroup {
 	packages := "./merkle ./protocol ./miner ./miner/onchain ./validator"
 	return releaseEvidenceV2GateGroup{
 		phase: "sn_v2", job: "sn-v2", variable: "settlement_v2_tests",
-		alternatives: "Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2",
+		alternatives: "Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2",
 		packages:     strings.Fields(packages),
 		sources: map[string][]string{
 			"./merkle":        releaseEvidenceV2GateSources(t, []string{"../merkle/ledger_*_test.go"}),
 			"./protocol":      releaseEvidenceV2GateSources(t, []string{"../protocol/ledger_*_test.go"}),
 			"./miner":         releaseEvidenceV2GateSources(t, []string{"../miner/claim_v2_*_test.go"}),
 			"./miner/onchain": releaseEvidenceV2GateSources(t, []string{"../miner/onchain/v2*_test.go", "../miner/onchain/withdraw*_test.go", "../miner/onchain/submit_value*_test.go"}),
-			"./validator":     releaseEvidenceV2GateSources(t, []string{"../validator/settlement_v2*_test.go"}),
+			"./validator":     releaseEvidenceV2GateSources(t, []string{"../validator/settlement_v2*_test.go", "../validator/production_settlement_v2*_test.go"}),
 		},
 		commands: []string{
 			"go test " + whole + " -count=1",
@@ -377,17 +377,24 @@ func releaseGateOperatorV2Groups(t *testing.T) []releaseEvidenceV2GateGroup {
 	return append([]releaseEvidenceV2GateGroup{releaseGateLedgerV2ServerGroup(t), releaseGateMigrationSuffixGroup(t)}, releaseGateServerScaleDatabaseGroups(t)...)
 }
 
-// CL-2 (§11, §15.7): the SDK's v2 ledger display, normal and race; every root
-// of a v2 ledger test file is selected.
+// CL-2 and CL-4 (§11, §15.7): the SDK's v2 ledger display and claims, with
+// their vault2 bindings and ledger proofs, normal and race; every root of a
+// v2 test file is selected.
 func releaseGateSdkLedgerV2Group(t *testing.T) releaseEvidenceV2GateGroup {
 	t.Helper()
+	packages := ". ./sn/evm ./sn/merkle"
 	return releaseEvidenceV2GateGroup{
-		phase: "sdk", variable: "sdk_ledger_v2_tests", alternatives: "SnLedger",
-		packages: []string{"."},
-		sources:  map[string][]string{".": releaseEvidenceV2GateSources(t, []string{"../../sdk/sn_ledger*_test.go"})},
+		phase: "sdk", variable: "sdk_ledger_v2_tests",
+		alternatives: "SnLedger|BuildTestLedgerTreeMatchesTheVectors|SnChainSettingsVault2Address|Ledger|PackLedger|DecodeLedger|EthCallFrom|TransactionReceiptLogs",
+		packages:     strings.Fields(packages),
+		sources: map[string][]string{
+			".":           releaseEvidenceV2GateSources(t, []string{"../../sdk/sn_ledger*_test.go"}),
+			"./sn/evm":    releaseEvidenceV2GateSources(t, []string{"../../sdk/sn/evm/vault2_test.go", "../../sdk/sn/evm/rpc_test.go"}),
+			"./sn/merkle": releaseEvidenceV2GateSources(t, []string{"../../sdk/sn/merkle/ledger_*_test.go"}),
+		},
 		commands: []string{
-			`go test . -run "$sdk_ledger_v2_tests" -count=1`,
-			`go test -race . -run "$sdk_ledger_v2_tests" -count=1`,
+			"go test " + packages + ` -run "$sdk_ledger_v2_tests" -count=1`,
+			"go test -race " + packages + ` -run "$sdk_ledger_v2_tests" -count=1`,
 		},
 	}
 }
@@ -769,17 +776,17 @@ func TestReleaseGateSettlementV2OperatorSuitesRejectOmissions(t *testing.T) {
 	}
 }
 
-// CL-2: the SDK phase runs the v2 ledger display.
-func TestReleaseGateSettlementV2RunsTheSdkDisplay(t *testing.T) {
+// CL-2 and CL-4: the SDK phase runs the v2 ledger display and claims.
+func TestReleaseGateSettlementV2RunsTheSdkLedgerSuites(t *testing.T) {
 	t.Parallel()
 	if err := verifyReleaseEvidenceV2GateGroup(readReleaseGateLocalScript(t), releaseGateSdkLedgerV2Group(t)); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// CL-2: removing the family, a mode or the SDK phase fails, as does a root of
-// a v2 ledger test file that escapes the selector.
-func TestReleaseGateSettlementV2SdkDisplayRejectsOmissions(t *testing.T) {
+// CL-2 and CL-4: removing a family, a mode or the SDK phase fails, as does a
+// root of a v2 test file that escapes the selector.
+func TestReleaseGateSettlementV2SdkLedgerSuitesRejectOmissions(t *testing.T) {
 	t.Parallel()
 	verifyReleaseGateGroupRejectsOmissions(t, readReleaseGateLocalScript(t), releaseGateSdkLedgerV2Group(t))
 }
