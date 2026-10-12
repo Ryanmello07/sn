@@ -62,8 +62,9 @@ type settlementV2TestApproval struct {
 	auditor            common.Address
 }
 
+// Demand state is kept per (seq, rootIndex, index).
 type settlementV2TestDemand struct {
-	noID, seq, index uint64
+	noID, seq, rootIndex, index uint64
 }
 
 // vault2's DemandState (SPEC A1).
@@ -246,7 +247,7 @@ func (self *settlementV2TestChain) execute(state *settlementV2TestState, number 
 	case "hasApproved":
 		return method.Outputs.Pack(pending.Seq != 0 && state.approved[settlementV2TestApproval{noID: noID, seq: pending.Seq, version: state.version, auditor: arguments[1].(common.Address)}])
 	case "demanded":
-		return method.Outputs.Pack(state.demanded[settlementV2TestDemand{noID: noID, seq: arguments[1].(uint64), index: arguments[2].(*big.Int).Uint64()}])
+		return method.Outputs.Pack(state.demanded[settlementV2TestDemand{noID: noID, seq: arguments[1].(uint64), rootIndex: arguments[2].(*big.Int).Uint64(), index: arguments[3].(*big.Int).Uint64()}])
 	case "approveDistribution":
 		key := settlementV2TestApproval{noID: noID, seq: pending.Seq, version: state.version, auditor: from}
 		switch {
@@ -264,18 +265,19 @@ func (self *settlementV2TestChain) execute(state *settlementV2TestState, number 
 		state.approved[key] = true
 		return nil, nil
 	case "demandPath":
-		account := *abi.ConvertType(arguments[1], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
-		key := settlementV2TestDemand{noID: noID, seq: pending.Seq, index: account.Index.Uint64()}
+		rootIndex := arguments[1].(*big.Int)
+		account := *abi.ConvertType(arguments[2], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
+		key := settlementV2TestDemand{noID: noID, seq: pending.Seq, rootIndex: rootIndex.Uint64(), index: account.Index.Uint64()}
 		switch {
 		case value.Cmp(settlementV2TestFee) != 0:
 			return revert("InvalidDemandFee")
 		case pending.Seq == 0:
 			return revert("NoPendingRoot")
-		case len(roots) == 0:
-			return revert("NoFinalizedRoot")
+		case rootIndex.Cmp(big.NewInt(int64(len(roots)))) >= 0:
+			return revert("UnknownRoot")
 		case number >= pending.CommittedBlock+50:
 			return revert("ChallengeWindowClosed")
-		case account.Index.Uint64() >= roots[len(roots)-1].LeafCount:
+		case account.Index.Uint64() >= roots[rootIndex.Uint64()].LeafCount:
 			return revert("IndexOutOfRange")
 		case state.demanded[key] != settlementV2TestDemandNone:
 			return revert("AlreadyDemanded")
@@ -285,8 +287,8 @@ func (self *settlementV2TestChain) execute(state *settlementV2TestState, number 
 		state.pending[noID] = pending
 		return nil, nil
 	case "checkPath":
-		account := *abi.ConvertType(arguments[1], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
-		key := settlementV2TestDemand{noID: noID, seq: pending.Seq, index: account.Index.Uint64()}
+		account := *abi.ConvertType(arguments[2], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
+		key := settlementV2TestDemand{noID: noID, seq: pending.Seq, rootIndex: arguments[1].(*big.Int).Uint64(), index: account.Index.Uint64()}
 		switch {
 		case pending.Seq == 0:
 			return revert("NoPendingRoot")
@@ -564,9 +566,14 @@ func (self *settlementV2SenderTestFixture) approve(t *testing.T) error {
 	return self.sender.Approve(t.Context(), 1, settlementV2TestPending())
 }
 
+// demand demands index of the latest (and only) finalized root, root 0.
 func (self *settlementV2SenderTestFixture) demand(t *testing.T, index uint64) error {
+	return self.demandAt(t, 0, index)
+}
+
+func (self *settlementV2SenderTestFixture) demandAt(t *testing.T, rootIndex, index uint64) error {
 	account, oldProof, _ := settlementV2TestOpening(index)
-	return self.sender.Demand(t.Context(), 1, settlementV2TestPending(), account, oldProof)
+	return self.sender.Demand(t.Context(), 1, settlementV2TestPending(), rootIndex, account, oldProof)
 }
 
 // The account at index of the finalized root, its proof and the pending path.
@@ -578,16 +585,27 @@ func settlementV2TestOpening(index uint64) (stabi.LedgerTreeAccount, []stabi.Led
 
 func (self *settlementV2SenderTestFixture) challenge(t *testing.T, index uint64) error {
 	account, oldProof, newPath := settlementV2TestOpening(index)
-	return self.sender.Challenge(t.Context(), 1, settlementV2TestPending(), account, oldProof, newPath)
+	return self.sender.Challenge(t.Context(), 1, settlementV2TestPending(), 0, account, oldProof, newPath)
 }
 
+// recordPath names the record of an action against root 0, which is also an
+// approval's.
 func (self *settlementV2SenderTestFixture) recordPath(action string, index uint64) string {
-	return filepath.Join(self.stateDir, "settlement-v2-sends", fmt.Sprintf("1-7-%s-%d.json", action, index))
+	return self.recordPathAt(action, 0, index)
+}
+
+func (self *settlementV2SenderTestFixture) recordPathAt(action string, rootIndex, index uint64) string {
+	return filepath.Join(self.stateDir, "settlement-v2-sends", fmt.Sprintf("1-7-%s-%d-%d.json", action, rootIndex, index))
 }
 
 func (self *settlementV2SenderTestFixture) record(t *testing.T, action string, index uint64) settlementV2SendRecord {
 	t.Helper()
-	encoded, err := os.ReadFile(self.recordPath(action, index))
+	return self.recordAt(t, action, 0, index)
+}
+
+func (self *settlementV2SenderTestFixture) recordAt(t *testing.T, action string, rootIndex, index uint64) settlementV2SendRecord {
+	t.Helper()
+	encoded, err := os.ReadFile(self.recordPathAt(action, rootIndex, index))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -775,7 +793,7 @@ func TestSettlementV2DemandPaysExactlyTheFee(t *testing.T) {
 		t.Fatal(err)
 	}
 	account, oldProof, _ := settlementV2TestOpening(3)
-	fixture.requireSent(t, 0, settlementV2TestVault, stabi.NewSTSettlementVault2().PackDemandPath(big.NewInt(1), account, oldProof), settlementV2TestFee)
+	fixture.requireSent(t, 0, settlementV2TestVault, stabi.NewSTSettlementVault2().PackDemandPath(big.NewInt(1), big.NewInt(0), account, oldProof), settlementV2TestFee)
 	fixture.chain.lock.Lock()
 	calls := slices.Clone(fixture.chain.calls)
 	fixture.chain.lock.Unlock()
@@ -805,6 +823,34 @@ func TestSettlementV2DemandAlreadyDemanded(t *testing.T) {
 	}
 }
 
+// VA-4: demand state and send records are kept per (seq, rootIndex, index):
+// one index demanded against two finalized roots is two demands, each sent
+// once with its own root index and recorded under it.
+func TestSettlementV2DemandKeyedByRootIndex(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2SenderTestFixture(t)
+	fixture.chain.mutate(func(state *settlementV2TestState) {
+		state.roots[1] = []stabi.ISTSettlementVault2Root{settlementV2TestRoot(1), settlementV2TestRoot(2)}
+	})
+	account, oldProof, _ := settlementV2TestOpening(3)
+	for k, rootIndex := range []uint64{1, 0} {
+		if err := fixture.demandAt(t, rootIndex, 3); err != nil {
+			t.Fatal(err)
+		}
+		fixture.requireSent(t, k, settlementV2TestVault, stabi.NewSTSettlementVault2().PackDemandPath(big.NewInt(1), new(big.Int).SetUint64(rootIndex), account, oldProof), settlementV2TestFee)
+		record := fixture.recordAt(t, "demand", rootIndex, 3)
+		if !record.Finalized || record.RootIndex != rootIndex || record.Index != 3 ||
+			fixture.chain.current().demanded[settlementV2TestDemand{noID: 1, seq: 7, rootIndex: rootIndex, index: 3}] != settlementV2TestDemandOpen {
+			t.Fatalf("the demand against root %d or its record is absent: %+v", rootIndex, record)
+		}
+	}
+	for _, rootIndex := range []uint64{1, 0} {
+		if err := fixture.demandAt(t, rootIndex, 3); err != nil || len(fixture.chain.accepted()) != 2 {
+			t.Fatalf("a repeated demand against root %d sent again: %v", rootIndex, err)
+		}
+	}
+}
+
 // VA-4: a demand is sent while the next block precedes commit +
 // CHALLENGE_BLOCKS and refused from that block on.
 func TestSettlementV2DemandRefusedAfterChallengeWindow(t *testing.T) {
@@ -830,7 +876,7 @@ func TestSettlementV2ChallengeDeletesFaultedRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	account, oldProof, newPath := settlementV2TestOpening(2)
-	fixture.requireSent(t, 0, settlementV2TestVault, stabi.NewSTSettlementVault2().PackCheckPath(big.NewInt(1), account, oldProof, newPath), new(big.Int))
+	fixture.requireSent(t, 0, settlementV2TestVault, stabi.NewSTSettlementVault2().PackCheckPath(big.NewInt(1), big.NewInt(0), account, oldProof, newPath), new(big.Int))
 	if fixture.chain.current().pending[1].Seq != 0 || !fixture.record(t, "challenge", 2).Finalized {
 		t.Fatal("the faulted root is still pending")
 	}
@@ -989,20 +1035,20 @@ func TestSettlementV2SenderRefusesIncompleteInput(t *testing.T) {
 	} {
 		account, oldProof, newPath = settlementV2TestOpening(2)
 		testCase.change()
-		if err := fixture.sender.Challenge(t.Context(), 1, settlementV2TestPending(), account, oldProof, newPath); err == nil || !strings.Contains(err.Error(), "challenge account or path has a missing or oversized integer") {
+		if err := fixture.sender.Challenge(t.Context(), 1, settlementV2TestPending(), 0, account, oldProof, newPath); err == nil || !strings.Contains(err.Error(), "challenge account or path has a missing or oversized integer") {
 			t.Errorf("challenge %s: %v", testCase.name, err)
 		}
 		if !testCase.demand {
 			continue
 		}
-		if err := fixture.sender.Demand(t.Context(), 1, settlementV2TestPending(), account, oldProof); err == nil || !strings.Contains(err.Error(), "demand account or proof has a missing or oversized integer") {
+		if err := fixture.sender.Demand(t.Context(), 1, settlementV2TestPending(), 0, account, oldProof); err == nil || !strings.Contains(err.Error(), "demand account or proof has a missing or oversized integer") {
 			t.Errorf("demand %s: %v", testCase.name, err)
 		}
 	}
 	account, oldProof, _ = settlementV2TestOpening(2)
 	unsequenced := settlementV2TestPending()
 	unsequenced.Seq = 0
-	if err := fixture.sender.Demand(t.Context(), 1, unsequenced, account, oldProof); err == nil || !strings.Contains(err.Error(), "no commit sequence") {
+	if err := fixture.sender.Demand(t.Context(), 1, unsequenced, 0, account, oldProof); err == nil || !strings.Contains(err.Error(), "no commit sequence") {
 		t.Fatalf("a root without a sequence: %v", err)
 	}
 	if fixture.chain.count("eth_estimateGas") != 0 || len(fixture.chain.accepted()) != 0 {
@@ -1129,9 +1175,10 @@ func TestSettlementV2SenderReadFailures(t *testing.T) {
 	}
 }
 
-// VA-3, VA-8: a preflight revert other than front-running signs nothing and
-// leaves no record: an approval by an address outside the auditor set, and a challenge
-// whose opening shows no fault while nothing is demanded.
+// VA-3, VA-4, VA-8: a preflight revert other than front-running signs nothing
+// and leaves no record: an approval by an address outside the auditor set, a
+// demand naming a finalized root vault2 does not have (UnknownRoot), and a
+// challenge whose opening shows no fault while nothing is demanded.
 func TestSettlementV2PreflightRevertSendsNothing(t *testing.T) {
 	t.Parallel()
 	fixture := newSettlementV2SenderTestFixture(t)
@@ -1139,13 +1186,16 @@ func TestSettlementV2PreflightRevertSendsNothing(t *testing.T) {
 	if err := fixture.approve(t); err == nil || !strings.Contains(err.Error(), "preflight eth_call failed") {
 		t.Fatalf("an unauthorized approval: %v", err)
 	}
+	if err := fixture.demandAt(t, 1, 2); err == nil || !strings.Contains(err.Error(), "preflight eth_call failed") || !settlementV2Reverted(err, evmSelector("UnknownRoot()")) {
+		t.Fatalf("a demand against an unknown root: %v", err)
+	}
 	if err := fixture.challenge(t, 2); err == nil || !strings.Contains(err.Error(), "preflight eth_call failed") {
 		t.Fatalf("a challenge without a fault: %v", err)
 	}
 	if fixture.chain.count("eth_sendRawTransaction") != 0 {
 		t.Fatal("a reverting action was sent")
 	}
-	for _, path := range []string{fixture.recordPath("approve", 1), fixture.recordPath("challenge", 2)} {
+	for _, path := range []string{fixture.recordPath("approve", 1), fixture.recordPathAt("demand", 1, 2), fixture.recordPath("challenge", 2)} {
 		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("a reverting action left a record: %v", err)
 		}
@@ -1171,14 +1221,15 @@ func TestSettlementV2SendRefusesForeignRecord(t *testing.T) {
 	fixture := newSettlementV2SenderTestFixture(t)
 	record := settlementV2SendRecord{Schema: settlementV2SendSchema, NoID: 1, Seq: 7, Action: "demand", Index: 1, Transaction: signed(fixture.key, settlementV2TestVault)}
 	for name, change := range map[string]func(*settlementV2SendRecord){
-		"schema":    func(record *settlementV2SendRecord) { record.Schema = "other" },
-		"no id":     func(record *settlementV2SendRecord) { record.NoID = 2 },
-		"seq":       func(record *settlementV2SendRecord) { record.Seq = 8 },
-		"action":    func(record *settlementV2SendRecord) { record.Action = "approve" },
-		"index":     func(record *settlementV2SendRecord) { record.Index = 2 },
-		"hex":       func(record *settlementV2SendRecord) { record.Transaction = "0xzz" },
-		"rlp":       func(record *settlementV2SendRecord) { record.Transaction = "0x01" },
-		"other key": func(record *settlementV2SendRecord) { record.Transaction = signed(other, settlementV2TestVault) },
+		"schema":     func(record *settlementV2SendRecord) { record.Schema = "other" },
+		"no id":      func(record *settlementV2SendRecord) { record.NoID = 2 },
+		"seq":        func(record *settlementV2SendRecord) { record.Seq = 8 },
+		"action":     func(record *settlementV2SendRecord) { record.Action = "approve" },
+		"root index": func(record *settlementV2SendRecord) { record.RootIndex = 1 },
+		"index":      func(record *settlementV2SendRecord) { record.Index = 2 },
+		"hex":        func(record *settlementV2SendRecord) { record.Transaction = "0xzz" },
+		"rlp":        func(record *settlementV2SendRecord) { record.Transaction = "0x01" },
+		"other key":  func(record *settlementV2SendRecord) { record.Transaction = signed(other, settlementV2TestVault) },
 		"other target": func(record *settlementV2SendRecord) {
 			record.Transaction = signed(fixture.key, settlementV2TestSettlement)
 		},

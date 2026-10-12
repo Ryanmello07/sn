@@ -146,27 +146,28 @@ func TestR5Settlement(t *testing.T) {
 		claim(t, first, 0, 1, "")
 	})
 
-	// R-5: a demand proves an account against the finalized root, pays
-	// exactly demandFeeWei, which vault2 keeps, and blocks finalization until
-	// the operator answers it with the account's path in the pending root.
+	// R-5: a demand proves an account against a finalized root, here root 0,
+	// pays exactly demandFeeWei, which vault2 keeps, and blocks finalization
+	// until the operator answers it with the account's path in the pending
+	// root.
 	t.Run("demand and answer", func(t *testing.T) {
 		demander := newEVMKey(t)
 		n.fundEVM(t, demander.address, 100*tao)
 		a := first.account(2)
 		short := new(big.Int).Sub(demandFeeWei, big.NewInt(tao))
-		if got := n.refused(t, demander, s.vault, s.vaultArtifact, short, "demandPath", id(1), a, first.proof(2)); got != "InvalidDemandFee" {
+		if got := n.refused(t, demander, s.vault, s.vaultArtifact, short, "demandPath", id(1), id(0), a, first.proof(2)); got != "InvalidDemandFee" {
 			t.Fatalf("a short fee refused with %s", got)
 		}
 		kept := n.freeBalance(t, s.vaultColdkey)
-		receipt := n.send(t, demander, s.vault, s.vaultArtifact, demandFeeWei, "demandPath", id(1), a, first.proof(2))
+		receipt := n.send(t, demander, s.vault, s.vaultArtifact, demandFeeWei, "demandPath", id(1), id(0), a, first.proof(2))
 		record(t, "demand", false, receipt)
 		requireEvent(t, receipt, s.vaultArtifact, s.vault, "PathDemanded", map[string]any{
-			"noId": id(1), "seq": uint64(2), "index": id(2), "demander": demander.address,
+			"noId": id(1), "seq": uint64(2), "rootIndex": id(0), "index": id(2), "demander": demander.address,
 		})
 		if n.freeBalance(t, s.vaultColdkey)-kept != new(big.Int).Quo(demandFeeWei, big.NewInt(tao)).Uint64() || s.pending(t, 1).OpenDemands != 1 {
 			t.Fatalf("vault2 kept %d rao of the fee; open demands %d", n.freeBalance(t, s.vaultColdkey)-kept, s.pending(t, 1).OpenDemands)
 		}
-		if got := n.refused(t, demander, s.vault, s.vaultArtifact, demandFeeWei, "demandPath", id(1), a, first.proof(2)); got != "AlreadyDemanded" {
+		if got := n.refused(t, demander, s.vault, s.vaultArtifact, demandFeeWei, "demandPath", id(1), id(0), a, first.proof(2)); got != "AlreadyDemanded" {
 			t.Fatalf("a second demand refused with %s", got)
 		}
 		n.send(t, s.auditor, s.settlement, s.settlementArtifact, nil, "approveDistribution", id(1), uint64(2), commit2.Root, commit2.LedgerHash)
@@ -174,12 +175,12 @@ func TestR5Settlement(t *testing.T) {
 		if got := n.refused(t, relayer, s.settlement, s.settlementArtifact, nil, "finalizeDistribution", id(1)); got != "DemandOpen" {
 			t.Fatalf("finalize with an open demand refused with %s", got)
 		}
-		receipt = n.send(t, operator.rootSigner, s.vault, s.vaultArtifact, nil, "checkPath", id(1), a, first.proof(2), second.path(2))
+		receipt = n.send(t, operator.rootSigner, s.vault, s.vaultArtifact, nil, "checkPath", id(1), id(0), a, first.proof(2), second.path(2))
 		record(t, "answer", true, receipt)
 		requireEvent(t, receipt, s.vaultArtifact, s.vault, "PathAnswered", map[string]any{
-			"noId": id(1), "seq": uint64(2), "index": id(2), "answerer": operator.rootSigner.address,
+			"noId": id(1), "seq": uint64(2), "rootIndex": id(0), "index": id(2), "answerer": operator.rootSigner.address,
 		})
-		if got := n.refused(t, relayer, s.vault, s.vaultArtifact, nil, "checkPath", id(1), a, first.proof(2), second.path(2)); got != "NoFault" {
+		if got := n.refused(t, relayer, s.vault, s.vaultArtifact, nil, "checkPath", id(1), id(0), a, first.proof(2), second.path(2)); got != "NoFault" {
 			t.Fatalf("a second answer refused with %s", got)
 		}
 		receipt = n.send(t, relayer, s.settlement, s.settlementArtifact, nil, "finalizeDistribution", id(1))

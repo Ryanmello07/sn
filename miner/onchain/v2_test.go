@@ -442,9 +442,6 @@ func (c *v2TestChain) disputed(rootIndex *big.Int, account stabi.LedgerTreeAccou
 	if c.pending.Seq == 0 {
 		return v2TestError("NoPendingRoot")
 	}
-	if len(c.roots) == 0 {
-		return v2TestError("NoFinalizedRoot")
-	}
 	if !rootIndex.IsUint64() || rootIndex.Uint64() >= uint64(len(c.roots)) {
 		return v2TestError("UnknownRoot")
 	}

@@ -991,7 +991,7 @@ func TestV2CheckForeignLog(t *testing.T) {
 // name from the preflight; with the pending root still pending and the
 // index not demanded, the refusal stands and nothing is sent.
 func TestV2CheckDecodesRevert(t *testing.T) {
-	for _, reason := range []string{"NoPendingRoot", "NoFinalizedRoot", "UnknownRoot", "IndexOutOfRange", "InvalidProof", "NoFault", "Reentrancy"} {
+	for _, reason := range []string{"NoPendingRoot", "UnknownRoot", "IndexOutOfRange", "InvalidProof", "NoFault", "Reentrancy"} {
 		s := newV2CheckScenario(t)
 		s.lowered(t)
 		s.c.revert["checkPath"] = reason
@@ -999,7 +999,7 @@ func TestV2CheckDecodesRevert(t *testing.T) {
 			t.Fatalf("checkPath %s: %v", reason, err)
 		}
 	}
-	for _, reason := range []string{"InvalidDemandFee", "NoPendingRoot", "NoFinalizedRoot", "UnknownRoot", "ChallengeWindowClosed", "IndexOutOfRange", "InvalidProof", "AlreadyDemanded"} {
+	for _, reason := range []string{"InvalidDemandFee", "NoPendingRoot", "UnknownRoot", "ChallengeWindowClosed", "IndexOutOfRange", "InvalidProof", "AlreadyDemanded"} {
 		s := newV2CheckScenario(t)
 		s.withhold()
 		s.c.revert["demandPath"] = reason
