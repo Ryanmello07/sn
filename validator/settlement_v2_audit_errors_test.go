@@ -554,7 +554,7 @@ func TestReleaseRuntimeRunsLedgerAudit(t *testing.T) {
 	default:
 		t.Fatal("the ledger audit was not joined")
 	}
-	audit, err := newReleaseSettlementV2Audit(t.Context(), cfg, nil)
+	audit, err := newReleaseSettlementV2Audit(t.Context(), cfg, nil, nil)
 	if err != nil || audit != nil || audit.worker() != nil {
 		t.Fatalf("an audit without the settlement_v2 block: %v", err)
 	}

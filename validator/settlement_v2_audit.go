@@ -133,8 +133,9 @@ type settlementV2Audit struct {
 	maxBytes uint64
 	// random is crypto/rand.Reader; tests fix it.
 	random io.Reader
-	// confirm has the chain confirm the configured contracts (§13); the audit
-	// runs no pass before it succeeds once. Nil once confirmed.
+	// confirm reports whether the chain has confirmed the configured
+	// contracts (§13); the audit runs no pass before it succeeds once. Nil
+	// once confirmed.
 	confirm func(context.Context) error
 }
 
@@ -142,11 +143,31 @@ func newSettlementV2Audit(reader settlementV2AuditReader, custody *settlementV2C
 	return &settlementV2Audit{reader: reader, custody: custody, sender: sender, pools: pools, maxBytes: maxBytes, random: rand.Reader}
 }
 
+// errSettlementV2Unconfirmed: the release runtime has not yet confirmed the
+// settlement_v2 contracts at a finalized snapshot.
+var errSettlementV2Unconfirmed = errors.New("settlement v2 contracts are not confirmed at a finalized snapshot yet")
+
+// settlementV2Confirmed returns nil once the runtime's identity check,
+// verifyReleaseSettlementV2Context in its first advance, has passed. It is
+// the release audit's confirmation, so the audit starts only after it.
+func (self *releaseRuntimeV2) settlementV2Confirmed(ctx context.Context) error {
+	release, err := self.acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if !self.settlementV2Verified {
+		return errSettlementV2Unconfirmed
+	}
+	return nil
+}
+
 // newReleaseSettlementV2Audit audits the configured operators' pools when the
 // configuration names settlement v2, and returns nil otherwise. Custody and
 // the sender's records live under state_dir; the flags come from `validator
-// run` (SettlementV2RuntimeOptionsFrom).
-func newReleaseSettlementV2Audit(ctx context.Context, cfg *ReleaseConfig, chain *ChainClient) (*settlementV2Audit, error) {
+// run` (SettlementV2RuntimeOptionsFrom). The audit runs no pass before
+// confirm succeeds.
+func newReleaseSettlementV2Audit(ctx context.Context, cfg *ReleaseConfig, chain *ChainClient, confirm func(context.Context) error) (*settlementV2Audit, error) {
 	addresses := releaseSettlementV2Addresses(cfg)
 	if !addresses.configured() {
 		return nil, nil
@@ -171,7 +192,9 @@ func newReleaseSettlementV2Audit(ctx context.Context, cfg *ReleaseConfig, chain 
 		pools[i] = settlementV2AuditPool{noID: operator.NoID, objects: objects}
 	}
 	reader := &settlementV2AuditChain{chain: chain, vault: addresses.Vault, deployBlock: cfg.DeployBlock}
-	return newSettlementV2Audit(reader, custody, sender, pools, options.LedgerMaxBytes), nil
+	audit := newSettlementV2Audit(reader, custody, sender, pools, options.LedgerMaxBytes)
+	audit.confirm = confirm
+	return audit, nil
 }
 
 // worker is the audit's run loop, or nil without an audit.

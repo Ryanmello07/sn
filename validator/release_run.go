@@ -1106,7 +1106,9 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 			return fmt.Errorf("release V2 initial terminal publication: %w", err)
 		}
 	}
-	ledgerAudit, err := newReleaseSettlementV2Audit(ctx, cfg, chain)
+	// The audit starts only after the runtime confirmed the settlement_v2
+	// contracts in its first advance.
+	ledgerAudit, err := newReleaseSettlementV2Audit(ctx, cfg, chain, runtimeV2.settlementV2Confirmed)
 	if err != nil {
 		return fmt.Errorf("settlement v2 ledger audit startup: %w", err)
 	}
