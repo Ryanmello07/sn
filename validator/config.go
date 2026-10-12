@@ -83,6 +83,8 @@ type ReleaseConfig struct {
 	ProductionRuntimeApprovals []ReleaseEvidenceV2File            `yaml:"production_runtime_approvals,omitempty" json:"production_runtime_approvals,omitempty"`
 	ProductionAuthorityHistory []ReleaseEvidenceV2File            `yaml:"production_authority_history,omitempty" json:"production_authority_history,omitempty"`
 	ProductionCapacityRevision *ProductionCapacityRevision        `yaml:"production_capacity_revision,omitempty" json:"production_capacity_revision,omitempty"`
+	// Absent until adoption, so a config without it keeps its original hash.
+	SettlementV2 *ReleaseSettlementV2Config `yaml:"settlement_v2,omitempty" json:"settlement_v2,omitempty"`
 
 	ProvisionalDeferClosedNativeInput bool   `yaml:"provisional_defer_closed_native_input,omitempty" json:"provisional_defer_closed_native_input,omitempty"`
 	ProvisionalRuntimeCompatibility   string `yaml:"provisional_runtime_compatibility,omitempty" json:"provisional_runtime_compatibility,omitempty"`
@@ -499,6 +501,11 @@ func (c ReleaseConfig) validateWithMode(historical, provisionalActivationObserva
 	}
 	if !common.IsHexAddress(c.SettlementVault) || common.HexToAddress(c.SettlementVault) == (common.Address{}) {
 		return errors.New("settlement_vault is missing or zero")
+	}
+	if c.SettlementV2 != nil {
+		if err := c.SettlementV2.validate(); err != nil {
+			return err
+		}
 	}
 	genesis, err := parseHash32("genesis_hash", c.GenesisHash)
 	if err != nil {
