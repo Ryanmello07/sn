@@ -614,6 +614,26 @@ The challenge window is the constant `CHALLENGE_BLOCKS` = 14,400.
 **Vault-wide state**: `totalCaptured`, `totalPaid`, `escrowAccounted`,
 `escrowRegistered`, and a reentrancy flag.
 
+**Storage.** The fields above are what the views return; vault2 packs them by
+use so that each call touches few slots. Each pool takes four: its hotkey;
+`claimedTotal` and the root count, the slot a claim reads and writes;
+`capturedTotal`, `firstEpoch` and the number of funded epochs
+(`lastFundedEpoch` is `firstEpoch` plus that number, less one), the slot a
+capture or deferral reads and writes; and `commitSeq`, `lastCommitBlock`, the
+pending root's seq and `openDemands`. A pool is registered exactly when its
+`firstEpoch` is nonzero. A root takes three slots, its total in 128 bits. The
+pending root is stored at index `rootCount` of the pool's roots, where
+finalization admits it without a copy; its `committedBlock` is
+`lastCommitBlock`, and `pending` reads zero while no root is pending. Two
+epochs' `fundedThrough` snapshots, and two accounts' `claimed` watermarks,
+share a slot. `totalCaptured` and `totalPaid` share one, and `escrowAccounted`
+is their difference; the reentrancy flag shares `coordinator`'s slot. It stays
+in persistent storage, because runtime 475's EVM keeps a transient write made
+in a call that reverts (`scripts/runtime-rehearsal/README.md`). Amounts are
+held in 128 bits: a capture moves less than 2^64, and a funding total of 2^128
+or more, which no real stake reaches, is refused (`SafeCastOverflowedUintDowncast`)
+rather than truncated.
+
 **Functions.** C means coordinator only, B bootstrap only, A anyone. Every
 state-changing function shares one `nonReentrant` guard. The functions that
 move or assign stake, `captureEmission`, `claim`, `absorbStake` and
@@ -1401,24 +1421,24 @@ forge coverage --ir-minimum --report lcov \
 | ID | Behaviour |
 | --- | --- |
 | V-1 | The constructor refuses a zero argument, and a `demandFeeWei` that is not a multiple of 10^9 wei. `setCoordinatorOnce` and `registerEscrow`: bootstrap only, once each; a zero or codeless coordinator refused; `registerEscrow`'s refund, and a failed refund refused |
-| V-2 | `registerPool`: refused before `registerEscrow`, and for a zero or 2^64 `noId`, a zero, duplicate or escrow hotkey, a zero `maxBurn`, and a UID that is missing after registration; sets `lastFundedEpoch = firstEpoch − 1`; `firstEpoch` 0 refused |
+| V-2 | `registerPool`: refused before `registerEscrow`, and for a zero or 2^64 `noId`, a zero, duplicate or escrow hotkey, a zero `maxBurn`, and a UID that is missing after registration; sets `lastFundedEpoch = firstEpoch − 1`; `firstEpoch` 0 refused; an unregistered pool reads empty |
 | V-3 | `registerPoolUid`: unknown pool refused; refused while a UID exists; the caller pays; refund; a call that would spend vault2's own native balance reverts |
 | V-4 | Capture and defer in strict order; out of order refused; unknown pool refused |
-| V-5 | Capture: zero stake funds 0; exact source delta; escrow gains the amount or one rao less, and that gain is accounted; a larger gap or a runtime refusal reverts; an amount of 2^64 − 1 or more refused. With registration collateral on the pool position, only the movable stake moves, a position holding only its lock funds 0, and the deltas are checked on whole positions |
+| V-5 | Capture: zero stake funds 0; exact source delta; escrow gains the amount or one rao less, and that gain is accounted; a larger gap or a runtime refusal reverts; an amount of 2^64 − 1 or more refused; a funding total of 2^128 or more refused. With registration collateral on the pool position, only the movable stake moves, a position holding only its lock funds 0, and the deltas are checked on whole positions |
 | V-6 | `fundedThrough` is written once and is monotone |
 | V-7 | `commitPending` refusals, one each: epoch range; total not equal to the snapshot; total not above `finalizedTotal`; `leafCount` 0, above 2^29, or below the previous; zero root; zero `ledgerHash`. A replaced pending root bumps `seq` and discards its demands on the accounts of every finalized root; a commit within 14,400 blocks of the pool's previous commit refused, including after a self-proven fault; a `prevRootCount` mismatch refused; `seq` after a finalization or deletion exceeds every earlier `seq` |
 | V-8 | `checkPath` deletes the pending root for each fault kind, including at depth 0, against any finalized root: a value kept above an older root's but lowered below a later root's is faulted against the later root, and the clean answer of a demand against the older root neither answers nor bars a demand against the later one |
 | V-9 | `checkPath` reverts on an honest index (fuzzed), a malformed path, an invalid old proof, an index out of range of the named root, no pending root, or an unknown root index: one at or above the root count, which is every index while no root is finalized |
 | V-10 | `demandPath`: only inside the window and for an account proven against the finalized root it names, any of the pool's, once per `(seq, rootIndex, index)`. A clean `checkPath` against that root answers it, once: a second clean opening, or one with no open demand, reverts `NoFault` and changes nothing; an answered account cannot be demanded again under that `seq`. Demands on one account against two roots are two demands, each answered against its own root, and an account that a later root appended is out of range of an earlier one. An unanswerable demand (garbage or withheld node) blocks finalization; an unprovable position of a finalized root cannot be demanded; refused with no pending root or an unknown root index (every index while no root is finalized); a fee other than `demandFeeWei` refused; an index at or above the named root's leaf count refused; an account that does not verify refused; a demand in the window's last block answered after the window. Regression for the gate 1 review's H1: the newest finalized root's tree is withheld, and a successor lowers accounts of the older root; a demand against the older root still blocks finalization, and its opening deletes the successor |
-| V-11 | `finalizePending`: refused with no pending root, before 14,400 blocks, and with an open demand; appends the root and clears the slot |
+| V-11 | `finalizePending`: refused with no pending root, before 14,400 blocks, and with an open demand; appends exactly the last commit, after a deletion or a replacement, and clears the slot; `roots` refuses an index at or past the root count, a pending root's included |
 | V-12 | Claim against the latest root: pays exactly; one rao short at the destination is accepted, two is not; a refusal (floor, staking-hotkey cap) reverts and leaves the account claimable; depth-0 claim; an escrow loss other than the amount reverts; the escrow's own registration collateral stays in place |
-| V-13 | A repeat claim on the same root refused; after a newer root only the increment is paid |
+| V-13 | A repeat claim on the same root refused; after a newer root only the increment is paid; neighbouring accounts keep their own watermarks |
 | V-14 | An older root after a newer claim refused; the older root first, then the newer, pays the difference |
 | V-15 | Claim refusals: an invalid proof; an unknown root index; a zero coldkey or `selfColdkey`; an amount of 2^64−1 or more |
 | V-16 | Pool cap: after an unchallenged decrease, the second claimant's claim reverts at `finalizedTotal`; with honest roots it never binds, even for a claim against an older root once claims against a newer one exceed that older root's total |
 | V-17 | The payment goes to the leaf's coldkey whoever calls |
 | V-18 | `absorbStake`: moves vault2-owned movable stake from a foreign hotkey and leaves every counter unchanged; refuses the escrow hotkey, pool hotkeys and zero; a zero hotkey, stake that is all collateral, and an amount of 2^64 − 1 or more refused |
-| V-19 | `assignSurplus`: refuses zero and an amount above the surplus; the escrow's collateral is never surplus; event attribution |
+| V-19 | `assignSurplus`: refuses zero and an amount above the surplus, and a pool or vault funding total of 2^128 or more; the escrow's collateral is never surplus; event attribution |
 | V-20 | Reentry through the staking and neuron mocks, or through a registration refund, is refused on every function that calls the runtime |
 | V-21 | Two pools: each pool's claims are capped by its own `finalizedTotal` |
 | V-22 | A backing deficit makes every stake-moving function revert `Underfunded`, never `checkPath` or `demandPath`; the escrow's collateral is not backing |

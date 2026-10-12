@@ -194,7 +194,7 @@ func TestReleaseV2JsonRejectsIncompleteCensus(t *testing.T) {
 // deployment readback reads pinned to the compiler layout.
 func TestSettlementV2DefinitionsPinImmutablesAndReadbackSlots(t *testing.T) {
 	expected := map[string]artifactDefinition{
-		"SettlementVault2": {path: "STSettlementVault2.sol/STSettlementVault2.json", immutableNames: []string{"netuid", "escrowHotkey", "selfColdkey", "bootstrap", "demandFeeWei"}, immutableSources: []string{"src/STSettlementVault2.sol"}, requiredStorageSlots: map[string]string{"coordinator": "0", "escrowRegistered": "0", "_entered": "1", "totalCaptured": "14", "totalPaid": "15", "escrowAccounted": "16"}},
+		"SettlementVault2": {path: "STSettlementVault2.sol/STSettlementVault2.json", immutableNames: []string{"netuid", "escrowHotkey", "selfColdkey", "bootstrap", "demandFeeWei"}, immutableSources: []string{"src/STSettlementVault2.sol"}, requiredStorageSlots: map[string]string{"coordinator": "0", "escrowRegistered": "0", "_entered": "0", "_totalCaptured": "1", "_totalPaid": "1"}},
 		"Settlement2":      {path: "STSettlement2.sol/STSettlement2.json", immutableNames: []string{"__self"}, immutableSources: []string{"lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol"}, requiredStorageSlots: map[string]string{"v1Coordinator": "0", "vault": "1", "_auditors": "2", "quorum": "3", "auditorSetVersion": "4"}},
 	}
 	members := map[string]bool{}

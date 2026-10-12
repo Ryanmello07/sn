@@ -158,7 +158,7 @@ func TestEvmV2ReadbackProjectionsNameEveryGetter(t *testing.T) {
 			packed[11] = 1
 			storage = append(storage, contractStorageWord{Slot: zero, Expected: packed.Hex()})
 		}
-		return append(storage, contractStorageWord{Slot: slot(1), Expected: zero}, contractStorageWord{Slot: slot(14), Expected: zero}, contractStorageWord{Slot: slot(15), Expected: zero}, contractStorageWord{Slot: slot(16), Expected: zero})
+		return append(storage, contractStorageWord{Slot: slot(1), Expected: zero})
 	}
 	for index, expected := range map[int]struct {
 		getters []contractGetter
@@ -294,7 +294,7 @@ func TestEvmV2ReadbackRefusesEachMismatch(t *testing.T) {
 			cases++
 		}
 	}
-	if cases != 1+13+5+1+7+11+1+8+7 {
+	if cases != 1+13+2+1+7+11+1+8+7 {
 		t.Fatalf("readback covered %d facts", cases)
 	}
 	for _, method := range []string{"eth_getCode", "eth_call", "eth_getStorageAt"} {

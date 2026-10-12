@@ -30,6 +30,38 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     // One rao in wei. The runtime truncates native value below a rao.
     uint256 private constant RAO_WEI = 1e9;
 
+    // A pool, packed by use: a claim reads and writes the second slot, a
+    // capture or deferral the third, and a commit, demand, answer or
+    // finalization the fourth and rootCount. Amounts fit 128 bits: a capture
+    // moves less than 2^64, and _fund refuses a total beyond 128 bits, which
+    // no real stake reaches. The pool is registered exactly when firstEpoch
+    // is nonzero (registerPool refuses 0), and its next unfunded epoch,
+    // lastFundedEpoch + 1, is firstEpoch + fundedEpochs. While pendingSeq is
+    // nonzero, the pending root is the pool's root record at index rootCount,
+    // committed at lastCommitBlock.
+    struct PoolState {
+        bytes32 hotkey;
+        uint128 claimedTotal;
+        uint64 rootCount;
+        uint128 capturedTotal;
+        uint64 firstEpoch;
+        uint64 fundedEpochs;
+        uint64 commitSeq;
+        uint64 lastCommitBlock;
+        uint64 pendingSeq;
+        uint64 openDemands;
+    }
+
+    // A Root as stored. Its total equals a funding snapshot, so it fits 128
+    // bits, and a proof reads two slots.
+    struct RootRecord {
+        bytes32 root;
+        uint128 total;
+        uint64 leafCount;
+        uint64 epoch;
+        bytes32 ledgerHash;
+    }
+
     uint16 public immutable netuid;
     bytes32 public immutable escrowHotkey;
     bytes32 public immutable selfColdkey;
@@ -38,29 +70,28 @@ contract STSettlementVault2 is ISTSettlementVault2 {
 
     address public coordinator;
     bool public escrowRegistered;
-    uint256 private _entered;
+    // The reentrancy flag shares the slot every coordinator call reads.
+    bool private _entered;
 
-    mapping(uint256 noId => Pool pool) private _pools;
+    // The vault's totals; escrowAccounted is their difference (§4.2 G1).
+    uint128 private _totalCaptured;
+    uint128 private _totalPaid;
+
+    mapping(uint256 noId => PoolState pool) private _pools;
     mapping(bytes32 hotkey => bool used) public poolHotkeyUsed;
-    mapping(uint256 noId => uint256 epoch) public lastFundedEpoch;
-    mapping(uint256 noId => mapping(uint256 epoch => uint256 amount)) public fundedThrough;
-    mapping(uint256 noId => uint256 amount) public capturedTotal;
-    mapping(uint256 noId => uint256 amount) public claimedTotal;
-    mapping(uint256 noId => Root[] history) private _roots;
-    mapping(uint256 noId => Pending root) private _pending;
-    mapping(uint256 noId => uint64 seq) public commitSeq;
-    mapping(uint256 noId => uint64 blockNumber) public lastCommitBlock;
+    // Records below rootCount are the finalized roots, append-only; the one
+    // at rootCount is the pending root while there is one.
+    mapping(uint256 noId => mapping(uint256 rootIndex => RootRecord root)) private _roots;
+    // Two epochs' funding snapshots, and two accounts' claimed watermarks,
+    // share a slot: entry i is half i % 2 of slot i / 2.
+    mapping(uint256 noId => mapping(uint256 pair => uint128[2] amounts)) private _fundedThrough;
+    mapping(uint256 noId => mapping(uint256 pair => uint128[2] amounts)) private _claimed;
     mapping(
         uint256 noId
             => mapping(
             uint64 seq => mapping(uint256 rootIndex => mapping(uint256 index => DemandState state))
         )
     ) public demanded;
-    mapping(uint256 noId => mapping(uint256 index => uint256 amount)) public claimed;
-
-    uint256 public totalCaptured;
-    uint256 public totalPaid;
-    uint256 public escrowAccounted;
 
     modifier onlyBootstrap() {
         if (msg.sender != bootstrap) revert Unauthorized();
@@ -74,11 +105,13 @@ contract STSettlementVault2 is ISTSettlementVault2 {
 
     // One guard shared by every state-changing entry point, so no runtime or
     // refund callback can enter the vault while another call is in progress.
+    // It stays in persistent storage: runtime 475's EVM keeps a transient
+    // write made in a call that reverts (scripts/runtime-rehearsal/README.md).
     modifier nonReentrant() {
-        if (_entered != 0) revert Reentrancy();
-        _entered = 1;
+        if (_entered) revert Reentrancy();
+        _entered = true;
         _;
-        _entered = 0;
+        _entered = false;
     }
 
     constructor(
@@ -130,14 +163,15 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         nonReentrant
         returns (uint16 uid)
     {
+        PoolState storage pool = _pools[noId];
         if (
             !escrowRegistered || noId == 0 || noId > type(uint64).max || hotkey == bytes32(0)
                 || hotkey == escrowHotkey || poolHotkeyUsed[hotkey] || maximumBurnRao == 0 || firstEpoch == 0
-                || _pools[noId].registered
+                || pool.firstEpoch != 0
         ) revert InvalidConfiguration();
-        _pools[noId] = Pool({hotkey: hotkey, firstEpoch: firstEpoch, registered: true});
+        pool.hotkey = hotkey;
+        pool.firstEpoch = firstEpoch;
         poolHotkeyUsed[hotkey] = true;
-        lastFundedEpoch[noId] = firstEpoch - 1;
         uid = _register(hotkey, maximumBurnRao);
         emit PoolRegistered(noId, hotkey, uid, firstEpoch);
     }
@@ -151,9 +185,7 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         nonReentrant
         returns (uint16 uid)
     {
-        Pool storage pool = _pools[noId];
-        if (!pool.registered) revert UnknownPool();
-        bytes32 hotkey = pool.hotkey;
+        bytes32 hotkey = _registeredPool(noId).hotkey;
         // Only whether a UID exists matters here.
         // slither-disable-next-line unused-return
         (bool exists,) = INeuron(INeuron_ADDRESS).getUid(netuid, hotkey);
@@ -173,18 +205,17 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         nonReentrant
         returns (uint256 amount)
     {
-        bytes32 hotkey = _advance(epoch, noId);
+        PoolState storage pool = _advance(epoch, noId);
+        bytes32 hotkey = pool.hotkey;
         (uint256 staked, uint256 observed) = _movable(hotkey);
         uint256 escrowStake;
         if (observed != 0) {
             (amount, escrowStake) = _moveToEscrow(hotkey, staked, observed);
-            capturedTotal[noId] += amount;
-            totalCaptured += amount;
-            escrowAccounted += amount;
+            _fund(pool, amount);
         } else {
             escrowStake = _stake(escrowHotkey, selfColdkey);
         }
-        uint256 funded = _snapshot(epoch, noId);
+        uint256 funded = _snapshot(pool, noId, epoch);
         _requireBacking(escrowStake);
         emit EmissionCaptured(epoch, noId, observed, amount, funded);
     }
@@ -192,8 +223,8 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     /// @notice Funds epoch `epoch` with nothing. Its emission stays on the pool
     /// hotkey for the next capture.
     function deferEmission(uint256 epoch, uint256 noId) external onlyCoordinator nonReentrant {
-        _advance(epoch, noId);
-        emit EmissionDeferred(epoch, noId, _snapshot(epoch, noId));
+        PoolState storage pool = _advance(epoch, noId);
+        emit EmissionDeferred(epoch, noId, _snapshot(pool, noId, epoch));
     }
 
     /// @notice Replaces the pool's pending root, and with it every demand on
@@ -207,41 +238,45 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         nonReentrant
         returns (uint64 seq)
     {
-        Pool storage pool = _pools[noId];
-        if (!pool.registered) revert UnknownPool();
-        uint64 lastCommit = lastCommitBlock[noId];
+        PoolState storage pool = _registeredPool(noId);
+        uint64 lastCommit = pool.lastCommitBlock;
         if (lastCommit != 0 && block.number < uint256(lastCommit) + CHALLENGE_BLOCKS) revert CommitTooSoon();
-        Root[] storage history = _roots[noId];
-        if (prevRootCount != history.length) revert StaleRootCount();
+        uint64 count = pool.rootCount;
+        if (prevRootCount != count) revert StaleRootCount();
         // With no finalized root, the pool starts empty before its first epoch.
-        Root memory previous = Root({
-            root: bytes32(0), total: 0, leafCount: 0, epoch: pool.firstEpoch - 1, ledgerHash: bytes32(0)
-        });
-        if (history.length != 0) previous = history[history.length - 1];
-        if (epoch <= previous.epoch || epoch > lastFundedEpoch[noId]) revert EpochOutOfRange();
-        if (commitment.total != fundedThrough[noId][epoch]) revert TotalMismatch();
-        if (commitment.total <= previous.total) revert TotalNotIncreased();
+        uint256 previousEpoch = pool.firstEpoch - 1;
+        uint256 previousTotal = 0;
+        uint256 previousLeafCount = 0;
+        if (count != 0) {
+            RootRecord storage previous = _roots[noId][count - 1];
+            (previousEpoch, previousTotal, previousLeafCount) =
+            (previous.epoch, previous.total, previous.leafCount);
+        }
+        if (epoch <= previousEpoch || epoch >= _nextEpoch(pool)) revert EpochOutOfRange();
+        if (commitment.total != _fundedThrough[noId][epoch >> 1][epoch & 1]) revert TotalMismatch();
+        if (commitment.total <= previousTotal) revert TotalNotIncreased();
         if (
             commitment.leafCount == 0 || commitment.leafCount > LedgerTree.MAX_LEAF_COUNT
-                || commitment.leafCount < previous.leafCount
+                || commitment.leafCount < previousLeafCount
         ) revert InvalidLeafCount();
         if (commitment.root == bytes32(0) || commitment.ledgerHash == bytes32(0)) revert InvalidRoot();
 
-        uint64 replacedSeq = _pending[noId].seq;
-        seq = ++commitSeq[noId];
+        uint64 replacedSeq = pool.pendingSeq;
+        seq = pool.commitSeq + 1;
         uint64 committedEpoch = SafeCast.toUint64(epoch);
         uint64 committedBlock = SafeCast.toUint64(block.number);
-        _pending[noId] = Pending({
-            seq: seq,
+        // The total equals a funding snapshot, so its cast cannot fail.
+        _roots[noId][count] = RootRecord({
             root: commitment.root,
-            total: commitment.total,
+            total: SafeCast.toUint128(commitment.total),
             leafCount: commitment.leafCount,
             epoch: committedEpoch,
-            ledgerHash: commitment.ledgerHash,
-            committedBlock: committedBlock,
-            openDemands: 0
+            ledgerHash: commitment.ledgerHash
         });
-        lastCommitBlock[noId] = committedBlock;
+        pool.commitSeq = seq;
+        pool.lastCommitBlock = committedBlock;
+        pool.pendingSeq = seq;
+        pool.openDemands = 0;
         emit DistributionCommitted(
             noId,
             seq,
@@ -270,15 +305,15 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         LedgerTree.ProofNode[] calldata oldProof
     ) external payable nonReentrant {
         if (msg.value != demandFeeWei) revert InvalidDemandFee();
-        (Pending storage next, Root storage previous) = _disputedRoots(noId, rootIndex);
-        if (block.number >= uint256(next.committedBlock) + CHALLENGE_BLOCKS) revert ChallengeWindowClosed();
+        (PoolState storage pool, RootRecord storage previous) = _disputedRoots(noId, rootIndex);
+        if (block.number >= uint256(pool.lastCommitBlock) + CHALLENGE_BLOCKS) revert ChallengeWindowClosed();
         _requireProven(previous, account, oldProof);
-        uint64 seq = next.seq;
+        uint64 seq = pool.pendingSeq;
         uint256 index = account.index;
         mapping(uint256 => DemandState) storage demands = demanded[noId][seq][rootIndex];
         if (demands[index] != DemandState.None) revert AlreadyDemanded();
         demands[index] = DemandState.Open;
-        next.openDemands++;
+        pool.openDemands++;
         emit PathDemanded(noId, seq, rootIndex, index, msg.sender);
     }
 
@@ -294,46 +329,42 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         LedgerTree.ProofNode[] calldata oldProof,
         LedgerTree.PathNode[] calldata newPath
     ) external nonReentrant returns (LedgerTree.Fault fault) {
-        (Pending storage next, Root storage previous) = _disputedRoots(noId, rootIndex);
+        (PoolState storage pool, RootRecord storage previous) = _disputedRoots(noId, rootIndex);
         _requireProven(previous, account, oldProof);
-        uint64 seq = next.seq;
+        uint64 seq = pool.pendingSeq;
         uint256 index = account.index;
+        RootRecord storage next = _roots[noId][pool.rootCount];
         // Leaf counts never decrease from one root to the next (commitPending),
         // so `index` is inside the pending root.
         uint256 level;
         (fault, level) = LedgerTree.walkPath(next.root, next.total, next.leafCount, account, newPath);
         if (fault != LedgerTree.Fault.None) {
-            delete _pending[noId];
+            pool.pendingSeq = 0;
             emit DistributionDeleted(noId, seq, rootIndex, index, fault, level, msg.sender);
             return fault;
         }
         mapping(uint256 => DemandState) storage demands = demanded[noId][seq][rootIndex];
         if (demands[index] != DemandState.Open) revert NoFault();
         demands[index] = DemandState.Answered;
-        next.openDemands--;
+        pool.openDemands--;
         emit PathAnswered(noId, seq, rootIndex, index, msg.sender);
     }
 
     /// @notice Appends the pending root to the pool's finalized roots once its
     /// challenge window has passed with no open demand (§4.2 G6).
     function finalizePending(uint256 noId) external onlyCoordinator nonReentrant returns (uint256 rootIndex) {
-        Pending memory next = _pending[noId];
-        if (next.seq == 0) revert NoPendingRoot();
-        if (block.number < uint256(next.committedBlock) + CHALLENGE_BLOCKS) revert ChallengeWindowOpen();
-        if (next.openDemands != 0) revert DemandOpen();
-        rootIndex = _roots[noId].length;
-        _roots[noId].push(
-            Root({
-                root: next.root,
-                total: next.total,
-                leafCount: next.leafCount,
-                epoch: next.epoch,
-                ledgerHash: next.ledgerHash
-            })
-        );
-        delete _pending[noId];
+        PoolState storage pool = _pools[noId];
+        uint64 seq = pool.pendingSeq;
+        if (seq == 0) revert NoPendingRoot();
+        if (block.number < uint256(pool.lastCommitBlock) + CHALLENGE_BLOCKS) revert ChallengeWindowOpen();
+        if (pool.openDemands != 0) revert DemandOpen();
+        uint64 count = pool.rootCount;
+        pool.rootCount = count + 1;
+        pool.pendingSeq = 0;
+        rootIndex = count;
+        RootRecord storage next = _roots[noId][count];
         emit DistributionFinalized(
-            noId, next.seq, rootIndex, next.epoch, next.root, next.total, next.leafCount, next.ledgerHash
+            noId, seq, rootIndex, next.epoch, next.root, next.total, next.leafCount, next.ledgerHash
         );
     }
 
@@ -348,26 +379,31 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         LedgerTree.Account calldata account,
         LedgerTree.ProofNode[] calldata proof
     ) external nonReentrant returns (uint256 amount) {
-        Root[] storage history = _roots[noId];
-        if (rootIndex >= history.length) revert UnknownRoot();
-        Root storage finalized = history[rootIndex];
+        PoolState storage pool = _pools[noId];
+        uint256 count = pool.rootCount;
+        if (rootIndex >= count) revert UnknownRoot();
+        RootRecord storage finalized = _roots[noId][rootIndex];
         bytes32 coldkey = account.coldkey;
         if (coldkey == bytes32(0) || coldkey == selfColdkey) revert InvalidColdkey();
         if (!LedgerTree.verifyLeaf(finalized.root, finalized.total, finalized.leafCount, account, proof)) {
             revert InvalidProof();
         }
-        uint256 paid = claimed[noId][account.index];
-        if (account.cumulative <= paid) revert NothingToClaim();
-        amount = account.cumulative - paid;
+        uint256 index = account.index;
+        uint256 cumulative = account.cumulative;
+        uint256 paid = _claimed[noId][index >> 1][index & 1];
+        if (cumulative <= paid) revert NothingToClaim();
+        amount = cumulative - paid;
         if (amount >= WHOLE_POSITION) revert AmountTooLarge();
-        if (claimedTotal[noId] + amount > history[history.length - 1].total) revert PoolCapExceeded();
+        uint256 poolClaimed = pool.claimedTotal + amount;
+        if (poolClaimed > _roots[noId][count - 1].total) revert PoolCapExceeded();
 
-        claimed[noId][account.index] = account.cumulative;
-        claimedTotal[noId] += amount;
-        totalPaid += amount;
-        escrowAccounted -= amount;
+        // A proven cumulative is at most its root's total, and the pool's
+        // claims at most its latest total, so no cast here can fail.
+        _claimed[noId][index >> 1][index & 1] = SafeCast.toUint128(cumulative);
+        pool.claimedTotal = SafeCast.toUint128(poolClaimed);
+        _totalPaid += SafeCast.toUint128(amount);
         _requireBacking(_payFromEscrow(coldkey, amount));
-        emit Claimed(noId, rootIndex, account.index, coldkey, account.cumulative, amount, msg.sender);
+        emit Claimed(noId, rootIndex, index, coldkey, cumulative, amount, msg.sender);
     }
 
     /// @notice Moves all the stake this vault's coldkey can move off a foreign
@@ -386,42 +422,120 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     /// @notice Adds escrow stake that no pool accounts for to a pool's funding.
     /// It enters the funding snapshot of the pool's next epoch.
     function assignSurplus(uint256 noId, uint256 amount) external onlyCoordinator nonReentrant {
-        if (!_pools[noId].registered) revert UnknownPool();
+        PoolState storage pool = _registeredPool(noId);
         uint256 live = _liveEscrowStake();
-        if (amount == 0 || live < escrowAccounted || amount > live - escrowAccounted) {
+        uint256 accounted = escrowAccounted();
+        if (amount == 0 || live < accounted || amount > live - accounted) {
             revert InvalidSurplus();
         }
-        capturedTotal[noId] += amount;
-        totalCaptured += amount;
-        escrowAccounted += amount;
+        _fund(pool, amount);
         _requireBacking(_stake(escrowHotkey, selfColdkey));
-        emit SurplusAssigned(noId, lastFundedEpoch[noId] + 1, amount);
+        emit SurplusAssigned(noId, _nextEpoch(pool), amount);
     }
 
     function pools(uint256 noId) external view returns (Pool memory) {
-        return _pools[noId];
+        PoolState storage pool = _pools[noId];
+        return Pool({hotkey: pool.hotkey, firstEpoch: pool.firstEpoch, registered: pool.firstEpoch != 0});
+    }
+
+    function lastFundedEpoch(uint256 noId) external view returns (uint256 epoch) {
+        PoolState storage pool = _pools[noId];
+        return pool.firstEpoch == 0 ? 0 : _nextEpoch(pool) - 1;
+    }
+
+    function fundedThrough(uint256 noId, uint256 epoch) external view returns (uint256 amount) {
+        return _fundedThrough[noId][epoch >> 1][epoch & 1];
+    }
+
+    function capturedTotal(uint256 noId) external view returns (uint256 amount) {
+        return _pools[noId].capturedTotal;
+    }
+
+    function claimedTotal(uint256 noId) external view returns (uint256 amount) {
+        return _pools[noId].claimedTotal;
     }
 
     function finalizedTotal(uint256 noId) external view returns (uint256) {
-        Root[] storage history = _roots[noId];
-        return history.length == 0 ? 0 : history[history.length - 1].total;
+        uint256 count = _pools[noId].rootCount;
+        return count == 0 ? 0 : _roots[noId][count - 1].total;
     }
 
     function rootCount(uint256 noId) external view returns (uint256) {
-        return _roots[noId].length;
+        return _pools[noId].rootCount;
     }
 
     function roots(uint256 noId, uint256 rootIndex) external view returns (Root memory) {
-        return _roots[noId][rootIndex];
+        // Past the last finalized root this fails as a read past the end of an
+        // array does (Panic 0x32), a stored pending root included.
+        if (rootIndex >= _pools[noId].rootCount) return new Root[](0)[rootIndex];
+        RootRecord storage stored = _roots[noId][rootIndex];
+        return Root({
+            root: stored.root,
+            total: stored.total,
+            leafCount: stored.leafCount,
+            epoch: stored.epoch,
+            ledgerHash: stored.ledgerHash
+        });
     }
 
     function pending(uint256 noId) external view returns (Pending memory) {
-        return _pending[noId];
+        PoolState storage pool = _pools[noId];
+        uint64 seq = pool.pendingSeq;
+        // With no root pending, every field reads zero.
+        if (seq == 0) {
+            return Pending({
+                seq: 0,
+                root: bytes32(0),
+                total: 0,
+                leafCount: 0,
+                epoch: 0,
+                ledgerHash: bytes32(0),
+                committedBlock: 0,
+                openDemands: 0
+            });
+        }
+        RootRecord storage stored = _roots[noId][pool.rootCount];
+        return Pending({
+            seq: seq,
+            root: stored.root,
+            total: stored.total,
+            leafCount: stored.leafCount,
+            epoch: stored.epoch,
+            ledgerHash: stored.ledgerHash,
+            committedBlock: pool.lastCommitBlock,
+            openDemands: pool.openDemands
+        });
     }
 
-    /// @notice Executable conservation identity (§4.2 G1).
+    function commitSeq(uint256 noId) external view returns (uint64 seq) {
+        return _pools[noId].commitSeq;
+    }
+
+    function lastCommitBlock(uint256 noId) external view returns (uint64 blockNumber) {
+        return _pools[noId].lastCommitBlock;
+    }
+
+    function claimed(uint256 noId, uint256 index) external view returns (uint256 amount) {
+        return _claimed[noId][index >> 1][index & 1];
+    }
+
+    function totalCaptured() external view returns (uint256) {
+        return _totalCaptured;
+    }
+
+    function totalPaid() external view returns (uint256) {
+        return _totalPaid;
+    }
+
+    function escrowAccounted() public view returns (uint256) {
+        return _totalCaptured - _totalPaid;
+    }
+
+    /// @notice Executable conservation identity (§4.2 G1). totalCaptured =
+    /// totalPaid + escrowAccounted holds by construction, escrowAccounted
+    /// being their difference; the live escrow stake must back it.
     function conservationHolds() external view returns (bool) {
-        return totalCaptured == totalPaid + escrowAccounted && _liveEscrowStake() >= escrowAccounted;
+        return _liveEscrowStake() >= escrowAccounted();
     }
 
     function liveEscrowStake() external view returns (uint256) {
@@ -448,20 +562,37 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         }
     }
 
+    // The registered pool `noId`, or UnknownPool.
+    function _registeredPool(uint256 noId) private view returns (PoolState storage pool) {
+        pool = _pools[noId];
+        if (pool.firstEpoch == 0) revert UnknownPool();
+    }
+
+    // The pool's next unfunded epoch, lastFundedEpoch + 1.
+    function _nextEpoch(PoolState storage pool) private view returns (uint256) {
+        return uint256(pool.firstEpoch) + pool.fundedEpochs;
+    }
+
     // Records `epoch`, which must be the pool's next unfunded epoch, as funded
-    // before any runtime call, and returns the pool hotkey.
-    function _advance(uint256 epoch, uint256 noId) private returns (bytes32) {
-        Pool storage pool = _pools[noId];
-        if (!pool.registered) revert UnknownPool();
-        if (epoch != lastFundedEpoch[noId] + 1) revert InvalidTransition();
-        lastFundedEpoch[noId] = epoch;
-        return pool.hotkey;
+    // before any runtime call.
+    function _advance(uint256 epoch, uint256 noId) private returns (PoolState storage pool) {
+        pool = _registeredPool(noId);
+        if (epoch != _nextEpoch(pool)) revert InvalidTransition();
+        pool.fundedEpochs++;
+    }
+
+    // Adds `amount` to the pool's funding and the vault's. A total beyond 128
+    // bits is refused, not truncated.
+    function _fund(PoolState storage pool, uint256 amount) private {
+        pool.capturedTotal = SafeCast.toUint128(pool.capturedTotal + amount);
+        _totalCaptured = SafeCast.toUint128(_totalCaptured + amount);
     }
 
     // Writes the funding snapshot of the epoch just advanced to, once (§4.2 G5).
-    function _snapshot(uint256 epoch, uint256 noId) private returns (uint256 funded) {
-        funded = capturedTotal[noId];
-        fundedThrough[noId][epoch] = funded;
+    function _snapshot(PoolState storage pool, uint256 noId, uint256 epoch) private returns (uint256) {
+        uint128 funded = pool.capturedTotal;
+        _fundedThrough[noId][epoch >> 1][epoch & 1] = funded;
+        return funded;
     }
 
     // Moves `observed` of the vault's stake on `hotkey`, whose whole position
@@ -502,23 +633,22 @@ contract STSettlementVault2 is ISTSettlementVault2 {
         ) revert RuntimeAccountingMismatch();
     }
 
-    // The pool's pending root and the finalized root `rootIndex` whose
-    // accounts it must keep: the two roots a demand or path check is about.
+    // The pool, with a pending root, and the finalized root `rootIndex` whose
+    // accounts the pending root must keep: what a demand or path check is about.
     function _disputedRoots(uint256 noId, uint256 rootIndex)
         private
         view
-        returns (Pending storage next, Root storage previous)
+        returns (PoolState storage pool, RootRecord storage previous)
     {
-        next = _pending[noId];
-        if (next.seq == 0) revert NoPendingRoot();
-        Root[] storage history = _roots[noId];
-        if (rootIndex >= history.length) revert UnknownRoot();
-        previous = history[rootIndex];
+        pool = _pools[noId];
+        if (pool.pendingSeq == 0) revert NoPendingRoot();
+        if (rootIndex >= pool.rootCount) revert UnknownRoot();
+        previous = _roots[noId][rootIndex];
     }
 
     // Requires `account` to be an account of the finalized root `previous`.
     function _requireProven(
-        Root storage previous,
+        RootRecord storage previous,
         LedgerTree.Account calldata account,
         LedgerTree.ProofNode[] calldata proof
     ) private view {
@@ -562,6 +692,6 @@ contract STSettlementVault2 is ISTSettlementVault2 {
     // for. `escrowStake` is escrow's whole position as read after the call's
     // last runtime call; nothing moves stake between that read and this check.
     function _requireBacking(uint256 escrowStake) private view {
-        if (_unlocked(escrowHotkey, escrowStake) < escrowAccounted) revert Underfunded();
+        if (_unlocked(escrowHotkey, escrowStake) < escrowAccounted()) revert Underfunded();
     }
 }

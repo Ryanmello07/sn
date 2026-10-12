@@ -765,9 +765,9 @@ the authenticated canonical inclusion:
 - `vault2-create`: the exact runtime and the getters `netuid`, `escrowHotkey`,
   `selfColdkey`, `bootstrap`, `demandFeeWei`, `CHALLENGE_BLOCKS` (14,400),
   `coordinator` (zero), `totalCaptured`, `totalPaid` and `escrowAccounted`
-  (zero) and `conservationHolds` (true), and four zero storage words of the
-  reviewed layout: the reentrancy flag in slot one and `totalCaptured`,
-  `totalPaid` and `escrowAccounted` in slots 14 to 16. That is every
+  (zero) and `conservationHolds` (true), and the zero storage word of the
+  reviewed layout that packs `totalCaptured` and `totalPaid` in slot one
+  (`escrowAccounted` is their difference). That is every
   argument-free view except `liveEscrowStake`, which anyone can raise by
   transferring stake to vault2's escrow position (`conservationHolds`
   evaluates it through the staking precompile), and `escrowRegistered`: the
@@ -776,8 +776,8 @@ the authenticated canonical inclusion:
 - `escrow2-register`: the original escrow checks (one `EscrowRegistered` event
   and the `getUid`/`getHotkey`/`getColdkey` mapping), the vault2 getters with
   `escrowRegistered` true, slot zero packing `coordinator` in its low 20
-  bytes with `escrowRegistered` at byte offset 20, the four zero words, and
-  the escrow position's
+  bytes with `escrowRegistered` at byte offset 20 and the reentrancy flag,
+  zero, at offset 21, the zero word, and the escrow position's
   registration collateral, `getMinerCollateral(netuid, escrowHotkey,
   selfColdkey)` on the staking precompile `0x805`
   (`evm/src/interfaces/stakingCollateral.sol`). While SN25's

@@ -528,7 +528,9 @@ func TestEvmV2RevertedActionsRetainConsumedNonce(t *testing.T) {
 	g.completeV2Action("vault2-create")
 	g.selectV2Action("escrow2-register")
 	g.prepareV2Action("escrow2-register")
-	g.vm.GasLimit, g.gasFailure = 30_000, true
+	// Below the guard's first write: registerEscrow runs out of gas setting
+	// the reentrancy flag beside the still zero coordinator.
+	g.vm.GasLimit, g.gasFailure = 20_000, true
 	if _, code, diagnostic := g.command("resume", "--action", "escrow2-register", "--online", "--submit"); code != 0 {
 		t.Fatal(diagnostic)
 	}
