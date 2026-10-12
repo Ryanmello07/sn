@@ -168,15 +168,15 @@ release_gate_start sn-simulator-history-race release_phase_sn_simulator_history_
 
 # Settlement v2 (VERSION2-FINAL.md §14 gate 3, §15): the ledger package (GL),
 # the sum tree (GT) and allocation (GA) additions, the claim daemon (E-5),
-# snclaim (CL) and the validator's v2 code (VA), in both modes, with gate 1's
-# coverage checker. The aggregate jobs above run them too; this job is gate
+# snclaim (CL) and the validator's v2 code (VA), its ledger audit and custody
+# included, in both modes, with gate 1's coverage checker. The aggregate jobs above run them too; this job is gate
 # 3's own verdict. The claim daemon's durable volumes need the umask 022 and
 # private TMPDIR that every phase gets.
 release_phase_sn_v2() {
   cd "$sn_repo"
   go test ./ledger ./scripts/solidity-coverage -count=1
   go test -race ./ledger ./scripts/solidity-coverage -count=1
-  settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2)'
+  settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2|ReleaseRuntimeRunsLedgerAudit)'
   go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
   go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
 }

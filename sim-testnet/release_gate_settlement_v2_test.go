@@ -250,7 +250,7 @@ func releaseGateSnV2Group(t *testing.T) releaseEvidenceV2GateGroup {
 	packages := "./merkle ./protocol ./miner ./miner/onchain ./validator"
 	return releaseEvidenceV2GateGroup{
 		phase: "sn_v2", job: "sn-v2", variable: "settlement_v2_tests",
-		alternatives: "Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2",
+		alternatives: "Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2|ReleaseRuntimeRunsLedgerAudit",
 		packages:     strings.Fields(packages),
 		sources: map[string][]string{
 			"./merkle":        releaseEvidenceV2GateSources(t, []string{"../merkle/ledger_*_test.go"}),
