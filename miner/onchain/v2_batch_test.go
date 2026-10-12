@@ -518,8 +518,9 @@ func TestV2ClaimAllBatchRefusals(t *testing.T) {
 	}
 }
 
-// The batcher's events of a receipt, as ClaimBatchOutcomes reads them.
-func TestClaimBatchOutcomes(t *testing.T) {
+// CL-1, CB-EV: the batcher's events of a receipt, as ClaimBatchOutcomes reads
+// them.
+func TestV2ClaimBatchOutcomes(t *testing.T) {
 	c := newV2TestChain(t)
 	c.batcher = common.HexToAddress(v2TestBatcher)
 	paid := func(item, amount int64) *types.Log {
@@ -564,8 +565,8 @@ func TestClaimBatchOutcomes(t *testing.T) {
 	}
 }
 
-// SizeClaimBatch stops with its context, whose error it reports.
-func TestSizeClaimBatchStopsWithItsContext(t *testing.T) {
+// CL-1: SizeClaimBatch stops with its context, whose error it reports.
+func TestV2SizeClaimBatchStopsWithItsContext(t *testing.T) {
 	s := newV2BatchScenario(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()

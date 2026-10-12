@@ -781,7 +781,7 @@ func TestClaimV2BatchRefusesBytesOfAnotherUnit(t *testing.T) {
 }
 
 // CL-5: the batch's endpoint is the first that serves the configured chain.
-func TestDialClaimV2FailsOver(t *testing.T) {
+func TestClaimV2DialFailsOver(t *testing.T) {
 	chain := newClaimV2TestChain(t)
 	cfg := &ClaimDaemonV2Config{ChainID: claimV2TestChainID, RPC: []string{"ftp://rpc.example", chain.server.URL}}
 	client, err := dialClaimV2(t.Context(), cfg)
