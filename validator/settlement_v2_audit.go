@@ -384,7 +384,7 @@ func (self *settlementV2Audit) fallback(ctx context.Context, pool settlementV2Au
 	if err != nil || !ok {
 		return anchor, ledger.ActionDemand, nil, err
 	}
-	faults := settlementV2Faults(anchor.accounts, accounts)
+	faults := ledger.Faults(anchor.accounts, accounts)
 	// A tree not built because ctx ended leads to a demand, whose history
 	// read then fails with ctx.
 	switch {
@@ -394,30 +394,6 @@ func (self *settlementV2Audit) fallback(ctx context.Context, pool settlementV2Au
 		return anchor, ledger.ActionChallenge, faults, nil
 	}
 	return anchor, ledger.ActionRefuse, nil, nil
-}
-
-// settlementV2Faults lists, by index, every account of a finalized root
-// whose row in accounts is below its value, names another coldkey or is
-// missing: what checkPath finds at the account's leaf when accounts are a
-// pending root's tree (ledger.Verify's rule for F, for any finalized root,
-// as positions and coldkeys never change and values never decrease).
-func settlementV2Faults(previous, accounts []merkle.LedgerAccount) []ledger.Fault {
-	var faults []ledger.Fault
-	for i := range previous {
-		kind := merkle.LedgerFaultNone
-		switch {
-		case i >= len(accounts):
-			kind = merkle.LedgerFaultWrongLeaf
-		case accounts[i].Cumulative.Lt(&previous[i].Cumulative):
-			kind = merkle.LedgerFaultLowerValue
-		case accounts[i].Coldkey != previous[i].Coldkey:
-			kind = merkle.LedgerFaultWrongLeaf
-		}
-		if kind != merkle.LedgerFaultNone {
-			faults = append(faults, ledger.Fault{Index: uint64(i), Kind: kind})
-		}
-	}
-	return faults
 }
 
 // anchor returns the finalized root rootIndex's accounts and tree from
