@@ -30,13 +30,24 @@ import (
 
 var stSettlementVault2 = stabi.NewSTSettlementVault2()
 
-// The generated ABI parses, as NewSTSettlementVault2 already requires.
+var stClaimBatcher = stabi.NewSTClaimBatcher()
+
+// The generated ABIs parse, as NewSTSettlementVault2 and NewSTClaimBatcher
+// already require.
 var stSettlementVault2Claim = func() abi.Method {
 	parsed, err := stabi.STSettlementVault2MetaData.ParseABI()
 	if err != nil {
 		panic(err)
 	}
 	return parsed.Methods["claim"]
+}()
+
+var stClaimBatcherClaimMany = func() abi.Method {
+	parsed, err := stabi.STClaimBatcherMetaData.ParseABI()
+	if err != nil {
+		panic(err)
+	}
+	return parsed.Methods["claimMany"]
 }()
 
 var errClaimV2Proof = errors.New("v2 claim proof does not verify against a finalized on-chain root")
@@ -142,6 +153,26 @@ func readClaimedV2(ctx context.Context, cfg *ClaimDaemonV2Config, account *claim
 	return nil, errors.Join(failures...)
 }
 
+// The first RPC endpoint that serves the configured chain, failing over as
+// v1's reads do.
+func dialClaimV2(ctx context.Context, cfg *ClaimDaemonV2Config) (*ethclient.Client, error) {
+	var failures []error
+	for _, endpoint := range cfg.RPC {
+		client, err := evmrpc.DialContext(ctx, endpoint)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", endpoint, err))
+			continue
+		}
+		chainID, err := client.ChainID(ctx)
+		if err == nil && chainID.Cmp(new(big.Int).SetUint64(cfg.ChainID)) == 0 {
+			return client, nil
+		}
+		client.Close()
+		failures = append(failures, fmt.Errorf("%s: chain id %v (%v), want %d", endpoint, chainID, err, cfg.ChainID))
+	}
+	return nil, errors.Join(failures...)
+}
+
 func readClaimedV2At(ctx context.Context, cfg *ClaimDaemonV2Config, endpoint string, account *claimAccountV2) (*uint256.Int, error) {
 	client, err := evmrpc.DialContext(ctx, endpoint)
 	if err != nil {
@@ -193,6 +224,9 @@ type claimIntentV2 struct {
 	RootIndex *big.Int
 	Account   stabi.LedgerTreeAccount
 	Proof     []stabi.LedgerTreeProofNode
+	// Items is the claim count of a batch through the claim batcher, and
+	// Item this claim's place in it; Items is 0 for a claim sent to vault2.
+	Item, Items int
 }
 
 // The account a signed claim names; its watermark is re-read after a revert.
@@ -206,13 +240,19 @@ func (self *claimIntentV2) account(vault string) *claimAccountV2 {
 	return account
 }
 
-func claimV2Calldata(account *claimAccountV2) []byte {
+// The account's claim arguments, for vault2 or the claim batcher.
+func claimV2Item(account *claimAccountV2) stabi.STClaimBatcherClaim {
 	proof := make([]stabi.LedgerTreeProofNode, len(account.Proof))
 	for index, node := range account.Proof {
 		proof[index] = stabi.LedgerTreeProofNode{Hash: node.Hash, Sum: node.Sum.ToBig()}
 	}
 	leaf := stabi.LedgerTreeAccount{Index: new(big.Int).SetUint64(account.Index), Coldkey: account.Coldkey, Cumulative: account.Cumulative.ToBig()}
-	return stSettlementVault2.PackClaim(new(big.Int).SetUint64(account.NoID), new(big.Int).SetUint64(account.RootIndex), leaf, proof)
+	return stabi.STClaimBatcherClaim{NoId: new(big.Int).SetUint64(account.NoID), RootIndex: new(big.Int).SetUint64(account.RootIndex), Account: leaf, Proof: proof}
+}
+
+func claimV2Calldata(account *claimAccountV2) []byte {
+	item := claimV2Item(account)
+	return stSettlementVault2.PackClaim(item.NoId, item.RootIndex, item.Account, item.Proof)
 }
 
 // Repacking excludes trailing bytes and alternative encodings, as in v1.
@@ -236,8 +276,45 @@ func decodeClaimV2Calldata(data []byte) (*claimIntentV2, error) {
 	return intent, nil
 }
 
+// A batch's calldata, canonical as v2 claims' is: claimMany of the
+// configured vault, whose claim of the unit's account it returns as the
+// intent, with its place in the batch.
+func decodeClaimV2BatchCalldata(data []byte, vault string, unit *ClaimUnitV2) (*claimIntentV2, error) {
+	method := stClaimBatcherClaimMany
+	if len(data) < 4 || !bytes.Equal(data[:4], method.ID) {
+		return nil, errors.New("calldata is not a v2 claim batch")
+	}
+	values, err := method.Inputs.Unpack(data[4:])
+	if err != nil {
+		return nil, err
+	}
+	target := abi.ConvertType(values[0], new(common.Address)).(*common.Address)
+	items := *abi.ConvertType(values[1], new([]stabi.STClaimBatcherClaim)).(*[]stabi.STClaimBatcherClaim)
+	perClaim := abi.ConvertType(values[2], new(big.Int)).(*big.Int)
+	if !bytes.Equal(stClaimBatcher.PackClaimMany(*target, items, perClaim), data) {
+		return nil, errors.New("v2 claim batch calldata is not canonical")
+	}
+	if !strings.EqualFold(target.Hex(), vault) {
+		return nil, errors.New("v2 claim batch names another vault")
+	}
+	var intent *claimIntentV2
+	for index, item := range items {
+		if item.NoId.IsUint64() && item.NoId.Uint64() == unit.NoID && item.Account.Index.IsUint64() && item.Account.Index.Uint64() == unit.Index {
+			if intent != nil {
+				return nil, errors.New("v2 claim batch names the account twice")
+			}
+			intent = &claimIntentV2{NoID: item.NoId, RootIndex: item.RootIndex, Account: item.Account, Proof: item.Proof, Item: index, Items: len(items)}
+		}
+	}
+	if intent == nil {
+		return nil, errors.New("signed v2 claim calldata names another account")
+	}
+	return intent, nil
+}
+
 // The retained bytes must be exactly a relayer-signed claim of this unit on
-// the configured chain and vault.
+// the configured chain and vault, sent to vault2 or in a batch to the
+// configured claim batcher.
 func authenticateSignedClaimV2(cfg *ClaimDaemonV2Config, unit *ClaimUnitV2) (*types.Transaction, *claimIntentV2, common.Address, error) {
 	refuse := func(reason string) (*types.Transaction, *claimIntentV2, common.Address, error) {
 		return nil, nil, common.Address{}, errors.New("signed v2 claim " + reason)
@@ -247,10 +324,18 @@ func authenticateSignedClaimV2(cfg *ClaimDaemonV2Config, unit *ClaimUnitV2) (*ty
 	if err != nil || tx.UnmarshalBinary(raw) != nil || !strings.EqualFold(tx.Hash().Hex(), unit.TxHash) {
 		return refuse("bytes do not decode to their retained hash")
 	}
-	if tx.ChainId().Cmp(new(big.Int).SetUint64(cfg.ChainID)) != 0 || tx.To() == nil || !strings.EqualFold(tx.To().Hex(), cfg.Vault) || tx.Value().Sign() != 0 {
+	if tx.ChainId().Cmp(new(big.Int).SetUint64(cfg.ChainID)) != 0 || tx.To() == nil || tx.Value().Sign() != 0 {
 		return refuse("has another chain, target or value")
 	}
-	intent, err := decodeClaimV2Calldata(tx.Data())
+	var intent *claimIntentV2
+	switch {
+	case strings.EqualFold(tx.To().Hex(), cfg.Vault):
+		intent, err = decodeClaimV2Calldata(tx.Data())
+	case cfg.Batcher != "" && strings.EqualFold(tx.To().Hex(), cfg.Batcher):
+		intent, err = decodeClaimV2BatchCalldata(tx.Data(), cfg.Vault, unit)
+	default:
+		return refuse("has another chain, target or value")
+	}
 	if err != nil {
 		return nil, nil, common.Address{}, err
 	}
@@ -263,6 +348,31 @@ func authenticateSignedClaimV2(cfg *ClaimDaemonV2Config, unit *ClaimUnitV2) (*ty
 		return refuse("signer is not the configured relayer")
 	}
 	return &tx, intent, from, nil
+}
+
+// A batched claim the batcher reports paid must have exactly one canonical
+// Claimed event of its account from the vault, matching the signed intent,
+// with the batcher as caller and the batcher's amount.
+func verifyBatchedClaimV2Receipt(vault common.Address, tx *types.Transaction, intent *claimIntentV2, amount *big.Int, receipt *types.Receipt) (*stabi.STSettlementVault2Claimed, error) {
+	var claimed *stabi.STSettlementVault2Claimed
+	for _, log := range receipt.Logs {
+		if log == nil || log.Address != vault {
+			continue
+		}
+		event, err := stSettlementVault2.UnpackClaimedEvent(log)
+		if err != nil || event.NoId.Cmp(intent.NoID) != 0 || event.Index.Cmp(intent.Account.Index) != 0 {
+			continue
+		}
+		if claimed != nil || log.Removed || log.TxHash != receipt.TxHash || log.BlockHash != receipt.BlockHash || log.BlockNumber != receipt.BlockNumber.Uint64() || log.TxIndex != receipt.TransactionIndex ||
+			event.RootIndex.Cmp(intent.RootIndex) != 0 || event.Coldkey != intent.Account.Coldkey || event.Cumulative.Cmp(intent.Account.Cumulative) != 0 || event.Amount.Cmp(amount) != 0 || event.Caller != *tx.To() {
+			return nil, errors.New("canonical v2 Claimed event differs from the exact batched intent")
+		}
+		claimed = event
+	}
+	if claimed == nil {
+		return nil, errors.New("exact batched v2 claim has no Claimed event")
+	}
+	return claimed, nil
 }
 
 // Exactly one canonical Claimed event must match the signed intent; its

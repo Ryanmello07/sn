@@ -94,6 +94,7 @@ type claimV2TestChain struct {
 	sendFailures    int
 	revertMined     bool
 	refuseClaims    bool
+	refuseIndex     map[uint64]bool
 	dropLogs        bool
 	estimate        uint64
 	calls           []string
@@ -101,15 +102,19 @@ type claimV2TestChain struct {
 	failMethod      string
 	finalized       *uint64
 	beforePreflight func()
+	beforeEstimate  func()
 	beforeMine      func()
 	afterView       func()
 	account         func(map[string]any)
 	server          *httptest.Server
+	// batch models the claim batcher (claim_v2_batch_test.go); nil means
+	// the chain has none.
+	batch *claimV2TestBatcherModel
 }
 
 func newClaimV2TestChain(t *testing.T) *claimV2TestChain {
 	t.Helper()
-	chain := &claimV2TestChain{t: t, vault: common.HexToAddress(claimV2TestVault), noID: 7, claimed: map[uint64]uint256.Int{}, head: 100, receipts: map[common.Hash]*types.Receipt{}}
+	chain := &claimV2TestChain{t: t, vault: common.HexToAddress(claimV2TestVault), noID: 7, claimed: map[uint64]uint256.Int{}, refuseIndex: map[uint64]bool{}, head: 100, receipts: map[common.Hash]*types.Receipt{}}
 	chain.server = httptest.NewServer(chain)
 	t.Cleanup(chain.server.Close)
 	return chain
@@ -240,11 +245,13 @@ func (self *claimV2TestChain) rpc(method string, params []json.RawMessage) (any,
 			}
 			number = value
 		}
-		return map[string]any{"number": hexutil.EncodeUint64(number), "hash": claimV2TestBlockHash(number).Hex()}, nil
+		return map[string]any{"number": hexutil.EncodeUint64(number), "hash": claimV2TestBlockHash(number).Hex(), "gasLimit": hexutil.EncodeUint64(75_000_000)}, nil
 	case "eth_call", "eth_estimateGas":
 		var message struct {
-			Input hexutil.Bytes `json:"input"`
-			Data  hexutil.Bytes `json:"data"`
+			To    *common.Address `json:"to"`
+			Gas   *hexutil.Uint64 `json:"gas"`
+			Input hexutil.Bytes   `json:"input"`
+			Data  hexutil.Bytes   `json:"data"`
 		}
 		if err := json.Unmarshal(params[0], &message); err != nil {
 			self.t.Error(err)
@@ -253,8 +260,14 @@ func (self *claimV2TestChain) rpc(method string, params []json.RawMessage) (any,
 		if len(data) == 0 {
 			data = message.Data
 		}
+		if self.batch != nil && message.To != nil && *message.To == self.batch.address {
+			return self.answerBatch(method, message.Gas, data)
+		}
 		if method == "eth_estimateGas" {
 			self.calls = append(self.calls, "estimate")
+			if self.beforeEstimate != nil {
+				self.beforeEstimate()
+			}
 			if _, _, err := self.execute(data); err != nil {
 				return nil, err
 			}
@@ -346,7 +359,7 @@ func (self *claimV2TestChain) execute(data []byte) (*claimIntentV2, *uint256.Int
 	if !claimed.Lt(cumulative) {
 		return nil, nil, claimV2TestRevert("NothingToClaim")
 	}
-	if self.refuseClaims {
+	if self.refuseClaims || self.refuseIndex[index] {
 		return nil, nil, claimV2TestRevert("runtime transfer refusal")
 	}
 	return intent, new(uint256.Int).Sub(cumulative, &claimed), nil
@@ -385,6 +398,11 @@ func (self *claimV2TestChain) mine(param json.RawMessage) (any, *claimV2TestRPCE
 	self.nonce++
 	receipt := &types.Receipt{Type: types.LegacyTxType, Status: types.ReceiptStatusFailed, CumulativeGasUsed: 200_000, GasUsed: 200_000, Logs: []*types.Log{},
 		TxHash: tx.Hash(), BlockHash: claimV2TestBlockHash(self.head), BlockNumber: new(big.Int).SetUint64(self.head)}
+	if self.batch != nil && *tx.To() == self.batch.address {
+		self.mineBatch(&tx, receipt)
+		self.receipts[tx.Hash()] = receipt
+		return tx.Hash().Hex(), nil
+	}
 	intent, amount, refusal := self.execute(tx.Data())
 	if refusal == nil && !self.revertMined {
 		self.claimed[intent.Account.Index.Uint64()] = *uint256.MustFromBig(intent.Account.Cumulative)
