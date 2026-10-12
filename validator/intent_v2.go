@@ -33,6 +33,8 @@ type releaseIntentV2Owner struct {
 	productionPrepared   *ownerRecyclePreparedAuthorization
 	// Fault observers run after physical reference operations, never instead.
 	referenceReadHooks releaseMeasurementInputV2ReadHooks
+	// The retained prefix this process has already completely verified.
+	verified *releaseIntentV2VerifiedHistory
 }
 
 type releaseIntentV2Read struct {
@@ -152,6 +154,42 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 	return artifact, verified.Decision, measurement, options, nil
 }
 
+// An entry this process already verified completely keeps its native, source,
+// envelope and replay verdict. Its retained files are still read through the
+// same custody and must still match the hashes its unchanged bytes pin, and
+// its local source commitment and hotkey are checked again.
+func (self *IntentStore) readVerifiedMeasurementV2(ctx context.Context, custody *releaseEvidenceV2StartupReferences, intent *SteeringIntent) (*ReleaseMeasurementArtifact, []byte, error) {
+	runtime, bounds := self.v2.runtime, self.v2.runtime.cfg.EvidenceV2.Bounds
+	measurement, err := runtime.history.readContentReference(ctx, custody, intent.MeasurementArtifactPath, intent.MeasurementArtifactHash, intent.MeasurementArtifactSize, bounds.MaxArtifactBytes, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	if _, err := runtime.history.readContentReference(ctx, custody, intent.MeasurementEnvelopePath, intent.MeasurementEnvelopeHash, intent.MeasurementEnvelopeSize, bounds.MaxControlBytes, true); err != nil {
+		return nil, nil, err
+	}
+	artifact, err := decodeReleaseMeasurementV2Bytes(ctx, measurement, bounds.MaxArtifactBytes, bounds.MaxOperators)
+	if err != nil {
+		return nil, nil, err
+	}
+	sourceHash, err := releaseIntentNativeSourceHash(ctx, measurement, intent)
+	if err != nil {
+		return nil, nil, err
+	}
+	if intent.Prepared == nil || intent.Prepared.SourceCommitment == nil || intent.Prepared.SourceCommitment.Hash != releaseHex32(sourceHash) {
+		return nil, nil, errors.New("V2 intent lacks its exact pre-Prepared native source commitment")
+	}
+	if intent.Prepared.HotkeyHex != releaseHex32(runtime.hotkey.PublicKey()) {
+		return nil, nil, errors.New("V2 prepared hotkey differs from independently owned validator identity")
+	}
+	if err := errors.Join(custody.check(), ctx.Err()); err != nil {
+		return nil, nil, err
+	}
+	if err := self.retainOwnerRecyclePreparedAuthorization(intent); err != nil {
+		return nil, nil, err
+	}
+	return artifact, measurement, nil
+}
+
 func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Read, resultErr error) {
 	self.v2.productionPrepared = nil
 	bounds := self.v2.runtime.cfg.EvidenceV2.Bounds
@@ -178,6 +216,7 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 	}
 	result.encoded = encoded
 	if encoded == nil {
+		self.v2.verified = nil
 		if self.v2.historyAdoption != nil {
 			if _, err := self.v2.historyAdoption.request.matchPrefix(ctx, result.file, nil, bounds.IntentFileLimit()); err != nil {
 				return result, err
@@ -204,6 +243,15 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 	if result.file.Current != nil {
 		all = append(all, result.file.Current)
 	}
+	// Entries before reusable passed complete verification earlier in this
+	// process with these exact bytes, position, predecessors and authority.
+	authority := self.v2.verifiedAuthority()
+	digests, digestible := releaseIntentV2EntryDigests(all)
+	reusable := 0
+	if digestible {
+		reusable = self.v2.verified.reusablePrefix(authority, digests)
+	}
+	verifiedOptions := make(map[int]ReleaseMeasurementV2Options, min(len(all), releaseIntentV2VerifiedTail))
 	seen := make(map[string]bool, len(all))
 	var previous *SteeringIntent
 	for index, intent := range all {
@@ -224,7 +272,16 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 			return result, errors.New("V2 intent history repeats a vector")
 		}
 		seen[intent.VectorHash] = true
-		artifact, _, measurement, options, err := self.readMeasurementV2(ctx, result.custody, intent)
+		var artifact *ReleaseMeasurementArtifact
+		var measurement []byte
+		var options ReleaseMeasurementV2Options
+		optionsKnown := true
+		if index < reusable {
+			artifact, measurement, err = self.readVerifiedMeasurementV2(ctx, result.custody, intent)
+			options, optionsKnown = self.v2.verified.optionsAt(index)
+		} else {
+			artifact, _, measurement, options, err = self.readMeasurementV2(ctx, result.custody, intent)
+		}
 		if err != nil {
 			return result, fmt.Errorf("V2 intent %d: %w", index, err)
 		}
@@ -236,21 +293,32 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 			if err := validateSteeringIntentSuccessorWithGapsV2(previous, intent, self.v2.allowsIntentGap(previous, intent)); err != nil {
 				return result, err
 			}
-			previousReplay, err := self.v2.runtime.measurementReplayOptionsV2(ctx, result.lastOptions, "history-lineage-previous")
-			if err != nil {
-				return result, err
+			if index >= reusable {
+				previousReplay, err := self.v2.runtime.measurementReplayOptionsV2(ctx, result.lastOptions, "history-lineage-previous")
+				if err != nil {
+					return result, err
+				}
+				currentReplay, err := self.v2.runtime.measurementReplayOptionsV2(ctx, options, "history-lineage-current")
+				if err != nil {
+					return result, err
+				}
+				if err := self.verifyMeasurementLineageV2(ctx, result.lastBytes, previousReplay, artifact, currentReplay); err != nil {
+					return result, err
+				}
 			}
-			currentReplay, err := self.v2.runtime.measurementReplayOptionsV2(ctx, options, "history-lineage-current")
-			if err != nil {
-				return result, err
-			}
-			if err := self.verifyMeasurementLineageV2(ctx, result.lastBytes, previousReplay, artifact, currentReplay); err != nil {
-				return result, err
-			}
+		}
+		if optionsKnown && index >= len(all)-releaseIntentV2VerifiedTail {
+			verifiedOptions[index] = options
 		}
 		previous, result.lastArtifact, result.lastBytes, result.lastOptions = intent, artifact, measurement, options
 	}
-	return result, errors.Join(result.custody.check(), ctx.Err())
+	if err := errors.Join(result.custody.check(), ctx.Err()); err != nil {
+		return result, err
+	}
+	if digestible {
+		self.v2.rememberVerifiedHistory(authority, digests, verifiedOptions)
+	}
+	return result, nil
 }
 
 // The same reviewed native no-replace/exchange primitive used by bounded EMA
