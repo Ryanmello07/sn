@@ -29,7 +29,7 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 	flags := flag.NewFlagSet("bootstrap-contracts "+command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configPath := flags.String("config", "", "phase configuration; only preview accepts an unsigned draft")
-	actionId := flags.String("action", "reserve-create", "implemented approved action: reserve-create, vault-create, coordinator-create, escrow-register, proxy-create, reserve-link, vault-link or evidence-create; settlement v2: vault2-create, settlement2-create, escrow2-register, proxy2-create or vault2-link")
+	actionId := flags.String("action", "reserve-create", "implemented approved action: reserve-create, vault-create, coordinator-create, escrow-register, proxy-create, reserve-link, vault-link or evidence-create; settlement v2: vault2-create, escrow2-register, settlement2-create, proxy2-create or vault2-link")
 	accepted := flags.String("accept-plan-hash", "", "exact reviewed phase hash")
 	runDirectory := flags.String("run-dir", "", "approved private journal directory")
 	signaturePath := flags.String("signed-transaction", "", "private regular file containing original public transaction bytes")

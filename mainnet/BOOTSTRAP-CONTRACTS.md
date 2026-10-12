@@ -682,6 +682,14 @@ release. The same generator exports it from the reviewed catalog, whose
 go run ./sim-testnet/gencontracts --release-v2-json evm/out sim-testnet/contracts_gen.go /secure/ur-mainnet/settlement-v2-contracts.json
 ```
 
+The catalog holds the final reviewed contracts: vault2 with the contract
+review's fix (11,780 runtime bytes) and `STSettlement2` (8,588). After a full
+`forge build`, `go generate ./sim-testnet` rebuilds the catalog, and
+`stabi/generate.sh` binds both contracts in one combined abigen pass and
+exports their ABIs to `evm/abi/`. `go run ./sim-testnet/gencontracts --check
+evm/out sim-testnet/contracts_gen.go` and `stabi/generate.sh --check` confirm
+that the catalog, the bindings and the ABIs match that build.
+
 **Gas.** Each action's gas limit is part of the approval. Size it from the
 measurements in `scripts/runtime-rehearsal/README.md`: the runtime admits a
 precompile dispatch only if the forwarded gas covers its declared weight, while
@@ -690,14 +698,14 @@ an `eth_estimateGas` limit of about 1.49M, and `registerPoolUid`, the closest
 measured analogue of `registerEscrow`, used 1,449,743, so `escrow2-register`
 needs a limit well above 1.5M. No other v2 action calls a precompile, and none
 moves stake, so the 2.4M to 2.6M limits of capturing closes and claims do not
-apply. Reasonable starting limits are 4,000,000 for `vault2-create` (11,798
-runtime bytes), 2,500,000 for `escrow2-register`, 3,000,000 for
-`settlement2-create` (8,588 runtime bytes), 1,000,000 for `proxy2-create` and
-150,000 for `vault2-link`. With them the R-1 rehearsal below completed every
-action, using 2,604,451, 1,465,914, 1,935,622, 310,474 and 33,523 gas
-(2026-10-11, the vault2 bytes before the review fix).
-`maximum_total_wei` covers every limit times its fee cap plus the escrow
-funding.
+apply. Reasonable starting limits are 4,000,000 for `vault2-create`, 2,500,000
+for `escrow2-register`, 3,000,000 for `settlement2-create`, 1,000,000 for
+`proxy2-create` and 150,000 for `vault2-link`. With them R-1 (below) completed
+every action of the final contracts, using 2,600,537, 1,465,892, 1,935,622,
+310,486 and 33,523 gas (2026-10-12; the figures vary by a few gas with the
+random addresses in calldata, and the README records them with the R
+battery). `maximum_total_wei` covers every limit times its fee cap plus the
+escrow funding.
 
 **Builder checks.** Every selection, in `preview`, `plan` and every custody
 operation, rebuilds the complete graph from the approval and the release, so a
@@ -835,13 +843,14 @@ vault2's finalized readback, with the same unregistered-hotkey check.
 Two residuals remain. A registration of the hotkey that lands before ours
 leaves `escrow-registration-reverted-nonce-consumed`; the call reverts and
 returns its funding, and the recovery is a redeploy under a new approval with a
-fresh escrow hotkey and fresh nonces. No funds are at risk, because vault2
-holds nothing until a pool registers. And the back-to-back send leaves the
-registration in flight before vault2's own receipt is known: were vault2's
-creation to fail after admission, the registration's funding would reach an
-address without code. The builder admits only a valid constructor, so only an
-approved gas limit below vault2's creation cost could cause that; size it from
-the rehearsal.
+fresh escrow hotkey and fresh nonces. No funds are at risk: vault2 holds
+nothing until a pool registers, and `registerPool` refuses until the escrow
+is registered (contract review L1), so such a vault2 never holds a pool. And
+the back-to-back send leaves the registration in flight before vault2's own
+receipt is known: were vault2's creation to fail after admission, the
+registration's funding would reach an address without code. The builder
+admits only a valid constructor, so only an approved gas limit below vault2's
+creation cost could cause that; size it from the rehearsal.
 
 ```sh
 sn-mainnet bootstrap-contracts preview --action vault2-create --config /secure/ur-mainnet/settlement-v2.unsigned.json > /secure/ur-mainnet/settlement-v2.preview.json
@@ -890,4 +899,6 @@ sealing advances the chain one 250 ms slot per block, faster than real time,
 and the node builds the pending block that admission reads at the wall-clock
 slot, which Aura refuses unless it increases, so the test waits for real time
 to pass the latest block before each online command. The whole run takes
-about 80 seconds.
+about 80 seconds. On 2026-10-12 it passed on the final contracts in 86
+seconds, with the escrow registration in vault2's block and no registration
+collateral on the escrow position.

@@ -178,5 +178,5 @@ for entry in "${generated[@]}"; do
 done
 
 # stctl is a quarantined pre-1.0 monolith diagnostic. Keep its packaged ABI
-# coherent with the legacy STSubnet binding; release clients use the four
+# coherent with the legacy STSubnet binding; release clients use the other
 # generated bindings above and sim-testnet embeds the reviewed bytecode.
