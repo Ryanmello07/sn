@@ -187,7 +187,8 @@ release_gate_start sn-v2 release_phase_sn_v2
 # snclaim, in both modes. It needs no database. The suite builds the v2
 # contracts in a private directory, so it never reads the Solidity job's build
 # while it is written; the daemon's durable volumes need the same umask and
-# private TMPDIR as the job above.
+# private TMPDIR as the job above. On 2026-10-12 the normal run took 3 minutes
+# and the race run 5.5, each with its private build.
 release_phase_sn_e2e() {
   cd "$sn_repo"
   settlement_v2_e2e_tests='^Test(SettlementV2E2E)'
