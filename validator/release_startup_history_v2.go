@@ -44,6 +44,7 @@ type releaseEvidenceV2StartupHistory struct {
 	cfg                ReleaseConfig
 	retainedStartup    bool
 	historyAdoption    *releaseHistoryAdoptionV2
+	nativeGapBridge    *releaseNativeGapBridgeV2
 	initial            map[uint64]ReleaseEvidenceV2ActivationContext
 	keys               map[uint64]map[byte]ed25519.PublicKey
 	participants       []AttemptSettlementRuntimeV2Participant
@@ -491,6 +492,10 @@ func readReleaseEvidenceV2StartupHistoryWithRuntime(ctx context.Context, cfg *Re
 		request := *cfg.historyAdoptionV2
 		owned.cfg.historyAdoptionV2 = &request
 	}
+	if cfg.nativeGapBridge != nil {
+		bridge := *cfg.nativeGapBridge
+		owned.cfg.nativeGapBridge = &bridge
+	}
 	owned.cfg.Policy.Deposit.Tiers = slices.Clone(cfg.Policy.Deposit.Tiers)
 	if cfg.PreviousPolicy != nil {
 		previous := *cfg.PreviousPolicy
@@ -541,6 +546,9 @@ func readReleaseEvidenceV2StartupHistoryWithRuntime(ctx context.Context, cfg *Re
 	owned.retainedStartup = provisionalRetainedStartupHistory(inputs)
 	if owned.cfg.historyAdoptionV2 != nil && (owned.retainedStartup || owned.cfg.ProvisionalDeferClosedNativeInput) {
 		return nil, errors.New("strict history adoption cannot reuse provisional activation or source audits")
+	}
+	if owned.cfg.nativeGapBridge != nil && (owned.retainedStartup || owned.cfg.ProvisionalDeferClosedNativeInput || owned.cfg.historyAdoptionV2 != nil) {
+		return nil, errors.New("native gap bridge cannot reuse provisional activation, source audits or adopted history")
 	}
 	var err error
 	owned.images, err = newAttemptSettlementV2StartupImages(ctx, owned.cfg.StateDir, owned.participants, disk.snapshotBytes, disk.snapshotPresent, disk.journalBytes, disk.journalPresent, owned.cfg.EvidenceV2.Bounds.Persistence)

@@ -793,7 +793,13 @@ func RunRelease(ctx context.Context, configPath string) (returnErr error) {
 // Optional operational output cannot grant authority or change the configured
 // protocol owner. A publisher failure never cancels validation or reconciliation.
 func RunReleaseWithProgress(ctx context.Context, configPath, progressPath string) error {
-	return runReleaseWithStartupAndProgressV2(ctx, configPath, nil, nil, progressPath)
+	return runReleaseWithStartupAndProgressV2(ctx, configPath, nil, nil, nil, progressPath)
+}
+
+// An already pinned native gap bridge only admits its one missed-native edge;
+// with a nil bridge this is exactly RunReleaseWithProgress.
+func RunReleaseWithNativeGapBridge(ctx context.Context, configPath, progressPath string, bridge *ReleaseNativeGapBridge) error {
+	return runReleaseWithStartupAndProgressV2(ctx, configPath, nil, nil, bridge, progressPath)
 }
 
 func runReleaseWithActivationSetup(ctx context.Context, configPath string, retainedSetup *ProvisionalActivationSetupV2) (returnErr error) {
@@ -801,12 +807,12 @@ func runReleaseWithActivationSetup(ctx context.Context, configPath string, retai
 }
 
 func runReleaseWithStartupV2(ctx context.Context, configPath string, retainedSetup *ProvisionalActivationSetupV2, adoption *ReleaseHistoryAdoptionV2) (returnErr error) {
-	return runReleaseWithStartupAndProgressV2(ctx, configPath, retainedSetup, adoption, "")
+	return runReleaseWithStartupAndProgressV2(ctx, configPath, retainedSetup, adoption, nil, "")
 }
 
 // One optional publisher shares only the parent lifecycle, never its signer,
 // stores or retry decisions. Its deferred close always joins the owned worker.
-func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, retainedSetup *ProvisionalActivationSetupV2, adoption *ReleaseHistoryAdoptionV2, progressPath string) (returnErr error) {
+func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, retainedSetup *ProvisionalActivationSetupV2, adoption *ReleaseHistoryAdoptionV2, bridge *ReleaseNativeGapBridge, progressPath string) (returnErr error) {
 	if ctx == nil {
 		return errors.New("release production lifecycle context is unavailable")
 	}
@@ -814,7 +820,7 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		return err
 	}
 	cfg, err := LoadReleaseConfig(configPath)
-	if errors.Is(err, ErrReleaseEvidenceV2ActivationPending) && retainedSetup == nil && adoption == nil {
+	if errors.Is(err, ErrReleaseEvidenceV2ActivationPending) && retainedSetup == nil && adoption == nil && bridge == nil {
 		// The inputs are missing. The lifecycle allows run to finish an
 		// activation that was prepared and published earlier once its epoch
 		// has begun; it never signs, publishes or invents one. A signed schema 3
@@ -839,6 +845,15 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		if err := adoption.configure(cfg, configPath); err != nil {
 			return err
 		}
+	}
+	if bridge != nil {
+		if retainedSetup != nil || adoption != nil {
+			return errors.New("native gap bridge cannot select provisional startup or history adoption")
+		}
+		if err := bridge.configure(cfg); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "validator: native gap bridge from native epoch %d (%s) to the first intent at native epoch %d or later; release idles before it\n", bridge.LastNativeEpoch, bridge.LastArtifactHash, bridge.FirstNativeEpoch)
 	}
 	if retainedSetup != nil {
 		if err := retainedSetup.validate(cfg, configPath); err != nil {
@@ -1126,14 +1141,14 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	})
 }
 
-func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference) {
+func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference, bridge *ReleaseNativeGapBridge) {
 	ctx := context.Background()
 	if reference.Path != "" || reference.Sha256 != "" {
 		ctx = durablevolume.WithReference(ctx, reference)
 	}
 	event := connect.NewEventWithContext(ctx)
 	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	if err := RunReleaseWithProgress(event.Ctx(), configPath, progressPath); err != nil {
+	if err := RunReleaseWithNativeGapBridge(event.Ctx(), configPath, progressPath, bridge); err != nil {
 		panic(err)
 	}
 }
