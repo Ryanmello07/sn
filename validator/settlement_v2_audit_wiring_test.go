@@ -43,8 +43,9 @@ func (self *settlementV2AuditTestFixture) wired(t *testing.T, cfg *ReleaseConfig
 	return audit
 }
 
-// confirm has the runtime pass its settlement_v2 identity check, as its first
-// advance does, and the audit take that confirmation.
+// confirmSettlementV2AuditTest has the runtime pass its settlement_v2
+// identity check, as its first advance does, and the audit take that
+// confirmation.
 func confirmSettlementV2AuditTest(t *testing.T, runtime *releaseRuntimeV2, audit *settlementV2Audit) {
 	t.Helper()
 	release, err := runtime.acquire(t.Context())
