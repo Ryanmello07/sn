@@ -111,9 +111,11 @@ release_phase_sn_go() {
 }
 release_gate_start sn-go release_phase_sn_go
 
+# The E suite needs the server's database, so the aggregate skips it; sn-e2e
+# runs every TestSettlementV2E2E test on the gate's private services.
 release_phase_sn_all_normal() {
   cd "$sn_repo"
-  go test -parallel=4 -timeout 90m ./... -count=1
+  go test -parallel=4 -timeout 90m ./... -count=1 -skip '^TestSettlementV2E2E'
 }
 release_phase_sn_core_race() {
   cd "$sn_repo"

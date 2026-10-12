@@ -742,7 +742,7 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 		job     string
 		command string
 	}{
-		{phase: "sn_all_normal", job: "sn-all-normal", command: "go test -parallel=4 -timeout 90m ./... -count=1"},
+		{phase: "sn_all_normal", job: "sn-all-normal", command: releaseGateAggregateNormalCommand},
 		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race ./crv4 ./miner/... ./protocol -count=1"},
 		{phase: "sn_validator_race", job: "sn-validator-race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
 		{phase: "sn_simulator_race", job: "sn-simulator-race", command: releaseGateSimulatorOrdinaryRaceCommand},
@@ -1050,7 +1050,7 @@ var releaseGateUncachedCommands = []struct {
 	phase   string
 	command string
 }{
-	{phase: "sn_all_normal", command: "go test -parallel=4 -timeout 90m ./... -count=1"},
+	{phase: "sn_all_normal", command: releaseGateAggregateNormalCommand},
 	{phase: "sn_core_race", command: "go test -race ./crv4 ./miner/... ./protocol -count=1"},
 	{phase: "sn_validator_race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
 	{phase: "sn_simulator_race", command: releaseGateSimulatorOrdinaryRaceCommand},
