@@ -1170,8 +1170,8 @@ watcher, on a host other than the validator's. A UR sweep relayer is
 optional and can be added later without touching vault2.
 
 **Claim batcher.** `STClaimBatcher` (`evm/src/STClaimBatcher.sol`) is an
-optional, immutable, ownerless helper with no storage and no funds, which
-changes nothing in vault2. `claimMany(vault, claims, gasPerClaim)` calls
+optional, immutable, ownerless helper with no storage, persistent or
+transient, and no funds, which changes nothing in vault2. `claimMany(vault, claims, gasPerClaim)` calls
 vault2's `claim` for each item with exactly `gasPerClaim` gas inside
 try/catch, so a refused item never reverts the others, and reports it,
 `ClaimPaid(item, amount)` or `ClaimRefused(item, selector)`. The runtime
@@ -1606,7 +1606,7 @@ bytecode.
 | CB-2 | A refused item (a third party's earlier claim, an invalid proof, an unknown root, the runtime's refusals) reports its selector and leaves the account claimable; the other items pay |
 | CB-3 | A refusal that consumes all the gas forwarded to the precompile uses at most its item's cap, and later items still pay; a claim that needs more than the cap is refused, not the batch |
 | CB-4 | An item the gas left cannot cover is not attempted, nor any later one, reported once; whatever the batch's gas (fuzzed), each attempted item receives exactly its cap, and an item is attempted from the gas its cap needs at the call plus the bookkeeping |
-| CB-5 | Payments go only to each leaf's coldkey, whoever calls; the batcher takes no value and touches no storage |
+| CB-5 | Payments go only to each leaf's coldkey, whoever calls; the batcher takes no value, touches no storage, and its code has no storage opcode, persistent or transient |
 | CB-6 | An empty batch calls nothing; a cap whose requirement overflows reverts |
 | CB-7 | The deployment phase's optional sixth action creates the batcher at the deployer's next nonce after the binding; anything but the exact argument-free release creation is refused, and it completes only on readback of its exact runtime (SV-8) |
 | CB-EV | Every batcher event, with its exact fields |

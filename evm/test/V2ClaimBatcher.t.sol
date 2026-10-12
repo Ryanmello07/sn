@@ -440,6 +440,25 @@ contract V2ClaimBatcherTest is V2VaultBase {
         assertEq(address(batcher).balance, 0);
     }
 
+    // CB-5: the batcher's code has no storage opcode, persistent or transient
+    // (SLOAD, SSTORE, TLOAD, TSTORE). Runtime 475 keeps a transient write made
+    // in a call that reverts (rehearsal/transient_test.go), so a batcher that
+    // catches reverts must not rely on one. The scan skips push data and stops
+    // at the CBOR metadata, whose length the last two bytes give.
+    function test_CB5_theBatcherCodeHasNoStorageOpcode() public view {
+        bytes memory code = address(batcher).code;
+        uint256 end =
+            code.length - 2 - ((uint256(uint8(code[code.length - 2])) << 8) | uint8(code[code.length - 1]));
+        uint256 calls;
+        for (uint256 i; i < end; i++) {
+            uint8 op = uint8(code[i]);
+            assertTrue(op != 0x54 && op != 0x55 && op != 0x5c && op != 0x5d, "storage opcode");
+            if (op == 0xf1) calls++;
+            if (op >= 0x60 && op <= 0x7f) i += op - 0x5f;
+        }
+        assertGt(calls, 0, "the scan found no CALL");
+    }
+
     // ------------------------------------------------------------------
     // CB-6: an empty batch and an unusable cap
     // ------------------------------------------------------------------
