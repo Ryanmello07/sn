@@ -128,8 +128,9 @@ func TestReleaseJsonUsesRetainedReviewedBytecode(t *testing.T) {
 	}
 }
 
-// SV-8: the settlement v2 release holds exactly vault2, the implementation
-// and the shared reviewed proxy, with their exact bytes, in a fixed order.
+// SV-8: the settlement v2 release holds exactly vault2, the implementation,
+// the shared reviewed proxy and the claim batcher, with their exact bytes, in
+// a fixed order.
 func TestReleaseV2JsonRetainsSettlementArtifactsAndExactBytes(t *testing.T) {
 	items := releaseJsonTestItems(t)
 	raw, err := renderReleaseV2Json(items)
@@ -161,11 +162,11 @@ func TestReleaseV2JsonRetainsSettlementArtifactsAndExactBytes(t *testing.T) {
 			}
 		}
 	}
-	if envelope.Schema != "urnetwork-settlement-v2-contract-release-artifacts-v1" || !slices.Equal(names, []string{"ERC1967Proxy", "Settlement2", "SettlementVault2"}) {
+	if envelope.Schema != "urnetwork-settlement-v2-contract-release-artifacts-v1" || !slices.Equal(names, []string{"ClaimBatcher", "ERC1967Proxy", "Settlement2", "SettlementVault2"}) {
 		t.Fatalf("v2 release census changed: %+v", envelope)
 	}
 	original, err := renderReleaseJson(items)
-	if err != nil || bytes.Contains(original, []byte("SettlementVault2")) {
+	if err != nil || bytes.Contains(original, []byte("SettlementVault2")) || bytes.Contains(original, []byte("ClaimBatcher")) {
 		t.Fatalf("v2 artifacts joined the original release: %v", err)
 	}
 }
@@ -191,11 +192,13 @@ func TestReleaseV2JsonRejectsIncompleteCensus(t *testing.T) {
 
 // SV-8: both v2 contracts are cataloged apart from the original release, with
 // their immutables in declaration order and the storage coordinates the
-// deployment readback reads pinned to the compiler layout.
+// deployment readback reads pinned to the compiler layout; so is the claim
+// batcher, without immutables, whose layout must stay empty.
 func TestSettlementV2DefinitionsPinImmutablesAndReadbackSlots(t *testing.T) {
 	expected := map[string]artifactDefinition{
 		"SettlementVault2": {path: "STSettlementVault2.sol/STSettlementVault2.json", immutableNames: []string{"netuid", "escrowHotkey", "selfColdkey", "bootstrap", "demandFeeWei"}, immutableSources: []string{"src/STSettlementVault2.sol"}, requiredStorageSlots: map[string]string{"coordinator": "0", "escrowRegistered": "0", "_entered": "0", "_totalCaptured": "1", "_totalPaid": "1"}},
 		"Settlement2":      {path: "STSettlement2.sol/STSettlement2.json", immutableNames: []string{"__self"}, immutableSources: []string{"lib/openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol"}, requiredStorageSlots: map[string]string{"v1Coordinator": "0", "vault": "1", "_auditors": "2", "quorum": "3", "auditorSetVersion": "4"}},
+		"ClaimBatcher":     {path: "STClaimBatcher.sol/STClaimBatcher.json", requireEmptyLinearStorage: true},
 	}
 	members := map[string]bool{}
 	for _, definition := range artifactDefinitions {
@@ -206,12 +209,12 @@ func TestSettlementV2DefinitionsPinImmutablesAndReadbackSlots(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if definition.release || !definition.releaseV2 || definition.variable != "" || definition.path != want.path || !slices.Equal(definition.immutableNames, want.immutableNames) || !slices.Equal(definition.immutableSources, want.immutableSources) || !maps.Equal(definition.requiredStorageSlots, want.requiredStorageSlots) {
+		if definition.release || !definition.releaseV2 || definition.variable != "" || definition.path != want.path || !slices.Equal(definition.immutableNames, want.immutableNames) || !slices.Equal(definition.immutableSources, want.immutableSources) || !maps.Equal(definition.requiredStorageSlots, want.requiredStorageSlots) || definition.requireEmptyLinearStorage != want.requireEmptyLinearStorage {
 			t.Fatalf("%s is not the exact settlement v2 artifact: %+v", definition.name, definition)
 		}
 		delete(expected, definition.name)
 	}
-	if len(expected) != 0 || !maps.Equal(members, map[string]bool{"SettlementVault2": true, "Settlement2": true, "ERC1967Proxy": true}) {
+	if len(expected) != 0 || !maps.Equal(members, map[string]bool{"SettlementVault2": true, "Settlement2": true, "ERC1967Proxy": true, "ClaimBatcher": true}) {
 		t.Fatalf("settlement v2 release census: missing %v, members %v", expected, members)
 	}
 }

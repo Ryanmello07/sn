@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/holiman/uint256"
 	"github.com/urnetwork/connect"
@@ -52,11 +54,14 @@ type ClaimDaemonV2Config struct {
 	RPC           []string `yaml:"rpc" json:"rpc"`
 	ChainID       uint64   `yaml:"chain_id" json:"chain_id"`
 	Vault         string   `yaml:"vault" json:"vault"`
-	Coldkeys      []string `yaml:"coldkeys" json:"coldkeys"`
-	KeyFile       string   `yaml:"key_file" json:"key_file"`
-	StateDir      string   `yaml:"state_dir" json:"state_dir"`
-	PollSeconds   int      `yaml:"poll_seconds" json:"poll_seconds"`
-	coldkeys      [][32]byte
+	// Batcher, optional, is the claim batcher (STClaimBatcher, §10.2) that
+	// claims several due accounts of one pass in one transaction.
+	Batcher     string   `yaml:"batcher,omitempty" json:"batcher,omitempty"`
+	Coldkeys    []string `yaml:"coldkeys" json:"coldkeys"`
+	KeyFile     string   `yaml:"key_file" json:"key_file"`
+	StateDir    string   `yaml:"state_dir" json:"state_dir"`
+	PollSeconds int      `yaml:"poll_seconds" json:"poll_seconds"`
+	coldkeys    [][32]byte
 }
 
 // One strict YAML document. The vault is pinned here, never taken from the
@@ -83,7 +88,8 @@ func LoadClaimDaemonV2Config(path string) (*ClaimDaemonV2Config, error) {
 		cfg.PollSeconds = 30
 	}
 	if cfg.SchemaVersion != 2 || cfg.APIURL == "" || len(cfg.RPC) == 0 || cfg.ChainID == 0 || cfg.PollSeconds < 5 || cfg.PollSeconds > 3600 ||
-		!strings.HasPrefix(cfg.Vault, "0x") || !common.IsHexAddress(cfg.Vault) || cfg.Vault != strings.ToLower(cfg.Vault) || len(cfg.Coldkeys) == 0 || cfg.KeyFile == "" || cfg.StateDir == "" {
+		!strings.HasPrefix(cfg.Vault, "0x") || !common.IsHexAddress(cfg.Vault) || cfg.Vault != strings.ToLower(cfg.Vault) || len(cfg.Coldkeys) == 0 || cfg.KeyFile == "" || cfg.StateDir == "" ||
+		cfg.Batcher != "" && (!strings.HasPrefix(cfg.Batcher, "0x") || !common.IsHexAddress(cfg.Batcher) || cfg.Batcher != strings.ToLower(cfg.Batcher) || cfg.Batcher == cfg.Vault) {
 		return nil, errors.New("invalid v2 claim daemon configuration")
 	}
 	for _, value := range []*string{&cfg.KeyFile, &cfg.StateDir} {
@@ -153,7 +159,9 @@ func (self *claimDaemonV2) observe(snapshot map[string]*claimAccountV2, demand b
 }
 
 // One admitted operation per wakeup, as v1 yields after each. v2 units have
-// no epoch, so each joins the shared admission's current class.
+// no epoch, so each joins the shared admission's current class. With a
+// claim batcher, the operation claims every due unsigned unit of the pass
+// that one transaction holds, when there are two or more.
 func (self *claimDaemonV2) poll(ctx context.Context) error {
 	keys := self.queue.due(self.now(), self.accounts)
 	candidates := []claimPollCandidate{}
@@ -168,6 +176,17 @@ func (self *claimDaemonV2) poll(ctx context.Context) error {
 		return err
 	}
 	defer done()
+	if self.cfg.Batcher != "" && !self.queue.Units[keys[0]].signed() {
+		var unsigned []string
+		for _, key := range keys {
+			if !self.queue.Units[key].signed() {
+				unsigned = append(unsigned, key)
+			}
+		}
+		if len(unsigned) > 1 {
+			return self.processBatch(operationCtx, unsigned)
+		}
+	}
 	return self.process(operationCtx, self.queue.Units[keys[0]], self.accounts[keys[0]])
 }
 
@@ -188,7 +207,7 @@ func (self *claimDaemonV2) process(ctx context.Context, unit *ClaimUnitV2, accou
 		if err := self.store.save(self.queue); err != nil {
 			return err
 		}
-		if err := self.submit(ctx, unit, account); err != nil {
+		if err := self.submit(ctx, []*ClaimUnitV2{unit}, common.HexToAddress(self.cfg.Vault), claimV2Calldata(account), 0); err != nil {
 			// Signed bytes are settled by their receipt, never by a watermark.
 			var saveErr error
 			if unit.signed() {
@@ -202,6 +221,9 @@ func (self *claimDaemonV2) process(ctx context.Context, unit *ClaimUnitV2, accou
 			}
 			return custody
 		}
+	}
+	if tx, intent, from, err := authenticateSignedClaimV2(self.cfg, unit); err == nil && intent.Items != 0 {
+		return self.settleBatch(ctx, unit, tx, from, intent.Items)
 	}
 	intent, event, reverted, err := self.settle(ctx, unit)
 	if err != nil {
@@ -244,9 +266,11 @@ func (self *claimDaemonV2) idle(unit *ClaimUnitV2) error {
 	return self.store.save(self.queue)
 }
 
-// Signs one claim through the shared submitter. Its exact bytes are durable
-// and raise the shared nonce floor before any broadcast.
-func (self *claimDaemonV2) submit(ctx context.Context, unit *ClaimUnitV2, account *claimAccountV2) error {
+// Signs one transaction, a claim to vault2 or a batch to the claim batcher,
+// for its units through the shared submitter; a zero gas limit takes the
+// estimate. Its exact bytes are durable in every unit and raise the shared
+// nonce floor before any broadcast.
+func (self *claimDaemonV2) submit(ctx context.Context, units []*ClaimUnitV2, to common.Address, calldata []byte, gasLimit uint64) error {
 	key, err := onchain.LoadKeyFile(self.cfg.KeyFile)
 	if err != nil {
 		return err
@@ -257,7 +281,7 @@ func (self *claimDaemonV2) submit(ctx context.Context, unit *ClaimUnitV2, accoun
 	}
 	owner := self.store.owner
 	_, err = onchain.SubmitWithHooks(ctx, onchain.SubmitParams{
-		Contract: common.HexToAddress(self.cfg.Vault), Rpcs: self.cfg.RPC, Key: key, Calldata: claimV2Calldata(account),
+		Contract: to, Rpcs: self.cfg.RPC, Key: key, Calldata: calldata, GasLimit: gasLimit,
 		NonceFloor: self.admission.nonceMinimum(), ChainID: chainID,
 		RuntimeAdmission: func(request context.Context, _ *ethclient.Client, number *big.Int) error {
 			if number != nil {
@@ -267,19 +291,23 @@ func (self *claimDaemonV2) submit(ctx context.Context, unit *ClaimUnitV2, accoun
 		},
 	}, onchain.SubmitHooks{
 		Prepared: func(hash common.Hash, raw []byte) error {
-			unit.TxHash, unit.RawTxHex, unit.UpdatedAt = strings.ToLower(hash.Hex()), hexutil.Encode(raw), self.stamp()
+			for _, unit := range units {
+				unit.TxHash, unit.RawTxHex, unit.UpdatedAt = strings.ToLower(hash.Hex()), hexutil.Encode(raw), self.stamp()
+			}
 			if err := self.store.save(self.queue); err != nil {
 				// An uncertain checkpoint may already hold these bytes.
 				if errors.Is(err, durablehead.ErrUncertain) {
-					err = errors.Join(err, self.admission.rememberClaimV2(self.cfg, unit))
+					err = errors.Join(err, self.admission.rememberClaimV2(self.cfg, units[0]))
 				}
-				unit.TxHash, unit.RawTxHex = "", ""
+				for _, unit := range units {
+					unit.TxHash, unit.RawTxHex = "", ""
+				}
 				return err
 			}
-			return self.admission.rememberClaimV2(self.cfg, unit)
+			return self.admission.rememberClaimV2(self.cfg, units[0])
 		},
 		BeforeBroadcast: func(common.Hash) error {
-			tx, _, _, err := authenticateSignedClaimV2(self.cfg, unit)
+			tx, _, _, err := authenticateSignedClaimV2(self.cfg, units[0])
 			if err != nil {
 				return err
 			}
@@ -287,6 +315,197 @@ func (self *claimDaemonV2) submit(ctx context.Context, unit *ClaimUnitV2, accoun
 		},
 	})
 	return err
+}
+
+// A batch claims two or more due accounts in one transaction through the
+// claim batcher (§10.2). Each unit is verified alone against its finalized
+// root, as for a single claim, then preflighted alone; a refused preflight is
+// a refused claim (A6). The units the batch holds are signed together, the
+// rest of the due units wait for the next pass, and a single passing unit
+// is claimed alone.
+func (self *claimDaemonV2) processBatch(ctx context.Context, keys []string) error {
+	var units []*ClaimUnitV2
+	var accounts []*claimAccountV2
+	for _, key := range keys {
+		unit, account := self.queue.Units[key], self.accounts[key]
+		claimed, err := readClaimedV2(ctx, self.cfg, account)
+		if err != nil {
+			if err := self.retry(unit, time.Minute, "claim is not ready for finalized verification: "+err.Error()); err != nil {
+				return err
+			}
+			continue
+		}
+		unit.RootIndex, unit.Cumulative, unit.Claimed = account.RootIndex, account.Cumulative.Dec(), claimed.Dec()
+		if !claimV2Due(&account.Cumulative, claimed, self.threshold, unit.Demand) {
+			if err := self.idle(unit); err != nil {
+				return err
+			}
+			continue
+		}
+		units, accounts = append(units, unit), append(accounts, account)
+	}
+	if len(units) < 2 {
+		if len(units) == 1 {
+			return self.process(ctx, units[0], accounts[0])
+		}
+		return nil
+	}
+	batch, err := self.prepareBatch(ctx, units, accounts)
+	if batch == nil {
+		return err
+	}
+	signed := make([]*ClaimUnitV2, len(batch.Items))
+	for i, index := range batch.Items {
+		unit := units[index]
+		unit.Status, unit.Attempts, unit.NextRetryAt, unit.LastError, unit.UpdatedAt = "submitting", unit.Attempts+1, "", "", self.stamp()
+		signed[i] = unit
+	}
+	if err := self.store.save(self.queue); err != nil {
+		return err
+	}
+	if err := self.submit(ctx, signed, common.HexToAddress(self.cfg.Batcher), batch.Calldata, batch.GasLimit); err != nil {
+		var saveErr error
+		for i, unit := range signed {
+			if unit.signed() {
+				saveErr = errors.Join(saveErr, self.retry(unit, time.Minute, "exact transaction was prepared but finality was not confirmed: "+err.Error()))
+			} else {
+				saveErr = errors.Join(saveErr, self.refused(ctx, unit, accounts[batch.Items[i]], err.Error()))
+			}
+		}
+		var custody *claimNonceSafetyError
+		if saveErr != nil || !errors.As(err, &custody) {
+			return saveErr
+		}
+		return custody
+	}
+	return self.process(ctx, signed[0], accounts[batch.Items[0]])
+}
+
+// Preflights each unit's claim alone and sizes the batch from the first RPC
+// endpoint that serves the configured chain. A refused preflight settles its
+// unit as a refused claim; without a batch, a single passing unit is claimed
+// alone. Every unit retries when nothing could be preflighted.
+func (self *claimDaemonV2) prepareBatch(ctx context.Context, units []*ClaimUnitV2, accounts []*claimAccountV2) (*onchain.ClaimBatch, error) {
+	retryAll := func(message string) (*onchain.ClaimBatch, error) {
+		var err error
+		for _, unit := range units {
+			err = errors.Join(err, self.retry(unit, time.Minute, message))
+		}
+		return nil, err
+	}
+	key, err := onchain.LoadKeyFile(self.cfg.KeyFile)
+	if err != nil {
+		return retryAll("claim batch is not ready: " + err.Error())
+	}
+	client, err := dialClaimV2(ctx, self.cfg)
+	if err != nil {
+		return retryAll("claim batch is not ready: " + err.Error())
+	}
+	defer client.Close()
+	items := make([]stabi.STClaimBatcherClaim, len(accounts))
+	for i, account := range accounts {
+		items[i] = claimV2Item(account)
+	}
+	refusals, batch, err := onchain.PrepareClaimBatch(ctx, client, crypto.PubkeyToAddress(key.PublicKey), common.HexToAddress(self.cfg.Batcher), common.HexToAddress(self.cfg.Vault), items)
+	var passed []int
+	for i, refusal := range refusals {
+		if refusal == nil {
+			passed = append(passed, i)
+			continue
+		}
+		if err := self.refused(ctx, units[i], accounts[i], "claim preflight: "+refusal.Error()); err != nil {
+			return nil, err
+		}
+	}
+	if err != nil {
+		for _, i := range passed {
+			if saveErr := self.retry(units[i], time.Minute, "claim batch is not ready: "+err.Error()); saveErr != nil {
+				return nil, saveErr
+			}
+		}
+		return nil, nil
+	}
+	if batch == nil && len(passed) == 1 {
+		return nil, self.process(ctx, units[passed[0]], accounts[passed[0]])
+	}
+	return batch, nil
+}
+
+// The units of one batch settle together from its finalized receipt: a paid
+// unit by its account's Claimed event from vault2, with the batcher as caller
+// and the batcher's amount; a refused unit as a refused claim (A6); and a
+// unit the batch did not attempt reopens at once. A reverted batch refuses
+// each unit. Without a finalized receipt the exact bytes are rebroadcast
+// under the rules of a single claim, and every unit stays in flight.
+func (self *claimDaemonV2) settleBatch(ctx context.Context, unit *ClaimUnitV2, tx *types.Transaction, from common.Address, items int) error {
+	var keys []string
+	for key, other := range self.queue.Units {
+		if other.TxHash == unit.TxHash && other.RawTxHex == unit.RawTxHex {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	retryAll := func(message string) error {
+		var err error
+		for _, key := range keys {
+			err = errors.Join(err, self.retry(self.queue.Units[key], time.Minute, "uncertain transaction reconciliation: "+message))
+		}
+		return err
+	}
+	receipt, receiptErr := finalizedClaimReceipt(ctx, self.cfg.relayer(), unit.TxHash, tx.ChainId())
+	if receiptErr != nil {
+		consumed, err := rebroadcastSignedClaim(ctx, self.cfg.relayer(), tx, from, self.store)
+		switch {
+		case err != nil:
+			return retryAll((&claimSignedOutcomeError{reason: "exact rebroadcast did not reconcile outcome", cause: err}).Error())
+		case consumed:
+			return retryAll((&claimSignedOutcomeError{reason: "signed nonce is consumed without an authenticated receipt"}).Error())
+		}
+		return retryAll((&claimSignedOutcomeError{reason: "exact transaction is not yet canonically finalized", cause: receiptErr}).Error())
+	}
+	var outcomes []onchain.ClaimBatchOutcome
+	if receipt.Status == types.ReceiptStatusSuccessful {
+		var err error
+		if outcomes, err = onchain.ClaimBatchOutcomes(receipt, *tx.To(), items); err != nil {
+			return retryAll((&claimSignedOutcomeError{reason: "canonical receipt does not prove the batch's outcome", cause: err}).Error())
+		}
+	}
+	vault := common.HexToAddress(self.cfg.Vault)
+	for _, key := range keys {
+		unit := self.queue.Units[key]
+		_, intent, _, err := authenticateSignedClaimV2(self.cfg, unit)
+		if err != nil {
+			if err := self.retry(unit, time.Minute, "uncertain transaction reconciliation: "+err.Error()); err != nil {
+				return err
+			}
+			continue
+		}
+		hash := unit.TxHash
+		switch {
+		case outcomes == nil:
+			unit.TxHash, unit.RawTxHex = "", ""
+			err = self.refused(ctx, unit, intent.account(self.cfg.Vault), fmt.Sprintf("claim batch %s reverted in finalized block %s", hash, receipt.BlockNumber))
+		case outcomes[intent.Item].Amount != nil:
+			event, verifyErr := verifyBatchedClaimV2Receipt(vault, tx, intent, outcomes[intent.Item].Amount, receipt)
+			if verifyErr != nil {
+				err = self.retry(unit, time.Minute, "uncertain transaction reconciliation: "+(&claimSignedOutcomeError{reason: "canonical receipt does not prove this claim succeeded", cause: verifyErr}).Error())
+				break
+			}
+			unit.RootIndex, unit.Cumulative, unit.Claimed = event.RootIndex.Uint64(), event.Cumulative.String(), event.Cumulative.String()
+			err = self.idle(unit)
+		case outcomes[intent.Item].Attempted:
+			unit.TxHash, unit.RawTxHex = "", ""
+			err = self.refused(ctx, unit, intent.account(self.cfg.Vault), fmt.Sprintf("claim batch %s refused the claim with 0x%x", hash, outcomes[intent.Item].Selector))
+		default:
+			unit.TxHash, unit.RawTxHex = "", ""
+			unit.Status, unit.NextRetryAt, unit.LastError, unit.UpdatedAt = "open", "", "claim batch "+hash+" did not attempt the claim", self.stamp()
+			err = self.store.save(self.queue)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // The finalized outcome of the exact signed bytes: the matching Claimed event,

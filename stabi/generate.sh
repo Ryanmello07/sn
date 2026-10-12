@@ -102,10 +102,12 @@ jq -c .abi "$artifact_root/STReserveSink.sol/STReserveSink.json" > "$temporary_d
 jq -c .abi "$artifact_root/STValidatorEvidence.sol/STValidatorEvidence.json" > "$temporary_dir/STValidatorEvidence.abi.json"
 jq -c .abi "$artifact_root/STSettlementVault2.sol/STSettlementVault2.json" > "$temporary_dir/STSettlementVault2.abi.json"
 jq -c .abi "$artifact_root/STSettlement2.sol/STSettlement2.json" > "$temporary_dir/STSettlement2.abi.json"
-# The two settlement v2 contracts share struct types, so one combined pass
-# binds both without duplicate type declarations.
+jq -c .abi "$artifact_root/STClaimBatcher.sol/STClaimBatcher.json" > "$temporary_dir/STClaimBatcher.abi.json"
+# The two settlement v2 contracts and the claim batcher share struct types, so
+# one combined pass binds all three without duplicate type declarations.
 jq -n --slurpfile settlement "$temporary_dir/STSettlement2.abi.json" --slurpfile vault "$temporary_dir/STSettlementVault2.abi.json" \
-    '{contracts: {"STSettlement2.sol:STSettlement2": {abi: $settlement[0]}, "STSettlementVault2.sol:STSettlementVault2": {abi: $vault[0]}}}' \
+    --slurpfile batcher "$temporary_dir/STClaimBatcher.abi.json" \
+    '{contracts: {"STSettlement2.sol:STSettlement2": {abi: $settlement[0]}, "STSettlementVault2.sol:STSettlementVault2": {abi: $vault[0]}, "STClaimBatcher.sol:STClaimBatcher": {abi: $batcher[0]}}}' \
     > "$temporary_dir/stsettlement2.combined.json"
 
 "$abigen" --v2 \
@@ -151,6 +153,7 @@ generated=(
     "STValidatorEvidence.abi.json:../evm/abi/STValidatorEvidence.abi.json"
     "STSettlementVault2.abi.json:../evm/abi/STSettlementVault2.abi.json"
     "STSettlement2.abi.json:../evm/abi/STSettlement2.abi.json"
+    "STClaimBatcher.abi.json:../evm/abi/STClaimBatcher.abi.json"
     "stsubnet.go:stsubnet.go"
     "stcoordinator.go:stcoordinator.go"
     "stsettlementvault.go:stsettlementvault.go"

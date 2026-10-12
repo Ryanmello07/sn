@@ -14,7 +14,7 @@ import (
 
 // Commands preserve original custody even when result publication fails.
 // An explicit action selects one of the eight implemented graph reservations,
-// or one of the five settlement v2 actions of its separately approved graph.
+// or one of the settlement v2 actions of its separately approved graph.
 // The default and original reserve journal remain unchanged.
 func runBootstrapContractCommand(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 || args[0] != "bootstrap-contracts" {
@@ -29,7 +29,7 @@ func runBootstrapContractCommand(ctx context.Context, args []string, stdout, std
 	flags := flag.NewFlagSet("bootstrap-contracts "+command, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	configPath := flags.String("config", "", "phase configuration; only preview accepts an unsigned draft")
-	actionId := flags.String("action", "reserve-create", "implemented approved action: reserve-create, vault-create, coordinator-create, escrow-register, proxy-create, reserve-link, vault-link or evidence-create; settlement v2: vault2-create, escrow2-register, settlement2-create, proxy2-create or vault2-link")
+	actionId := flags.String("action", "reserve-create", "implemented approved action: reserve-create, vault-create, coordinator-create, escrow-register, proxy-create, reserve-link, vault-link or evidence-create; settlement v2: vault2-create, escrow2-register, settlement2-create, proxy2-create, vault2-link or the optional batcher-create")
 	accepted := flags.String("accept-plan-hash", "", "exact reviewed phase hash")
 	runDirectory := flags.String("run-dir", "", "approved private journal directory")
 	signaturePath := flags.String("signed-transaction", "", "private regular file containing original public transaction bytes")

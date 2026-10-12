@@ -60,8 +60,9 @@ const (
 )
 
 // The rehearsal's approved gas limits, the starting values of
-// BOOTSTRAP-CONTRACTS.md; R-1 reports each action's actual use.
-var r1GasLimits = []uint64{4_000_000, 2_500_000, 3_000_000, 1_000_000, 150_000}
+// BOOTSTRAP-CONTRACTS.md, the optional claim batcher's last; R-1 reports
+// each action's actual use.
+var r1GasLimits = []uint64{4_000_000, 2_500_000, 3_000_000, 1_000_000, 150_000, 400_000}
 
 // The approved demand fee of BOOTSTRAP-CONTRACTS.md: R-6's measured answer
 // gas, 149,074, at 5 gwei, rounded up to 750,000 rao.
@@ -420,7 +421,7 @@ func (self *r1Phase) sign(index int) (string, string) {
 // its receipt is retained after the readback.
 func (self *r1Phase) complete(id string) evmCreateResult {
 	self.t.Helper()
-	completed := evmV2Actions[evmV2ActionIndex(id)].completed
+	completed := evmV2ActionAt(evmV2ActionIndex(id)).completed
 	for range 8 {
 		result, code, diagnostic := self.command("resume", "--action", id, "--online")
 		if code == 0 && result.Status == completed {
@@ -434,10 +435,11 @@ func (self *r1Phase) complete(id string) evmCreateResult {
 }
 
 // R-1: on SN25 of the rehearsal chain, with a v1 coordinator in place, one
-// approval deploys the five actions: vault2 and its escrow registration
-// broadcast back to back and sealed into one block, the STSettlement2
-// implementation, the initialized proxy and the coordinator binding, each
-// completed only after its readback against the real precompiles.
+// approval deploys the five actions and the optional sixth: vault2 and its
+// escrow registration broadcast back to back and sealed into one block, the
+// STSettlement2 implementation, the initialized proxy, the coordinator
+// binding and the claim batcher, each completed only after its readback
+// against the real precompiles.
 func TestR1SettlementV2Phase(t *testing.T) {
 	n := startR1Node(t)
 	n.createSubnet25(t)
@@ -476,10 +478,12 @@ func TestR1SettlementV2Phase(t *testing.T) {
 		"0x" + evmV2TestArtifactNamed(t, release, "Settlement2").Creation,
 		evmV2TestProxyData(t, release, implementation, initializer),
 		"0x" + hex.EncodeToString(stabi.NewSTSettlementVault2().PackSetCoordinatorOnce(proxy)),
+		"0x" + evmV2TestArtifactNamed(t, release, "ClaimBatcher").Creation,
 	}
+	ids := append(evmV2ActionIds(), evmV2BatcherAction.id)
 	total := new(big.Int).Set(funding)
 	actions := []evmPhaseAction{}
-	for index, id := range evmV2ActionIds() {
+	for index, id := range ids {
 		action := evmPhaseAction{Id: id, Sender: deployer, Nonce: uint64(index), Data: data[index], ValueWei: "0", Gas: r1GasLimits[index], FeeCapWei: feeCap.String(), TipCapWei: "0"}
 		if index == 1 || index == 4 {
 			action.To = &vault
@@ -547,8 +551,8 @@ func TestR1SettlementV2Phase(t *testing.T) {
 		t.Fatalf("escrow registration outside vault2's block or with collateral: %+v %+v", results[0].Receipt, results[1])
 	}
 
-	// The implementation, the initialized proxy and the binding.
-	for index, id := range evmV2ActionIds()[2:] {
+	// The implementation, the initialized proxy, the binding and the batcher.
+	for index, id := range ids[2:] {
 		p.require("signature-awaiting-import", "apply", "--action", id)
 		path, hash := p.sign(index + 2)
 		p.require("signed-custody-complete", "resume", "--action", id, "--signed-transaction", path, "--signed-transaction-hash", hash)
@@ -556,11 +560,14 @@ func TestR1SettlementV2Phase(t *testing.T) {
 		n.seal(t)
 		results = append(results, p.complete(id))
 	}
-	link := results[4]
+	link, batcher := results[4], results[5]
 	if !link.InstallationComplete || link.ActivationReady || link.Vault2Address != vault.Hex() || link.Settlement2Address != proxy.Hex() || link.Settlement2ImplementationAddress != implementation.Hex() {
 		t.Fatalf("installation: %+v", link)
 	}
+	if !batcher.InstallationComplete || batcher.ClaimBatcherAddress != crypto.CreateAddress(deployer, 5).Hex() || batcher.Receipt.ContractAddress != batcher.ClaimBatcherAddress {
+		t.Fatalf("claim batcher: %+v", batcher)
+	}
 	for index, result := range results {
-		t.Logf("R-1 %s: block %d, gas used %d of limit %d", evmV2ActionIds()[index], result.Receipt.BlockNumber, result.Receipt.GasUsed, r1GasLimits[index])
+		t.Logf("R-1 %s: block %d, gas used %d of limit %d", ids[index], result.Receipt.BlockNumber, result.Receipt.GasUsed, r1GasLimits[index])
 	}
 }

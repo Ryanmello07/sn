@@ -42,7 +42,12 @@ import (
 // initialize needs.
 func newEvmV2ChainFixture(t *testing.T) *evmCreateFixture {
 	t.Helper()
-	f := newEvmV2Fixture(t)
+	return newEvmV2ChainFixtureOf(t, newEvmV2Fixture(t))
+}
+
+// The chain fixture over a given v2 fixture's approval.
+func newEvmV2ChainFixtureOf(t *testing.T, f *evmCreateFixture) *evmCreateFixture {
+	t.Helper()
 	f.history = &evmCreateHistory{receipts: map[string]map[string]any{}, transactions: map[string]*types.Transaction{}, blocks: map[string]types.Transactions{}, states: map[string]*state.StateDB{}, storage: map[string]map[string]string{}}
 	sender := f.config.Plan.Actions[0].Sender
 	f.installRegistrationPrecompiles(7, evmV2TestHotkey, ss58.EvmMirrorPubkey(crypto.CreateAddress(sender, 0)))

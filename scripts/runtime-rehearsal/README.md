@@ -224,9 +224,10 @@ RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
 
 The whole package, the smoke test, the transient-storage probe and R-2 to
 R-6 each on its own node in parallel, took 8 minutes 22 seconds on
-2026-10-12. Sealing runs at about 110 to 125 blocks a second whether or not
-blocks finalize or several callers seal at once, so a 14,400-block challenge
-window takes about 2 minutes.
+2026-10-12 (R-7, added the same day, takes about 7 minutes on its own node).
+Sealing runs at about 110 to 125 blocks a second whether or not blocks
+finalize or several callers seal at once, so a 14,400-block challenge window
+takes about 2 minutes.
 
 Each R test deploys directly, from the exact forge artifacts, the stack
 STSettlement2 needs: the v1 reserve sink, vault and coordinator proxy (in
@@ -244,16 +245,17 @@ from epoch 2, R-5 from epoch 3). R-2, R-4 and R-5 stop subnet epochs (tempo
 0) so that no dividend moves a position between two reads; R-3 runs SN25's
 tempo of 360. Measured:
 
-- **R-1 deployment** (`TestR1SettlementV2Phase`, 80 seconds). The settlement
+- **R-1 deployment** (`TestR1SettlementV2Phase`, 100 seconds). The settlement
   v2 phase of `bootstrap-contracts` deployed the final vault2 and its escrow
   registration, sent back to back and sealed into one block, then the
-  STSettlement2 implementation, the initialized proxy and vault2's binding.
-  Each completed only after its readback against the real precompiles, and
-  the escrow position held no registration collateral. Gas used of the
-  approved limits: `vault2-create` 2,821,678 of 4,000,000,
-  `escrow2-register` 1,463,833 of 2,500,000, `settlement2-create` 1,935,622
-  of 3,000,000, `proxy2-create` 310,486 of 1,000,000 and `vault2-link`
-  31,329 of 150,000.
+  STSettlement2 implementation, the initialized proxy and vault2's binding,
+  and, as the optional sixth action, the claim batcher. Each completed only
+  after its readback against the real precompiles, and the escrow position
+  held no registration collateral. Gas used of the approved limits:
+  `vault2-create` 2,821,690 of 4,000,000, `escrow2-register` 1,463,833 of
+  2,500,000, `settlement2-create` 1,935,622 of 3,000,000, `proxy2-create`
+  310,486 of 1,000,000, `vault2-link` 31,329 of 150,000 and `batcher-create`
+  285,209 of 400,000.
 - **R-2 capture.** A pool holding nothing funded 0 without a runtime call
   (gas 110,018). With 88,974,634,979 rao on the pool, the close moved exactly
   that and escrow gained exactly that (gas 230,818). A pool registered at a
@@ -334,3 +336,56 @@ tempo of 360. Measured:
   `rpc-binary-search-estimate`: its search stops once a step moves the bound
   by less than 10%, so a limit can exceed the least sufficient one by up to
   that much and need not fall with the gas used.
+- **R-7 batched claims** (`TestR7ClaimBatch`, 423 seconds), on a root of
+  2^29 accounts: claims through `STClaimBatcher` (`evm/src/STClaimBatcher.sol`),
+  each item capped at the tooling's default gas per claim of 2,600,000
+  (`onchain.ClaimBatchGasPerClaim`), and each batch sent with exactly the
+  least gas limit at which an `eth_call` of it attempts every item, which then
+  paid every item. A batch succeeds at any gas limit, attempting only the
+  items its gas covers, so `eth_estimateGas` cannot size one; the tooling
+  finds the limit with `eth_call` and adds 20%.
+
+  The block gas limit is 75,000,000, but the pool refuses a transaction that
+  names more than 64,998,500 gas (`exceeds block gas limit`): the normal
+  dispatch class's extrinsic weight limit, the 75% normal share of the 4 s
+  block less the 10% kept for block initialization, at 40,000 weight per
+  gas, less the transaction's own extension weight
+  (`onchain.ClaimBatchMaxGas`). Two accounts' claimed watermarks share a
+  slot of vault2, so consecutive accounts alternate between a claim that
+  writes its slot's first value and one after its neighbour's: alone they
+  used 187,067 to 187,102 and 169,968 to 169,991 gas; `eth_estimateGas` gave
+  a limit of up to 2,573,957, and the least limit that paid was up to
+  2,443,929, below the default cap. Each batch claims consecutive accounts,
+  so about half of each kind.
+
+  | Claims | Gas used | Per claim | Least gas limit |
+  | --- | ---: | ---: | ---: |
+  | 1, batched | 180,890 | 180,890 | 2,704,245 |
+  | 5, batched | 783,371 | 156,674 | 3,319,133 |
+  | 10, batched | 1,508,764 | 150,876 | 4,058,525 |
+  | 20, batched | 2,971,926 | 148,596 | 5,549,688 |
+  | 418, the most one transaction holds | 61,206,546 | 146,427 | 64,898,775 |
+
+  Against the same claims sent alone, a batch of 10 uses 15.5% less gas, a
+  batch of 20 16.8% and the largest 18.0%: the 21,000 intrinsic gas of a
+  transaction and vault2's first, cold reads are paid once. Its least limit
+  grows by about 149,000 gas per claim, because only the last item needs
+  the 2.6M the runtime admits a transfer with; ten single claims need ten
+  limits of about 2.44M. A batch of one, an account after its neighbour's,
+  used 6% more than such a claim alone, so the tooling sends a lone claim
+  directly. The most one transaction holds is searched by batch size, since
+  offering more accounts than fit also spends their calldata's intrinsic
+  gas; with shallower trees, and so shorter proofs, more than 418 claims
+  fit. Against vault2 before its gas reduction (snv2 `7202d7cb`) single
+  claims used about 202,500 gas, a batch of 20 166,340 per claim, and one
+  transaction held 339 claims.
+
+  A last batch of four, whose second claim had a broken proof and whose third
+  was below the transfer floor, paid the first and the fourth and reported
+  the second's `InvalidProof` and the third's runtime refusal, which returns
+  nothing, as selector zero; both accounts stayed claimable. It used
+  2,974,684 gas: the runtime consumes all the gas forwarded to a precompile
+  call it refuses, so the refused claim used nearly all of its 2.6M cap, and
+  the tools preflight each claim to keep refusals out of a batch. vault2's
+  reentrancy flag, persistent storage, was clear again for the claim after
+  each refusal.

@@ -100,6 +100,27 @@ type v2TestChain struct {
 
 	// mute drops the events of the transactions snclaim sends.
 	mute bool
+	// batcher, when set, is an STClaimBatcher (v2_batch_test.go) over the
+	// model at that address; pools holds the roots of pools other than
+	// v2TestPool, and gasLimit is the latest block's gas limit.
+	batcher  common.Address
+	pools    map[uint64][]stabi.ISTSettlementVault2Root
+	gasLimit uint64
+	// exhaust makes a claim of (pool, index) fail as a runtime refusal
+	// does: without revert data, and in a batch consuming its whole gas cap.
+	// itemGas, when set, replaces the gas a paid batch item uses;
+	// revertBatch reverts a sent batch and muteVault drops vault2's events
+	// from its receipt.
+	exhaust     map[[2]uint64]bool
+	itemGas     uint64
+	revertBatch bool
+	muteVault   bool
+	// claimEstimate, when set, answers eth_estimateGas of a claim;
+	// batchBase, when set, is the batch model's gas outside its items, and
+	// batchAnswer, when set, answers every eth_call of claimMany.
+	claimEstimate uint64
+	batchBase     uint64
+	batchAnswer   *big.Int
 	// failAt fails the nth answer to a key (an RPC method, or method:function)
 	// with an RPC error; garbage answers an eth_call of a function with no
 	// data; revert refuses a preflight and estimate of a function with an
@@ -130,6 +151,9 @@ func newV2TestChain(t *testing.T) *v2TestChain {
 		failAt:   map[string]int{},
 		garbage:  map[string]bool{},
 		revert:   map[string]string{},
+		pools:    map[uint64][]stabi.ISTSettlementVault2Root{},
+		gasLimit: 75_000_000,
+		exhaust:  map[[2]uint64]bool{},
 	}
 	if err := os.WriteFile(c.keyFile, []byte(testKeyHex), 0o600); err != nil {
 		t.Fatal(err)
@@ -213,16 +237,25 @@ func (c *v2TestChain) answer(method string, params []json.RawMessage) (any, map[
 		default:
 			number = hexutil.MustDecodeUint64(selector)
 		}
-		return syntheticBlockIdentityFixture(c.t, number, v2TestBlockHash(number)), nil
+		block := syntheticBlockIdentityFixture(c.t, number, v2TestBlockHash(number))
+		block["gasLimit"] = hexutil.EncodeUint64(c.gasLimit)
+		if c.gasLimit == 0 {
+			delete(block, "gasLimit")
+		}
+		return block, nil
 	case "eth_call", "eth_estimateGas":
 		var message struct {
-			From  common.Address `json:"from"`
-			To    common.Address `json:"to"`
-			Input hexutil.Bytes  `json:"input"`
-			Value *hexutil.Big   `json:"value"`
+			From  common.Address  `json:"from"`
+			To    common.Address  `json:"to"`
+			Input hexutil.Bytes   `json:"input"`
+			Value *hexutil.Big    `json:"value"`
+			Gas   *hexutil.Uint64 `json:"gas"`
 		}
-		if len(params) == 0 || json.Unmarshal(params[0], &message) != nil || message.To != c.vault {
+		if len(params) == 0 || json.Unmarshal(params[0], &message) != nil || message.To != c.vault && (message.To != c.batcher || c.batcher == common.Address{}) {
 			c.t.Errorf("%s does not address vault2: %s", method, params)
+		}
+		if message.To == c.batcher {
+			return c.answerBatch(method, message.Gas, message.Input)
 		}
 		function := c.function(message.Input)
 		key := method + ":" + function
@@ -247,6 +280,9 @@ func (c *v2TestChain) answer(method string, params []json.RawMessage) (any, map[
 			return nil, rpcError(3, "execution reverted", revert)
 		}
 		if method == "eth_estimateGas" {
+			if c.claimEstimate != 0 && function == "claim" {
+				return hexutil.EncodeUint64(c.claimEstimate), nil
+			}
 			return "0xc350", nil
 		}
 		return hexutil.Bytes(out), nil
@@ -270,8 +306,11 @@ func (c *v2TestChain) answer(method string, params []json.RawMessage) (any, map[
 			return nil, rpcError(-32000, "malformed send", nil)
 		}
 		sender, err := types.Sender(types.LatestSignerForChainID(big.NewInt(v2TestChainID)), tx)
-		if err != nil || tx.To() == nil || *tx.To() != c.vault {
+		if err != nil || tx.To() == nil || *tx.To() != c.vault && (*tx.To() != c.batcher || c.batcher == common.Address{}) {
 			c.t.Errorf("send from %s (%v) to %v", sender, err, tx.To())
+		}
+		if *tx.To() == c.batcher {
+			return c.sendBatch(tx), nil
 		}
 		c.sent = append(c.sent, tx)
 		c.count("send:" + c.function(tx.Data()))
@@ -365,11 +404,11 @@ func (c *v2TestChain) execute(from common.Address, value *big.Int, input []byte,
 	case "rootCount":
 		return pack(big.NewInt(int64(len(c.roots)))), nil, nil
 	case "roots":
-		index := args[1].(*big.Int)
-		if !index.IsUint64() || index.Uint64() >= uint64(len(c.roots)) {
+		index, roots := args[1].(*big.Int), c.rootsOf(args[0].(*big.Int))
+		if !index.IsUint64() || index.Uint64() >= uint64(len(roots)) {
 			return nil, nil, v2TestError("UnknownRoot")
 		}
-		return pack(c.roots[index.Uint64()]), nil, nil
+		return pack(roots[index.Uint64()]), nil, nil
 	case "fundedThrough":
 		funded := c.funded[args[1].(*big.Int).Uint64()]
 		if funded == nil {
@@ -391,10 +430,7 @@ func (c *v2TestChain) execute(from common.Address, value *big.Int, input []byte,
 	case "claim":
 		account := *abi.ConvertType(args[2], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
 		proof := *abi.ConvertType(args[3], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
-		if !ours {
-			return nil, nil, v2TestError("UnknownRoot")
-		}
-		return c.claim(from, args[1].(*big.Int), account, proof, commit, pack)
+		return c.claim(from, args[0].(*big.Int), args[1].(*big.Int), account, proof, commit, pack)
 	case "checkPath":
 		account := *abi.ConvertType(args[2], new(stabi.LedgerTreeAccount)).(*stabi.LedgerTreeAccount)
 		proof := *abi.ConvertType(args[3], new([]stabi.LedgerTreeProofNode)).(*[]stabi.LedgerTreeProofNode)
@@ -418,17 +454,29 @@ func v2TestVerify(root stabi.ISTSettlementVault2Root, account stabi.LedgerTreeAc
 	return account.Index.IsUint64() && merkle.VerifyLedgerProof(root.Root, uint256.MustFromBig(root.Total), root.LeafCount, account.Index.Uint64(), account.Coldkey, uint256.MustFromBig(account.Cumulative), nodes)
 }
 
-func (c *v2TestChain) claim(from common.Address, rootIndex *big.Int, account stabi.LedgerTreeAccount, proof []stabi.LedgerTreeProofNode, commit bool, pack func(...any) []byte) ([]byte, []*types.Log, []byte) {
-	if !rootIndex.IsUint64() || rootIndex.Uint64() >= uint64(len(c.roots)) {
+// rootsOf returns the finalized roots of a pool.
+func (c *v2TestChain) rootsOf(noID *big.Int) []stabi.ISTSettlementVault2Root {
+	if noID.Cmp(big.NewInt(v2TestPool)) == 0 {
+		return c.roots
+	}
+	if !noID.IsUint64() {
+		return nil
+	}
+	return c.pools[noID.Uint64()]
+}
+
+func (c *v2TestChain) claim(from common.Address, noID, rootIndex *big.Int, account stabi.LedgerTreeAccount, proof []stabi.LedgerTreeProofNode, commit bool, pack func(...any) []byte) ([]byte, []*types.Log, []byte) {
+	roots := c.rootsOf(noID)
+	if !rootIndex.IsUint64() || rootIndex.Uint64() >= uint64(len(roots)) {
 		return nil, nil, v2TestError("UnknownRoot")
 	}
 	if account.Coldkey == ([32]byte{}) {
 		return nil, nil, v2TestError("InvalidColdkey")
 	}
-	if !v2TestVerify(c.roots[rootIndex.Uint64()], account, proof) {
+	if !v2TestVerify(roots[rootIndex.Uint64()], account, proof) {
 		return nil, nil, v2TestError("InvalidProof")
 	}
-	key := [2]uint64{v2TestPool, account.Index.Uint64()}
+	key := [2]uint64{noID.Uint64(), account.Index.Uint64()}
 	claimed := c.claimed[key]
 	if claimed == nil {
 		claimed = new(big.Int)
@@ -436,12 +484,15 @@ func (c *v2TestChain) claim(from common.Address, rootIndex *big.Int, account sta
 	if account.Cumulative.Cmp(claimed) <= 0 {
 		return nil, nil, v2TestError("NothingToClaim")
 	}
+	if c.exhaust[key] {
+		return nil, nil, []byte{}
+	}
 	amount := new(big.Int).Sub(account.Cumulative, claimed)
 	if !commit {
 		return pack(amount), nil, nil
 	}
 	c.claimed[key] = account.Cumulative
-	log := c.event("Claimed", []common.Hash{common.BigToHash(big.NewInt(v2TestPool)), common.BigToHash(account.Index), account.Coldkey}, rootIndex, account.Cumulative, amount, from)
+	log := c.event("Claimed", []common.Hash{common.BigToHash(noID), common.BigToHash(account.Index), account.Coldkey}, rootIndex, account.Cumulative, amount, from)
 	return pack(amount), []*types.Log{log}, nil
 }
 

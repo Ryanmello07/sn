@@ -56,9 +56,9 @@ cd "$evm_repo"
 # sim-testnet. The coordinator root traverses immutable custody, proxy libraries,
 # and runtime-precompile interfaces. The fleet batcher, disposable precompile
 # probe, hostile governance-drill implementation, immutable validator evidence
-# journal, settlement v2 coordinator, and immutable settlement v2 vault are
-# separate deployment roots analyzed independently. The settlement v2 ledger
-# sum tree library is analyzed as a root of its own.
+# journal, settlement v2 coordinator, immutable settlement v2 vault and its
+# optional claim batcher are separate deployment roots analyzed independently.
+# The settlement v2 ledger sum tree library is analyzed as a root of its own.
 contracts=(
   src/STCoordinator.sol
   src/STFleetBatcher.sol
@@ -68,6 +68,7 @@ contracts=(
   src/LedgerTree.sol
   src/STSettlement2.sol
   src/STSettlementVault2.sol
+  src/STClaimBatcher.sol
 )
 # Every root is analyzed even after another fails, so that one root's finding
 # cannot hide the next root's; any failure still fails the gate at the end.

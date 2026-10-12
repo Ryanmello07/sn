@@ -35,10 +35,17 @@ contract MockStakingV2 {
     bytes public reentryData;
     bool public reentrySucceeded;
     bytes4 public reentryFailureSelector;
+    // A transfer to one of these coldkeys fails as the runtime refuses a
+    // precompile call: it consumes all the gas forwarded and returns no data.
+    mapping(bytes32 => bool) public exhaustTransferTo;
 
     // --- test configuration ---
     function setColdkey(address caller, bytes32 coldkey) external {
         callerColdkey[caller] = coldkey;
+    }
+
+    function setExhaustTransferTo(bytes32 coldkey, bool exhaust) external {
+        exhaustTransferTo[coldkey] = exhaust;
     }
 
     function setStake(bytes32 hotkey, bytes32 coldkey, uint256 amount) external {
@@ -175,6 +182,11 @@ contract MockStakingV2 {
     {
         require(address(this) == address(0x805), "runtime453: foreign staking frame");
         require(!failTransferStake, "mock: transferStake down");
+        if (exhaustTransferTo[destinationColdkey]) {
+            assembly {
+                invalid()
+            }
+        }
         bytes32 ck = callerColdkey[msg.sender];
         require(ck != bytes32(0), "mock: unknown caller");
         require(amount >= minimumTransferAmount, "mock: transfer amount too low");

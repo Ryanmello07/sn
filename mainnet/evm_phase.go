@@ -164,8 +164,9 @@ func (self evmPhaseConfig) validateStructure() error {
 	configSchema, planSchema, reserveHotkey, minimum := evmPhaseConfigSchema, evmPhaseSchema, rootCanonicalHash(p.ReserveHotkey), 1
 	ids := []string{"reserve-create", "vault-create", "coordinator-create", "escrow-register", "proxy-create", "reserve-link", "vault-link", "evidence-create", "evidence-anchor"}
 	if p.settlementV2() {
-		// The separate settlement v2 graph has no reserve and approves all five actions.
-		configSchema, planSchema, reserveHotkey, minimum, ids = evmPhase2ConfigSchema, evmPhase2Schema, p.ReserveHotkey == "", len(evmV2Actions), evmV2ActionIds()
+		// The separate settlement v2 graph has no reserve and approves all five
+		// actions, and may add the claim batcher's CREATE.
+		configSchema, planSchema, reserveHotkey, minimum, ids = evmPhase2ConfigSchema, evmPhase2Schema, p.ReserveHotkey == "", len(evmV2Actions), append(evmV2ActionIds(), evmV2BatcherAction.id)
 	}
 	if self.Schema != configSchema || p.Schema != planSchema || !planLabel(p.DeploymentId) || p.Network.NativeChain == "" || p.Network.EvmChainId != mainnetEvmChainId || !rootCanonicalHash(p.Network.GenesisHash) || p.Netuid != 25 || !reserveHotkey || !planLabel(p.CustodyId) || !planSha256(p.CustodyFenceHash) || !planSha256(p.CutoverEvidenceHash) || !planSha256(p.SourceLockHash) || !planSha256(p.Artifacts.Sha256) || !bootstrapRootAbsolutePath(p.Artifacts.Path) || !bootstrapRootAbsolutePath(p.RunDirectory) || p.StartNativeNumber == 0 || !rootCanonicalHash(p.StartNativeHash) || p.ValidThroughNative <= p.StartNativeNumber || p.ValidThroughNative-p.StartNativeNumber > 7200 || p.MaximumAttempts == 0 || p.MaximumAttempts > 8 || len(p.Actions) < minimum || len(p.Actions) > len(ids) {
 		return errors.New("contract phase lacks exact identity, scope or finite bounds")
@@ -451,7 +452,7 @@ func (self evmCreatePlan) priorPlan(index int) evmCreatePlan {
 // Completion names identify only the selected contract, never the whole graph.
 func (self evmCreatePlan) completedStatus() string {
 	if self.Config.Plan.settlementV2() {
-		return evmV2Actions[self.ActionIndex].completed
+		return evmV2ActionAt(self.ActionIndex).completed
 	}
 	if self.ActionIndex == 7 {
 		return "evidence-created-unanchored"
@@ -480,7 +481,7 @@ func (self evmCreatePlan) completedStatus() string {
 // Call failure consumes the original nonce without suggesting another CREATE.
 func (self evmCreatePlan) revertedStatus() string {
 	if self.Config.Plan.settlementV2() {
-		return evmV2Actions[self.ActionIndex].reverted
+		return evmV2ActionAt(self.ActionIndex).reverted
 	}
 	if self.ActionIndex == 6 {
 		return "vault-binding-reverted-nonce-consumed"
@@ -497,7 +498,7 @@ func (self evmCreatePlan) revertedStatus() string {
 // Diagnostics name only the selected contract or call.
 func (self evmCreatePlan) actionName() string {
 	if self.Config.Plan.settlementV2() {
-		return evmV2Actions[self.ActionIndex].name
+		return evmV2ActionAt(self.ActionIndex).name
 	}
 	return []string{"reserve", "vault", "coordinator implementation", "escrow registration", "initialized proxy", "reserve recorder binding", "vault coordinator binding", "unanchored validator evidence"}[self.ActionIndex]
 }

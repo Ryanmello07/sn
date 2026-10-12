@@ -25,7 +25,7 @@ import (
 
 // The contracts held to the bar, named as the report names them: relative to
 // the Foundry project.
-var contracts = []string{"src/LedgerTree.sol", "src/STSettlement2.sol", "src/STSettlementVault2.sol"}
+var contracts = []string{"src/LedgerTree.sol", "src/STClaimBatcher.sol", "src/STSettlement2.sol", "src/STSettlementVault2.sol"}
 
 // An artifact is a source line that the report shows unexecuted although the
 // tests run it. The report must show exactly count unexecuted lines of the

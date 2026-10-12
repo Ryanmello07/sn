@@ -526,7 +526,7 @@ func TestClaimV2SubmitAndSettleRefusals(t *testing.T) {
 		}
 		daemon.store.owner.afterSync = func(*os.File) error { return syscall.EIO }
 		unit := daemon.unit(1)
-		err := daemon.submit(daemon.ctx, unit, account)
+		err := daemon.submit(daemon.ctx, []*ClaimUnitV2{unit}, common.HexToAddress(daemon.cfg.Vault), claimV2Calldata(account), 0)
 		if !errors.Is(err, durablehead.ErrUncertain) || len(chain.sent()) != 0 || daemon.admission.nonceMinimum() != 1 || unit.signed() {
 			t.Fatalf("uncertain prepared bytes lost nonce custody: err=%v floor=%d", err, daemon.admission.nonceMinimum())
 		}
