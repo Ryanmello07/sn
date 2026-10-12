@@ -353,6 +353,102 @@ func TestSettlementV2E2EBadSuccessorsWithheld(t *testing.T) {
 	}
 }
 
+// E-4, the withheld-newest-root drill (§4.2 G2): no watcher holds the
+// newest finalized root's tree, and every account of the older root it
+// holds stays protected. A bypassed admission commits F1, the honest
+// successor of F, with its tree withheld; the watcher demands F's accounts
+// against root 0 and the operator answers them all, so F1 finalizes as
+// root 1. The attacker's next root P takes every other account of F to
+// zero in favour of its own new account. F's proofs cannot prove those
+// accounts against root 1, but against root 0 they can: the watcher falls
+// back to root 0, the newest whose objects it holds. With P published it
+// challenges the first lowered account with root 0's index; with P withheld
+// it demands F's accounts with root 0's index, the attacker answers those P
+// keeps, and the lowered ones block P past its window until an opening
+// deletes it.
+func TestSettlementV2E2EWithheldNewestRootDrill(t *testing.T) {
+	for _, successor := range []struct {
+		name      string
+		published bool
+	}{{"successor published", true}, {"successor withheld", false}} {
+		t.Run(successor.name, func(t *testing.T) {
+			s := newE2ESuccessor(t)
+			f := s.f
+			// F1: the operator keeps its tree and serves none of its objects.
+			f.publisher.publish(nil, s.honest.Accounts, s.honest.Tree)
+			seq := f.commit(f.operator, s.epoch, s.honest.Commit)
+			output, stderr, code := s.check(t)
+			if code != 0 || !strings.Contains(output, "demand set: 4 accounts of root 0 (0 doublings, 0 forced), 0 already demanded\n") {
+				t.Fatalf("watcher on F1 (exit %d):\n%s%s", code, output, stderr)
+			}
+			s.requireDemanded(t, 0, seq, []uint64{0, 1, 2, 3})
+			for i := range uint64(4) {
+				f.requireLogs(f.open(f.operator, 0, s.finalized, i, e2eOpening(t, s.honest.Tree, i)), f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(i), f.operator.address))
+			}
+			f.approveBlind(f.auditor)
+			if index := f.finalize(); index != 1 {
+				t.Fatalf("F1 finalized as root %d", index)
+			}
+
+			// P over F1 zeroes F's accounts 0 and 2 into the last new account.
+			epoch := s.epoch + 1
+			f.rows[epoch] = []protocol.LedgerUsageRow{e2eRow(1, e2eKey("alice"), 100), e2eRow(3, e2eKey("bob"), 100)}
+			f.emitV2(1_200_000_000)
+			f.closeV2(epoch)
+			honest, err := f.build(epoch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			accounts := slices.Clone(honest.Accounts)
+			for _, i := range []int{0, 2} {
+				accounts[6].Cumulative.Add(&accounts[6].Cumulative, &accounts[i].Cumulative)
+				accounts[i].Cumulative.Clear()
+			}
+			commitment, objects, tree := f.forge(honest, accounts)
+			if successor.published {
+				f.publisher.publish(objects, accounts, tree)
+			}
+			seq = f.commit(f.operator, epoch, commitment)
+			account, proof := e2eProof(t, s.finalized.tree, s.finalized.accounts, 0)
+			f.refused(f.anyone, f.vault2, e2eRao(e2eDemandFeeWei), e2eVault2Binding.PackDemandPath(e2eRao(e2eNoID), e2eRao(1), account, proof), "InvalidProof")
+
+			output, stderr, code = s.check(t)
+			if code != 0 || !strings.Contains(output, "  object missing:    "+ledger.Ref(s.honest.Commit.LedgerHash).String()+"\n") ||
+				!strings.Contains(output, "  fallback:          finalized root 1's objects are missing or do not rebuild it; protecting finalized root 0, the newest whose objects do\n") {
+				t.Fatalf("watcher on P (exit %d):\n%s%s", code, output, stderr)
+			}
+			if successor.published {
+				want := fmt.Sprintf("DistributionDeleted: pool 1, seq %d\n  account:     0 of finalized root 0\n  fault:       lower_value at level 0\n  challenger:  %s\n", seq, f.watcher.address.Hex())
+				if !strings.Contains(output, "  previous accounts: 4 of root 0, 2 with a provable fault, 2 with no fault\n    account 0:      lower_value\n    account 2:      lower_value\n") || !strings.HasSuffix(output, want) {
+					t.Fatalf("watcher on published P:\n%s", output)
+				}
+				sent := f.chain.sentBy(f.watcher.address)
+				if len(sent) != 5 {
+					t.Fatalf("the watcher sent %d transactions, want 4 demands on F1 and one challenge", len(sent))
+				}
+				f.requireLogs(f.chain.receipt(sent[4].Hash()), f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(0), uint8(merkle.LedgerFaultLowerValue), e2eRao(0), f.watcher.address))
+			} else {
+				if !strings.Contains(output, "  previous accounts: 4 of root 0, unverifiable") || !strings.Contains(output, "demand set: 4 accounts of root 0 (0 doublings, 0 forced), 0 already demanded\n") {
+					t.Fatalf("watcher on withheld P:\n%s", output)
+				}
+				s.requireDemanded(t, 4, seq, []uint64{0, 1, 2, 3})
+				for _, i := range []uint64{1, 3} {
+					f.requireLogs(f.open(f.operator, 0, s.finalized, i, e2eOpening(t, tree, i)), f.vault2Log("PathAnswered", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(i), f.operator.address))
+				}
+				f.approveBlind(f.auditor)
+				f.chain.rollTo(f.pending().CommittedBlock + e2eWindow)
+				f.refused(f.anyone, f.settlement, nil, e2eSettlementBinding.PackFinalizeDistribution(e2eRao(e2eNoID)), "DemandOpen")
+				receipt := f.open(f.anyone, 0, s.finalized, 0, e2eOpening(t, tree, 0))
+				f.requireLogs(receipt, f.vault2Log("DistributionDeleted", e2eRao(e2eNoID), seq, e2eRao(0), e2eRao(0), uint8(merkle.LedgerFaultLowerValue), e2eRao(0), f.anyone.address))
+			}
+			if f.pending().Seq != 0 || f.rootCount() != 2 {
+				t.Fatal("P survived")
+			}
+			f.requireConservation()
+		})
+	}
+}
+
 // E-4, withheld, at the end of the challenge window: eth_call and
 // eth_estimateGas run at the head while a transaction runs in the next block,
 // so a demand whose block would reach committedBlock + CHALLENGE_BLOCKS passes
