@@ -250,6 +250,9 @@ func (self *releaseErrorObservation) capture(err error, depth int) error {
 	case *provisionalClosedNativeInput:
 		copy := *cause
 		observed.value = &copy
+	case *productionSteeringReadDeadline:
+		copy := *cause
+		observed.value = &copy
 	case syscall.Errno:
 		observed.value = err
 	case interface{ Is(error) bool }, interface{ As(any) bool }:
