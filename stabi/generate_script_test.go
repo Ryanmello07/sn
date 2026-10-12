@@ -121,7 +121,7 @@ esac
 	// Tool-discovery tests own their metadata inputs. They must not depend on
 	// a concurrent release gate's mutable Foundry build directory.
 	artifactsDir := t.TempDir()
-	for _, name := range []string{"STSubnet", "STCoordinator", "STSettlementVault", "STReserveSink", "STValidatorEvidence", "STSettlementVault2", "STSettlement2"} {
+	for _, name := range []string{"STSubnet", "STCoordinator", "STSettlementVault", "STReserveSink", "STValidatorEvidence", "STSettlementVault2", "STSettlement2", "STClaimBatcher"} {
 		abi, err := os.ReadFile(filepath.Join(sourceDir, "..", "evm", "abi", name+".abi.json"))
 		if err != nil {
 			t.Fatal(err)
@@ -290,9 +290,9 @@ func TestGenerateChecksIndependentArtifactInputs(t *testing.T) {
 			first, second := newGeneratorTestEnvironment(t), newGeneratorTestEnvironment(t)
 			for _, environment := range []*generatorTestEnvironment{first, second} {
 				installGeneratorTestAbigen(t, filepath.Join(environment.pathDir, "abigen"), "1.17.0-stable")
-				for _, name := range []string{"STSubnet", "STCoordinator", "STSettlementVault", "STReserveSink", "STValidatorEvidence", "STSettlementVault2", "STSettlement2"} {
+				for _, name := range []string{"STSubnet", "STCoordinator", "STSettlementVault", "STReserveSink", "STValidatorEvidence", "STSettlementVault2", "STSettlement2", "STClaimBatcher"} {
 					binding := strings.ToLower(name) + ".go"
-					if name == "STSettlementVault2" {
+					if name == "STSettlementVault2" || name == "STClaimBatcher" {
 						binding = "stsettlement2.go"
 					}
 					for _, path := range []string{
