@@ -373,7 +373,8 @@ func (self *settlementV2AuditChain) demandHistory(ctx context.Context, state *se
 }
 
 // settlementV2Objects reads ledger objects from an operator's public
-// GET /sn/ledger/object endpoint, without following redirects.
+// GET /sn/ledger/object endpoint, beside /sn/artifact on the API host,
+// without following redirects.
 type settlementV2Objects struct {
 	endpoint *url.URL
 	client   *http.Client
@@ -384,7 +385,7 @@ func newSettlementV2Objects(apiURL string) (*settlementV2Objects, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settlement v2 object endpoint: %w", err)
 	}
-	return &settlementV2Objects{endpoint: base.JoinPath("sn", "ledger", "object"), client: &http.Client{Timeout: releaseHttpGetAttemptTimeout, CheckRedirect: func(*http.Request, []*http.Request) error {
+	return &settlementV2Objects{endpoint: base.ResolveReference(&url.URL{Path: "/sn/ledger/object"}), client: &http.Client{Timeout: releaseHttpGetAttemptTimeout, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}}, nil
 }

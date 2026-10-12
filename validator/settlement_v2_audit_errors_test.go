@@ -175,15 +175,17 @@ func TestSettlementV2AuditHeadBindingsNeedClosedEpoch(t *testing.T) {
 	}
 }
 
-// VA-2: an operator endpoint that is unreachable or answers other than 200
-// leaves the object missing; a malformed endpoint is refused at startup.
+// VA-2: objects are read from /sn/ledger/object on the operator's API host,
+// as /sn/artifact is, whatever path its api_url names. An endpoint that is
+// unreachable or answers other than 200 leaves the object missing; a
+// malformed endpoint is refused at startup.
 func TestSettlementV2AuditObjectEndpoint(t *testing.T) {
 	t.Parallel()
 	if _, err := newSettlementV2Objects("http://[::1"); err == nil {
 		t.Fatal("a malformed api_url was accepted")
 	}
 	objects := newSettlementV2AuditTestObjects(t)
-	fetcher, err := newSettlementV2Objects(objects.url)
+	fetcher, err := newSettlementV2Objects(objects.url + "/api/")
 	if err != nil {
 		t.Fatal(err)
 	}
