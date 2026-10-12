@@ -103,13 +103,13 @@ func readV2State(ctx context.Context, r *v2Reader, noID uint64) (*v2State, error
 	return state, nil
 }
 
-// v2Objects fetches ledger objects from GET /sn/ledger/object.
+// v2Objects fetches ledger objects from GET /sn/ledger/object on the API
+// host, resolved against --api_url as the validator resolves an operator's
+// api_url: a path in it is replaced, not extended.
 type v2Objects struct{ api *url.URL }
 
 func (o v2Objects) Fetch(ctx context.Context, ref ledger.Ref) (io.ReadCloser, error) {
-	u := o.api.JoinPath("sn", "ledger", "object")
-	u.RawQuery = url.Values{"hash": {ref.String()}}.Encode()
-	return v2Get(ctx, u)
+	return v2Get(ctx, o.api.ResolveReference(&url.URL{Path: "/sn/ledger/object", RawQuery: url.Values{"hash": {ref.String()}}.Encode()}))
 }
 
 // v2ReadObject fetches an object of at most limit bytes and checks its

@@ -61,8 +61,9 @@ Options:
                        --contract) keeps accepted but unpaid credit.
                        v2: the STSettlementVault2 (vault2) address (0x...).
     --api_url=<url>    Operator API serving the v2 ledger, GET
-                       /sn/ledger/account and /sn/ledger/object
-                       [default: https://api.bringyour.com].
+                       /sn/ledger/account below its path and
+                       /sn/ledger/object on its host, as the validator
+                       reads objects [default: https://api.bringyour.com].
     --index=<i>        v2 claim: the account index to claim, with --no_id
                        when the coldkey has accounts in several pools.
     --all              v2 check: compare every account of the latest

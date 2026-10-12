@@ -253,6 +253,19 @@ func TestV2CheckHonestRoot(t *testing.T) {
 	}
 }
 
+// CL-1: objects are fetched from GET /sn/ledger/object on the API host, as
+// the validator fetches them: a path in --api_url is replaced, not
+// extended, so the check of an honest root under such a URL reads every
+// object there (the endpoint refuses any other path).
+func TestV2CheckObjectsOnAPIHost(t *testing.T) {
+	s := newV2CheckScenario(t)
+	output, err := s.c.run(s.c.checkArgv("--api_url=" + s.c.api.URL + "/operator/v1/"))
+	if err != nil || !strings.Contains(output, "  audit:             approve\n") || !strings.HasSuffix(output, "  previous accounts: 4 of root 0, no fault\n") ||
+		len(s.c.apiCalls) != 1 || s.c.apiCalls["/sn/ledger/object"] != len(s.f.Objects)-len(s.f.Epochs[0].Providers)+len(s.p.Objects) {
+		t.Fatalf("objects under an API path: %v; fetched %v\n%s", err, s.c.apiCalls, output)
+	}
+}
+
 // E-4: a published faulty root is caught and challenged for each fault
 // kind its account rows can show: an omitted account, a lowered one, a
 // garbage leaf and a moved coldkey. checkPath for the first fault, with F's
