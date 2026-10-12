@@ -341,7 +341,7 @@ func TestReleaseEvidenceV2UploadReplicasRejectConcreteWriterMisbinding(t *testin
 	if _, err := releaseAttemptUploadReplicasV2(cfg, origins, runtimes); err != nil {
 		t.Fatalf("actual session census prerequisite: %v", err)
 	}
-	for _, fault := range []string{"other-operator", "path", "query", "metadata", "records", "proofs", "getter", "client", "timeout", "redirect", "transport", "cookie-jar", "cancel"} {
+	for _, fault := range []string{"other-operator", "path", "query", "metadata", "records", "proofs", "getter", "client", "timeout", "redirect", "transport", "default-transport", "cookie-jar", "cancel"} {
 		owners := slices.Clone(runtimes)
 		runtime := *owners[0]
 		owner := *runtime.attemptUpload
@@ -374,6 +374,9 @@ func TestReleaseEvidenceV2UploadReplicasRejectConcreteWriterMisbinding(t *testin
 				t.Error("admission invoked substituted transport")
 				return nil, errors.New("unexpected transport")
 			})
+		case "default-transport":
+			// The default transport has no HTTP/2 health check.
+			client.Transport = nil
 		case "cookie-jar":
 			jar, err := cookiejar.New(nil)
 			if err != nil {
