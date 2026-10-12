@@ -135,7 +135,7 @@ showed something that was not visible at decision time.
 | --- | --- |
 | Three new contracts, policy v2 at E_s | Two contracts; policy v1 throughout |
 | OpenZeppelin tree, multiproofs, a ring of four roots | Position-binding sum tree, single proofs, every finalized root kept |
-| Claim credit, deferral reasons, batch claims, permits | A claim pays or reverts; batching is left to an optional helper contract |
+| Claim credit, deferral reasons, batch claims, permits | A claim pays or reverts; batching is an optional helper contract that calls `claim` per item (§10.2) |
 | Live `unfinalizedFunding` counter | One funding snapshot per epoch |
 | Veto from journal activations | Affirmative approval plus objective challenges and demands |
 | Large header, manifests, a signed artifact | One header listing chunk hashes, committed by hash on chain |
@@ -191,6 +191,8 @@ gas is under 10% of a claim after about 131 weeks. At 1M providers both take
 ten times longer. A third party can raise the cost by filling vault2's
 staking-hotkey list (§7.3), paying a transfer above the floor per entry:
 every claim then uses about 1.07M gas more (R-3: 1,269,881 against 201,559).
+Claimed through the claim batcher (§10.2), twenty or more claims in one
+transaction use about 166,000 gas each, 18% less than alone (R-7).
 At the same prices a claim then costs about 1 α, about 69 weeks of that
 provider's earnings, and gas falls under 10% of a claim only above about
 10 α. A claim below the runtime's 100,000-rao TAO-equivalent transfer floor,
@@ -920,9 +922,10 @@ v2 contract phase:
 2. `registerEscrow`, with one burn;
 3. `STSettlement2` implementation creation;
 4. proxy creation with `initialize`;
-5. vault2 `setCoordinatorOnce`.
+5. vault2 `setCoordinatorOnce`;
+6. optionally, the claim batcher's creation (§10.2).
 
-One deployer sends all five at consecutive nonces, and the first two are
+One deployer sends them all at consecutive nonces, and the first two are
 broadcast back to back. vault2's creation reveals the escrow hotkey, and
 anyone who registers that hotkey first makes `registerEscrow` fail for good.
 That costs a redeploy, with no funds at risk.
@@ -1111,6 +1114,16 @@ run the unchanged v1 daemon in the same process with the same relayer key:
 - **Refusals.** A claim refused because a third party claimed first is done
   (§5). Any other refusal, such as the floor or a staking-hotkey cap, leaves
   the unit open under a backoff.
+- **Batching.** Given a claim batcher's address (`batcher` in its config),
+  the daemon claims the due units of one pass in one `claimMany` transaction
+  when two or more are due. Each is verified against its finalized root and
+  preflighted alone; a refused preflight is a refused claim. The batch's gas
+  limit is the least at which an `eth_call` of it attempts every claim, plus
+  20%, within the most gas one transaction may name. Every unit of the batch
+  keeps its exact signed bytes until its finalized receipt settles each one
+  by the batcher's event: paid, by vault2's `Claimed` with the batcher as
+  caller; refused, under the refusal rules above; not attempted, open again
+  at once. A lone due unit is claimed directly.
 - **Reused as they are:** locks, durable head, nonce admission, finality
   helpers and the relayer key.
 
@@ -1120,13 +1133,37 @@ run the unchanged v1 daemon in the same process with the same relayer key:
 | --- | --- |
 | `v2 status --coldkey` | account, claimable, claimed, pending |
 | `v2 claim` | one claim; a third party's earlier claim counts as done |
+| `v2 claim --all [--batch=<batcher>]` | every finalized account of the coldkey with anything claimable, each verified against vault2's root first: one claim each, or with `--batch` two or more per transaction through the claim batcher |
 | `v2 check --all` | Rebuilds the pending root from published objects and compares every account of the protected root (§9.3): the newest finalized root whose objects it fetched and verified, F or, when F's objects are missing or do not rebuild it, an older root, which it reports. Each account is reported as having no fault, a provable fault, or as unverifiable when the objects are missing or do not reproduce the root. With `--challenge` it sends `checkPath` for a fault. With `--demand`, in the unverifiable case, it sends the §9.3 demand set (`ledger.DemandSet`) in its order until the window's end, with the same sample size and doubling, each demand naming the protected root, carrying the account's proof against it and paying the fee. Unlike the validator, it does not wait until commit + 7,200, and a sender draws one sample per pending root and protected root. A root that has left the pending slot, or an account already demanded, counts as done (§5). |
 | `withdraw --vault v1` | `withdrawClaimCredit` for v1 credits |
 
 UR runs `snclaim v2 check --all --challenge --demand` as an independent
-watcher, on a host other than the validator's. A UR sweep relayer, and a
-batching helper contract that calls `claim` per item, are optional and can be
-added later without touching vault2.
+watcher, on a host other than the validator's. A UR sweep relayer is
+optional and can be added later without touching vault2.
+
+**Claim batcher.** `STClaimBatcher` (`evm/src/STClaimBatcher.sol`) is an
+optional, immutable, ownerless helper with no storage and no funds, which
+changes nothing in vault2. `claimMany(vault, claims, gasPerClaim)` calls
+vault2's `claim` for each item with exactly `gasPerClaim` gas inside
+try/catch, so a refused item never reverts the others, and reports it,
+`ClaimPaid(item, amount)` or `ClaimRefused(item, selector)`. The runtime
+consumes all the gas forwarded to a precompile call it refuses; the per-item
+cap keeps one such item from starving the rest. An item is attempted only
+while the gas left covers `gasPerClaim` at the call, which keeps 1/64 of it
+(EIP-150), plus 20,000 gas of bookkeeping; the items left are reported once,
+`ClaimsNotAttempted(item)`, and `claimMany` returns how many it attempted.
+vault2 pays each leaf's coldkey whoever calls, so the batcher can redirect
+nothing. A batch succeeds at any gas limit, so `eth_estimateGas` cannot size
+it: senders find the least limit at which an `eth_call` attempts every claim
+and add 20%. They cap each claim at the larger of 2,600,000 gas, a single
+claim's least limit with margin, and the batch's largest single-claim
+estimate. Measured on runtime 475 at depth 29 (R-7): a transaction may name at
+most 64,998,500 gas, below the 75,000,000 block gas limit, and so holds at
+most 331 claims; from ten claims on a batch saves 17 to 19% of each claim's gas
+(166,320 per claim in a batch of 20, against 202,462 alone), and its gas
+limit grows by about 184,000 per claim where each single claim needs 2.5M.
+A batch of one costs 5% more than a claim alone, so the tools send a lone
+claim directly. The deployment phase can create the batcher (§8.5).
 
 ## 11. Apps and SDK
 
@@ -1321,8 +1358,8 @@ forge coverage --ir-minimum --report lcov \
 
 - The new contracts must compile under `--ir-minimum`. Wide argument lists
   are passed as structs, and they do not reuse `ValidatorEvidenceActivation`.
-- vault2, `STSettlement2` and `LedgerTree.sol` need 100% line and branch
-  coverage in that lcov report. A reviewed list explains each
+- vault2, `STSettlement2`, `LedgerTree.sol` and `STClaimBatcher` need 100%
+  line and branch coverage in that lcov report. A reviewed list explains each
   instrumentation artifact or unreachable branch.
 - Plain `forge test` must also pass.
 - Sizes come from the release `forge build --sizes`, never from a coverage
@@ -1496,10 +1533,11 @@ handler that never reaches a claim fails instead of passing silently.
 | VA-7 | Custody: objects retained; findings and declarations recorded; a fresh validator re-verifies the previous root's chunks |
 | VA-8 | A send that another transaction made unnecessary counts as success (§5): a root already deleted or replaced, an index already demanded, an approval already counted |
 | VA-9 | The existing activation and CLOSED_CENSUS keep working under the adopted config |
-| CL-1 | `snclaim` commands, including `withdraw --vault v1` |
+| CL-1 | `snclaim` commands, including `withdraw --vault v1` and `v2 claim --all` |
 | CL-2 | SDK display: every account state; v1 shown separately; "unavailable" rather than zero |
 | CL-3 | `snclaim v2 check` reports "unverifiable", never "no fault", when objects are missing or do not reproduce the root; a challenge against a root that has left the pending slot counts as done |
 | CL-4 | SDK and app v2 claims (§11): an account is claimed only when its vault is the pinned vault2 and its proof verifies against vault2's root; `claimed` is read from chain; preflight, `eth_estimateGas` and the gas key's balance; a third party's earlier claim counts as done; a floor or staking-hotkey refusal leaves the account claimable; the confirmed amount comes from the `Claimed` event; each app shows v2 beside v1, offers no v2 claim without `Vault2Address`, and presents every claim outcome |
+| CL-5 | Batched claims (§10.2): `snclaim v2 claim --all --batch` and the daemon with a batcher claim two or more accounts in one transaction; each claim is verified and preflighted alone; the batch is sized by `eth_call` within the most gas a transaction may name; each item's outcome settles its own account (paid, refused, not attempted); a third party's earlier claim counts as done; the daemon keeps the batch's exact signed bytes in every unit until its finalized receipt; a lone claim goes directly to vault2 |
 
 ### 15.8 Runtime rehearsal (R)
 
@@ -1508,12 +1546,13 @@ bytecode.
 
 | ID | Behaviour |
 | --- | --- |
-| R-1 | Deploy through §8.5, with readback |
+| R-1 | Deploy through §8.5, with readback, the optional claim batcher included |
 | R-2 | Capture: exact deltas, a zero epoch, a dust refusal; with registration collateral on the pool position, the close moves exactly `getStake − locked` and leaves the lock |
 | R-3 | Claim with a real `transferStake`; a floor refusal; a staking-hotkey cap refusal; third-party stake operations on the escrow hotkey never lower vault2's position, and a transfer of conviction-locked alpha to vault2 is refused; the escrow hotkey earns nothing across a tempo in which a validator sets weights, and by stake in one without; the whole-position sentinel; the signer's own staking-hotkey cap; third parties filling vault2's own staking-hotkey list raise the gas of claims and `absorbStake` without stopping them |
 | R-4 | Pool registration, also at a nonzero collateral lock share, whose lock vault2 never moves or counts; re-registration after pruning; stake on a pruned hotkey, the escrow's included; `absorbStake` from the v1 escrow hotkey |
 | R-5 | Approvals from an auditor address; a demand paying `demandFeeWei`, and its answer |
 | R-6 | Gas used and gas limit needed, at depth 29, for a claim, a demand, an approval, a capturing close, a close deferring one epoch and one deferring many, a commit, an answer and a finalize; the operator's transactions, a capturing close with a few deferred epochs included, fit the re-signed operator gas policy (§8.1, §13) |
+| R-7 | Batched claims (§10.2), at depth 29: the block gas limit and the most gas one transaction may name; the gas used and the least gas limit of single claims and of batches of 1, 5, 10, 20 and the most one transaction holds, each batch capped at the default gas per claim and paying every item |
 
 ### 15.9 Guarantee traceability
 
@@ -1530,6 +1569,20 @@ bytecode.
 | S3 replacement and carry | S-6, E-3, GL-4 |
 | S4 identity | S-4, VA-1, E-1 |
 | S5 pause | S-5, S-6, S-8, E-6 |
+
+### 15.10 Claim batcher (CB)
+
+| ID | Behaviour |
+| --- | --- |
+| CB-1 | Every item pays its account's claimable to the leaf's coldkey, and after a newer root only the increment; vault2's `Claimed` names the batcher as caller |
+| CB-2 | A refused item (a third party's earlier claim, an invalid proof, an unknown root, the runtime's refusals) reports its selector and leaves the account claimable; the other items pay |
+| CB-3 | A refusal that consumes all the gas forwarded to the precompile uses at most its item's cap, and later items still pay; a claim that needs more than the cap is refused, not the batch |
+| CB-4 | An item the gas left cannot cover is not attempted, nor any later one, reported once; whatever the batch's gas (fuzzed), each attempted item receives exactly its cap, and an item is attempted from the gas its cap needs at the call plus the bookkeeping |
+| CB-5 | Payments go only to each leaf's coldkey, whoever calls; the batcher takes no value and touches no storage |
+| CB-6 | An empty batch calls nothing; a cap whose requirement overflows reverts |
+| CB-7 | The deployment phase's optional sixth action creates the batcher at the deployer's next nonce after the binding; anything but the exact argument-free release creation is refused, and it completes only on readback of its exact runtime (SV-8) |
+| CB-EV | Every batcher event, with its exact fields |
+| CB-SIZE | The batcher's sizes from the release build |
 
 ## 16. Later phases
 
@@ -1568,8 +1621,8 @@ bytecode.
     constraint (§2.2).
 - **Null consensus:** a separate track, unchanged from
   VERSION2-REVIEW-RESPONSE.md §13.
-- **Optional.** A UR sweep relayer; a batching helper; daemon self-checks; a
-  third-party mirror of the ledger objects.
+- **Optional.** A UR sweep relayer; daemon self-checks; a third-party mirror
+  of the ledger objects.
 
 ## 17. Risks
 

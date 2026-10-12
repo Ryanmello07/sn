@@ -1588,7 +1588,11 @@ or a destination coldkey whose staking-hotkey list is full) reverts the claim an
 claimable; since balances never expire, a provider, its app or the miner claim daemon simply claims once the
 balance is large relative to gas. A claim uses about 236,000 gas but needs a gas limit of about 2.5M,
 because the runtime admits a stake transfer only if the forwarded gas covers its declared weight
-(`VERSION2-FINAL.md` §7.3, §8.1).
+(`VERSION2-FINAL.md` §7.3, §8.1). An optional, stateless claim batcher (`STClaimBatcher`) claims many
+accounts in one transaction, each capped at its own gas so that a claim the runtime refuses cannot starve
+the others, and still only to each leaf's coldkey: from ten claims on it saves 17–19% of each claim's gas,
+and a batch's gas limit grows by about 184,000 per claim where a single claim needs 2.5M. One
+transaction holds up to 331 claims at the deepest tree (`VERSION2-FINAL.md` §10.2, R-7).
 Pausing settlement never stops claims. Claims are pull‑based, so settlement is `O(1)` on‑chain regardless of
 participant count, and each pool has its own root — **there is no global claim root**.
 
@@ -2148,8 +2152,9 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
      sum-tree library (`evm/src/LedgerTree.sol`, the twin of `merkle/ledger_sum_tree.go`; same pinned
      toolchain). A new v2 phase of `sn-mainnet bootstrap-contracts` creates vault2 and registers its escrow
      (one burn) at the very next nonce, back to back (§14), then creates the `STSettlement2` implementation
-     and the proxy with `initialize` and sets vault2's coordinator once; it completes only on readback of
-     exact runtime code, getters and storage slots.
+     and the proxy with `initialize` and sets vault2's coordinator once, and can then create the optional
+     claim batcher (`evm/src/STClaimBatcher.sol`); it completes only on readback of exact runtime code,
+     getters and storage slots.
    - **Ledger.** The `ledger` package serves the operator, the auditors and `snclaim` alike: the canonical
      header and chunk codec, the root build, the nine audit checks and the §11.3 demand set.
    - **Operator server.** Builds each root's v2 ledger (provider rows per covered epoch, accounts, sum
@@ -2169,8 +2174,10 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
    - **Claims and apps.** The miner claim daemon v2 (`provider claim-daemon-v2`), beside the unchanged v1
      daemon, claims an account whenever its claimable amount reaches the daemon's threshold (1.9 α by
      default, never below the 0.0152 α transfer floor). `snclaim v2` provides `status`, `claim`
-     and `check --all` (with `--challenge` and `--demand`), and `snclaim withdraw --vault v1` withdraws v1
-     claim credit; UR runs `snclaim v2 check --all --challenge --demand` as an independent watcher on a
+     (one account, or with `--all` every account of a coldkey) and `check --all` (with `--challenge` and
+     `--demand`), and `snclaim withdraw --vault v1` withdraws v1 claim credit. Given the claim batcher's
+     address, `snclaim v2 claim --all --batch` and the daemon claim two or more due accounts in one
+     transaction, each verified and preflighted alone first; UR runs `snclaim v2 check --all --challenge --demand` as an independent watcher on a
      host other than the validator's. Through the SDK the apps (Android, Apple, Windows, Linux and ur.io)
      show the v2 finalized, claimable and paid amounts, a pending root as pending, v1 balances
      separately, and "unavailable" rather than zero when the proof service cannot be reached, and from
