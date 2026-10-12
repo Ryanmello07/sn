@@ -47,8 +47,10 @@ type AttemptCutV2ReplayBounds struct {
 // Inputs must not be mutated during replay. VisitRecord receives owned data
 // after its record authentication, but must stage any derived state until the
 // entire replay succeeds: a later missing chunk or proof invalidates the cut.
-// ScratchDirectory must not exist; replay closes but does not erase it, so its
-// caller can preserve failed evidence or retire a successful scratch index.
+// ScratchDirectory must not exist. Replay closes it and erases it only when the
+// context marks its parent as a retiring replay root (replay scratch
+// retirement); otherwise its caller can preserve failed evidence or retire a
+// successful scratch index.
 type AttemptCutV2ReplayOptions struct {
 	Bounds           AttemptCutV2ReplayBounds
 	ScratchDirectory string
@@ -206,6 +208,13 @@ func newAttemptCutV2ReplayScratch(ctx context.Context, path string, bounds Attem
 // opens and owns its parent normally; neither path can follow a replacement
 // parent into an unrelated directory before creating the backend child.
 func newAttemptCutV2ReplayScratchWithParent(ctx context.Context, path string, bounds AttemptCutV2ReplayBounds, hooks attemptCutV2ReplayHooks, retainedParent *os.Root) (result *attemptCutV2ReplayScratch, resultErr error) {
+	return newAttemptCutV2ReplayScratchCreated(ctx, path, bounds, hooks, retainedParent, nil)
+}
+
+// created receives the fresh child's inode only once this call has made it,
+// so a retiring caller can remove exactly that directory, never one that
+// already existed or replaced it.
+func newAttemptCutV2ReplayScratchCreated(ctx context.Context, path string, bounds AttemptCutV2ReplayBounds, hooks attemptCutV2ReplayHooks, retainedParent *os.Root, created *os.FileInfo) (result *attemptCutV2ReplayScratch, resultErr error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -244,6 +253,9 @@ func newAttemptCutV2ReplayScratchWithParent(ctx context.Context, path string, bo
 	anchor, err := root.Lstat(name)
 	if err != nil || !attemptStorePrivateDirectory(anchor) {
 		return nil, errors.Join(errors.New("compact attempt scratch is not private and owned"), err)
+	}
+	if created != nil {
+		*created = anchor
 	}
 	createdDirectory, err := root.Open(name)
 	if err != nil {
@@ -536,7 +548,11 @@ func replayAttemptCutV2Contents(ctx context.Context, cut AttemptCutV2, expected 
 		result.ProofProjectionHash = attemptHex32(sha256.Sum256(nil))
 		return result, ctx.Err()
 	}
-	scratch, err := newAttemptCutV2ReplayScratchWithParent(ctx, options.ScratchDirectory, options.Bounds, hooks, scratchParent)
+	// Registered before the close below, so it runs after every scratch
+	// resource has closed. It never changes the replay's result.
+	var created os.FileInfo
+	defer func() { retireAttemptCutV2ReplayScratch(ctx, options.ScratchDirectory, created) }()
+	scratch, err := newAttemptCutV2ReplayScratchCreated(ctx, options.ScratchDirectory, options.Bounds, hooks, scratchParent, &created)
 	if err != nil {
 		return result, err
 	}
