@@ -586,11 +586,15 @@ The contract is `evm/src/STSettlementVault2.sol`; its external surface is
 - `selfColdkey`, the contract's mapped SS58 account, predicted from the
   deployer nonce as `evm/script/Deploy.s.sol:53-59,113-115` does;
 - `bootstrap`;
-- `demandFeeWei`, fixed at deployment at no less than twice the answer gas R-6
-  measures, priced at the planning fee. R-6 measured an answer at depth 29
-  at 159,665 gas, so at 5 gwei the fee is at least 2 × 159,665 gas, 1,596,650
-  rao (1.59665·10^15 wei). It must be a multiple of 10^9 wei, one rao,
-  because the runtime moves only whole rao of a call's value (§7.3).
+- `demandFeeWei`, fixed at deployment at 800,000 rao (8·10^14 wei): one
+  answer's gas at the planning fee, the smallest fee that still makes
+  griefing cost the griefer at least what each answer costs the operator
+  (owner decision, 2026-10-12: minimize the gas needed to run and use the
+  protocol). R-6 measured an answer at depth 29 at 159,665 gas, and 159,665 ×
+  5 gwei is 798,325 rao, rounded up. With the demander's own 104,867 gas, a
+  demand costs at least the answer's gas at prices up to about three times
+  the planning fee. It must be a multiple of 10^9 wei, one rao, because the
+  runtime moves only whole rao of a call's value (§7.3).
 
 The challenge window is the constant `CHALLENGE_BLOCKS` = 14,400.
 `coordinator` is set once by the bootstrap to the `STSettlement2` proxy.
@@ -1583,7 +1587,7 @@ bytecode.
 | Someone registers vault2's escrow hotkey between vault2's creation, which reveals it, and `registerEscrow` | Both are broadcast back to back at consecutive nonces (§8.5). If it still happens, `registerEscrow` fails for good and vault2 is redeployed. `registerPool` requires the escrow registered, so that vault2 never holds a pool, and no funds are at risk |
 | Admission bypassed (an owner upgrade, or root signer plus auditor keys) with the tree withheld | Demands block finalization (§6.5). They may name any finalized root, so withholding the newest root's tree does not stop them (§4.2). Watchers sample by value; a faulted account that is never demanded is lost |
 | A root finalized after a bypass that is not tight, or that lowered an account of an older root, halts honest successors | The validator refuses to build on a root that is not tight, and anyone can delete a successor that keeps an account below an older root's value; recovery needs a reviewed validator release and is outside phase A |
-| Demand griefing | Each demand costs the demander its gas and the fee. An answer costs about 1.5 times a demand's gas (R-6: 159,665 against 104,867), and the fee is at least twice the answer gas: 1,596,650 rao at 5 gwei (§7.1). Each account of each finalized root can be demanded once per pending root, so the demands possible on one pending root grow with the number of roots; each still pays the fee. Answers are automatic (§8.1) |
+| Demand griefing | Each demand costs the demander its gas and the fee. An answer costs about 1.5 times a demand's gas (R-6: 159,665 against 104,867), and the fee is one answer's gas at the planning fee: 800,000 rao (§7.1). Each account of each finalized root can be demanded once per pending root, so the demands possible on one pending root grow with the number of roots; each still pays the fee. Answers are automatic (§8.1) |
 | Stake-moving transactions need a gas limit far above the gas they use, and a refused precompile call consumes all the gas forwarded to it (§7.3) | Senders preflight with `eth_call` and size limits with `eth_estimateGas`; the operator gas policy is re-signed to cover a capturing close (§8.1, §13); anyone can send a close that defers more epochs than the policy covers |
 | Third parties fill vault2's own staking-hotkey list, up to 128 entries | Claims and `absorbStake` keep working; a claim then uses about 1.27M gas instead of 0.2M (R-3), about 1 α at the §3 figures, so the daemon's threshold should rise to match (§10.1). Each entry costs the griefer a transfer above the floor, which vault2 can absorb as surplus |
 | A missed close moves an epoch's share to the next epoch's earners | The 1,200-block window and alerts |
