@@ -255,8 +255,21 @@ func decodeProductionAuthorityBundle(raw []byte, current *ReleaseConfig, prefix 
 
 // This first continuity class preserves policy, identities, operators, proof
 // bounds and custody. Runtime pins, approval history and polling may advance.
-// Rendering an activation-pending census is a separate exact class.
+// Rendering an activation-pending census and adopting settlement v2 are
+// separate exact classes. stable() keeps settlement_v2, so once adopted it can
+// be neither re-pointed nor removed.
 func validateProductionAuthorityContinuity(original, current *ReleaseConfig) error {
+	if productionSettlementV2AdoptionTransition(original, current) {
+		prior, err := ownerRecycleProductionApproval(original)
+		if err != nil {
+			return err
+		}
+		next, err := ownerRecycleProductionApproval(current)
+		if err != nil {
+			return err
+		}
+		return validateProductionSettlementV2Adoption(original, current, prior.Approval, next.Approval)
+	}
 	if err := validateProductionCapacityTransition(original, current); err != nil {
 		return err
 	}
@@ -327,6 +340,49 @@ func validateProductionAuthorityContinuity(original, current *ReleaseConfig) err
 	}
 	if a.ValidFromNativeBlock == b.ValidFromNativeBlock && releaseNativeRuntimeIdentity(original) != releaseNativeRuntimeIdentity(current) {
 		return errors.New("production authority changes an exact runtime at the same activation block")
+	}
+	return nil
+}
+
+// Only a predecessor without settlement_v2 and a successor with it select the
+// adoption class. It is exclusive: no capacity, rendering or runtime change
+// can ride along with it.
+func productionSettlementV2AdoptionTransition(original, current *ReleaseConfig) bool {
+	return original.SettlementV2 == nil && current.SettlementV2 != nil
+}
+
+// Clears exactly what adoption changes: the added block, the authority
+// history and the approval's own content address. Selector and signer stay.
+func productionSettlementV2AdoptionProjection(cfg *ReleaseConfig) ([]byte, error) {
+	owned := *cfg
+	owned.SettlementV2, owned.ProductionAuthorityHistory = nil, nil
+	if cfg.OwnerRecycleApproval != nil {
+		owned.OwnerRecycleApproval = &ReleaseOwnerRecycleApprovalConfig{Signer: cfg.OwnerRecycleApproval.Signer}
+	}
+	if cfg.TreasuryApproval != nil {
+		owned.TreasuryApproval = &ReleaseTreasuryApprovalConfig{Signer: cfg.TreasuryApproval.Signer}
+	}
+	return json.Marshal(&owned)
+}
+
+// The successor adds exactly the settlement_v2 block and appends exactly one
+// history entry, the predecessor's bundle. Its approval is the old one
+// verbatim except the complete-config hash.
+func validateProductionSettlementV2Adoption(original, current *ReleaseConfig, prior, next OwnerRecycleApproval) error {
+	history := original.ProductionAuthorityHistory
+	if len(current.ProductionAuthorityHistory) != len(history)+1 || !slices.Equal(current.ProductionAuthorityHistory[:len(history)], history) {
+		return errors.New("settlement v2 adoption must append exactly one authority history entry")
+	}
+	before, beforeErr := productionSettlementV2AdoptionProjection(original)
+	after, afterErr := productionSettlementV2AdoptionProjection(current)
+	if err := errors.Join(beforeErr, afterErr); err != nil {
+		return err
+	}
+	if !bytes.Equal(before, after) {
+		return errors.New("settlement v2 adoption changes signed configuration beyond the added settlement_v2 block")
+	}
+	if productionCapacityEconomicHash(prior) != productionCapacityEconomicHash(next) {
+		return errors.New("settlement v2 adoption changes the approval beyond its config hash")
 	}
 	return nil
 }

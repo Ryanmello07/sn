@@ -73,6 +73,9 @@ type productionStartupEvmTestFixture struct {
 	freshRead chan struct{}
 	freshOnce sync.Once
 	release   chan struct{}
+	// Settlement v2 views by lowercase target and calldata, as
+	// settlementV2TestKey keys them; nil serves none.
+	settlementV2 map[string][]byte
 }
 
 // Blocking handlers consume and close the real bounded body before publishing
@@ -138,6 +141,9 @@ func (self *productionStartupEvmTestFixture) view(ctx context.Context, call map[
 	}
 	initial := self.contexts[9]
 	target := common.BytesToAddress(call["to"])
+	if answer, found := self.settlementV2[strings.ToLower(target.Hex())+"/"+common.Bytes2Hex(data)]; found {
+		return bytes.Clone(answer), true, nil
+	}
 	coordinator, journal := stabi.NewSTCoordinator(), stabi.NewSTValidatorEvidence()
 	coordinatorAbi, err := stabi.STCoordinatorMetaData.ParseABI()
 	if err != nil {
@@ -660,6 +666,9 @@ func newProductionStartupTestFixtureWithConfig(t *testing.T, allowRegistration b
 		}
 		if configure != nil {
 			configure(cfg)
+		}
+		if cfg.SettlementV2 != nil {
+			self.evm.settlementV2 = settlementV2TestStartupViews(t, cfg)
 		}
 		normalizeProductionStartupTestConfig(t, cfg, root)
 	})
