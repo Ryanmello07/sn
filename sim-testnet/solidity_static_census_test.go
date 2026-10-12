@@ -13,10 +13,10 @@ import (
 	"testing"
 )
 
-// The deployed contracts, including the settlement v2 coordinator and vault,
-// plus the settlement v2 ledger sum tree library, which VERSION2-FINAL.md §15
-// adds as a root of its own.
-const solidityStaticDeployedRoots = "src/STCoordinator.sol\nsrc/STFleetBatcher.sol\nsrc/STValidatorEvidence.sol\nsrc/probe/STSubnetProbe.sol\nsrc/testnet/STCoordinatorAdversary.sol\nsrc/LedgerTree.sol\nsrc/STSettlement2.sol\nsrc/STSettlementVault2.sol"
+// The deployed contracts, including the settlement v2 coordinator, vault and
+// claim batcher, plus the settlement v2 ledger sum tree library, which
+// VERSION2-FINAL.md §15 adds as a root of its own.
+const solidityStaticDeployedRoots = "src/STCoordinator.sol\nsrc/STFleetBatcher.sol\nsrc/STValidatorEvidence.sol\nsrc/probe/STSubnetProbe.sol\nsrc/testnet/STCoordinatorAdversary.sol\nsrc/LedgerTree.sol\nsrc/STSettlement2.sol\nsrc/STSettlementVault2.sol\nsrc/STClaimBatcher.sol"
 
 // Admit the reviewed literal array only. A comment, duplicate, nondeployed
 // library or dynamic expansion cannot stand in for one actual analysis root.
@@ -163,7 +163,7 @@ func TestSolidityStaticGateAnalyzesEveryRootAfterAFinding(t *testing.T) {
 	}
 	output, analyzed, err := runSolidityStaticGate(t, "", false, string(pinned))
 	if err != nil || strings.Join(analyzed, "\n") != solidityStaticDeployedRoots ||
-		!strings.Contains(output, "release Solidity static gate passed for all 8 deployable roots") {
+		!strings.Contains(output, "release Solidity static gate passed for all 9 deployable roots") {
 		t.Fatalf("clean roots: %v %q\n%s", err, analyzed, output)
 	}
 	for _, test := range []struct {
