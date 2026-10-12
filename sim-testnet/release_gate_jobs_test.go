@@ -317,9 +317,9 @@ release_gate_complete
 	self.join(t, 0)
 }
 
-// Portable-mode fixtures, the settlement v2 claim daemon's among them, need
-// every phase at umask 022, whether the gate itself runs at a shared-group
-// 0002 or a private 077.
+// Portable-mode fixtures, the settlement v2 claim daemon's among them (E-5),
+// need every phase at umask 022, whether the gate itself runs at a
+// shared-group 0002 or a private 077.
 func TestReleaseGateJobsRunEveryPhaseAtUmask022(t *testing.T) {
 	self := newReleaseGateJobsFixture(t, `
 phase_mask() { [[ "$(umask)" == 0022 ]]; }
