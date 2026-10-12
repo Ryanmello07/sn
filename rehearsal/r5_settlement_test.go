@@ -141,9 +141,12 @@ func TestR5Settlement(t *testing.T) {
 	commit2 := second.commitment("ledger header epoch 2")
 	n.send(t, operator.rootSigner, s.settlement, s.settlementArtifact, nil, "commitDistribution", id(2), id(1), id(1), commit2)
 
+	// R-6 records four kinds of claim: vault2's first; an account's first,
+	// right after its neighbour's; a second claim; and the first claim of an
+	// account whose neighbour has not claimed.
 	t.Run("claims", func(t *testing.T) {
 		claim(t, first, 0, 0, "claim")
-		claim(t, first, 0, 1, "")
+		claim(t, first, 0, 1, "claim (paired)")
 	})
 
 	// R-5: a demand proves an account against a finalized root, here root 0,
@@ -189,8 +192,8 @@ func TestR5Settlement(t *testing.T) {
 			"total": commit2.Total, "leafCount": uint64(deepLeafCount), "ledgerHash": commit2.LedgerHash,
 		})
 		// Claims pay each account its increment since its last claim.
-		claim(t, second, 1, 0, "")
-		claim(t, second, 1, 2, "")
+		claim(t, second, 1, 0, "claim (repeat)")
+		claim(t, second, 1, 2, "claim (new)")
 	})
 
 	// R-6: a close defers every epoch since the pool's last funded one. Epochs

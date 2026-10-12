@@ -1808,11 +1808,11 @@ designs, §9.3/§13.6) is an open post‑launch question, not a committed roadma
   **close is missed** beyond its 1,200-block window, whose share moves to later earners. Nor is delivery
   time promised: at live rates about 1,450 α per epoch reaches the pool at θ = 3/10, ≈ 0.0145 α per
   provider per week at 100k providers, so a 250k-gas claim at a 5 gwei base fee (≈ 0.19 α; the rehearsal
-  measured 235,938 gas) costs about 13 weeks of average earnings, and gas falls under 10% of a claim only
-  after ≈ 131 weeks; both take ten times longer at 1M providers (`VERSION2-FINAL.md` §3). A third party can
-  also raise that cost: by filling vault2's own staking-hotkey list (up to 128 entries, each costing it a
-  transfer above the floor) it makes every claim use about 1.27M gas instead of 0.2M, about 1 α at the
-  same prices.
+  measured 186,707 gas for an account's first claim and 169,606 for a later one) costs about 13 weeks of
+  average earnings, and gas falls under 10% of a claim only after ≈ 131 weeks; both take ten times longer
+  at 1M providers (`VERSION2-FINAL.md` §3). A third party can also raise that cost: by filling vault2's own
+  staking-hotkey list (up to 128 entries, each costing it a transfer above the floor) it makes every claim
+  use about 1.26M gas instead of 0.15M, about 1 α at the same prices.
 - **Outside any contract** (chain-level powers that the release 1.0 vault faces too): the SN25 owner key
   or root can **freeze every claim** by disabling stake transfers (§6.4), though it cannot take or
   redirect a balance; and SN25 can be **dissolved**. A new subnet registration at the subnet limit
