@@ -5,12 +5,18 @@ package onchain
 // pending root, the latest finalized root F and the covered epochs'
 // fundedThrough from vault2 at the finalized block, fetches the published
 // objects, and runs ledger.Verify (without head bindings, for which a
-// watcher has no archive state). Every account of F is then reported as
-// having no fault, a provable fault, or as unverifiable when objects are
-// missing or do not reproduce the root: never "no fault" then. With
-// --challenge it sends checkPath for a provable fault, which deletes the
-// root; with --demand it sends the §9.3 demand set (ledger.DemandSet), each
-// demand paying demandFeeWei with the account and its proof against F.
+// watcher has no archive state).
+//
+// The watcher protects the accounts of the newest finalized root whose
+// objects it fetched and verified: F, or when F's objects are missing or do
+// not rebuild it, the newest older root whose objects do, which it says.
+// Every account of that root is reported as having no fault, a provable
+// fault, or as unverifiable when objects are missing or do not reproduce
+// the pending root: never "no fault" then. With --challenge it sends
+// checkPath for a provable fault, which deletes the root; with --demand it
+// sends the §9.3 demand set (ledger.DemandSet), each demand paying
+// demandFeeWei with the root's index, the account and its proof against
+// that root.
 
 import (
 	"context"
@@ -44,11 +50,11 @@ const v2LogChunkBlocks = 1_000
 type v2State struct {
 	firstEpoch uint64
 	pending    stabi.ISTSettlementVault2Pending
-	// previous is the latest finalized root F, at index previousIndex; nil
+	// latest is the latest finalized root F, at index latestIndex; nil
 	// before the pool's first root.
-	previous      *stabi.ISTSettlementVault2Root
-	previousIndex *big.Int
-	funded        map[uint64]uint256.Int
+	latest      *stabi.ISTSettlementVault2Root
+	latestIndex uint64
+	funded      map[uint64]uint256.Int
 }
 
 // readV2State reads the pool, its pending root, F and fundedThrough for
@@ -77,12 +83,12 @@ func readV2State(ctx context.Context, r *v2Reader, noID uint64) (*v2State, error
 	}
 	p := pool.FirstEpoch - 1
 	if count.Sign() > 0 {
-		index := new(big.Int).Sub(count, common.Big1)
-		root, err := v2View(ctx, r, vault2.PackRoots(n, index), vault2.UnpackRoots)
+		index := count.Uint64() - 1
+		root, err := v2View(ctx, r, vault2.PackRoots(n, new(big.Int).SetUint64(index)), vault2.UnpackRoots)
 		if err != nil {
-			return nil, fmt.Errorf("roots(%d,%s): %w", noID, index, err)
+			return nil, fmt.Errorf("roots(%d,%d): %w", noID, index, err)
 		}
-		state.previous, state.previousIndex, p = &root, index, root.Epoch
+		state.latest, state.latestIndex, p = &root, index, root.Epoch
 	}
 	if pending.Epoch > p && pending.Epoch-p <= ledger.MaxCoveredEpochs {
 		for k := p + 1; k <= pending.Epoch; k++ {
@@ -103,6 +109,77 @@ func (o v2Objects) Fetch(ctx context.Context, ref ledger.Ref) (io.ReadCloser, er
 	u := o.api.JoinPath("sn", "ledger", "object")
 	u.RawQuery = url.Values{"hash": {ref.String()}}.Encode()
 	return v2Get(ctx, u)
+}
+
+// v2ReadObject fetches an object of at most limit bytes and checks its
+// bytes against its reference.
+func v2ReadObject(ctx context.Context, objects ledger.Fetcher, ref ledger.Ref, limit int) ([]byte, error) {
+	body, err := objects.Fetch(ctx, ref)
+	var data []byte
+	if err == nil {
+		data, err = io.ReadAll(io.LimitReader(body, int64(limit)+1))
+		body.Close()
+		if err == nil && (len(data) > limit || ledger.RefOf(data) != ref) {
+			err = errors.New("the bytes served do not match it")
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("object %v: %w", ref, err)
+	}
+	return data, nil
+}
+
+// v2ReadAccounts reads a root's published accounts: its canonical header
+// and account chunks, each checked against its reference, and their tree.
+func v2ReadAccounts(ctx context.Context, objects ledger.Fetcher, ledgerHash [32]byte) ([]merkle.LedgerAccount, *merkle.LedgerSumTree, error) {
+	data, err := v2ReadObject(ctx, objects, ledgerHash, ledger.MaxHeaderBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	header, err := ledger.DecodeHeader(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("header %v: %w", ledger.Ref(ledgerHash), err)
+	}
+	chunks := make([][]byte, len(header.Accounts))
+	for j, ref := range header.Accounts {
+		if chunks[j], err = v2ReadObject(ctx, objects, ref, ledger.ChunkRows*ledger.AccountRowBytes); err != nil {
+			return nil, nil, err
+		}
+	}
+	accounts, err := ledger.DecodeAccountChunks(chunks)
+	if err != nil {
+		return nil, nil, fmt.Errorf("account chunks of %v: %w", ledger.Ref(ledgerHash), err)
+	}
+	tree, err := merkle.BuildLedgerSumTree(ctx, accounts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("accounts of %v: %w", ledger.Ref(ledgerHash), err)
+	}
+	return accounts, tree, nil
+}
+
+// v2Rebuilds reports that tree is the committed root.
+func v2Rebuilds(tree *merkle.LedgerSumTree, root [32]byte, total *big.Int, leafCount uint64) bool {
+	hash, sum := tree.Root()
+	return hash == root && sum.ToBig().Cmp(total) == 0 && tree.LeafCount() == leafCount
+}
+
+// v2Protected is the finalized root whose accounts the watcher protects.
+type v2Protected struct {
+	index    uint64
+	accounts []merkle.LedgerAccount
+	tree     *merkle.LedgerSumTree
+}
+
+// v2Assessment is what the pending root's published accounts show against
+// the protected root, and the §9.3 response.
+type v2Assessment struct {
+	protected v2Protected
+	// tree is the published accounts' tree, nil when they were not read;
+	// reproduced reports that it is the pending root.
+	tree       *merkle.LedgerSumTree
+	reproduced bool
+	faults     []ledger.Fault
+	action     ledger.Action
 }
 
 // cmdV2Check implements `snclaim v2 check --all`.
@@ -143,7 +220,8 @@ func cmdV2Check(ctx context.Context, opts docopt.Opts) error {
 	if err != nil {
 		return fmt.Errorf("read the finalized EVM head: %w", err)
 	}
-	state, err := readV2State(ctx, &v2Reader{client: client, vault: vault, block: new(big.Int).SetUint64(head.Number)}, noID)
+	reader := &v2Reader{client: client, vault: vault, block: new(big.Int).SetUint64(head.Number)}
+	state, err := readV2State(ctx, reader, noID)
 	if err != nil {
 		return err
 	}
@@ -156,15 +234,16 @@ func cmdV2Check(ctx context.Context, opts docopt.Opts) error {
 	}
 	fmt.Printf("  pending root:      seq %d, epoch %d, committed at block %d, %d open demands\n", pending.Seq, pending.Epoch, pending.CommittedBlock, pending.OpenDemands)
 	fmt.Printf("                     root 0x%x, total %s, %d accounts, ledger %v\n", pending.Root, formatAlpha(pending.Total), pending.LeafCount, ledger.Ref(pending.LedgerHash))
+	objects := v2Objects{api: api}
 	in := ledger.VerifyInput{
 		NoID: noID, FirstEpoch: state.firstEpoch, Seq: pending.Seq,
 		Pending:       v2LedgerRoot(pending.Epoch, pending.Root, pending.Total, pending.LeafCount, pending.LedgerHash),
-		FundedThrough: state.funded, Fetcher: v2Objects{api: api}, Custody: ledger.NewMemoryCustody(),
+		FundedThrough: state.funded, Fetcher: objects, Custody: ledger.NewMemoryCustody(),
 		MaxFetchBytes: ledger.DefaultMaxFetchBytes,
 	}
-	if previous := state.previous; previous != nil {
-		fmt.Printf("  finalized root:    index %s, epoch %d, root 0x%x, total %s, %d accounts\n", state.previousIndex, previous.Epoch, previous.Root, formatAlpha(previous.Total), previous.LeafCount)
-		root := v2LedgerRoot(previous.Epoch, previous.Root, previous.Total, previous.LeafCount, previous.LedgerHash)
+	if latest := state.latest; latest != nil {
+		fmt.Printf("  finalized root:    index %d, epoch %d, root 0x%x, total %s, %d accounts\n", state.latestIndex, latest.Epoch, latest.Root, formatAlpha(latest.Total), latest.LeafCount)
+		root := v2LedgerRoot(latest.Epoch, latest.Root, latest.Total, latest.LeafCount, latest.LedgerHash)
 		in.Previous = &root
 	} else {
 		fmt.Printf("  finalized root:    none; the pending root is the pool's first\n")
@@ -173,29 +252,39 @@ func cmdV2Check(ctx context.Context, opts docopt.Opts) error {
 	if err != nil {
 		return fmt.Errorf("verify the pending root: %w", err)
 	}
-	reportV2Check(res)
-
-	switch {
-	case state.previous == nil:
+	reportV2Audit(res)
+	if state.latest == nil {
 		return nil
-	case res.Previous == nil:
-		return errors.New("the finalized root's objects are unavailable or do not rebuild it: its accounts cannot be checked, challenged or demanded")
 	}
+	a := &v2Assessment{
+		protected: v2Protected{index: state.latestIndex, accounts: res.PreviousAccounts, tree: res.Previous},
+		tree:      res.Tree, reproduced: res.Reproduced, faults: res.Faults, action: res.Action(),
+	}
+	if res.Previous == nil {
+		if a, err = v2Fallback(ctx, reader, objects, noID, state); err != nil {
+			return err
+		}
+	}
+	reportV2Accounts(a)
+
 	sender := &v2Sender{client: client, chainID: chainID, rpcURL: rpcURL, vault: vault, key: key, gasLimit: gasLimit, dryRun: boolOpt(opts, "--dry-run")}
 	if key != nil {
 		sender.from = crypto.PubkeyToAddress(key.PublicKey)
 	}
-	switch res.Action() {
+	switch a.action {
 	case ledger.ActionChallenge:
 		if !challenge {
-			return fmt.Errorf("pending root seq %d faults %d accounts of the finalized root; --challenge deletes it", pending.Seq, len(res.Faults))
+			return fmt.Errorf("pending root seq %d faults %d accounts of finalized root %d; --challenge deletes it", pending.Seq, len(a.faults), a.protected.index)
 		}
-		return v2Challenge(ctx, sender, noID, state, res)
+		return v2Challenge(ctx, sender, noID, state, a)
 	case ledger.ActionDemand:
 		if !demand {
-			return fmt.Errorf("pending root seq %d leaves the finalized root's accounts unverifiable; --demand sends the demand set", pending.Seq)
+			return fmt.Errorf("pending root seq %d leaves the accounts of finalized root %d unverifiable; --demand sends the demand set", pending.Seq, a.protected.index)
 		}
-		return v2Demand(ctx, sender, noID, state, res, head.Number)
+		return v2Demand(ctx, sender, noID, state, a, head.Number)
+	}
+	if a.protected.index != state.latestIndex {
+		return fmt.Errorf("finalized root %d's objects are missing or do not rebuild it: the accounts added after root %d cannot be checked", state.latestIndex, a.protected.index)
 	}
 	return nil
 }
@@ -205,9 +294,52 @@ func v2LedgerRoot(epoch uint64, root [32]byte, total *big.Int, leafCount uint64,
 	return ledger.Root{Epoch: epoch, Root: root, Total: *uint256.MustFromBig(total), LeafCount: leafCount, LedgerHash: ledgerHash}
 }
 
-// reportV2Check prints the audit and, for the finalized root's accounts,
-// no fault, the provable faults, or unverifiable.
-func reportV2Check(res *ledger.Result) {
+// v2Fallback protects, when the latest finalized root's objects are missing
+// or do not rebuild it, the newest older root whose objects do, and reads
+// the pending root's published accounts against it: a fault they show is
+// challenged when they reproduce the pending root, and a pending root they
+// do not reproduce is demanded.
+func v2Fallback(ctx context.Context, r *v2Reader, objects ledger.Fetcher, noID uint64, state *v2State) (*v2Assessment, error) {
+	a := &v2Assessment{action: ledger.ActionRefuse}
+	found := false
+	for k := state.latestIndex; k > 0 && !found; {
+		k--
+		root, err := v2View(ctx, r, vault2.PackRoots(new(big.Int).SetUint64(noID), new(big.Int).SetUint64(k)), vault2.UnpackRoots)
+		if err != nil {
+			return nil, fmt.Errorf("roots(%d,%d): %w", noID, k, err)
+		}
+		accounts, tree, err := v2ReadAccounts(ctx, objects, root.LedgerHash)
+		if err == nil && !v2Rebuilds(tree, root.Root, root.Total, root.LeafCount) {
+			err = errors.New("its published accounts do not rebuild it")
+		}
+		if err != nil {
+			fmt.Printf("  fallback:          finalized root %d is unverifiable too: %v\n", k, err)
+			continue
+		}
+		a.protected, found = v2Protected{index: k, accounts: accounts, tree: tree}, true
+	}
+	if !found {
+		return nil, fmt.Errorf("no finalized root of pool %d has objects that rebuild it: its accounts cannot be checked, challenged or demanded", noID)
+	}
+	fmt.Printf("  fallback:          finalized root %d's objects are missing or do not rebuild it; protecting finalized root %d, the newest whose objects do\n", state.latestIndex, a.protected.index)
+	accounts, tree, err := v2ReadAccounts(ctx, objects, state.pending.LedgerHash)
+	if err != nil {
+		fmt.Printf("  pending accounts:  unavailable: %v\n", err)
+	} else {
+		a.tree, a.faults = tree, ledger.Faults(a.protected.accounts, accounts)
+		a.reproduced = v2Rebuilds(tree, state.pending.Root, state.pending.Total, state.pending.LeafCount)
+	}
+	switch {
+	case !a.reproduced:
+		a.action = ledger.ActionDemand
+	case len(a.faults) > 0:
+		a.action = ledger.ActionChallenge
+	}
+	return a, nil
+}
+
+// reportV2Audit prints the audit and the objects it could not obtain.
+func reportV2Audit(res *ledger.Result) {
 	if res.Err == nil {
 		fmt.Printf("  audit:             %v\n", res.Action())
 	} else {
@@ -216,23 +348,25 @@ func reportV2Check(res *ledger.Result) {
 	for _, ref := range res.Missing {
 		fmt.Printf("  object missing:    %v\n", ref)
 	}
-	if res.Previous == nil {
-		return
-	}
-	n := len(res.PreviousAccounts)
-	switch res.Action() {
+}
+
+// reportV2Accounts prints, for the protected root's accounts, no fault,
+// the provable faults, or unverifiable.
+func reportV2Accounts(a *v2Assessment) {
+	n, k := len(a.protected.accounts), a.protected.index
+	switch a.action {
 	case ledger.ActionDemand:
-		fmt.Printf("  previous accounts: %d, unverifiable: the published objects are missing or do not reproduce the pending root\n", n)
-		for _, fault := range res.Faults {
+		fmt.Printf("  previous accounts: %d of root %d, unverifiable: the published objects are missing or do not reproduce the pending root\n", n, k)
+		for _, fault := range a.faults {
 			fmt.Printf("    account %d:      the published row shows %v\n", fault.Index, fault.Kind)
 		}
 	case ledger.ActionChallenge:
-		fmt.Printf("  previous accounts: %d, %d with a provable fault, %d with no fault\n", n, len(res.Faults), n-len(res.Faults))
-		for _, fault := range res.Faults {
+		fmt.Printf("  previous accounts: %d of root %d, %d with a provable fault, %d with no fault\n", n, k, len(a.faults), n-len(a.faults))
+		for _, fault := range a.faults {
 			fmt.Printf("    account %d:      %v\n", fault.Index, fault.Kind)
 		}
 	default:
-		fmt.Printf("  previous accounts: %d, no fault\n", n)
+		fmt.Printf("  previous accounts: %d of root %d, no fault\n", n, k)
 	}
 }
 
@@ -249,20 +383,20 @@ func v2PendingGone(ctx context.Context, s *v2Sender, noID, seq uint64) (bool, er
 // v2Challenge sends checkPath for the first provable fault: one deletes the
 // root. A root that has left the pending slot, deleted by another
 // challenger or replaced, is done (SPEC A6).
-func v2Challenge(ctx context.Context, s *v2Sender, noID uint64, state *v2State, res *ledger.Result) error {
-	fault := res.Faults[0]
-	path, err := res.Tree.Path(fault.Index)
+func v2Challenge(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *v2Assessment) error {
+	fault := a.faults[0]
+	path, err := a.tree.Path(fault.Index)
 	if err != nil {
 		return fmt.Errorf("the pending root has no account %d to open: %w", fault.Index, err)
 	}
-	// Faults index the finalized root's accounts, so each has a proof.
-	proof, _ := res.Previous.Proof(fault.Index)
-	account := &res.PreviousAccounts[fault.Index]
-	seq := state.pending.Seq
-	calldata := vault2.PackCheckPath(new(big.Int).SetUint64(noID), state.previousIndex, v2LedgerAccount(fault.Index, account), v2ProofNodes(proof), v2PathNodes(path))
+	// Faults index the protected root's accounts, so each has a proof.
+	proof, _ := a.protected.tree.Proof(fault.Index)
+	account := &a.protected.accounts[fault.Index]
+	seq, k := state.pending.Seq, a.protected.index
+	calldata := vault2.PackCheckPath(new(big.Int).SetUint64(noID), new(big.Int).SetUint64(k), v2LedgerAccount(fault.Index, account), v2ProofNodes(proof), v2PathNodes(path))
 	receipt, err := s.send(ctx, "challenge", calldata, nil, func() {
 		fmt.Printf("  pending:     pool %d, seq %d, root 0x%x\n", noID, seq, state.pending.Root)
-		fmt.Printf("  account:     %d of finalized root %s: coldkey 0x%x, cumulative %s\n", fault.Index, state.previousIndex, account.Coldkey, v2Alpha(&account.Cumulative))
+		fmt.Printf("  account:     %d of finalized root %d: coldkey 0x%x, cumulative %s\n", fault.Index, k, account.Coldkey, v2Alpha(&account.Cumulative))
 		fmt.Printf("  fault:       %v\n", fault.Kind)
 	})
 	if err != nil {
@@ -291,7 +425,7 @@ func v2Challenge(ctx context.Context, s *v2Sender, noID uint64, state *v2State, 
 			continue
 		}
 		fmt.Printf("DistributionDeleted: pool %s, seq %d\n", event.NoId, event.Seq)
-		fmt.Printf("  account:     %s\n", event.Index)
+		fmt.Printf("  account:     %s of finalized root %s\n", event.Index, event.RootIndex)
 		fmt.Printf("  fault:       %v at level %s\n", merkle.LedgerFault(event.Fault), event.Level)
 		fmt.Printf("  challenger:  %s\n", event.Challenger.Hex())
 		return nil
@@ -299,26 +433,29 @@ func v2Challenge(ctx context.Context, s *v2Sender, noID uint64, state *v2State, 
 	return fmt.Errorf("tx %s succeeded but %s emitted no DistributionDeleted for seq %d", receipt.TxHash, s.vault.Hex(), seq)
 }
 
+// v2Key names a demand within a pending root: an account index of the
+// finalized root it is proven against.
+type v2Key struct{ root, index uint64 }
+
 // v2History is what vault2's events since F's finalization say about the
 // pending root and its predecessors over F.
 type v2History struct {
 	// doublings counts the earlier pending roots over F replaced or deleted
-	// while a demand was open, and again holds their unanswered indexes.
+	// while a demand was open, and again holds their unanswered demands.
 	doublings uint
-	again     []uint64
-	// demanded holds the indexes demanded on the pending root, and ours
-	// those this sender demanded.
-	demanded map[uint64]bool
-	ours     map[uint64]bool
+	again     []v2Key
+	// demanded holds the demands on the pending root, and ours those this
+	// sender made.
+	demanded map[v2Key]bool
+	ours     map[v2Key]bool
 }
 
 // v2Event is a decoded vault2 event of the demand history.
 type v2Event struct {
 	name        string
 	seq         uint64
-	index       uint64
+	key         v2Key
 	replacedSeq uint64
-	rootIndex   *big.Int
 	sender      common.Address
 }
 
@@ -329,7 +466,8 @@ func v2EventID(name string) common.Hash {
 	return parsed.Events[name].ID
 }
 
-// decodeV2Event decodes a log of the demand history.
+// decodeV2Event decodes a log of the demand history. A DistributionFinalized
+// keys its root index.
 func decodeV2Event(log *types.Log) (v2Event, error) {
 	var topic common.Hash
 	if len(log.Topics) > 0 {
@@ -346,22 +484,22 @@ func decodeV2Event(log *types.Log) (v2Event, error) {
 	case v2EventID("DistributionDeleted"):
 		var e *stabi.STSettlementVault2DistributionDeleted
 		if e, err = vault2.UnpackDistributionDeletedEvent(log); err == nil {
-			ev = v2Event{name: "DistributionDeleted", seq: e.Seq}
+			ev = v2Event{name: "DistributionDeleted", seq: e.Seq, key: v2Key{e.RootIndex.Uint64(), e.Index.Uint64()}}
 		}
 	case v2EventID("PathDemanded"):
 		var e *stabi.STSettlementVault2PathDemanded
 		if e, err = vault2.UnpackPathDemandedEvent(log); err == nil {
-			ev = v2Event{name: "PathDemanded", seq: e.Seq, index: e.Index.Uint64(), sender: e.Demander}
+			ev = v2Event{name: "PathDemanded", seq: e.Seq, key: v2Key{e.RootIndex.Uint64(), e.Index.Uint64()}, sender: e.Demander}
 		}
 	case v2EventID("PathAnswered"):
 		var e *stabi.STSettlementVault2PathAnswered
 		if e, err = vault2.UnpackPathAnsweredEvent(log); err == nil {
-			ev = v2Event{name: "PathAnswered", seq: e.Seq, index: e.Index.Uint64()}
+			ev = v2Event{name: "PathAnswered", seq: e.Seq, key: v2Key{e.RootIndex.Uint64(), e.Index.Uint64()}}
 		}
 	case v2EventID("DistributionFinalized"):
 		var e *stabi.STSettlementVault2DistributionFinalized
 		if e, err = vault2.UnpackDistributionFinalizedEvent(log); err == nil {
-			ev = v2Event{name: "DistributionFinalized", seq: e.Seq, rootIndex: e.RootIndex}
+			ev = v2Event{name: "DistributionFinalized", seq: e.Seq, key: v2Key{root: e.RootIndex.Uint64()}}
 		}
 	default:
 		err = errors.New("not an event of the demand history")
@@ -374,7 +512,8 @@ func decodeV2Event(log *types.Log) (v2Event, error) {
 
 // readV2History scans vault2's events of the pool backwards from the
 // finalized head, in spans the public endpoint answers, to F's
-// DistributionFinalized, and reads the history after it.
+// DistributionFinalized, and reads the history after it. Demands are keyed
+// by seq, root index and account index.
 func readV2History(ctx context.Context, s *v2Sender, noID uint64, state *v2State, head uint64) (*v2History, error) {
 	query := ethereum.FilterQuery{
 		Addresses: []common.Address{s.vault},
@@ -401,7 +540,7 @@ func readV2History(ctx context.Context, s *v2Sender, noID uint64, state *v2State
 			if chunk[i], err = decodeV2Event(&logs[i]); err != nil {
 				return nil, err
 			}
-			if chunk[i].name == "DistributionFinalized" && chunk[i].rootIndex.Cmp(state.previousIndex) == 0 {
+			if chunk[i].name == "DistributionFinalized" && chunk[i].key.root == state.latestIndex {
 				start = i
 			}
 		}
@@ -411,14 +550,14 @@ func readV2History(ctx context.Context, s *v2Sender, noID uint64, state *v2State
 		}
 		events = append(chunk, events...)
 		if from == 0 {
-			return nil, fmt.Errorf("vault2 logs up to block %d hold no DistributionFinalized of root %s of pool %d", head, state.previousIndex, noID)
+			return nil, fmt.Errorf("vault2 logs up to block %d hold no DistributionFinalized of root %d of pool %d", head, state.latestIndex, noID)
 		}
 		to = from - 1
 	}
 
-	history := &v2History{demanded: map[uint64]bool{}, ours: map[uint64]bool{}}
+	history := &v2History{demanded: map[v2Key]bool{}, ours: map[v2Key]bool{}}
 	gone := map[uint64]bool{}
-	open := map[uint64]map[uint64]bool{}
+	open := map[uint64]map[v2Key]bool{}
 	for _, ev := range events {
 		switch ev.name {
 		case "DistributionCommitted":
@@ -429,55 +568,68 @@ func readV2History(ctx context.Context, s *v2Sender, noID uint64, state *v2State
 			gone[ev.seq] = true
 		case "PathDemanded":
 			if open[ev.seq] == nil {
-				open[ev.seq] = map[uint64]bool{}
+				open[ev.seq] = map[v2Key]bool{}
 			}
-			open[ev.seq][ev.index] = true
+			open[ev.seq][ev.key] = true
 			if ev.seq == state.pending.Seq {
-				history.demanded[ev.index] = true
+				history.demanded[ev.key] = true
 				if ev.sender == s.from {
-					history.ours[ev.index] = true
+					history.ours[ev.key] = true
 				}
 			}
 		case "PathAnswered":
-			delete(open[ev.seq], ev.index)
+			delete(open[ev.seq], ev.key)
 		}
 	}
 	for seq := range gone {
 		if len(open[seq]) > 0 {
 			history.doublings++
-			for index := range open[seq] {
-				history.again = append(history.again, index)
+			for key := range open[seq] {
+				history.again = append(history.again, key)
 			}
 		}
 	}
 	return history, nil
 }
 
-// v2Demand sends the §9.3 demand set. A sender draws its sample once per
-// pending root: once it holds as many sampled demands on the root as the
-// sample size, later runs demand only the forced indexes, so a watcher run
-// again does not pay for a fresh sample. An index already demanded is done
-// (SPEC A6); a pending root that leaves the slot ends the demands.
-func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, res *ledger.Result, head uint64) error {
+// v2Demand sends the §9.3 demand set against the protected root. An earlier
+// root's unanswered demand is demanded again at its account index when the
+// protected root holds that account. A sender draws its sample once per
+// pending root and protected root: once it holds as many sampled demands
+// there as the sample size, later runs demand only the forced indexes, so a
+// watcher run again does not pay for a fresh sample. A demand already made
+// is done (SPEC A6); a pending root that leaves the slot ends the demands.
+func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *v2Assessment, head uint64) error {
 	history, err := readV2History(ctx, s, noID, state, head)
 	if err != nil {
 		return err
 	}
-	forced := slices.Clone(history.again)
-	for _, fault := range res.Faults {
+	k, held := a.protected.index, uint64(len(a.protected.accounts))
+	var again []uint64
+	for _, key := range history.again {
+		if key.index < held {
+			again = append(again, key.index)
+		}
+	}
+	forced := slices.Clone(again)
+	for _, fault := range a.faults {
 		forced = append(forced, fault.Index)
 	}
 	slices.Sort(forced)
 	forced = slices.Compact(forced)
-	sampled := 0
-	for index := range history.ours {
-		if !slices.Contains(forced, index) {
+	sampled, already := 0, 0
+	for key := range history.demanded {
+		if key.root != k {
+			continue
+		}
+		already++
+		if history.ours[key] && !slices.Contains(forced, key.index) {
 			sampled++
 		}
 	}
 	set := forced
 	if history.doublings >= 32 || uint64(sampled) < ledger.DemandSample<<history.doublings {
-		if set, err = ledger.DemandSet(res.PreviousAccounts, res.Faults, history.doublings, history.again, v2Random); err != nil {
+		if set, err = ledger.DemandSet(a.protected.accounts, a.faults, history.doublings, again, v2Random); err != nil {
 			return err
 		}
 	}
@@ -485,18 +637,21 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, res
 	if err != nil {
 		return fmt.Errorf("demandFeeWei(): %w", err)
 	}
-	seq, n := state.pending.Seq, new(big.Int).SetUint64(noID)
-	fmt.Printf("demand set: %d accounts (%d doublings, %d forced), %d already demanded\n", len(set), history.doublings, len(forced), len(history.demanded))
+	seq, n, root := state.pending.Seq, new(big.Int).SetUint64(noID), new(big.Int).SetUint64(k)
+	fmt.Printf("demand set: %d accounts of root %d (%d doublings, %d forced), %d already demanded\n", len(set), k, history.doublings, len(forced), already)
+	if beyond := len(history.again) - len(again); beyond > 0 {
+		fmt.Printf("  %d unanswered earlier demands name accounts that root %d does not hold\n", beyond, k)
+	}
 	for _, index := range set {
-		if history.demanded[index] {
+		if history.demanded[v2Key{k, index}] {
 			continue
 		}
-		// The set indexes the finalized root's accounts, so each has a proof.
-		proof, _ := res.Previous.Proof(index)
-		account := &res.PreviousAccounts[index]
-		receipt, err := s.send(ctx, "demand", vault2.PackDemandPath(n, state.previousIndex, v2LedgerAccount(index, account), v2ProofNodes(proof)), fee, func() {
+		// The set indexes the protected root's accounts, so each has a proof.
+		proof, _ := a.protected.tree.Proof(index)
+		account := &a.protected.accounts[index]
+		receipt, err := s.send(ctx, "demand", vault2.PackDemandPath(n, root, v2LedgerAccount(index, account), v2ProofNodes(proof)), fee, func() {
 			fmt.Printf("  pending:     pool %d, seq %d\n", noID, seq)
-			fmt.Printf("  account:     %d of finalized root %s: coldkey 0x%x, cumulative %s\n", index, state.previousIndex, account.Coldkey, v2Alpha(&account.Cumulative))
+			fmt.Printf("  account:     %d of finalized root %d: coldkey 0x%x, cumulative %s\n", index, k, account.Coldkey, v2Alpha(&account.Cumulative))
 			fmt.Printf("  fee:         %s wei\n", fee)
 		})
 		if err != nil {
@@ -511,34 +666,35 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, res
 				fmt.Printf("pending root seq %d is no longer pending (deleted or replaced); no more demands\n", seq)
 				return nil
 			}
-			demanded, rerr := v2View(ctx, &v2Reader{client: s.client, vault: s.vault}, vault2.PackDemanded(n, seq, state.previousIndex, new(big.Int).SetUint64(index)), vault2.UnpackDemanded)
+			demanded, rerr := v2View(ctx, &v2Reader{client: s.client, vault: s.vault}, vault2.PackDemanded(n, seq, root, new(big.Int).SetUint64(index)), vault2.UnpackDemanded)
 			if rerr != nil {
-				return errors.Join(err, fmt.Errorf("demanded(%d,%d,%d): %w", noID, seq, index, rerr))
+				return errors.Join(err, fmt.Errorf("demanded(%d,%d,%d,%d): %w", noID, seq, k, index, rerr))
 			}
 			if demanded == 0 {
 				return err
 			}
-			fmt.Printf("account %d: already demanded on seq %d; done\n", index, seq)
+			fmt.Printf("account %d of root %d: already demanded on seq %d; done\n", index, k, seq)
 			continue
 		}
 		if receipt == nil {
 			continue // dry run
 		}
-		if !v2Demanded(receipt, s.vault, seq, index) {
-			return fmt.Errorf("tx %s succeeded but %s emitted no PathDemanded for seq %d account %d", receipt.TxHash, s.vault.Hex(), seq, index)
+		if !v2Demanded(receipt, s.vault, seq, k, index) {
+			return fmt.Errorf("tx %s succeeded but %s emitted no PathDemanded for seq %d account %d of root %d", receipt.TxHash, s.vault.Hex(), seq, index, k)
 		}
-		fmt.Printf("PathDemanded: pool %d, seq %d, account %d\n", noID, seq, index)
+		fmt.Printf("PathDemanded: pool %d, seq %d, account %d of root %d\n", noID, seq, index, k)
 	}
 	return nil
 }
 
-// v2Demanded reports a PathDemanded of seq and index in the receipt.
-func v2Demanded(receipt *types.Receipt, vault common.Address, seq, index uint64) bool {
+// v2Demanded reports a PathDemanded of seq, root and index in the receipt.
+func v2Demanded(receipt *types.Receipt, vault common.Address, seq, root, index uint64) bool {
 	for _, log := range receipt.Logs {
 		if log.Address != vault {
 			continue
 		}
-		if event, err := vault2.UnpackPathDemandedEvent(log); err == nil && event.Seq == seq && event.Index.IsUint64() && event.Index.Uint64() == index {
+		event, err := vault2.UnpackPathDemandedEvent(log)
+		if err == nil && event.Seq == seq && event.RootIndex.IsUint64() && event.RootIndex.Uint64() == root && event.Index.IsUint64() && event.Index.Uint64() == index {
 			return true
 		}
 	}

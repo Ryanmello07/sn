@@ -81,21 +81,21 @@ contract V2VaultEventsTest is V2VaultBase {
         LedgerTree.PathNode[] memory alicePath = V2TreeHelper.path(p, 0);
         vm.deal(stranger, DEMAND_FEE);
         vm.expectEmit(address(vault));
-        emit ISTSettlementVault2.PathDemanded(NO1, 2, 0, stranger);
+        emit ISTSettlementVault2.PathDemanded(NO1, 2, 0, 0, stranger);
         vm.prank(stranger);
-        vault.demandPath{value: DEMAND_FEE}(NO1, alice, aliceProof);
+        vault.demandPath{value: DEMAND_FEE}(NO1, 0, alice, aliceProof);
 
         vm.expectEmit(address(vault));
-        emit ISTSettlementVault2.PathAnswered(NO1, 2, 0, address(this));
-        vault.checkPath(NO1, alice, aliceProof, alicePath);
+        emit ISTSettlementVault2.PathAnswered(NO1, 2, 0, 0, address(this));
+        vault.checkPath(NO1, 0, alice, aliceProof, alicePath);
 
         LedgerTree.Account memory bob = _account(1, BOB, 400);
         LedgerTree.ProofNode[] memory bobProof = V2TreeHelper.proof(f, 1);
         LedgerTree.PathNode[] memory bobPath = V2TreeHelper.path(p, 1);
         vm.expectEmit(address(vault));
-        emit ISTSettlementVault2.DistributionDeleted(NO1, 2, 1, LedgerTree.Fault.LowerValue, 0, stranger);
+        emit ISTSettlementVault2.DistributionDeleted(NO1, 2, 0, 1, LedgerTree.Fault.LowerValue, 0, stranger);
         vm.prank(stranger);
-        vault.checkPath(NO1, bob, bobProof, bobPath);
+        vault.checkPath(NO1, 0, bob, bobProof, bobPath);
 
         // Claims, absorption and surplus.
         vm.expectEmit(address(vault));

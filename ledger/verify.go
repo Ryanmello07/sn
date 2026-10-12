@@ -534,21 +534,7 @@ func (v *verifier) accounts(h *Header) error {
 		return err
 	}
 	v.res.Accounts = accounts
-	previous := v.res.PreviousAccounts
-	for i := range previous {
-		kind := merkle.LedgerFaultNone
-		switch {
-		case i >= len(accounts):
-			kind = merkle.LedgerFaultWrongLeaf
-		case accounts[i].Cumulative.Lt(&previous[i].Cumulative):
-			kind = merkle.LedgerFaultLowerValue
-		case accounts[i].Coldkey != previous[i].Coldkey:
-			kind = merkle.LedgerFaultWrongLeaf
-		}
-		if kind != merkle.LedgerFaultNone {
-			v.res.Faults = append(v.res.Faults, Fault{Index: uint64(i), Kind: kind})
-		}
-	}
+	v.res.Faults = Faults(v.res.PreviousAccounts, accounts)
 	if n := uint64(len(accounts)); n == 0 || n > merkle.MaxLedgerLeafCount {
 		return nil
 	}
@@ -561,6 +547,31 @@ func (v *verifier) accounts(h *Header) error {
 	v.res.Tree = tree
 	v.res.Reproduced = root == pending.Root && total.Eq(&pending.Total) && tree.LeafCount() == pending.LeafCount
 	return nil
+}
+
+// Faults lists, by index, every previous account whose row in accounts is
+// below its value (merkle.LedgerFaultLowerValue), names another coldkey or
+// is missing (merkle.LedgerFaultWrongLeaf): when accounts are a pending
+// root's tree, what checkPath finds at the account's leaf. previous may be
+// any finalized root's accounts, as positions and coldkeys never change and
+// values never decrease.
+func Faults(previous, accounts []merkle.LedgerAccount) []Fault {
+	var faults []Fault
+	for i := range previous {
+		kind := merkle.LedgerFaultNone
+		switch {
+		case i >= len(accounts):
+			kind = merkle.LedgerFaultWrongLeaf
+		case accounts[i].Cumulative.Lt(&previous[i].Cumulative):
+			kind = merkle.LedgerFaultLowerValue
+		case accounts[i].Coldkey != previous[i].Coldkey:
+			kind = merkle.LedgerFaultWrongLeaf
+		}
+		if kind != merkle.LedgerFaultNone {
+			faults = append(faults, Fault{Index: uint64(i), Kind: kind})
+		}
+	}
+	return faults
 }
 
 // fixedInputs runs check 3 and records every null declaration it accepts.

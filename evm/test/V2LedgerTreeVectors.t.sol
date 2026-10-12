@@ -175,7 +175,7 @@ contract V2LedgerTreeVectorsTest is Test {
 
     /// T-2: each single change to every vector claim is rejected: a sibling
     /// hash or sum, an index bit, the coldkey, the cumulative, the proof
-    /// length, and an index at or above n.
+    /// length, an index at or above n, and the total one above or below.
     function test_treeVectorsRejectEverySingleChange() public view {
         TreeVector[] memory trees = _trees();
         for (uint256 t; t < trees.length; t++) {
@@ -232,6 +232,11 @@ contract V2LedgerTreeVectorsTest is Test {
         }
         _rejects(v, LedgerTree.Account(v.leafCount, a.coldkey, a.cumulative), proof, "index at n");
         _rejects(v, LedgerTree.Account(type(uint256).max, a.coldkey, a.cumulative), proof, "index max");
+        v.total += 1;
+        _rejects(v, a, proof, "total above");
+        v.total -= 2;
+        _rejects(v, a, proof, "total below");
+        v.total += 1;
         // The unchanged claim still verifies.
         assertTrue(tree.verifyLeaf(v.root, v.total, v.leafCount, a, proof), v.name);
     }
@@ -253,7 +258,7 @@ contract V2LedgerTreeVectorsTest is Test {
             ),
             (ProofCase[])
         );
-        assertEq(cases.length, 37);
+        assertEq(cases.length, 39);
         uint256 reverts;
         for (uint256 i; i < cases.length; i++) {
             ProofCase memory c = cases[i];

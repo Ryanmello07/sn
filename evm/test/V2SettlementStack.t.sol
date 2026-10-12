@@ -118,7 +118,7 @@ contract V2SettlementStackTest is V2StackBase {
         _closeV2(FIRST_EPOCH + 1, NO1);
         uint64 seq = _commitV2(FIRST_EPOCH + 1, NO1, rootSigner1, p, 3);
         _approveV2(NO1, auditor1);
-        _demandV2(NO1, f, _account(1, BOB, 400));
+        _demandV2(NO1, 0, f, _account(1, BOB, 400));
         assertEq(vault2.pending(NO1).openDemands, 1);
 
         vm.roll(block.number + WINDOW * 3);
@@ -127,7 +127,7 @@ contract V2SettlementStackTest is V2StackBase {
         assertEq(vault2.pending(NO1).seq, seq);
         assertEq(vault2.rootCount(NO1), 1);
 
-        vault2.checkPath(NO1, _account(1, BOB, 400), V2TreeHelper.proof(f, 1), V2TreeHelper.path(p, 1));
+        vault2.checkPath(NO1, 0, _account(1, BOB, 400), V2TreeHelper.proof(f, 1), V2TreeHelper.path(p, 1));
         assertEq(settlement.finalizeDistribution(NO1), 1);
         assertEq(vault2.finalizedTotal(NO1), 1_500);
     }

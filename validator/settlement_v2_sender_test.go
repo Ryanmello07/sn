@@ -273,12 +273,10 @@ func (self *settlementV2TestChain) execute(state *settlementV2TestState, number 
 			return revert("InvalidDemandFee")
 		case pending.Seq == 0:
 			return revert("NoPendingRoot")
-		case len(roots) == 0:
-			return revert("NoFinalizedRoot")
-		case number >= pending.CommittedBlock+50:
-			return revert("ChallengeWindowClosed")
 		case rootIndex.Cmp(big.NewInt(int64(len(roots)))) >= 0:
 			return revert("UnknownRoot")
+		case number >= pending.CommittedBlock+50:
+			return revert("ChallengeWindowClosed")
 		case account.Index.Uint64() >= roots[rootIndex.Uint64()].LeafCount:
 			return revert("IndexOutOfRange")
 		case state.demanded[key] != settlementV2TestDemandNone:
@@ -1177,9 +1175,10 @@ func TestSettlementV2SenderReadFailures(t *testing.T) {
 	}
 }
 
-// VA-3, VA-8: a preflight revert other than front-running signs nothing and
-// leaves no record: an approval by an address outside the auditor set, and a challenge
-// whose opening shows no fault while nothing is demanded.
+// VA-3, VA-4, VA-8: a preflight revert other than front-running signs nothing
+// and leaves no record: an approval by an address outside the auditor set, a
+// demand naming a finalized root vault2 does not have (UnknownRoot), and a
+// challenge whose opening shows no fault while nothing is demanded.
 func TestSettlementV2PreflightRevertSendsNothing(t *testing.T) {
 	t.Parallel()
 	fixture := newSettlementV2SenderTestFixture(t)
@@ -1187,13 +1186,16 @@ func TestSettlementV2PreflightRevertSendsNothing(t *testing.T) {
 	if err := fixture.approve(t); err == nil || !strings.Contains(err.Error(), "preflight eth_call failed") {
 		t.Fatalf("an unauthorized approval: %v", err)
 	}
+	if err := fixture.demandAt(t, 1, 2); err == nil || !strings.Contains(err.Error(), "preflight eth_call failed") || !settlementV2Reverted(err, evmSelector("UnknownRoot()")) {
+		t.Fatalf("a demand against an unknown root: %v", err)
+	}
 	if err := fixture.challenge(t, 2); err == nil || !strings.Contains(err.Error(), "preflight eth_call failed") {
 		t.Fatalf("a challenge without a fault: %v", err)
 	}
 	if fixture.chain.count("eth_sendRawTransaction") != 0 {
 		t.Fatal("a reverting action was sent")
 	}
-	for _, path := range []string{fixture.recordPath("approve", 1), fixture.recordPath("challenge", 2)} {
+	for _, path := range []string{fixture.recordPath("approve", 1), fixture.recordPathAt("demand", 1, 2), fixture.recordPath("challenge", 2)} {
 		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("a reverting action left a record: %v", err)
 		}
@@ -1219,14 +1221,15 @@ func TestSettlementV2SendRefusesForeignRecord(t *testing.T) {
 	fixture := newSettlementV2SenderTestFixture(t)
 	record := settlementV2SendRecord{Schema: settlementV2SendSchema, NoID: 1, Seq: 7, Action: "demand", Index: 1, Transaction: signed(fixture.key, settlementV2TestVault)}
 	for name, change := range map[string]func(*settlementV2SendRecord){
-		"schema":    func(record *settlementV2SendRecord) { record.Schema = "other" },
-		"no id":     func(record *settlementV2SendRecord) { record.NoID = 2 },
-		"seq":       func(record *settlementV2SendRecord) { record.Seq = 8 },
-		"action":    func(record *settlementV2SendRecord) { record.Action = "approve" },
-		"index":     func(record *settlementV2SendRecord) { record.Index = 2 },
-		"hex":       func(record *settlementV2SendRecord) { record.Transaction = "0xzz" },
-		"rlp":       func(record *settlementV2SendRecord) { record.Transaction = "0x01" },
-		"other key": func(record *settlementV2SendRecord) { record.Transaction = signed(other, settlementV2TestVault) },
+		"schema":     func(record *settlementV2SendRecord) { record.Schema = "other" },
+		"no id":      func(record *settlementV2SendRecord) { record.NoID = 2 },
+		"seq":        func(record *settlementV2SendRecord) { record.Seq = 8 },
+		"action":     func(record *settlementV2SendRecord) { record.Action = "approve" },
+		"root index": func(record *settlementV2SendRecord) { record.RootIndex = 1 },
+		"index":      func(record *settlementV2SendRecord) { record.Index = 2 },
+		"hex":        func(record *settlementV2SendRecord) { record.Transaction = "0xzz" },
+		"rlp":        func(record *settlementV2SendRecord) { record.Transaction = "0x01" },
+		"other key":  func(record *settlementV2SendRecord) { record.Transaction = signed(other, settlementV2TestVault) },
 		"other target": func(record *settlementV2SendRecord) {
 			record.Transaction = signed(fixture.key, settlementV2TestSettlement)
 		},
