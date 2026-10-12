@@ -817,9 +817,11 @@ Paths in this section are in `server/` unless marked.
   so a call that would revert never takes a nonce.
 - **Alerts.** A missed close, a missed commit window, an open demand older
   than one day, a root not finalized by `end(e) + 14,400 + 1,200`, and SN25
-  nearing the prune threshold: within the lowest few non-immune subnets by
-  moving price, which a registration at the subnet limit would dissolve (§17,
-  dissolution row).
+  nearing the prune threshold: among the lowest `v2_prune_alert_positions`
+  (`st.yml`, default 3) non-immune subnets by moving price, the order in
+  which registrations at the subnet limit dissolve subnets (§17, dissolution
+  row). The driver reads that census from Subtensor storage at the finalized
+  head at most every ten minutes.
 
 **Gas.** R-6 measured each v2 transaction on ledgers of 2^29 accounts, the
 deepest vault2 takes, as gas used and the gas limit `eth_estimateGas` needs:
