@@ -34,7 +34,7 @@ var (
 )
 
 // The reviewed settlement v2 catalog entries as their release file.
-func evmV2TestRelease(t *testing.T) contractReleaseArtifacts {
+func evmV2TestRelease(t testing.TB) contractReleaseArtifacts {
 	t.Helper()
 	return evmTestCatalog(t, "SettlementV2ReleaseArtifacts", contractReleaseV2Schema)
 }

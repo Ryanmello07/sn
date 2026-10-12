@@ -82,34 +82,34 @@ type e2eArtifact struct {
 
 var e2eArtifacts sync.Map
 
-// e2eCatalogArtifact reads a contract from the reviewed release catalog.
+// e2eCatalogArtifact reads a contract from the reviewed release catalogs: the
+// v1 release's, then settlement v2's.
 func e2eCatalogArtifact(t testing.TB, name string) *e2eArtifact {
 	t.Helper()
 	if cached, ok := e2eArtifacts.Load("catalog/" + name); ok {
 		return cached.(*e2eArtifact)
 	}
-	for _, artifact := range evmTestRelease(t).Artifacts {
-		if artifact.Name != name {
-			continue
+	for _, release := range []func(testing.TB) contractReleaseArtifacts{evmTestRelease, evmV2TestRelease} {
+		for _, artifact := range release(t).Artifacts {
+			if artifact.Name != name {
+				continue
+			}
+			parsed, err := abi.JSON(strings.NewReader(artifact.Abi))
+			if err != nil {
+				t.Fatal(err)
+			}
+			loaded := &e2eArtifact{abi: parsed, creation: common.FromHex(artifact.Creation)}
+			e2eArtifacts.Store("catalog/"+name, loaded)
+			return loaded
 		}
-		parsed, err := abi.JSON(strings.NewReader(artifact.Abi))
-		if err != nil {
-			t.Fatal(err)
-		}
-		loaded := &e2eArtifact{abi: parsed, creation: common.FromHex(artifact.Creation)}
-		e2eArtifacts.Store("catalog/"+name, loaded)
-		return loaded
 	}
-	t.Fatalf("the reviewed catalog has no %s", name)
+	t.Fatalf("the reviewed catalogs have no %s", name)
 	return nil
 }
 
-// e2eForgeSources are the contracts the suite reads from a Foundry build of
-// sn/evm: the settlement v2 contracts until the reviewed catalog lists them,
-// and the test coordinator upgrade.
+// e2eForgeSources are the test contracts the suite reads from a Foundry build
+// of sn/evm: the test coordinator upgrade.
 var e2eForgeSources = []struct{ source, name string }{
-	{"src/STSettlementVault2.sol", "STSettlementVault2"},
-	{"src/STSettlement2.sol", "STSettlement2"},
 	{"test/utils/V2LifecycleHandler.sol", "STSettlement2Surplus"},
 }
 
@@ -358,8 +358,8 @@ func (f *e2eFixture) deployV1() {
 // coordinator.
 func (f *e2eFixture) deployV2() {
 	f.t.Helper()
-	vault2 := e2eForgeArtifact(f.t, "STSettlementVault2")
-	settlement := e2eForgeArtifact(f.t, "STSettlement2")
+	vault2 := e2eCatalogArtifact(f.t, "SettlementVault2")
+	settlement := e2eCatalogArtifact(f.t, "Settlement2")
 	f.vault2ABI, f.settlementABI = vault2.abi, settlement.abi
 	f.vault2Coldkey = ss58.EvmMirrorPubkey(crypto.CreateAddress(f.deployer.address, f.chain.nonce(f.deployer.address)))
 	f.vault2 = f.deploy(f.deployer, vault2, nil, uint16(e2eNetuid), f.escrowV2, f.vault2Coldkey, f.deployer.address, e2eRao(e2eDemandFeeWei))
