@@ -225,6 +225,24 @@ contract V2VaultRegistrationTest is V2VaultBase {
         assertEq(neuron.lastRegistrationCallValue(), 0);
     }
 
+    // V-2: a pool reads empty until it is registered.
+    function test_V2_anUnregisteredPoolReadsEmpty() public view {
+        ISTSettlementVault2.Pool memory pool = vault.pools(NO2);
+        assertEq(pool.hotkey, bytes32(0));
+        assertEq(pool.firstEpoch, 0);
+        assertFalse(pool.registered);
+        assertEq(vault.lastFundedEpoch(NO2), 0);
+        assertEq(vault.fundedThrough(NO2, 0), 0);
+        assertEq(vault.capturedTotal(NO2), 0);
+        assertEq(vault.claimedTotal(NO2), 0);
+        assertEq(vault.rootCount(NO2), 0);
+        assertEq(vault.finalizedTotal(NO2), 0);
+        assertEq(vault.commitSeq(NO2), 0);
+        assertEq(vault.lastCommitBlock(NO2), 0);
+        assertEq(vault.pending(NO2).seq, 0);
+        assertEq(vault.claimed(NO2, 0), 0);
+    }
+
     // V-2
     function test_V2_registerPoolAcceptsTheEdges() public {
         neuron.setUid(NETUID, POOL2, POOL2_UID);

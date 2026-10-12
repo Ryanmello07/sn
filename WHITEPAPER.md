@@ -1812,11 +1812,11 @@ designs, §9.3/§13.6) is an open post‑launch question, not a committed roadma
   **close is missed** beyond its 1,200-block window, whose share moves to later earners. Nor is delivery
   time promised: at live rates about 1,450 α per epoch reaches the pool at θ = 3/10, ≈ 0.0145 α per
   provider per week at 100k providers, so a 250k-gas claim at a 5 gwei base fee (≈ 0.19 α; the rehearsal
-  measured 235,938 gas) costs about 13 weeks of average earnings, and gas falls under 10% of a claim only
-  after ≈ 131 weeks; both take ten times longer at 1M providers (`VERSION2-FINAL.md` §3). A third party can
-  also raise that cost: by filling vault2's own staking-hotkey list (up to 128 entries, each costing it a
-  transfer above the floor) it makes every claim use about 1.27M gas instead of 0.2M, about 1 α at the
-  same prices.
+  measured 186,707 gas for an account's first claim and 169,606 for a later one) costs about 13 weeks of
+  average earnings, and gas falls under 10% of a claim only after ≈ 131 weeks; both take ten times longer
+  at 1M providers (`VERSION2-FINAL.md` §3). A third party can also raise that cost: by filling vault2's own
+  staking-hotkey list (up to 128 entries, each costing it a transfer above the floor) it makes every claim
+  use about 1.26M gas instead of 0.15M, about 1 α at the same prices.
 - **Outside any contract** (chain-level powers that the release 1.0 vault faces too): the SN25 owner key
   or root can **freeze every claim** by disabling stake transfers (§6.4), though it cannot take or
   redirect a balance; and SN25 can be **dissolved**. A new subnet registration at the subnet limit
@@ -2077,7 +2077,7 @@ pruned v2 pool hotkey through `registerPoolUid`, paying the burn.
 | Operator data deadline | — | +4 h (1,200 blocks) | `README.md`; the root commit window, unchanged in v2 settlement |
 | Close window | — | v1: 120 blocks after the epoch end; **v2: the 1,200-block commit window** | a v2 close missed beyond it defers the epoch with zero funding, and the next close captures its emission for later earners (§12.3) |
 | Challenge window (v2) | `CHALLENGE_BLOCKS` | **14,400 blocks** (≈ 48 h) from the commit, a constant of vault2 | no v2 root finalizes earlier or with a path demand open; needs `T_epoch` ≥ commit window + 14,400 (mainnet's 50,400 holds; testnet's 360-block cadence does not), checked at pool registration and kept by every later v1 policy (§5). v1 instead finalizes 14,400 blocks after the epoch end |
-| Demand fee (v2) | `demandFeeWei` | at least twice the gas of an answer at the planning fee: 2 × 159,665 gas at 5 gwei is 1,596,650 rao (1.59665·10^15 wei); a nonzero multiple of 10^9 wei | immutable in vault2 and kept by it, never paid to the answerer; the runtime moves only whole rao of a call's value. The rehearsal measured an answer at depth 29 at 159,665 gas and a demand at 104,867. Each account of each finalized root can be demanded once per pending root, so the possible demands grow with the number of roots, each paying the fee |
+| Demand fee (v2) | `demandFeeWei` | 750,000 rao (7.5·10^14 wei): one answer's gas at the planning fee, 149,074 gas at 5 gwei, rounded up; a nonzero multiple of 10^9 wei | immutable in vault2 and kept by it, never paid to the answerer; the runtime moves only whole rao of a call's value. The rehearsal measured an answer at depth 29 at 149,074 gas and a demand at 98,268. Each account of each finalized root can be demanded once per pending root, so the possible demands grow with the number of roots, each paying the fee |
 | Root approval (v2) | — | owner-admitted auditor addresses (≤ 16); **quorum 1 at launch** (the validator); approve before the end of epoch `e+1` | a root still unfinalized at the end of epoch `e+1` can be replaced by the next commit, and its epochs' funding stays for that root (§13.1) |
 | Claim expiry | — | v1: `claim_ttl_epochs` 8 + `claim_grace_epochs` 1; **v2: never** | policy v1 stays in force: `claim_ttl_epochs`, `claim_grace_epochs`, `expired_claim_action`, `shares_total_bps`, `rounding` and `deposit.usage_artifact` keep their meaning for v1 epochs and the v1 carry sweep and are **inert for v2 epochs**, which allocate in rao by `coldkey_usage_largest_remainder_rao_v1` |
 | Ledger bounds (v2) | — | ≤ 96 covered epochs per root; header ≤ 256 KiB (about 3,500 chunk references); 131,072 rows per chunk (48-byte account rows, 6 MiB; 57-byte provider rows, ≈ 7.1 MiB); ≤ 2^29 accounts per pool in vault2's tree | design target and activation gate: ≥ 1,000,000 providers per pool; the validator fetches at most `--ledger_max_bytes` of new objects per root (default 2 GiB, a runtime flag) |

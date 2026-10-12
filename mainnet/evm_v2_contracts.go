@@ -101,8 +101,9 @@ func contractVault2Payload(artifact contractReleaseArtifact, p evmPhasePlan) (co
 // executes in vault2's own block, so vault2's creation cannot pin it. Once
 // registered, the escrow position's collateral is read back as well.
 // Reviewed STSettlementVault2 layout: coordinator in the low 20 bytes of slot
-// zero with escrowRegistered at byte offset 20, the reentrancy flag in slot
-// one and totalCaptured, totalPaid and escrowAccounted in slots 14 to 16.
+// zero with escrowRegistered at byte offset 20 and the reentrancy flag at
+// offset 21, and totalCaptured and totalPaid packed in slot one
+// (escrowAccounted is their difference).
 func contractVault2State(vault evmCreatePlan, coordinator common.Address, registered bool) ([]contractGetter, []contractStorageWord) {
 	contract := stabi.NewSTSettlementVault2()
 	fee, _ := new(big.Int).SetString(vault.Vault2Constructor.DemandFeeWei, 10)
@@ -136,9 +137,7 @@ func contractVault2State(vault evmCreatePlan, coordinator common.Address, regist
 		packed[11] = 1
 		storage = append(storage, contractStorageWord{Slot: (common.Hash{}).Hex(), Expected: packed.Hex()})
 	}
-	for _, slot := range []int64{1, 14, 15, 16} {
-		storage = append(storage, contractStorageWord{Slot: common.BigToHash(big.NewInt(slot)).Hex(), Expected: (common.Hash{}).Hex()})
-	}
+	storage = append(storage, contractStorageWord{Slot: common.BigToHash(big.NewInt(1)).Hex(), Expected: (common.Hash{}).Hex()})
 	return getters, storage
 }
 

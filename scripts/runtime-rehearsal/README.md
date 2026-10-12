@@ -202,6 +202,19 @@ Measured on 2026-10-11 (the test takes about 18 s):
   (every UID by stake if none is active), so the escrow hotkey stays at share
   price 1 only while validators set weights; R-3 needs one.
 
+`TestRehearsalTransientStorage` deploys a Yul probe of EIP-1153 transient
+storage (`rehearsal/transient_test.go`). Measured on 2026-10-12: TLOAD and
+TSTORE run, and the storage is empty at the start of every transaction, but a
+write made in a call frame that reverts survives the revert, which EIP-1153
+forbids. After the probe wrote 1 and called itself to write 2 and revert, it
+read 2. Frontier keeps one transient map per transaction and rolls back only
+persistent storage (`SubstrateStackState` in
+`vendor/frontier/frame/evm/src/runner/stack.rs` of the runtime source). A
+reentrancy flag kept there would stay set after a guarded call reverts inside a
+caller that catches the revert, such as a batch of claims, and refuse every
+later call in that transaction, so the settlement contracts keep their guards
+in persistent storage.
+
 ## R battery
 
 ```sh
@@ -209,11 +222,12 @@ RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
   go test -tags runtime_rehearsal ./rehearsal/ -v -timeout 60m
 ```
 
-The whole package, the smoke test and R-2 to R-6 each on its own node in
-parallel, took 10 minutes 10 seconds on 2026-10-11 (R-7, added on
-2026-10-12, takes about 4.5 minutes on its own node). Sealing runs at about
-110 to 125 blocks a second whether or not blocks finalize or several callers
-seal at once, so a 14,400-block challenge window takes about 2 minutes.
+The whole package, the smoke test, the transient-storage probe and R-2 to
+R-6 each on its own node in parallel, took 8 minutes 22 seconds on
+2026-10-12 (R-7, added the same day, takes about 6 minutes on its own node).
+Sealing runs at about 110 to 125 blocks a second whether or not blocks
+finalize or several callers seal at once, so a 14,400-block challenge window
+takes about 2 minutes.
 
 Each R test deploys directly, from the exact forge artifacts, the stack
 STSettlement2 needs: the v1 reserve sink, vault and coordinator proxy (in
@@ -231,20 +245,20 @@ from epoch 2, R-5 from epoch 3). R-2, R-4 and R-5 stop subnet epochs (tempo
 0) so that no dividend moves a position between two reads; R-3 runs SN25's
 tempo of 360. Measured:
 
-- **R-1 deployment** (`TestR1SettlementV2Phase`, 72 seconds). The settlement
+- **R-1 deployment** (`TestR1SettlementV2Phase`, 80 seconds). The settlement
   v2 phase of `bootstrap-contracts` deployed the final vault2 and its escrow
   registration, sent back to back and sealed into one block, then the
   STSettlement2 implementation, the initialized proxy and vault2's binding,
   and, as the optional sixth action, the claim batcher. Each completed only
   after its readback against the real precompiles, and the escrow position
   held no registration collateral. Gas used of the approved limits:
-  `vault2-create` 2,600,537 of 4,000,000, `escrow2-register` 1,465,892 of
+  `vault2-create` 2,821,678 of 4,000,000, `escrow2-register` 1,463,833 of
   2,500,000, `settlement2-create` 1,935,622 of 3,000,000, `proxy2-create`
-  310,486 of 1,000,000, `vault2-link` 33,523 of 150,000 and `batcher-create`
+  310,486 of 1,000,000, `vault2-link` 31,329 of 150,000 and `batcher-create`
   285,209 of 400,000.
 - **R-2 capture.** A pool holding nothing funded 0 without a runtime call
-  (gas 131,987). With 88,974,634,979 rao on the pool, the close moved exactly
-  that and escrow gained exactly that (gas 287,215). A pool registered at a
+  (gas 110,018). With 88,974,634,979 rao on the pool, the close moved exactly
+  that and escrow gained exactly that (gas 230,818). A pool registered at a
   collateral lock share of 2^15/65535 held 1,481,130,231 rao of locked
   collateral: alone it funded 0, and with stake added the close moved exactly
   `getStake − locked`, 38,742,541,778 of 40,223,672,009 rao, leaving the
@@ -270,18 +284,18 @@ tempo of 360. Measured:
   so its `AmountTooLarge` guard cannot be reached on a real chain. Third
   parties could add hotkeys to vault2's own `StakingHotkeys` only until it
   held 128; `absorbStake` and claims still worked, but a claim then used
-  1,269,881 gas instead of 201,559, and `absorbStake` 1,230,170: the runtime
+  1,256,716 gas instead of 154,218, and `absorbStake` 1,220,874: the runtime
   charges a walk of the origin coldkey's list.
 - **R-4 registration.** `registerOperatorPool` registered the pool hotkey
   under vault2's coldkey, burned 3.80 TAO and refunded the rest of the 100 TAO
-  ceiling to the owner through STSettlement2 (gas 1,598,525); a second
+  ceiling to the owner through STSettlement2 (gas 1,594,088); a second
   registration and a too-short first epoch were refused. With immunity 0 and
   the subnet full, registrations pruned the oldest UIDs first, the escrow
   hotkey before the pool hotkey; both kept stake and owner, and the close
   moved the pruned pool's stake into the pruned escrow. `registerPoolUid`
-  re-registered the pool hotkey for its payer (gas 1,449,743; `UidExists`
+  re-registered the pool hotkey for its payer (gas 1,449,949; `UidExists`
   once registered). `absorbStake` moved 35,094,897,822 rao that vault2 held
-  on the v1 escrow hotkey into escrow as surplus (gas 136,420).
+  on the v1 escrow hotkey into escrow as surplus (gas 127,124).
 - **R-5 approval, demand and answer.** Finalize was refused without a quorum
   (`QuorumNotReached`), then inside the window (`ChallengeWindowOpen`); an
   approval needed an auditor and the exact pending root (`Unauthorized`,
@@ -292,26 +306,36 @@ tempo of 360. Measured:
   `NoFault`).
 - **R-6 gas**, on ledgers of 2^29 accounts (depth 29, the deepest vault2
   takes), against the SN25 operator gas policy's `maximum_gas` of 1,000,000
-  (`server/local/sn25golive/sn25-mainnet-gas-params.json`):
+  (`server/local/sn25golive/sn25-mainnet-gas-params.json`). "Before" is the
+  same run against vault2 as it was before its gas reduction (snv2
+  `7202d7cb`), on the same day:
 
-  | Transaction | Sender | Gas used | Gas limit needed |
-  | --- | --- | ---: | ---: |
-  | close, capturing | operator | 298,927 | 2,634,202 |
-  | close, nothing to capture | operator | 131,479 | 158,120 |
-  | close deferring 1 epoch | operator | 158,174 | 205,242 |
-  | close deferring 144 epochs | operator | 5,459,241 | 7,049,278 |
-  | commit | operator | 297,926 | 334,653 |
-  | answer (checkPath) | operator | 159,665 | 185,590 |
-  | finalize | operator | 179,386 | 239,175 |
-  | approve | auditor | 134,333 | 137,389 |
-  | demand | anyone | 104,867 | 128,806 |
-  | claim | anyone | 235,938 | 2,514,273 |
+  | Transaction | Sender | Gas used | Before | Gas limit needed |
+  | --- | --- | ---: | ---: | ---: |
+  | close, capturing | operator | 225,430 | 298,949 | 2,688,632 |
+  | close, nothing to capture | operator | 126,610 | 131,501 | 144,347 |
+  | close deferring 1 epoch | operator | 131,633 | 158,174 | 149,526 |
+  | close deferring 144 epochs | operator | 2,409,622 | 5,456,724 | 2,949,195 |
+  | commit | operator | 205,288 | 297,958 | 225,484 |
+  | answer (checkPath) | operator | 149,074 | 158,843 | 154,089 |
+  | finalize | operator | 94,389 | 179,386 | 100,877 |
+  | approve | auditor | 132,524 | 134,343 | 135,736 |
+  | demand | anyone | 98,268 | 104,481 | 104,424 |
+  | claim, vault2's first | anyone | 186,682 | 236,314 | 2,572,701 |
+  | claim, an account's first | anyone | 186,707 | 202,102 | 2,572,776 |
+  | claim, an account's first after its neighbour's | anyone | 169,595 | 202,102 | 2,521,578 |
+  | claim, a repeat | anyone | 169,606 | 185,026 | 2,521,610 |
 
-  Each deferred epoch costs about 37,000 gas, and about 47,900 of limit. A
-  close that captures needs about 2.6 million gas of limit because the
-  runtime admits `moveStake` only if the forwarded gas covers its declared
-  weight; it is above the policy's `maximum_gas`, as is a close deferring
-  more than about 17 epochs.
+  Each deferred epoch costs about 15,900 gas (before, 37,000), and about
+  19,500 of limit. A close that captures, and a claim, need about 2.5 to 2.7
+  million gas of limit because the runtime admits `moveStake` and
+  `transferStake` only if the forwarded gas covers their declared weight; the
+  capturing close is above the policy's `maximum_gas`, as is a close
+  deferring more than about 43 epochs (before, 17). The limits are
+  `eth_estimateGas` values, which this node computes with Frontier's
+  `rpc-binary-search-estimate`: its search stops once a step moves the bound
+  by less than 10%, so a limit can exceed the least sufficient one by up to
+  that much and need not fall with the gas used.
 - **R-7 batched claims** (`TestR7ClaimBatch`, 376 seconds), on a root of
   2^29 accounts: claims through `STClaimBatcher` (`evm/src/STClaimBatcher.sol`),
   each item capped at the tooling's default gas per claim of 2,600,000

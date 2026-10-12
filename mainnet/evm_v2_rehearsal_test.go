@@ -64,9 +64,9 @@ const (
 // each action's actual use.
 var r1GasLimits = []uint64{4_000_000, 2_500_000, 3_000_000, 1_000_000, 150_000, 400_000}
 
-// The demand fee BOOTSTRAP-CONTRACTS.md recommends: twice R-6's measured
-// answer gas, 159,665, at 5 gwei.
-var r1DemandFeeWei = new(big.Int).Mul(big.NewInt(2*159_665), big.NewInt(5_000_000_000))
+// The approved demand fee of BOOTSTRAP-CONTRACTS.md: R-6's measured answer
+// gas, 149,074, at 5 gwei, rounded up to 750,000 rao.
+var r1DemandFeeWei = new(big.Int).Mul(big.NewInt(750_000), big.NewInt(1_000_000_000))
 
 // One rehearsal chain: blocks sealed on demand and finalized at once.
 type r1Node struct {
