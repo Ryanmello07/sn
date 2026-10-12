@@ -182,6 +182,20 @@ release_phase_sn_v2() {
 }
 release_gate_start sn-v2 release_phase_sn_v2
 
+# E-1 to E-7 (VERSION2-FINAL.md §14 gate 4, §15.6): settlement v2 end to end in
+# geth, from the reviewed catalog and the v2 contracts to the claim daemon and
+# snclaim, in both modes. It needs no database. The suite builds the v2
+# contracts in a private directory, so it never reads the Solidity job's build
+# while it is written; the daemon's durable volumes need the same umask and
+# private TMPDIR as the job above.
+release_phase_sn_e2e() {
+  cd "$sn_repo"
+  settlement_v2_e2e_tests='^Test(SettlementV2E2E)'
+  go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1
+  go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1
+}
+release_gate_start sn-e2e release_phase_sn_e2e
+
 # GL-10 (VERSION2-FINAL.md §15): the scale-tagged tests, which ./... never
 # compiles, build and verify ledgers of a million providers, assert the commit
 # and challenge windows' budgets, and log time, peak memory and bytes fetched.

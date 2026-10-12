@@ -1,9 +1,9 @@
 package main
 
-// Settlement v2 in the aggregate gate (VERSION2-FINAL.md §14 gates 1 and 3,
-// §15): sn's v2 suites, the scale shard, the Solidity coverage bar, the deep
-// invariant campaign, and the operator's and the SDK's v2 suites, each
-// executed by an admitted phase.
+// Settlement v2 in the aggregate gate (VERSION2-FINAL.md §14 gates 1, 3 and
+// 4, §15): sn's v2 suites, the end-to-end suite, the scale shard, the
+// Solidity coverage bar, the deep invariant campaign, and the operator's and
+// the SDK's v2 suites, each executed by an admitted phase.
 
 import (
 	"errors"
@@ -261,6 +261,36 @@ func verifyReleaseGateSnV2(script string, group releaseEvidenceV2GateGroup) erro
 		return err
 	}
 	body := []string{`cd "$sn_repo"`, group.commands[0], group.commands[1], group.variable + "='" + selector + "'", group.commands[2], group.commands[3]}
+	if err := verifyReleaseGateExactPhase(script, group.job, group.phase, body); err != nil {
+		return err
+	}
+	return verifyReleaseEvidenceV2GateGroup(script, group)
+}
+
+// E-1 to E-7 (§15.6): the end-to-end suite in its own job, normal and race;
+// every root of its test files is selected.
+func releaseGateSnE2EGroup(t *testing.T) releaseEvidenceV2GateGroup {
+	t.Helper()
+	return releaseEvidenceV2GateGroup{
+		phase: "sn_e2e", job: "sn-e2e", variable: "settlement_v2_e2e_tests",
+		alternatives: "SettlementV2E2E",
+		packages:     []string{"./mainnet"},
+		sources:      map[string][]string{"./mainnet": releaseEvidenceV2GateSources(t, []string{"../mainnet/settlement_v2_e2e_*_test.go"})},
+		commands: []string{
+			`go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1`,
+			`go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1`,
+		},
+	}
+}
+
+// The job's whole body is its selector and its two commands, admitted once
+// and unconditionally.
+func verifyReleaseGateSnE2E(script string, group releaseEvidenceV2GateGroup) error {
+	selector, err := releaseConnectPolicySelectorAssignment(script, group.variable)
+	if err != nil {
+		return err
+	}
+	body := []string{`cd "$sn_repo"`, group.variable + "='" + selector + "'", group.commands[0], group.commands[1]}
 	if err := verifyReleaseGateExactPhase(script, group.job, group.phase, body); err != nil {
 		return err
 	}
@@ -642,6 +672,52 @@ func TestReleaseGateSettlementV2SnSuitesRejectDrift(t *testing.T) {
 		if err := verifyReleaseGateSnV2(script, escaped); err == nil {
 			t.Fatalf("sn v2 job accepted a %s root outside its selector", packagePath)
 		}
+	}
+}
+
+// E-1 to E-7: the end-to-end job runs as pinned.
+func TestReleaseGateSettlementV2RunsTheEndToEndSuite(t *testing.T) {
+	t.Parallel()
+	if err := verifyReleaseGateSnE2E(readReleaseGateLocalScript(t), releaseGateSnE2EGroup(t)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// E-1 to E-7: a narrowed or emptied selector, a lost, masked, conditional or
+// cached mode, a lost, duplicated or conditional admission, or a root of an
+// end-to-end test file that escapes the selector fails.
+func TestReleaseGateSettlementV2EndToEndSuiteRejectsDrift(t *testing.T) {
+	t.Parallel()
+	script := readReleaseGateLocalScript(t)
+	group := releaseGateSnE2EGroup(t)
+	const assignment = "settlement_v2_e2e_tests='^Test(SettlementV2E2E)'"
+	const start = "release_gate_start sn-e2e release_phase_sn_e2e"
+	type change struct{ old, new string }
+	changes := []change{
+		{assignment, "settlement_v2_e2e_tests='^Test()'"},
+		{assignment, "settlement_v2_e2e_tests='^Test(SettlementV2E2EDaemon)'"},
+		{assignment, "settlement_v2_e2e_tests='^TestSettlementV2E2E$'"},
+		{start, "# " + start},
+		{start, start + "\n" + start},
+		{start, "if false; then\n" + start + "\nfi"},
+	}
+	for _, command := range group.commands {
+		for _, replacement := range []string{"# " + command, command + " || true", "if false; then\n  " + command + "\n  fi", strings.Replace(command, " -count=1", "", 1)} {
+			changes = append(changes, change{command, replacement})
+		}
+	}
+	for _, change := range changes {
+		if strings.Count(script, change.old) != 1 {
+			t.Fatalf("the mutation names no unique text: %s", change.old)
+		}
+		if err := verifyReleaseGateSnE2E(strings.Replace(script, change.old, change.new, 1), group); err == nil {
+			t.Fatalf("end-to-end job accepted %q", change.new)
+		}
+	}
+	escaped := group
+	escaped.sources = map[string][]string{"./mainnet": append(slices.Clone(group.sources["./mainnet"]), "package fixture\nfunc TestOmittedSettlementV2Root(t *testing.T) {}\n")}
+	if err := verifyReleaseGateSnE2E(script, escaped); err == nil {
+		t.Fatal("end-to-end job accepted a root outside its selector")
 	}
 }
 
