@@ -36,6 +36,7 @@ Usage:
     snclaim withdraw --vault=<vault> --coldkey=<key> --contract=<addr> --rpc=<url>... --key_file=<path> [--chain_id=<id>] [--gas_limit=<n>] [--dry-run]
     snclaim v2 status --coldkey=<key> --vault=<vault> --rpc=<url>... [--api_url=<url>] [--chain_id=<id>]
     snclaim v2 claim --coldkey=<key> [--no_id=<n>] [--index=<i>] --vault=<vault> --rpc=<url>... --key_file=<path> [--api_url=<url>] [--chain_id=<id>] [--gas_limit=<n>] [--dry-run]
+    snclaim v2 claim --all --coldkey=<key> [--batch=<batcher>] --vault=<vault> --rpc=<url>... --key_file=<path> [--api_url=<url>] [--chain_id=<id>] [--gas_limit=<n>] [--dry-run]
     snclaim v2 check --all --vault=<vault> --no_id=<n> --rpc=<url>... [--api_url=<url>] [--challenge] [--demand] [--key_file=<path>] [--chain_id=<id>] [--gas_limit=<n>] [--dry-run]
     snclaim -h | --help
     snclaim --version
@@ -66,8 +67,16 @@ Options:
                        reads objects [default: https://api.bringyour.com].
     --index=<i>        v2 claim: the account index to claim, with --no_id
                        when the coldkey has accounts in several pools.
-    --all              v2 check: compare every account of the latest
-                       finalized root with the pending root.
+    --all              v2 claim: claim every finalized account of the
+                       coldkey with anything claimable, one transaction
+                       each unless batched. v2 check: compare every account
+                       of the latest finalized root with the pending root.
+    --batch=<batcher>  v2 claim with all: claim two or more accounts through
+                       the STClaimBatcher at this address, as many per
+                       transaction as one block holds. Each claim's gas is
+                       capped at the larger of 2,600,000 and its own
+                       estimate, and the batch's gas limit comes from
+                       eth_call; vault2 pays each account's coldkey.
     --challenge        v2 check: send checkPath for a provable fault, which
                        deletes the pending root.
     --demand           v2 check: when the pending root's objects are missing
@@ -79,7 +88,8 @@ Options:
                        private key that signs the transaction.
     --chain_id=<id>    Expected chain id; errors if the RPC reports a
                        different one. Fetched via eth_chainId when omitted.
-    --gas_limit=<n>    Gas limit override (default: estimated gas + 20%).
+    --gas_limit=<n>    Gas limit override (default: estimated gas + 20%);
+                       for single transactions, not a --batch one.
     --dry-run          Stop after the eth_call preflight: print the decoded
                        intent and estimated gas, send nothing.
     -h --help          Show this help.
