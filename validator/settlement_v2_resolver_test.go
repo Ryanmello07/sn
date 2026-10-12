@@ -447,3 +447,28 @@ func TestSettlementV2RefusedOrDeletedRootKeepsPoolWeight(t *testing.T) {
 		t.Fatal("pool weight read the v2 root lifecycle")
 	}
 }
+
+// VA-1: the shared resolver at the finalized head, as live steering reads it:
+// the operator's hotkey before the pool's first v2 epoch and vault2's pool
+// hotkey from it, both read at the head; an unreadable head refuses.
+func TestSettlementV2PoolHotkeyAtFinalizedHead(t *testing.T) {
+	t.Parallel()
+	fixture := newSettlementV2ResolverTestFixture(t)
+	fixture.registerPool(1, 2)
+	operator := chainBatchHotkey(0)
+	for _, test := range []struct {
+		epoch uint64
+		want  [32]byte
+	}{{1, operator}, {2, settlementV2TestPoolHotkey}} {
+		if hotkey, err := fixture.chain.SettlementV2PoolHotkeyContext(t.Context(), fixture.addresses, 1, test.epoch, operator); err != nil || hotkey != test.want {
+			t.Fatalf("epoch %d resolves to 0x%x: %v", test.epoch, hotkey, err)
+		}
+	}
+	if pools, identities := fixture.v2Reads("pools"), fixture.v2Reads("settlementAt"); !slices.Equal(pools, []uint64{fixture.head, fixture.head}) || !slices.Equal(identities, []uint64{fixture.head}) {
+		t.Fatalf("v2 reads pools=%v settlementAt=%v", pools, identities)
+	}
+	fixture.head++
+	if _, err := fixture.chain.SettlementV2PoolHotkeyContext(t.Context(), fixture.addresses, 1, 2, operator); err == nil || !strings.Contains(err.Error(), "finalized EVM head") {
+		t.Fatalf("an unreadable finalized head resolved: %v", err)
+	}
+}

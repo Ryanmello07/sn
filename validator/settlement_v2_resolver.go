@@ -101,3 +101,15 @@ func (self *ChainClient) releasePoolHotkeyContext(ctx context.Context, v2 Settle
 	}
 	return pool.Hotkey, nil
 }
+
+// SettlementV2PoolHotkeyContext is the shared resolver for readers outside
+// the release runtime: noID's pool weight destination for epoch, given
+// operatorAt's pool hotkey for that epoch, read at the finalized head as live
+// steering reads its snapshot.
+func (self *ChainClient) SettlementV2PoolHotkeyContext(ctx context.Context, v2 SettlementV2Addresses, noID, epoch uint64, operatorHotkey [32]byte) ([32]byte, error) {
+	head, headHash, err := self.FinalizedBlockContext(ctx)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	return self.releasePoolHotkeyContext(ctx, v2, head, headHash, head, headHash, noID, epoch, operatorHotkey)
+}

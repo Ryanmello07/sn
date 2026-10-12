@@ -30,7 +30,7 @@ func e2eRows(epoch uint64) []protocol.LedgerUsageRow {
 }
 
 // e2eShare is coldkey's allocation of amount over rows by the §6.3 rule.
-func e2eShare(t *testing.T, amount uint64, rows []protocol.LedgerUsageRow, coldkey [32]byte) uint64 {
+func e2eShare(t testing.TB, amount uint64, rows []protocol.LedgerUsageRow, coldkey [32]byte) uint64 {
 	t.Helper()
 	deltas, err := protocol.AllocateLedgerEpoch(context.Background(), uint256.NewInt(amount), rows)
 	if err != nil {
@@ -123,7 +123,7 @@ func TestSettlementV2E2ETenEpochsThenOneClaim(t *testing.T) {
 }
 
 // e2eColdkeyText renders a coldkey as snclaim prints it.
-func e2eColdkeyText(t *testing.T, coldkey [32]byte) string {
+func e2eColdkeyText(t testing.TB, coldkey [32]byte) string {
 	t.Helper()
 	address, err := ss58.Encode(coldkey, ss58.BittensorPrefix)
 	if err != nil {

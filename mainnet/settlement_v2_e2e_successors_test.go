@@ -37,7 +37,7 @@ func (f *e2eFixture) open(actor *e2eActor, rootIndex uint64, finalized *e2eTreeV
 // e2eRawTree is a ledger sum tree whose nodes can be misstated.
 type e2eRawTree struct{ levels [][]merkle.LedgerNode }
 
-func newE2ERawTree(t *testing.T, accounts []merkle.LedgerAccount) *e2eRawTree {
+func newE2ERawTree(t testing.TB, accounts []merkle.LedgerAccount) *e2eRawTree {
 	t.Helper()
 	depth, err := merkle.LedgerTreeDepth(uint64(len(accounts)))
 	if err != nil {
@@ -218,7 +218,7 @@ func TestSettlementV2E2EBadSuccessorsPublished(t *testing.T) {
 // inconsistent subtree: its published account rows give the last new account
 // hidden more than the honest root, and the node above F's four accounts
 // states their sum less hidden, so the committed total is still the funding.
-func (s *e2eSuccessor) inconsistent(t *testing.T, hidden uint64) (ledger.Root, ledger.Objects, []merkle.LedgerAccount, *e2eRawTree) {
+func (s *e2eSuccessor) inconsistent(t testing.TB, hidden uint64) (ledger.Root, ledger.Objects, []merkle.LedgerAccount, *e2eRawTree) {
 	t.Helper()
 	rows := slices.Clone(s.honest.Accounts)
 	rows[6].Cumulative.AddUint64(&rows[6].Cumulative, hidden)

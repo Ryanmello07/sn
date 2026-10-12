@@ -41,7 +41,7 @@ const e2eClaimQueueBytes = 16 * 1024 * 1024
 // durable claim queue and returns a context declaring their volume, as an
 // operator's enrollment does: the daemon has no enrollment fallback. A
 // claim-queue.json written beforehand is adopted as the committed head.
-func e2eClaimQueueContext(t *testing.T, ctx context.Context, paths ...string) context.Context {
+func e2eClaimQueueContext(t testing.TB, ctx context.Context, paths ...string) context.Context {
 	t.Helper()
 	var roots []string
 	for _, path := range paths {
