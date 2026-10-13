@@ -3,6 +3,7 @@
 package rehearsal
 
 import (
+	"crypto/rand"
 	"fmt"
 	"math/big"
 	"strings"
@@ -18,9 +19,10 @@ import (
 )
 
 // batchAccounts is the number of accounts R-7's root holds: enough for the
-// single claims, the fixed batches, more than the most one transaction holds,
-// which was 418 and grows as claims get cheaper, and a mixed batch. The last
-// account holds less than the runtime's transfer floor.
+// single claims, the fixed batches, of up to the claim tools' 32, more than
+// the most one transaction holds, which was 418 and grows as claims get
+// cheaper, and a mixed batch. The last account holds less than the runtime's
+// transfer floor.
 const batchAccounts = 700
 
 // claimItem is STClaimBatcher.Claim.
@@ -33,10 +35,11 @@ type claimItem struct {
 
 // R-7. TestR7ClaimBatch measures the claim batcher (VERSION2-FINAL.md §10.2,
 // §15.8) against single claims, on a ledger of 2^29 accounts: the block gas
-// limit; for single claims the gas used, the gas limit eth_estimateGas gives
-// and the least gas limit that pays; for batches of 1, 5, 10 and 20 claims
-// and for the most one block holds, the gas used and the least gas limit at
-// which the batch attempts every item. Each batch caps each claim at the
+// limit and the most gas a transaction may name, 13/15 of it less 1,500 gas;
+// for single claims the gas used, the gas limit eth_estimateGas gives and the
+// least gas limit that pays; for batches of 1, 5, 10, 20 and the claim tools'
+// 32 claims and for the most one block holds, the gas used and the least gas
+// limit at which the batch attempts every item. Each batch caps each claim at the
 // tooling's default gas per claim, is sent with exactly its least limit, and
 // pays every item. A last batch mixes two refusals, a broken proof and a
 // claim below the transfer floor, with claims that pay.
@@ -103,6 +106,11 @@ func TestR7ClaimBatch(t *testing.T) {
 		} else {
 			high = middle
 		}
+	}
+	// The pool takes the normal class's extrinsic weight limit, 13/15 of the
+	// block's, less the extension weight, as the claim tools assume.
+	if low != header.GasLimit/15*13-1_500 {
+		t.Fatalf("the pool takes %d gas of a %d block gas limit, not 13/15 of it less 1,500", low, header.GasLimit)
 	}
 	maxGas := onchain.ClaimBatchMaxGas
 	t.Logf("block gas limit %d; most gas one transaction may name %d; batches sized at %d", header.GasLimit, low, maxGas)
@@ -205,7 +213,7 @@ func TestR7ClaimBatch(t *testing.T) {
 		s.requireConservation(t)
 		return receipt.GasUsed, limit
 	}
-	for _, count := range []uint64{1, 5, 10, 20} {
+	for _, count := range []uint64{1, 5, 10, 20, onchain.ClaimBatchMaxClaims} {
 		used, limit := batch(t, count, maxGas)
 		t.Logf("batch of %d: used %d (%d per claim), least limit %d", count, used, used/count, limit)
 	}
@@ -302,4 +310,27 @@ func TestR7ClaimBatch(t *testing.T) {
 	}
 	s.requireConservation(t)
 	t.Logf("batch of 4, the second with a broken proof and the third a %d rao claim below the transfer floor: used %d, least limit %d", dust, receipt.GasUsed, limit)
+}
+
+// R-7: the most gas a transaction may name does not depend on its calldata,
+// so a batch the claim tools sized and signed stays admissible however many
+// claims, at about 2,100 bytes each at depth 29, it carries.
+func TestR7MaxGasDoesNotDependOnCalldata(t *testing.T) {
+	t.Parallel()
+	n := startNode(t)
+	sender, target := newEVMKey(t), newEVMKey(t)
+	n.fundEVM(t, sender.address, 1_000*tao)
+	for _, size := range []int{0, 100_000, 900_000} {
+		data := make([]byte, size)
+		if _, err := rand.Read(data); err != nil {
+			t.Fatal(err)
+		}
+		if err := n.sendTx(t, sender, &target.address, data, onchain.ClaimBatchMaxGas+1); err == nil || !strings.Contains(err.Error(), "exceeds block gas limit") {
+			t.Fatalf("%d bytes naming %d gas: %v", size, onchain.ClaimBatchMaxGas+1, err)
+		}
+		if err := n.sendTx(t, sender, &target.address, data, onchain.ClaimBatchMaxGas); err != nil {
+			t.Fatalf("%d bytes naming %d gas: %v", size, onchain.ClaimBatchMaxGas, err)
+		}
+		t.Logf("%d bytes of calldata: the pool takes %d gas and refuses %d", size, onchain.ClaimBatchMaxGas, onchain.ClaimBatchMaxGas+1)
+	}
 }
