@@ -255,10 +255,10 @@ runbook, at steps 9 and 12.
 | --- | --- | --- | --- |
 | Deployer (O4) | the six v2 actions, and the escrow registration's value | limits 4,000,000, 2,500,000, 3,000,000, 1,000,000, 150,000 and 400,000; used 2,821,690, 1,463,833, 1,935,622, 310,486, 31,329 and 285,209; value `maximumBurnRao × 10^9` wei | BOOTSTRAP-CONTRACTS.md:660,697-712 |
 | Governance Safe (O8) | `registerOperatorPool`'s value; the surplus over the burn comes back to the Safe | R-4 sent a 100 TAO ceiling, burned 3.80 TAO and used 1,594,088 gas | `scripts/runtime-rehearsal/README.md` R-4; `rehearsal/stack_test.go:31-32,190-194` |
-| Operator root key | every v2 close, commit, finalize and answer | the §8.1 table; a capturing close needs a limit of about 2.69M and is signed at about 3.2M | VERSION2-FINAL.md §8.1; `server/controller/st_controller.go:1079-1087` |
+| Operator root key | every v2 close, commit, finalize and answer | the §8.1 table; a capturing close is signed at no less than 3.2M; on 478 it needs 236,399 with vault2's staking-hotkey list short and about 1.37M with it full | VERSION2-FINAL.md §8.1; `docs/spec/runtime-478-audit.md`; `server/controller/st_controller.go:1079-1087` |
 | Validator auditor key (O10) | approvals, challenges and demands | approve: 132,524 used, limit 135,736; demand: 98,268 used, limit 104,424, plus the fee | §8.1 table |
 | Watcher key (O21) | demands and challenges | each demand pays `demandFeeWei`, 750,000 rao, plus gas; a sample starts at 256 demands and doubles | §7.1, §9.3, §10.2 |
-| Claimants: the daemon relayer, app gas keys, anyone | claims | an account's first claim uses 186,707 gas and needs a limit of 2,572,776; in a batch of 32, 147,740 gas a claim | §8.1 table; README R-7 |
+| Claimants: the daemon relayer, app gas keys, anyone | claims | on 478 an account's first claim uses 187,332 gas, needs 192,318 with vault2's list short and about 1.31M with it full, and is signed at no less than 2,600,000; in a batch of 32, 148,378 gas a claim | `docs/spec/runtime-478-audit.md`; README, "Runtime 478" |
 | App gas key | v2 claims from the apps | about 0.02 TAO on the device gas key | §11 |
 
 - The deployer's `maximum_total_wei` covers every limit times its fee cap,
@@ -267,8 +267,8 @@ runbook, at steps 9 and 12.
   action and every later reservation of the same sender (:239-244).
 - The operator gas policy caps every operator transaction. Today's
   `maximum_gas` of 1,000,000 and per-intent liability of 5·10^16 wei are below
-  a capturing close, so the policy is re-signed before E_s (step 5;
-  VERSION2-FINAL.md §8.1, §13).
+  a capturing close signed at 3.2M, so the policy is re-signed before E_s
+  (step 5; VERSION2-FINAL.md §8.1, §13).
 
 ### 2.7 Key custody
 
@@ -396,24 +396,25 @@ first exist.
     /secure/ur-mainnet/runtime-snapshot.json
   ```
 
-- **Expect.** `specVersion` 475, code hash
-  `0x557634c8c31bc639ea6552e297dcfb781cd7d9bdd491a5352c151305db33d3a0` and
+- **Expect.** `specVersion` 478, code hash
+  `0x7e722b3aa5c9192c98665a5d65fa91364bf9055e21fc90efce6d59bf4ef414e1` and
   metadata hash
-  `0x983cfdabc62b0c6b08faafb47f24303999236e0022598d1b5a3ec70fbde895ff`
-  (`docs/spec/runtime-475-audit.md`:84,93). The output is an unapproved
-  observation, never an approval
+  `0x4f96a9cb954ebe3ae0e364fe7e34ec8a0e902239832f68dfe90aaa1e4511c747`
+  (`docs/spec/runtime-478-audit.md`, "Exact provenance"). The output is an
+  unapproved observation, never an approval
   ([mainnet/MAINNET.md](mainnet/MAINNET.md):1653).
-- **Observed already.** The public RPC `https://lite.chain.opentensor.ai`
-  answered `state_getRuntimeVersion` with `specVersion` 477, not 475, at
-  2026-10-13 20:23 UTC. That is an observation, not the check of record. The
-  owner's `runtime-snapshot` above still decides.
+- **Observed already.** Mainnet ran 475, then 477 from block 9,267,632, and
+  478 from block 9,276,925 (2026-10-13 21:08:36 UTC), as the public RPC
+  `https://lite.chain.opentensor.ai` and archive
+  `https://archive.chain.opentensor.ai` report. That is an observation, not
+  the check of record. The owner's `runtime-snapshot` above still decides.
 - **Stop if** any of the three differs. Gate 2 then repeats on the new runtime
-  before step 8. For 477 that work is in progress on sn branch
-  `v2/runtime-477` (section 9.3, item 2).
-  - **Gap.** `scripts/runtime-rehearsal/build.sh` builds only tag `v475`,
-    commit `d1718c99…`, against `docs/spec/runtime-v475-source.sha256`
+  before step 8. For 478 it ran on sn branch `v2/runtime-478` (section 9.3,
+  item 2).
+  - **Pins.** `scripts/runtime-rehearsal/build.sh` builds only tag `v478`,
+    commit `850f2755…`, against `docs/spec/runtime-v478-source.sha256`
     (build.sh:13-14,21,45). Another runtime first needs a reviewed change of
-    those pins and a source review like `docs/spec/runtime-475-audit.md`.
+    those pins and a source review like `docs/spec/runtime-478-audit.md`.
 
 **Step 3. Rerun the runtime rehearsal, R-1 to R-7.**
 
@@ -443,9 +444,11 @@ first exist.
     R-6).
 - **Stop if** any test fails, or the logged gas exceeds the limits of
   section 2.6.
-- `build.sh` builds the 475 node. If step 2 confirms 477, the battery that
-  counts is the one on the 477 node, which sn branch `v2/runtime-477` is
-  building (section 9.3, item 2).
+- `build.sh` builds the 478 node, and the battery that counts is the one on
+  it (section 9.3, item 2). On 478 the least gas limit of a stake-moving
+  transaction is far below the 475 figures of README and section 2.6, and
+  grows with vault2's own staking-hotkey list; R-6's limits are logged as
+  least limits beside `eth_estimateGas`'s (README, "Runtime 478").
 
 **Step 4. Run the release gates.**
 
@@ -1408,16 +1411,17 @@ the order:
 | Order | Steps | Runs in parallel | Owner signs |
 | --- | --- | --- | --- |
 | 1 | 1: freeze `main` after the second merge round, and build | with step 2 | |
-| 2 | 2, 3, 4: the runtime check; gate 2 again on runtime 477, with its source audit, rehearsal-node build and R-1 to R-7, on sn `v2/runtime-477`; the release gates | with each other | O26, the gate 1 confirmation |
-| 3 | 5, 6, 7: the gas policy, the server build with migrations, the validator binary and the tools | with each other, and while gate 2 repeats on 477 | step 5, with the gas approver key |
-| 4 | 8: deploy the contracts, after steps 2 to 4 pass and gate 2 has its verdict on 477 | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
+| 2 | 2, 3, 4: the runtime check; gate 2 on runtime 478, with its source audit, rehearsal-node build and R-1 to R-7, on sn `v2/runtime-478`; the release gates | with each other | O26, the gate 1 confirmation |
+| 3 | 5, 6, 7: the gas policy, the server build with migrations, the validator binary and the tools | with each other | step 5, with the gas approver key |
+| 4 | 8: deploy the contracts, after steps 2 to 4 pass, with the phase config naming runtime 478 | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
 | 5 | 10: adopt the validator config, after step 8 and step 7's validator binary | with step 13 | the treasury approval, with its approval key |
 | 6 | 11, then 12: the server switch, after steps 6, 8 and 10 | with step 13 | |
 | 7 | 15: register the pool, inside blocks 9,283,228 to 9,290,428 | | the Safe |
 
-- Step 8 waits for gate 2's verdict on runtime 477 (section 9.3, item 2).
-  Steps 5 to 7 touch nothing that the runtime decides, so they proceed
-  meanwhile.
+- Step 8 needs gate 2's verdict on runtime 478 (section 9.3, item 2) and a
+  phase config whose runtime is source `850f2755…` with version 478 and the
+  hashes of step 2. Steps 6 and 7 must ship the senders' gas floor of section
+  9.3, item 2, before the first close and the first claims.
 - Step 9, the pinned app releases, moves after step 15 (section 9.3, item 4).
 - Step 13 is off the critical path. The watcher must run by the first commit,
   at block 9,348,028 or later.
@@ -1440,12 +1444,21 @@ waits for it.
    after the last gate passes" (§14). For epoch 2 the last gate, gate 6 at
    step 12, would have to pass by block 9,283,228, about 22 hours after the
    reading. §14 also calls epoch 3 "not reachable", and epoch 2 is earlier.
-2. **Gate 2 on runtime 477.** The public RPC reported `specVersion` 477 on
-   2026-10-13 (step 2). Gate 2 ran on 475, and "Any runtime change on mainnet
-   repeats this gate" (§14); "gate 2 cannot be waived" (§17). So gate 2 must
-   be repeated on 477 before step 8. A 477 source audit, a rehearsal-node
-   build and an R-1 to R-7 rerun are in progress on sn branch
-   `v2/runtime-477`. Step 8 waits for their verdict.
+2. **Gate 2 on runtime 478.** Mainnet installed 477 and then, at block
+   9,276,925 on 2026-10-13, 478 (step 2). "Any runtime change on mainnet
+   repeats this gate" (§14); "gate 2 cannot be waived" (§17). It was repeated
+   on 477 (`docs/spec/runtime-477-audit.md`) and on 478
+   (`docs/spec/runtime-478-audit.md`), on sn branches `v2/runtime-477` and
+   `v2/runtime-478`: R-1 to R-7 pass on both with the same vault2 bytecode,
+   and gate 2 holds for 478. 478 admits `moveStake` and `transferStake`
+   against a walk of the caller's own staking-hotkey list, so the limit a
+   capture or a claim needs grows with vault2's list, which third parties can
+   lengthen after an estimate. Every sender of a stake-moving vault2
+   transaction therefore signs it at no less than its pre-478 size: a claim
+   at the larger of its estimate with margin and 2,600,000, a capturing close
+   at the larger of its estimate with 20% and 3,200,000. snclaim and the claim
+   daemon do so on `v2/runtime-478`; the server's close and the SDK's claim
+   must before the first close and the first claims.
 3. **O26.** Gate 1 needs the independent review of vault2, `LedgerTree.sol`
    and `STSettlement2` resolved (§14). The owner's confirmation is not given
    yet, and step 8 waits for it.
