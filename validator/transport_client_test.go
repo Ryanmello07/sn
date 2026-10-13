@@ -25,9 +25,12 @@ type tunnelTestClient struct {
 	post  func(context.Context, connect.Id, []byte) ([]byte, error)
 	close func(context.Context) error
 	owned tunnelTransportClient
+	// Each request's first family, in order; the request lease serializes it.
+	firstIpFamilies []int
 }
 
-func (self *tunnelTestClient) postVerify(ctx context.Context, hop connect.Id, body []byte) ([]byte, error) {
+func (self *tunnelTestClient) postVerify(ctx context.Context, hop connect.Id, body []byte, firstIpFamily int) ([]byte, error) {
+	self.firstIpFamilies = append(self.firstIpFamilies, firstIpFamily)
 	return self.post(ctx, hop, body)
 }
 

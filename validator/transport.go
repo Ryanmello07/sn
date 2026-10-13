@@ -20,6 +20,10 @@ package validator
 // Each request owns a fresh tunnel pinned to its exact hop. One exclusively
 // leased client retains processed key registration across sequential requests;
 // operator shutdown joins its final transport and identity retirement.
+//
+// IPv4 and IPv6 get equal attempts: the transport's requests alternate the
+// family their tunnel tries first, IPv4 for the first request, and each falls
+// back to the other family (connect IPV6.md C7, VALIDATOR.md §8.2).
 
 import (
 	"bytes"
@@ -64,8 +68,21 @@ type TunnelTransport struct {
 	client         tunnelTransportClient
 	registration   *tunnelClientRegistration
 	newClient      func(context.Context, connect.Id) (tunnelTransportClient, error)
-	closed         chan struct{}
-	closeErr       error
+	createTun      func(context.Context, *connect.TunSettings) (*connect.Tun, error)
+	// Requests handed to a client, which pick their first family. Guarded by
+	// the request lease.
+	hopRequests uint64
+	closed      chan struct{}
+	closeErr    error
+}
+
+// hopFirstIpFamily is the family the n-th hop request tries first: IPv4 for
+// even n and IPv6 for odd n, so the first request is IPv4-first.
+func hopFirstIpFamily(request uint64) int {
+	if request%2 == 0 {
+		return 4
+	}
+	return 6
 }
 
 type tunnelAttemptGenerator interface {
@@ -171,6 +188,7 @@ func NewTunnelTransport(ctx context.Context, clientStrategy *connect.ClientStrat
 		closed:         make(chan struct{}),
 	}
 	self.newClient = self.newRegisteredClient
+	self.createTun = connect.CreateTun
 	self.clientLease <- struct{}{}
 	go self.run()
 	return self
@@ -204,7 +222,8 @@ func newTunnelClientSettings() *connect.ClientSettings {
 
 // Each lease constructs and joins its own exact-hop packet path. The
 // registered identity remains alive after request cancellation or rejection.
-func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.Id, jsonBody []byte) (responseBody []byte, returnErr error) {
+// The tunnel's hostname dial tries firstIpFamily first.
+func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.Id, jsonBody []byte, firstIpFamily int) (responseBody []byte, returnErr error) {
 	byClientJwt, err := self.owner.currentByClientJwt()
 	if err != nil {
 		return nil, err
@@ -231,7 +250,9 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 		returnErr = errors.Join(returnErr, closeErr)
 	}()
 
-	tun, err := connect.CreateTunWithDefaults(tunnelCtx)
+	tunSettings := connect.DefaultTunSettings()
+	tunSettings.DialFirstIpFamily = firstIpFamily
+	tun, err := self.owner.createTun(tunnelCtx, tunSettings)
 	if err != nil {
 		return nil, fmt.Errorf("tunnel netstack: %w", err)
 	}

@@ -678,6 +678,14 @@ we exclude.
 - **IPv6 / churn:** index both families; expire entries when a `proxy_client` is
   released so a reassigned IP is not miscredited to the previous holder.
 
+**Address family of a hop.** The validator gives IPv4 and IPv6 equal attempts. Its hop
+requests (SEED and EXTEND posts, retries included) alternate the family their tunnel tries
+first, IPv4 for the first request, and each falls back to the other family when the first
+fails (connect `IPV6.md` C7). The source IP is the provider's egress on the family that
+landed, and only the provider's one indexed egress IP resolves: a request that lands on
+the provider's other family resolves to no provider, so a SEED is poisoned and an EXTEND
+fails.
+
 > **Bijection (attribution) vs. splitting (head score) — no contradiction.** The
 > exact-IP bijection here keeps **hop attribution** unambiguous: one exact egress IP ⇄
 > one `client_id`, so a trail hop names exactly one provider. The head **score** counts

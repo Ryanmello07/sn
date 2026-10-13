@@ -14,8 +14,9 @@ import (
 )
 
 // The packet exchange and registration lifetime are separate ownership units.
+// A request's tunnel tries its first IP family (4 or 6) first.
 type tunnelTransportClient interface {
-	postVerify(context.Context, connect.Id, []byte) ([]byte, error)
+	postVerify(ctx context.Context, hop connect.Id, body []byte, firstIpFamily int) ([]byte, error)
 	done() <-chan struct{}
 	closeAndWait(context.Context) error
 }
@@ -83,7 +84,10 @@ func (self *TunnelTransport) PostVerify(ctx context.Context, hop connect.Id, bod
 			return nil, err
 		}
 	}
-	response, err := self.client.postVerify(callCtx, hop, body)
+	// Requests alternate the family tried first, so attempts split evenly.
+	firstIpFamily := hopFirstIpFamily(self.hopRequests)
+	self.hopRequests++
+	response, err := self.client.postVerify(callCtx, hop, body, firstIpFamily)
 	select {
 	case <-self.client.done():
 		err = errors.Join(err, self.retireClient())
