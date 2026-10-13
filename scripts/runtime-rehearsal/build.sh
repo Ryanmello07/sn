@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the runtime-rehearsal node (VERSION2-FINAL.md §14 gate 2): upstream
-# subtensor at the runtime-475 commit with fast blocks, and records the runtime
+# subtensor at the runtime-478 commit with fast blocks, and records the runtime
 # Wasm hash. Usage: build.sh <subtensor-checkout-dir>
 #
 # CARGO_TARGET_DIR selects the build directory (default <checkout>/target) and
@@ -10,15 +10,15 @@ set -euo pipefail
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 repository="https://github.com/opentensor/subtensor.git"
-tag="v475"
-commit="d1718c99c34cf96abbf2bf09c0e9e48b945c76f5"
+tag="v478"
+commit="850f2755bb05a3851f948489f0ab27b0645cebce"
 # Upstream's localnet (scripts/localnet.sh, fast_runtime=True) builds the
 # workspace with "pow-faucet metadata-hash fast-runtime". metadata-hash is also
 # in mainnet's release build and fast-runtime gives fast blocks. pow-faucet only
 # adds a proof-of-work faucet call and drops the default subnet-registration
 # rate limit to 0, so it is left out: the runtime keeps mainnet's call set.
 features="metadata-hash fast-runtime"
-manifest="$sn_repo/docs/spec/runtime-v475-source.sha256"
+manifest="$sn_repo/docs/spec/runtime-v478-source.sha256"
 
 source_dir="${1:?usage: build.sh <subtensor-checkout-dir>}"
 jobs="${RUNTIME_REHEARSAL_JOBS:-10}"
@@ -42,7 +42,7 @@ mkdir -p "$target_dir"
 target_dir="$(cd "$target_dir" && pwd)"
 [[ "$(git -C "$source_dir" rev-parse HEAD)" == "$commit" ]] || fail "checkout HEAD is not $commit"
 [[ -z "$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all)" ]] || fail "checkout $source_dir is not clean"
-grep -Eq '^[[:space:]]*spec_version: 475,$' "$source_dir/runtime/src/lib.rs" || fail "runtime/src/lib.rs does not declare spec_version 475"
+grep -Eq '^[[:space:]]*spec_version: 478,$' "$source_dir/runtime/src/lib.rs" || fail "runtime/src/lib.rs does not declare spec_version 478"
 (cd "$source_dir" && sha256sum --check --quiet --strict "$manifest") || fail "checkout differs from $manifest"
 command -v "${PROTOC:-protoc}" >/dev/null || fail "protoc is missing: install protobuf-compiler or set PROTOC"
 
