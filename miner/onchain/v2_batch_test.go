@@ -281,7 +281,7 @@ func TestV2ClaimAllClaimsEachAccount(t *testing.T) {
 		t.Fatalf("claim --all sent %d transactions", len(sent))
 	}
 	for i, pool := range v2BatchPools {
-		requireV2Tx(t, sent[i], 7+uint64(i), 60_000, 0, s.single(t, pool))
+		requireV2Tx(t, sent[i], 7+uint64(i), ClaimBatchGasPerClaim, 0, s.single(t, pool))
 		if !strings.Contains(output, v2BatchPaid(pool, testKeyAddr)) {
 			t.Fatalf("output lacks pool %d's claim:\n%s", pool, output)
 		}
@@ -352,7 +352,7 @@ func TestV2ClaimAllBatchSplitsAtTheBlockGasLimit(t *testing.T) {
 	if sent[0].Gas() != v2BatchLeast(3)-1 || !bytes.Equal(sent[0].Data(), s.calldata(t, ClaimBatchGasPerClaim, 3, 4)) || *sent[0].To() != common.HexToAddress(v2TestBatcher) {
 		t.Fatalf("first transaction: gas %d to %s data 0x%x", sent[0].Gas(), sent[0].To(), sent[0].Data())
 	}
-	requireV2Tx(t, sent[1], 8, 60_000, 0, s.single(t, 6))
+	requireV2Tx(t, sent[1], 8, ClaimBatchGasPerClaim, 0, s.single(t, 6))
 	for _, want := range []string{v2BatchPaid(3, v2TestBatcher), v2BatchPaid(4, v2TestBatcher), v2BatchPaid(6, testKeyAddr)} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output lacks %q:\n%s", want, output)
@@ -438,7 +438,7 @@ func TestV2ClaimAllBatchPreflightsEachClaim(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "pool 6 account 1: preflight: ") || len(s.c.transactions()) != 1 || s.c.calls["eth_call:claimMany"] != 0 {
 		t.Fatalf("preflights: %v; observed %s\n%s", err, s.c.observed(), output)
 	}
-	requireV2Tx(t, s.c.transactions()[0], 7, 60_000, 0, s.single(t, 3))
+	requireV2Tx(t, s.c.transactions()[0], 7, ClaimBatchGasPerClaim, 0, s.single(t, 3))
 	if !strings.Contains(output, "pool 4 account 1: another sender claimed it first (claimed 4.000000000 α (4000000000 rao)); done\n") || !strings.Contains(output, v2BatchPaid(3, testKeyAddr)) {
 		t.Fatalf("outcomes:\n%s", output)
 	}
@@ -478,7 +478,7 @@ func TestV2ClaimAllEdges(t *testing.T) {
 	if output, err := s.c.run(s.c.claimArgv("--all", "--batch="+v2TestBatcher)); err != nil || len(s.c.transactions()) != 1 || s.c.calls["eth_call:claimMany"] != 0 {
 		t.Fatalf("one account: %v\n%s", err, output)
 	}
-	requireV2Tx(t, s.c.transactions()[0], 7, 60_000, 0, s.single(t, 3))
+	requireV2Tx(t, s.c.transactions()[0], 7, ClaimBatchGasPerClaim, 0, s.single(t, 3))
 
 	s = newV2BatchScenario(t)
 	s.c.setAccounts(v2TestEntry{Vault: strings.ToLower(v2TestVault), NoID: 9, Index: 0, Cumulative: "0", Claimed: "0", PendingCumulative: v2Ptr("7")})

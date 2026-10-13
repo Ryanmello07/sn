@@ -88,7 +88,8 @@ type SubmitParams struct {
 	ChainID    *big.Int // optional; when set, the rpc's chain id must match it
 	Value      *big.Int // optional; wei sent with the call, nil sends none
 	NonceFloor uint64   // optional durable minimum, owned by the calling relayer
-	GasLimit   uint64   // 0 = estimate + 20% headroom
+	GasLimit   uint64   // 0 = estimate + 20% headroom, and at least GasFloor
+	GasFloor   uint64   // optional; the least gas limit of an estimated transaction
 	DryRun     bool
 	// Additional owner authority on this exact connection: nil height means
 	// current finalized state; a receipt supplies its canonical inclusion height.
@@ -181,6 +182,7 @@ func submit(ctx context.Context, p SubmitParams, mkPrint intentPrinter, hooks Su
 		calldata:        p.Calldata,
 		value:           p.Value,
 		gasLimit:        p.GasLimit,
+		gasFloor:        p.GasFloor,
 		nonceFloor:      p.NonceFloor,
 		dryRun:          p.DryRun,
 		prepared:        hooks.Prepared,

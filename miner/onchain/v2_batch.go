@@ -25,13 +25,20 @@ import (
 	"github.com/urfoundation/sn/stabi"
 )
 
-// ClaimBatchGasPerClaim is the default gas cap of each batched claim. A claim
-// uses 170,000 to 187,000 gas, but the runtime admits its staking-precompile
-// transfer only if the gas forwarded covers the transfer's declared weight:
-// at depth 29 on runtime 475 a single claim's least gas limit was 2,443,953,
-// and eth_estimateGas, whose search stops within 10%, gave up to 2,574,029
-// (R-6, R-7). Senders cap each item at this or at the largest single-claim
-// estimate of the batch, whichever is higher.
+// ClaimBatchGasPerClaim is the gas a claim is given: the default cap of each
+// batched claim and the least limit of a claim sent alone. A claim uses
+// 170,000 to 188,000 gas, but the runtime admits its staking-precompile
+// transfer only if the gas forwarded covers the transfer's declared weight.
+// On runtimes 475 and 477 that held a walk of a full 256-entry StakingHotkeys
+// list: at depth 29 a single claim's least gas limit was 2,443,953, and
+// eth_estimateGas, whose search stops within 10%, gave up to 2,574,029 (R-6,
+// R-7). Runtime 478 sizes the walk to vault2's own list, 8,750 gas an entry,
+// so a claim's least limit is about 192,000 while the list is short, and its
+// estimate follows the list: third parties can lengthen it to 128 entries
+// between an estimate and the claim's inclusion (§7.3). This size covers the
+// 256 a list may hold on either runtime. A batch caps each item at this or at
+// the largest single-claim estimate of the batch, whichever is higher; a
+// claim sent alone takes this or its estimate with 20%, whichever is higher.
 const ClaimBatchGasPerClaim uint64 = 2_600_000
 
 // ClaimBatchMaxGas is the most gas a transaction may name on runtime 475,

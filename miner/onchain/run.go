@@ -88,8 +88,9 @@ Options:
                        private key that signs the transaction.
     --chain_id=<id>    Expected chain id; errors if the RPC reports a
                        different one. Fetched via eth_chainId when omitted.
-    --gas_limit=<n>    Gas limit override (default: estimated gas + 20%);
-                       for single transactions, not a --batch one.
+    --gas_limit=<n>    Gas limit override (default: estimated gas + 20%,
+                       and for a v2 claim at least 2,600,000); for single
+                       transactions, not a --batch one.
     --dry-run          Stop after the eth_call preflight: print the decoded
                        intent and estimated gas, send nothing.
     -h --help          Show this help.

@@ -395,7 +395,7 @@ func v2Challenge(ctx context.Context, s *v2Sender, noID uint64, state *v2State, 
 	account := &a.protected.accounts[fault.Index]
 	seq, k := state.pending.Seq, a.protected.index
 	calldata := vault2.PackCheckPath(new(big.Int).SetUint64(noID), new(big.Int).SetUint64(k), v2LedgerAccount(fault.Index, account), v2ProofNodes(proof), v2PathNodes(path))
-	receipt, err := s.send(ctx, "challenge", calldata, nil, func() {
+	receipt, err := s.send(ctx, "challenge", calldata, nil, 0, func() {
 		fmt.Printf("  pending:     pool %d, seq %d, root 0x%x\n", noID, seq, state.pending.Root)
 		fmt.Printf("  account:     %d of finalized root %d: coldkey 0x%x, cumulative %s\n", fault.Index, k, account.Coldkey, v2Alpha(&account.Cumulative))
 		fmt.Printf("  fault:       %v\n", fault.Kind)
@@ -680,7 +680,7 @@ func v2Demand(ctx context.Context, s *v2Sender, noID uint64, state *v2State, a *
 		// The set indexes the protected root's accounts, so each has a proof.
 		proof, _ := a.protected.tree.Proof(index)
 		account := &a.protected.accounts[index]
-		receipt, err := s.send(ctx, "demand", vault2.PackDemandPath(n, root, v2LedgerAccount(index, account), v2ProofNodes(proof)), fee, func() {
+		receipt, err := s.send(ctx, "demand", vault2.PackDemandPath(n, root, v2LedgerAccount(index, account), v2ProofNodes(proof)), fee, 0, func() {
 			fmt.Printf("  pending:     pool %d, seq %d\n", noID, seq)
 			fmt.Printf("  account:     %d of finalized root %d: coldkey 0x%x, cumulative %s\n", index, k, account.Coldkey, v2Alpha(&account.Cumulative))
 			fmt.Printf("  fee:         %s wei\n", fee)

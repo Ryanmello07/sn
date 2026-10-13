@@ -81,24 +81,28 @@ func claimV2TestRevert(name string) *claimV2TestRPCError {
 // moved finalized head and a receipt without its event. All fields are
 // guarded by stateLock.
 type claimV2TestChain struct {
-	t               *testing.T
-	stateLock       sync.Mutex
-	vault           common.Address
-	noID            uint64
-	ledgers         [][]merkle.LedgerAccount
-	trees           []*merkle.LedgerSumTree
-	claimed         map[uint64]uint256.Int
-	head            uint64
-	nonce           uint64
-	nonceView       *uint64
-	receipts        map[common.Hash]*types.Receipt
-	sends           []string
-	sendFailures    int
-	revertMined     bool
-	refuseClaims    bool
-	refuseIndex     map[uint64]bool
-	dropLogs        bool
-	estimate        uint64
+	t            *testing.T
+	stateLock    sync.Mutex
+	vault        common.Address
+	noID         uint64
+	ledgers      [][]merkle.LedgerAccount
+	trees        []*merkle.LedgerSumTree
+	claimed      map[uint64]uint256.Int
+	head         uint64
+	nonce        uint64
+	nonceView    *uint64
+	receipts     map[common.Hash]*types.Receipt
+	sends        []string
+	sendFailures int
+	revertMined  bool
+	refuseClaims bool
+	refuseIndex  map[uint64]bool
+	dropLogs     bool
+	estimate     uint64
+	// claimGas, when set, is the gas vault2's transfer needs, as runtime 478
+	// sizes it to vault2's staking-hotkey list: an eth_call of a claim that
+	// names less, and a claim mined with less, runs out of gas.
+	claimGas        uint64
 	calls           []string
 	accountStatus   int
 	failMethod      string
@@ -282,6 +286,9 @@ func (self *claimV2TestChain) rpc(method string, params []json.RawMessage) (any,
 			}
 			return hexutil.EncodeUint64(max(self.estimate, 200_000)), nil
 		}
+		if called, err := claimV2TestABI.MethodById(data[:4]); err == nil && called.Name == "claim" && message.Gas != nil && uint64(*message.Gas) < self.claimGas {
+			return nil, &claimV2TestRPCError{Code: -32603, Message: "out of gas"}
+		}
 		return self.view(data)
 	case "eth_getCode":
 		return self.answerCode(params)
@@ -415,7 +422,7 @@ func (self *claimV2TestChain) mine(param json.RawMessage) (any, *claimV2TestRPCE
 		return tx.Hash().Hex(), nil
 	}
 	intent, amount, refusal := self.execute(tx.Data())
-	if refusal == nil && !self.revertMined {
+	if refusal == nil && !self.revertMined && tx.Gas() >= self.claimGas {
 		self.claimed[intent.Account.Index.Uint64()] = *uint256.MustFromBig(intent.Account.Cumulative)
 		receipt.Status = types.ReceiptStatusSuccessful
 		if !self.dropLogs {
