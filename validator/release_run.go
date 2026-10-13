@@ -210,6 +210,9 @@ func classifyReleaseRetryBounded(err error, siblingCancellation, legacyText, tra
 		retryable := cause.IsTimeout || cause.IsTemporary
 		return retryable, retryable
 	case *attemptStreamHttpReadError:
+		if cause.interrupted {
+			return true, true
+		}
 		return classifyReleaseRetryBounded(cause.cause, siblingCancellation, legacyText, true, preparation, depth+1, remaining)
 	case *chainRpcMissingResponseError:
 		return classifyReleaseRetryBounded(cause.cause, siblingCancellation, legacyText, true, preparation, depth+1, remaining)
