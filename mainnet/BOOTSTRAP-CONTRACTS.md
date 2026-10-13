@@ -685,8 +685,9 @@ go run ./sim-testnet/gencontracts --release-v2-json evm/out sim-testnet/contract
 ```
 
 The catalog holds the final reviewed contracts: vault2 with the contract
-review's fix (11,780 runtime bytes), `STSettlement2` (8,588) and the claim
-batcher (1,073), whose storage layout the generator requires to stay empty.
+review's fix and its gas reduction (12,815 runtime bytes), `STSettlement2`
+(8,588) and the claim batcher (1,073), whose storage layout the generator
+requires to stay empty.
 After a full `forge build`, `go generate ./sim-testnet` rebuilds the catalog,
 and `stabi/generate.sh` binds the three in one combined abigen pass and
 exports their ABIs to `evm/abi/`. `go run ./sim-testnet/gencontracts --check
