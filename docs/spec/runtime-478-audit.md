@@ -468,9 +468,9 @@ a capturing close 2,513,577 again. Only the gas used is paid.
 | The daemon's rebroadcast of signed bytes | `miner/claim_daemon.go` preflight at the signed limit | Yes: an outgrown claim would never be resent | Covered by the floor (`TestClaimV2SignedClaimOutlastsAGrownStakingHotkeyList`) |
 | `snclaim --batch` and the daemon's batches | each item capped at max(2,600,000, its estimate); the batch at the least `eth_call` limit + 20% | No | Unchanged |
 | Validator approve, challenge and demand; `snclaim v2 check` | `validator/settlement_v2_sender.go` via `runTx` | No: no stake moves | Unchanged |
-| Server close | `server/controller/st_controller.go:1086`: estimate + ceil(20%); a replacement reuses the first limit (`:1066-1068`) | Yes, when it captures | Floor in progress elsewhere |
+| Server close | `server/controller/st_controller.go:1086`: estimate + ceil(20%); a replacement reuses the first limit (`:1066-1068`) | Yes, when it captures | Floor of 3,200,000 for a v2 stake move on server `main` (`54ae2aacf`) |
 | Server commit, finalize, answer | same engine | No | Unchanged |
-| SDK claim | `sdk/sn_ledger_claim.go:298-303`: estimate + 25% | Yes | Floor in progress elsewhere |
+| SDK claim | `sdk/sn_ledger_claim.go:298-303`: estimate + 25% | Yes | Floor of 2,600,000 on SDK `main` (`3bc7ec95`) |
 | `absorbStake` | no tool sends it (phase C) | Yes | Sign it at 2,600,000 or more |
 
 **The bound of the close floor.** A close that defers `k` missed epochs before
@@ -500,16 +500,18 @@ funded key with that limit, as for every close the policy does not cover
   The settlement v2 phase refuses a reviewed source named for another version
   (`TestEvmV2PhaseBindsReviewedSourceToItsSpecVersion`), so it refuses 477's
   source on the 478 runtime; this branch admits 850f2755 at 478.
-- Before the first close: the server's close floor, and the operator gas
-  policy re-signed as `VERSION2-LAUNCH.md` O13 already plans
+- Before the first close: a server build with its close floor (server
+  `main` at `54ae2aacf` or later), and the operator gas policy re-signed as
+  `VERSION2-LAUNCH.md` O13 already plans
   (`maximum_gas` about 3.5M, intent liability at least that at the 30 gwei
   fee cap). The proposed `server/local/sn25golive/sn25-mainnet-gas-params.json`
   (`maximum_gas` 1,000,000, intent liability 5·10^16 wei) refuses a close
   signed at the floor. The server's native-fee denomination binds the runtime
   code (`server/model/st_native_fee_settlement_model.go:124`), so one signed
   for 477's code settles nothing executed by 478.
-- Before the first claims: the SDK's claim floor. snclaim's and the daemon's
-  are in this branch.
+- Before the first claims: an SDK and app release with the SDK's claim floor
+  (SDK `main` at `3bc7ec95` or later). snclaim's and the daemon's are in this
+  branch.
 
 Stale numbers that fail nothing: the "gas limit needed" figures of §7.3, §8.1,
 §11 and §17 of `VERSION2-FINAL.md`, of `VERSION2-LAUNCH.md` §2.6 and of the
