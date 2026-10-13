@@ -1,6 +1,6 @@
 # Settlement v2 launch examples
 
-These are templates, and one command sequence, for the steps of the settlement
+These are templates, and two command sequences, for the steps of the settlement
 v2 launch runbook, `VERSION2-LAUNCH.md`, that had none written. Replace every
 `<...>` placeholder. A placeholder starting `O` and a number names an owner
 input of the runbook's section 3; the others name a value that a step produces
@@ -19,6 +19,7 @@ digits; a bare digest is refused.
 | File | Step | Owner inputs | Test |
 | --- | --- | --- | --- |
 | [settlement-v2.unsigned.example.json](settlement-v2.unsigned.example.json) | 8.3 | O2 to O12 | `TestSettlementV2LaunchPhaseConfigExample` (SV-8) |
+| [SETTLEMENT-V2-FILL.md](SETTLEMENT-V2-FILL.md), the command sequence that fills the phase config | 8.3 | O2 to O12 | none: its `bash` blocks were run in order against `sn-mainnet` built from `29c8bd70` and `c844f308` |
 | [settlement-v2-custody-request.example.json](settlement-v2-custody-request.example.json), [settlement-v2-custody-fence.example.json](settlement-v2-custody-fence.example.json) | 8.2 | O7 (run directory), O11 | `TestSettlementV2LaunchCustodyRequestExample` (SV-8) |
 | [SETTLEMENT-V2-ADOPTION.md](SETTLEMENT-V2-ADOPTION.md), the command sequence | 10 | O14, O15 | `TestSettlementV2AdoptionDocumentIsTheVA6Sequence`, `validator/TestSettlementV2AdoptionDocumentNamesTheLoaderRefusals` (VA-6) |
 | [validator-ledger-auditor.example.conf](validator-ledger-auditor.example.conf) | 10 | O10, O15 | `TestSettlementV2LaunchAuditorDropInExample`, `validator/TestSettlementV2LaunchAuditorDropInParses`, `validator/TestSettlementV2AdoptionDocumentRestartIsTheDropIn` (VA-3) |
@@ -74,6 +75,11 @@ builds them this way. Preview refuses the example while any placeholder is
 left. It checks only that `native_chain` and `specName` are not empty, so
 review those by eye: only the online steps compare them with the chain, after
 the approval is signed.
+
+[SETTLEMENT-V2-FILL.md](SETTLEMENT-V2-FILL.md) derives these fields with
+`cast`, `jq`, `b2sum` and `xxd`, fills this example, runs `preview` and
+compares its answer with the owner inputs. Preview accepts any well-formed
+wrong value, so read that comparison before signing.
 
 ## Custody request and fence (step 8.2)
 
