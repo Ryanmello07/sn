@@ -72,6 +72,14 @@ contracts=(
 )
 # Every root is analyzed even after another fails, so that one root's finding
 # cannot hide the next root's; any failure still fails the gate at the end.
+# An accepted finding carries a slither-disable-next-line comment in its
+# source, except in a release-locked contract, whose source cannot change.
+# Slither's triage database, slither.db.json, accepts those by finding id.
+# Its one entry is locked-ether in STSubnetProbe, whose bytecode
+# sim-testnet/contracts_gen.go pins: receive and seedFromTao fund the probe's
+# mapped account, and the staking precompile's addStake debits that account
+# natively, an outflow Slither cannot see. The id hashes the contract name and
+# its payable function signatures, so any change to them fails the gate again.
 failed=()
 for contract in "${contracts[@]}"; do
   rm -f -- "$report"
@@ -81,6 +89,7 @@ for contract in "${contracts[@]}"; do
     --exclude-low \
     --exclude-informational \
     --disable-color \
+    --triage-database slither.db.json \
     --json "$report"; then
     if [[ -s "$report" ]]; then
       jq -r '.results.detectors[]? | "[\(.impact)] \(.check): \(.description)"' "$report" >&2
