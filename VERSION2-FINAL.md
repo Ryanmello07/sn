@@ -946,7 +946,7 @@ authenticated `GET /sn/pool/claim` stays for v1 epochs.
 ### 8.5 Deployment tooling (this repository)
 
 `sn-mainnet bootstrap-contracts` accepts a fixed list of nine action ids, of
-which eight can execute (`mainnet/evm_phase.go:174,180,196`;
+which eight can execute (`mainnet/evm_phase.go:174,180,201`;
 `mainnet/bootstrap_contract_command.go:32,42`). Phase A adds a
 v2 contract phase:
 

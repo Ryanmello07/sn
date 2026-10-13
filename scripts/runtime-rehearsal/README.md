@@ -316,7 +316,15 @@ tempo of 360. Measured:
   builds from `mainnet/` with `go build`: review's `eth_call` preflight from
   the owner predicted UID 7, the owner sent exactly the printed call, and
   readback confirmed the event, `pools` and `settlementAt`, with the same
-  burn and gas (R-4 took 252 seconds).
+  burn and gas (R-4 took 252 seconds). `TestR4RegistrationRefusals` (51
+  seconds) drives what the chain refuses through the same command. The node
+  answers a revert with code -32603, the message `VM Exception while
+  processing transaction: revert` and the revert's bytes as `data`
+  (`0xc52a9bd3` for `InvalidConfiguration`), a burn above the cap as a revert
+  with data `0x`, and a sender short of the value as `evm error: OutOfFund`
+  with data `0x`; a failed read, such as `header not found` (-32000), carries
+  no data. review named each and exited 3, and readback did the same for a
+  `settlementAt` that reverts `UnknownOperator`.
 - **R-5 approval, demand and answer.** Finalize was refused without a quorum
   (`QuorumNotReached`), then inside the window (`ChallengeWindowOpen`); an
   approval needed an auditor and the exact pending root (`Unauthorized`,

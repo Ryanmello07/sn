@@ -967,8 +967,9 @@ epoch whose start block, `epochStartBlock(E_s)` on STSettlement2's
 `eth_call` from the Safe with its value and names the revert:
 `InactiveOperator`, `InvalidEpoch`, `CadenceTooShort`, `NativeRefundFailed`,
 vault2's `InvalidConfiguration`, `OwnableUnauthorizedAccount` (the Safe does
-not own STSettlement2) or the v1 coordinator's `UnknownOperator`; any other
-revert is refused with its data. Its result, schema
+not own STSettlement2) or the v1 coordinator's `UnknownOperator`. A Safe that
+holds less than the value is refused as `OutOfFund`, and any other failed
+call with the node's own message and data. Its result, schema
 `urnetwork-mainnet-settlement-v2-pool-registration-review-v1`, is the call
 for review and Safe import, `to`, `value_wei`, `data`, `function` and `args`
 (`noId`, `hotkey`, `maximumBurnRao`, `firstEpoch`), with `chain_id`, `safe`,
@@ -986,9 +987,29 @@ schema `urnetwork-mainnet-settlement-v2-pool-registration-readback-v1`, names
 `chain_id`, `settlement2`, `vault2`, `no_id`, `pool_hotkey`, `first_epoch`,
 the event's `uid`, `transaction_hash`, `block_number` and `head_block`.
 
-Both modes exit 0 with their result, 2 for a usage error, 3 for a refusal or
-a difference (the call must not be sent, or the chain does not hold the
-reviewed registration) and 1 when a read fails, which decides nothing.
-`evm_v2_pool_test.go` (PR-1 to PR-5) runs both against the reviewed contracts
-on the in-repo end-to-end chain, and R-4 (`rehearsal/r4_registration_test.go`)
-registers its pool through them on the rehearsal node.
+A call the chain ran and failed is never a failed read: no rerun changes it.
+Subtensor's node answers a revert with code -32603, the message `VM Exception
+while processing transaction: revert` and the revert's bytes as hex `data`;
+the data is `0x` when the revert carries no reason, which is how the runtime
+refuses the registration itself, for one a burn above `maximumBurnRao`. It
+answers an EVM error the same way with empty data, as `evm error: OutOfFund`
+for a sender short of the value. Other nodes answer a revert with code 3.
+Either mode takes hex data, code 3, or a message that names a revert or an
+EVM error as that evidence, in the preflight and in every view: `review`
+refuses, and `readback` reports a difference, as for a `settlementAt` that
+reverts `UnknownOperator` because `noId` has neither a pool nor a v1
+operator. A view answered as its contract would not answer it, as an address
+without the contract gives, is refused the same way.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | The result is printed: the reviewed call, or the confirmed registration. |
+| 1 | A read failed, which decides nothing: no answer, an HTTP error, a reply that is no JSON-RPC, an RPC error without evidence of a failed call, or an output that could not be written. Run it again. |
+| 2 | Usage: a missing, unknown or malformed argument. Nothing was read. |
+| 3 | `review` refuses, so the call must not be sent, or `readback` differs, so the chain does not hold the reviewed registration. Every revert and EVM error is here, named or not. |
+
+`evm_v2_pool_test.go` (PR-1 to PR-6) runs both against the reviewed contracts
+on the in-repo end-to-end chain, PR-6 with each shape of the node's answer.
+R-4 (`rehearsal/r4_registration_test.go`) registers its pool through them on
+the rehearsal node, and `TestR4RegistrationRefusals` drives the node's real
+reverts, `OutOfFund` and a reverted view through them.
