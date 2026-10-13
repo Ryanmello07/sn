@@ -330,12 +330,18 @@ func (self *evmCreateOwner) submitEscrowFollow(ctx context.Context, plan evmCrea
 // the binding's successful receipt, which retention admits after readback;
 // the claim batcher's action, which requires it, reports it with its own.
 // The escrow collateral is reported where a retained receipt read it back.
+// Vault2's creation reveals the escrow hotkey, so vault2's results also carry
+// the escrow registration's envelope, the approved action 1, which the
+// deployer signs before any send and imports beside vault2's own (A7).
 func evmV2CreateResult(plan evmCreatePlan, result evmCreateResult) evmCreateResult {
 	plans := append(plan.v2Prior(), &plan)
 	plans[plan.ActionIndex] = &plan
 	result.Address, result.ExecutableAction, result.RemainingActions = "", evmV2ActionAt(plan.ActionIndex).id, []string{}
 	for _, action := range plan.Config.Plan.Actions[plan.ActionIndex+1:] {
 		result.RemainingActions = append(result.RemainingActions, action.Id)
+	}
+	if plan.ActionIndex == 0 {
+		result.EscrowSigningDigest, result.EscrowUnsignedTransaction = plan.Config.Plan.Actions[1].envelope()
 	}
 	result.Vault2Address = plans[0].Address.Hex()
 	if plan.ActionIndex >= 2 {

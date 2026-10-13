@@ -3,28 +3,67 @@
 package rehearsal
 
 import (
+	"bytes"
+	"encoding/json"
 	"math/big"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	gethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/urfoundation/sn/chain"
 )
 
-// R-4. TestR4Registration: pool registration through STSettlement2; the
-// escrow and a pool hotkey pruned, their stake kept and still captured;
+// buildSnMainnet builds this repository's sn-mainnet, as the operator runs
+// it, in a private directory.
+func buildSnMainnet(t *testing.T) string {
+	t.Helper()
+	binary := filepath.Join(t.TempDir(), "sn-mainnet")
+	build := exec.Command("go", "build", "-o", binary, "./mainnet")
+	build.Dir = ".."
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build ./mainnet: %v\n%s", err, output)
+	}
+	return binary
+}
+
+// runSnMainnet runs one sn-mainnet command that must succeed and decodes its
+// JSON result.
+func runSnMainnet(t *testing.T, binary string, result any, args ...string) {
+	t.Helper()
+	command := exec.Command(binary, args...)
+	var stdout, stderr bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, &stderr
+	if err := command.Run(); err != nil {
+		t.Fatalf("sn-mainnet %v: %v\n%s", args, err, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), result); err != nil {
+		t.Fatalf("sn-mainnet %v: %v\n%s", args, err, stdout.String())
+	}
+}
+
+// R-4. TestR4Registration: pool registration through STSettlement2, reviewed,
+// preflighted and read back by sn-mainnet register-operator-pool; the escrow
+// and a pool hotkey pruned, their stake kept and still captured;
 // re-registration through registerPoolUid; absorbStake of vault2's stake on a
 // foreign hotkey, the v1 escrow hotkey (VERSION2-FINAL.md §15.8).
 func TestR4Registration(t *testing.T) {
 	t.Parallel()
+	binary := buildSnMainnet(t)
 	n := startNode(t)
 	s := deployStack(t, n, stackConfig{operators: 3, shortFrom: 2})
 	pool1, pool2 := s.operators[1].pool, s.operators[2].pool
 
 	// R-4: registerOperatorPool forwards the burn ceiling to vault2, which
 	// registers the hotkey under its mapped coldkey and refunds the rest to
-	// the owner through STSettlement2.
+	// the owner through STSettlement2. sn-mainnet's review prints the owner's
+	// exact call after its eth_call preflight from the owner, the owner sends
+	// exactly that call, and readback confirms the registration.
 	t.Run("registration", func(t *testing.T) {
 		economics, err := chain.ReadRegistrationEconomicsAtContext(n.ctx, n.sub, s.netuid, n.head(t))
 		if err != nil {
@@ -32,10 +71,29 @@ func TestR4Registration(t *testing.T) {
 		}
 		before := n.balance(t, s.owner.address)
 		mapped := n.freeBalance(t, s.vaultColdkey)
-		receipt := s.registerPool(t, 2, 1)
+		inputs := []string{"--rpc", n.http, "--settlement2", s.settlement.Hex(), "--no-id", "2", "--pool-hotkey", hexutil.Encode(pool2[:]), "--first-epoch", "1"}
+		var review struct {
+			To           common.Address `json:"to"`
+			ValueWei     string         `json:"value_wei"`
+			Data         hexutil.Bytes  `json:"data"`
+			PreflightUid uint16         `json:"preflight_uid"`
+		}
+		runSnMainnet(t, binary, &review, append([]string{"register-operator-pool", "review", "--safe", s.owner.address.Hex(), "--maximum-burn-rao", strconv.FormatUint(maximumBurn, 10), "--value-wei", raoWei(maximumBurn).String()}, inputs...)...)
+		value, _ := new(big.Int).SetString(review.ValueWei, 10)
+		if review.To != s.settlement || value == nil || value.Cmp(raoWei(maximumBurn)) != 0 || !bytes.Equal(review.Data, s.settlementArtifact.pack(t, "registerOperatorPool", id(2), pool2, uint64(maximumBurn), uint64(1))) {
+			t.Fatalf("reviewed call: %+v", review)
+		}
+		receipt := n.transact(t, s.owner, &review.To, value, review.Data, 0)
+		if receipt.Status != gethtypes.ReceiptStatusSuccessful {
+			t.Fatalf("the reviewed registerOperatorPool failed in block %s", receipt.BlockNumber)
+		}
+		var readback struct {
+			Uid uint16 `json:"uid"`
+		}
+		runSnMainnet(t, binary, &readback, append([]string{"register-operator-pool", "readback", "--transaction-hash", receipt.TxHash.Hex()}, inputs...)...)
 		uid, registered := n.uid(t, s.netuid, pool2)
-		if !registered || n.owner(t, pool2) != s.vaultColdkey {
-			t.Fatalf("pool 2's hotkey: registered %v, owner %x", registered, n.owner(t, pool2))
+		if !registered || n.owner(t, pool2) != s.vaultColdkey || review.PreflightUid != uid || readback.Uid != uid {
+			t.Fatalf("pool 2's hotkey: registered %v, owner %x, UID %d, preflight %d, readback %d", registered, n.owner(t, pool2), uid, review.PreflightUid, readback.Uid)
 		}
 		requireEvent(t, receipt, s.vaultArtifact, s.vault, "PoolRegistered", map[string]any{
 			"noId": id(2), "hotkey": pool2, "uid": uid, "firstEpoch": uint64(1),

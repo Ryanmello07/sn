@@ -243,6 +243,15 @@ type e2eFixture struct {
 // firstEpoch.
 func newE2EFixture(t testing.TB, firstEpoch uint64, extra ...*e2eActor) *e2eFixture {
 	t.Helper()
+	f := newE2EDeployment(t, firstEpoch, extra...)
+	f.publisher = newE2EPublisher(t, f)
+	f.registerPool()
+	return f
+}
+
+// newE2EDeployment deploys v1 and v2 with no pool registered for v2 yet.
+func newE2EDeployment(t testing.TB, firstEpoch uint64, extra ...*e2eActor) *e2eFixture {
+	t.Helper()
 	f := &e2eFixture{t: t, deployer: newE2EActor("deployer"), owner: newE2EActor("owner"), guardian: newE2EActor("guardian"), oracle: newE2EActor("oracle"),
 		operator: newE2EActor("operator"), depositSigner: newE2EActor("deposit-signer"), auditor: newE2EActor("auditor"), anyone: newE2EActor("anyone"), watcher: newE2EActor("watcher"),
 		escrowV1: e2eKey("v1-escrow"), reserveHotkey: e2eKey("v1-reserve"), poolV1: e2eKey("v1-pool"), deposit: e2eKey("v1-deposit"),
@@ -255,8 +264,6 @@ func newE2EFixture(t testing.TB, firstEpoch uint64, extra ...*e2eActor) *e2eFixt
 	f.chain = newE2EChain(t, funded)
 	f.deployV1()
 	f.deployV2()
-	f.publisher = newE2EPublisher(t, f)
-	f.registerPool()
 	return f
 }
 

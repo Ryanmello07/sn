@@ -836,9 +836,14 @@ journal.
 reveals the escrow hotkey as soon as its CREATE is broadcast. Anyone who
 registers that hotkey first, under their own coldkey, makes `registerEscrow`
 fail for good. So the registration is the deployer's very next nonce, and
-vault2's journal can also hold the registration's original signed bytes:
-import them with `--escrow-signed-transaction` and its pin beside vault2's own
-bytes. `resume --action vault2-create --online --submit` then sends vault2's
+vault2's journal can also hold the registration's original signed bytes.
+Every `vault2-create` result, `apply`'s included, prints the registration's
+envelope, the approved action 1, as `escrow_signing_digest` and
+`escrow_unsigned_transaction` beside vault2's own `signing_digest` and
+`unsigned_transaction`, so the deployer signs both before any send;
+`escrow2-register`'s journal later prints the same bytes as its own. Import
+the registration's signature with `--escrow-signed-transaction` and its pin
+beside vault2's own bytes. `resume --action vault2-create --online --submit` then sends vault2's
 transaction and, right after it in the same invocation, the registration's
 bytes, each after its own durable attempt within the one allowance. The status
 is `submitted-with-escrow-registration-awaiting-canonical-receipts`, or
@@ -903,7 +908,8 @@ the BLAKE2b-256 of its `:code` and metadata, a finalized start block, and the
 route `http://127.0.0.1:<port>` with no TLS pin. The approval covers the
 release from `contracts_gen.go`, the starting gas limits above, a fee cap of
 twice the node's gas price and the recommended demand fee. Each unsigned
-transaction is signed outside the command; vault2 and its escrow registration
+transaction a command prints is signed outside it, the escrow registration's
+from vault2's `apply`; vault2 and its escrow registration
 go out back to back and are sealed into one block, and each later action is
 sealed into its own. Every action completes only after its readback against
 the real precompiles. The custody declaration is the synthetic one of every
@@ -919,4 +925,59 @@ seconds, with the escrow registration in vault2's block and no registration
 collateral on the escrow position; with the claim batcher's creation added as
 the sixth action, it passed in 72 seconds, and in 100 seconds on a loaded
 machine against vault2 after its gas reduction, the batcher read back at its
-own block.
+own block. On 2026-10-13 it passed in 85 seconds signing only the envelopes
+the commands printed, with the same gas.
+
+## Settlement v2 activation
+
+Phase A activates when the governance Safe sends STSettlement2's
+`registerOperatorPool(noId, poolHotkeyV2, maximumBurnRao, E_s)`, with value
+`maximumBurnRao × 10^9` wei, as a direct call, the way v1's `registerOperator`
+went (`VERSION2-FINAL.md` §12.1 step 5, §14). `register-operator-pool` builds
+and preflights that call and reads its result back; it never signs or sends.
+Every flag is required. Its reads are `eth_chainId`, `eth_blockNumber`, then
+each `eth_call` at that head block, and for readback the Safe transaction's
+`eth_getTransactionReceipt`, read before the head:
+
+```sh
+sn-mainnet register-operator-pool review --rpc "$EVM_RPC" --settlement2 "$SETTLEMENT2_PROXY" \
+  --safe "$GOVERNANCE_SAFE" --no-id 1 --pool-hotkey "$POOL_HOTKEY_V2" \
+  --maximum-burn-rao "$MAXIMUM_BURN_RAO" --value-wei "$VALUE_WEI" --first-epoch "$E_S"
+sn-mainnet register-operator-pool readback --rpc "$EVM_RPC" --settlement2 "$SETTLEMENT2_PROXY" \
+  --no-id 1 --pool-hotkey "$POOL_HOTKEY_V2" --first-epoch "$E_S" --transaction-hash "$SAFE_TRANSACTION_HASH"
+```
+
+The hotkey is `0x` and its 32 bytes in hex, as in the phase config. `review`
+refuses, before any read, a zero pool hotkey and a value other than
+`maximumBurnRao × 10^9` wei; then a route that is not EVM chain 964, vault2's
+own escrow hotkey (`escrowHotkey()` of STSettlement2's `vault()`), and a first
+epoch whose start block, `epochStartBlock(E_s)` on STSettlement2's
+`v1Coordinator()`, the head has reached. It then runs the exact call as an
+`eth_call` from the Safe with its value and names the revert:
+`InactiveOperator`, `InvalidEpoch`, `CadenceTooShort`, `NativeRefundFailed`,
+vault2's `InvalidConfiguration`, `OwnableUnauthorizedAccount` (the Safe does
+not own STSettlement2) or the v1 coordinator's `UnknownOperator`; any other
+revert is refused with its data. Its result, schema
+`urnetwork-mainnet-settlement-v2-pool-registration-review-v1`, is the call
+for review and Safe import, `to`, `value_wei`, `data`, `function` and `args`
+(`noId`, `hotkey`, `maximumBurnRao`, `firstEpoch`), with `chain_id`, `safe`,
+`vault2`, `escrow_hotkey`, `v1_coordinator`, `head_block`,
+`first_epoch_start_block`, `blocks_remaining` and `preflight_uid`, the UID
+the preflight registered at the head. The Safe sends exactly `to`,
+`value_wei` and `data`.
+
+`readback` names every difference from the reviewed registration: no receipt;
+a reverted transaction; no `PoolRegistered` event of `noId` from vault2 in the
+receipt, or one with another hotkey or first epoch; `pools(noId)` unregistered
+or with another first epoch or hotkey; and `settlementAt(noId, E_s)` with a
+vault other than vault2, another hotkey or a version other than 2. Its result,
+schema `urnetwork-mainnet-settlement-v2-pool-registration-readback-v1`, names
+`chain_id`, `settlement2`, `vault2`, `no_id`, `pool_hotkey`, `first_epoch`,
+the event's `uid`, `transaction_hash`, `block_number` and `head_block`.
+
+Both modes exit 0 with their result, 2 for a usage error, 3 for a refusal or
+a difference (the call must not be sent, or the chain does not hold the
+reviewed registration) and 1 when a read fails, which decides nothing.
+`evm_v2_pool_test.go` (PR-1 to PR-5) runs both against the reviewed contracts
+on the in-repo end-to-end chain, and R-4 (`rehearsal/r4_registration_test.go`)
+registers its pool through them on the rehearsal node.

@@ -393,15 +393,19 @@ func (self *r1Phase) require(status, command string, extra ...string) evmCreateR
 	return result
 }
 
-// The deployer's original signature over one approved envelope, in its own
-// pinned file, as the operator signs apply's unsigned transaction.
-func (self *r1Phase) sign(index int) (string, string) {
+// The deployer's original signature over the envelope a command printed, in
+// its own pinned file, as the operator signs apply's unsigned transaction.
+func (self *r1Phase) sign(id, printed string) (string, string) {
 	self.t.Helper()
-	unsigned, err := self.config.Plan.Actions[index].unsigned()
+	encoded, err := hex.DecodeString(strings.TrimPrefix(printed, "0x"))
 	if err != nil {
 		self.t.Fatal(err)
 	}
-	tx, err := types.SignTx(unsigned, types.LatestSignerForChainID(big.NewInt(mainnetEvmChainId)), self.deployer)
+	var unsigned types.Transaction
+	if err := unsigned.UnmarshalBinary(encoded); err != nil {
+		self.t.Fatal(err)
+	}
+	tx, err := types.SignTx(&unsigned, types.LatestSignerForChainID(big.NewInt(mainnetEvmChainId)), self.deployer)
 	if err != nil {
 		self.t.Fatal(err)
 	}
@@ -409,7 +413,7 @@ func (self *r1Phase) sign(index int) (string, string) {
 	if err != nil {
 		self.t.Fatal(err)
 	}
-	path := filepath.Join(filepath.Dir(self.configPath), self.config.Plan.Actions[index].Id+".signed.bin")
+	path := filepath.Join(filepath.Dir(self.configPath), id+".signed.bin")
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		self.t.Fatal(err)
 	}
@@ -536,15 +540,18 @@ func TestR1SettlementV2Phase(t *testing.T) {
 	}
 	p.storage = durablefixture.New(t, t.Context(), dir)
 
-	// Vault2 and its escrow registration, back to back (A7).
-	p.require("signature-awaiting-import", "apply", "--action", "vault2-create")
-	vaultPath, vaultHash := p.sign(0)
-	escrowPath, escrowHash := p.sign(1)
+	// Vault2 and its escrow registration, back to back (A7): vault2's apply
+	// prints both envelopes, and the deployer signs both before any send.
+	prepared := p.require("signature-awaiting-import", "apply", "--action", "vault2-create")
+	vaultPath, vaultHash := p.sign("vault2-create", prepared.UnsignedTransaction)
+	escrowPath, escrowHash := p.sign("escrow2-register", prepared.EscrowUnsignedTransaction)
 	p.require("signed-custody-complete", "resume", "--action", "vault2-create", "--signed-transaction", vaultPath, "--signed-transaction-hash", vaultHash, "--escrow-signed-transaction", escrowPath, "--escrow-signed-transaction-hash", escrowHash)
 	p.require("submitted-with-escrow-registration-awaiting-canonical-receipts", "resume", "--action", "vault2-create", "--online", "--submit")
 	n.seal(t)
 	results := []evmCreateResult{p.complete("vault2-create")}
-	p.require("signature-awaiting-import", "apply", "--action", "escrow2-register")
+	if escrow := p.require("signature-awaiting-import", "apply", "--action", "escrow2-register"); escrow.UnsignedTransaction != prepared.EscrowUnsignedTransaction || escrow.SigningDigest != prepared.EscrowSigningDigest {
+		t.Fatalf("escrow2's envelope differs from the one vault2 printed: %+v %+v", escrow, prepared)
+	}
 	p.require("signed-custody-complete", "resume", "--action", "escrow2-register", "--signed-transaction", escrowPath, "--signed-transaction-hash", escrowHash)
 	results = append(results, p.complete("escrow2-register"))
 	if results[1].Receipt.BlockHash != results[0].Receipt.BlockHash || results[1].EscrowCollateral == nil || *results[1].EscrowCollateral != contractEscrowCollateralExpected {
@@ -552,9 +559,8 @@ func TestR1SettlementV2Phase(t *testing.T) {
 	}
 
 	// The implementation, the initialized proxy, the binding and the batcher.
-	for index, id := range ids[2:] {
-		p.require("signature-awaiting-import", "apply", "--action", id)
-		path, hash := p.sign(index + 2)
+	for _, id := range ids[2:] {
+		path, hash := p.sign(id, p.require("signature-awaiting-import", "apply", "--action", id).UnsignedTransaction)
 		p.require("signed-custody-complete", "resume", "--action", id, "--signed-transaction", path, "--signed-transaction-hash", hash)
 		p.require("submitted-awaiting-canonical-receipt", "resume", "--action", id, "--online", "--submit")
 		n.seal(t)

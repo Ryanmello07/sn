@@ -8,10 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -89,6 +87,8 @@ type evmCreateResult struct {
 	EscrowCollateral                 *contractEscrowCollateral       `json:"escrow_collateral,omitempty"`
 	EscrowTransactionHash            string                          `json:"escrow_transaction_hash,omitempty"`
 	EscrowAttempts                   uint8                           `json:"escrow_attempts,omitempty"`
+	EscrowSigningDigest              string                          `json:"escrow_signing_digest,omitempty"`
+	EscrowUnsignedTransaction        string                          `json:"escrow_unsigned_transaction,omitempty"`
 }
 
 // All mutable projections are copied on construction. Storage failure poisons
@@ -571,10 +571,8 @@ func (self *evmCreateOwner) advanceWithEscrow(ctx context.Context, signed, escro
 
 // Public signing material contains the exact envelope; it cannot sign itself.
 func (self *evmCreateOwner) result(record evmActionRecord, status string) evmCreateResult {
-	tx, _ := self.plan.Config.Plan.Actions[self.plan.ActionIndex].unsigned()
-	raw, _ := tx.MarshalBinary()
-	signer := types.LatestSignerForChainID(big.NewInt(mainnetEvmChainId))
-	result := evmCreateResult{PlanHash: self.plan.Config.Plan.hash(), Status: status, Address: self.plan.Address.Hex(), SigningDigest: signer.Hash(tx).Hex(), UnsignedTransaction: "0x" + hex.EncodeToString(raw), TransactionHash: record.TransactionHash, Attempts: record.Attempts, Receipt: record.Receipt, RemainingActions: []string{"vault-create", "coordinator-create", "escrow-register", "proxy-create", "reserve-link", "vault-link", "evidence-create", "evidence-anchor"},
+	digest, unsigned := self.plan.Config.Plan.Actions[self.plan.ActionIndex].envelope()
+	result := evmCreateResult{PlanHash: self.plan.Config.Plan.hash(), Status: status, Address: self.plan.Address.Hex(), SigningDigest: digest, UnsignedTransaction: unsigned, TransactionHash: record.TransactionHash, Attempts: record.Attempts, Receipt: record.Receipt, RemainingActions: []string{"vault-create", "coordinator-create", "escrow-register", "proxy-create", "reserve-link", "vault-link", "evidence-create", "evidence-anchor"},
 		EscrowTransactionHash: record.EscrowTransactionHash, EscrowAttempts: record.EscrowAttempts}
 	if self.plan.Config.Plan.settlementV2() {
 		return evmV2CreateResult(self.plan, result)

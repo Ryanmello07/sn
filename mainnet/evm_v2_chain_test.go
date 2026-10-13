@@ -434,6 +434,81 @@ func (self *evmCreateFixture) prepareV2ActionImportOnly(id string) {
 	}
 }
 
+// The deployer's signature over an envelope a command printed, as the
+// external signer returns it: canonical binary EIP-1559 bytes.
+func evmV2SignPrinted(t *testing.T, unsigned string) []byte {
+	t.Helper()
+	key, err := crypto.HexToECDSA(strings.Repeat("17", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := hex.DecodeString(strings.TrimPrefix(unsigned, "0x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope types.Transaction
+	if err := envelope.UnmarshalBinary(encoded); err != nil {
+		t.Fatal(err)
+	}
+	signed, err := types.SignTx(&envelope, types.LatestSignerForChainID(big.NewInt(964)), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := signed.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// SV-8, A7: vault2's apply prints the escrow registration's envelope, the
+// approved action 1, before that journal opens. The deployer signs both
+// printed envelopes before any send, vault2's journal sends them back to
+// back, and escrow2's journal later prints byte-identical bytes and records
+// and accepts the same signature.
+func TestEvmV2Vault2ApplyPrintsEscrowEnvelope(t *testing.T) {
+	f := newEvmV2ChainFixture(t)
+	f.selectV2Action("vault2-create")
+	escrowPlan, err := selectEvmCreatePlan(context.Background(), f.plan, "escrow2-register", f.configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	escrowTx, escrowRaw, _, _ := f.v2SignedFile(1)
+	escrowJournal := filepath.Join(f.config.Plan.RunDirectory, "escrow2-register.json")
+	vault, code, diagnostic := f.command("apply", "--action", "vault2-create")
+	if _, err := os.Lstat(escrowJournal); code != 0 || vault.Status != "signature-awaiting-import" || vault.EscrowSigningDigest != types.LatestSignerForChainID(big.NewInt(964)).Hash(escrowTx).Hex() || !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("vault2 preparation without the escrow envelope, or with escrow2's journal open: %+v %d %s %v", vault, code, diagnostic, err)
+	}
+	// The signatures over the printed envelopes are those over the approved actions.
+	vaultSigned, escrowSigned := evmV2SignPrinted(t, vault.UnsignedTransaction), evmV2SignPrinted(t, vault.EscrowUnsignedTransaction)
+	if !bytes.Equal(vaultSigned, f.raw) || !bytes.Equal(escrowSigned, escrowRaw) {
+		t.Fatal("a printed envelope differs from its approved action")
+	}
+	vaultPath, vaultHash := f.v2PinnedFile("vault2-printed.signed.bin", vaultSigned)
+	escrowPath, escrowHash := f.v2PinnedFile("escrow2-printed.signed.bin", escrowSigned)
+	imported, code, diagnostic := f.command("resume", "--action", "vault2-create", "--signed-transaction", vaultPath, "--signed-transaction-hash", vaultHash, "--escrow-signed-transaction", escrowPath, "--escrow-signed-transaction-hash", escrowHash)
+	if code != 0 || imported.Status != "signed-custody-complete" || imported.EscrowUnsignedTransaction != vault.EscrowUnsignedTransaction || imported.EscrowTransactionHash != escrowTx.Hash().Hex() {
+		t.Fatalf("vault2 import of both printed signatures: %+v %d %s", imported, code, diagnostic)
+	}
+	f.follow = &evmCreateFollow{plan: escrowPlan, tx: escrowTx, raw: escrowRaw, sameBlock: true}
+	if result, code, diagnostic := f.command("resume", "--action", "vault2-create", "--online", "--submit"); code != 0 || result.Status != "submitted-with-escrow-registration-awaiting-canonical-receipts" {
+		t.Fatalf("back-to-back send: %+v %d %s", result, code, diagnostic)
+	}
+	f.finishV2Action("vault2-create")
+	f.plan, f.signedPath, f.signedHash = escrowPlan, escrowPath, escrowHash
+	escrow, code, diagnostic := f.command("apply", "--action", "escrow2-register")
+	if code != 0 || escrow.Status != "signature-awaiting-import" || escrow.UnsignedTransaction != vault.EscrowUnsignedTransaction || escrow.SigningDigest != vault.EscrowSigningDigest || escrow.EscrowUnsignedTransaction != "" || escrow.EscrowSigningDigest != "" {
+		t.Fatalf("escrow2's envelope differs from the one vault2 printed: %+v %d %s", escrow, code, diagnostic)
+	}
+	f.prepareV2ActionImportOnly("escrow2-register")
+	f.finishV2Action("escrow2-register")
+	raw, err := os.ReadFile(escrowJournal)
+	var record evmActionRecord
+	if err != nil || json.Unmarshal(raw, &record) != nil || record.Signed != "0x"+hex.EncodeToString(escrowSigned) || record.TransactionHash != escrowTx.Hash().Hex() {
+		t.Fatalf("escrow2's journal does not hold the signature over the printed envelope: %+v %v", record, err)
+	}
+}
+
 // SV-8, A7: a vault2 whose escrow hotkey already has a UID is never created,
 // and a registration found registered after vault2 is never sent.
 func TestEvmV2RegisteredEscrowHotkeyRefusesSends(t *testing.T) {
