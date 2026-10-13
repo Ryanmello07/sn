@@ -190,7 +190,7 @@ release_gate_start sn-v2 release_phase_sn_v2
 # On 2026-10-11 the package took 170 seconds on four CPUs and peaked at 2.7 GiB.
 # The server's scale-tagged tests (SV-6) are this shard's database half, below.
 # The runtime rehearsal (activation gate 2, runtime_rehearsal tag) needs a node
-# built from runtime 475's source, so it runs beside this gate, on the same
+# built from runtime 477's source, so it runs beside this gate, on the same
 # checkout (scripts/runtime-rehearsal/README.md); R-1, the v2 contract phase,
 # runs from ./mainnet with the same tag:
 #   scripts/runtime-rehearsal/build.sh /path/to/subtensor-checkout
