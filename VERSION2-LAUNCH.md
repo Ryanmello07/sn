@@ -395,8 +395,13 @@ first exist.
   (`docs/spec/runtime-475-audit.md`:84,93). The output is an unapproved
   observation, never an approval
   ([mainnet/MAINNET.md](mainnet/MAINNET.md):1653).
+- **Observed already.** The public RPC `https://lite.chain.opentensor.ai`
+  answered `state_getRuntimeVersion` with `specVersion` 477, not 475, at
+  2026-10-13 20:23 UTC. That is an observation, not the check of record. The
+  owner's `runtime-snapshot` above still decides.
 - **Stop if** any of the three differs. Gate 2 then repeats on the new runtime
-  before step 5.
+  before step 8. For 477 that work is in progress on sn branch
+  `v2/runtime-477` (section 9.3, item 2).
   - **Gap.** `scripts/runtime-rehearsal/build.sh` builds only tag `v475`,
     commit `d1718c99…`, against `docs/spec/runtime-v475-source.sha256`
     (build.sh:13-14,21,45). Another runtime first needs a reviewed change of
@@ -430,6 +435,9 @@ first exist.
     R-6).
 - **Stop if** any test fails, or the logged gas exceeds the limits of
   section 2.6.
+- `build.sh` builds the 475 node. If step 2 confirms 477, the battery that
+  counts is the one on the 477 node, which sn branch `v2/runtime-477` is
+  building (section 9.3, item 2).
 
 **Step 4. Run the release gates.**
 
@@ -1349,13 +1357,16 @@ the order:
 | Order | Steps | Runs in parallel | Owner signs |
 | --- | --- | --- | --- |
 | 1 | 1: freeze `main` after the second merge round, and build | with step 2 | |
-| 2 | 2, 3, 4: the runtime check, R-1 to R-7 and the release gates | with each other | O26, the gate 1 confirmation |
-| 3 | 5, 6, 7: the gas policy, the server build with migrations, the validator binary and the tools | with each other, and with step 8 | step 5, with the gas approver key |
-| 4 | 8: deploy the contracts, after steps 2 to 4 pass | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
+| 2 | 2, 3, 4: the runtime check; gate 2 again on runtime 477, with its source audit, rehearsal-node build and R-1 to R-7, on sn `v2/runtime-477`; the release gates | with each other | O26, the gate 1 confirmation |
+| 3 | 5, 6, 7: the gas policy, the server build with migrations, the validator binary and the tools | with each other, and while gate 2 repeats on 477 | step 5, with the gas approver key |
+| 4 | 8: deploy the contracts, after steps 2 to 4 pass and gate 2 has its verdict on 477 | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
 | 5 | 10: adopt the validator config, after step 8 and step 7's validator binary | with step 13 | the treasury approval, with its approval key |
 | 6 | 11, then 12: the server switch, after steps 6, 8 and 10 | with step 13 | |
 | 7 | 15: register the pool, inside blocks 9,283,228 to 9,290,428 | | the Safe |
 
+- Step 8 waits for gate 2's verdict on runtime 477 (section 9.3, item 2).
+  Steps 5 to 7 touch nothing that the runtime decides, so they proceed
+  meanwhile.
 - Step 9, the pinned app releases, moves after step 15 (section 9.3, item 4).
 - Step 13 is off the critical path. The watcher must run by the first commit,
   at block 9,348,028 or later.
@@ -1370,17 +1381,20 @@ the order:
 
 ### 9.3 Departures from the plan of record
 
-Each item needs the owner's explicit acceptance. This runbook does not accept
-any of them.
+Each item needs the owner's explicit acceptance, and this runbook accepts
+none of them. Item 2 is not open to acceptance: it is a gate, and step 8
+waits for it.
 
 1. **The two-day rule.** "E_s is the first epoch that starts at least two days
    after the last gate passes" (§14). For epoch 2 the last gate, gate 6 at
    step 12, would have to pass by block 9,283,228, about 22 hours after the
    reading. §14 also calls epoch 3 "not reachable", and epoch 2 is earlier.
-2. **Gate 2 on another runtime.** If step 2 finds a runtime other than 475,
-   gate 2 repeats on it (§14), and "gate 2 cannot be waived" (§17). The
-   rehearsal tooling builds only 475 (step 2), so a rerun does not fit this
-   schedule. Activating in epoch 2 on such a runtime waives gate 2.
+2. **Gate 2 on runtime 477.** The public RPC reported `specVersion` 477 on
+   2026-10-13 (step 2). Gate 2 ran on 475, and "Any runtime change on mainnet
+   repeats this gate" (§14); "gate 2 cannot be waived" (§17). So gate 2 must
+   be repeated on 477 before step 8. A 477 source audit, a rehearsal-node
+   build and an R-1 to R-7 rerun are in progress on sn branch
+   `v2/runtime-477`. Step 8 waits for their verdict.
 3. **O26.** Gate 1 needs the independent review of vault2, `LedgerTree.sol`
    and `STSettlement2` resolved (§14). The owner's confirmation is not given
    yet, and step 8 waits for it.
