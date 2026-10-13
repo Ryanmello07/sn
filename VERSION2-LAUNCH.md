@@ -23,9 +23,11 @@ citations hold at them:
 | web | `9526a97b` |
 
 The second round is under way (STATE.md:298). sn `v2/launch-tools`
-(`c296b255`) is merged. Still to merge are sn `v2/launch-examples`, server
-`v2/launch-latch` and the consent branches, mmm's at `9e2e8c2b5`. Step 1
-freezes whatever `main` holds after it.
+(`c296b255`) is merged. Still to merge are sn `v2/launch-examples`, sn
+`v2/runtime-477` and `v2/runtime-478`, server `v2/launch-latch` and the
+consent branches, mmm's at `9e2e8c2b5`. Step 1 freezes whatever `main` holds
+after it. For step 8 that must include the reviewed sources of runtimes 477
+and 478, which land through those two runtime branches (step 8.3).
 
 The orchestration log is [VERSION2-STATE.md](VERSION2-STATE.md), cited as
 STATE.md. It is a snapshot of 2026-10-13 20:15 UTC; its lines 1 to 286 keep
@@ -49,6 +51,11 @@ Conventions:
   blocks, the commit window 1,200 and vault2's challenge window 14,400
   (VERSION2-FINAL.md §5). At 12 seconds a block these are 7 days, 4 hours and
   48 hours (LAUNCH.md:29-32; WHITEPAPER.md §8.3).
+- A file pin is `sha256:` and then the file's SHA-256 as 64 lowercase hex
+  characters. Every `--…-sha256` flag in this runbook takes that form, and so
+  do `--signed-transaction-hash` and `--escrow-signed-transaction-hash`. A
+  bare digest is refused (`mainnet/plan_input.go:111-113`; connect
+  `durablevolume/config.go:100-106`).
 - A gap is something the repositories do not settle. Each is marked **Gap**
   and listed again in section 8.
 
@@ -185,9 +192,10 @@ runbook, at steps 9 and 12.
   pushed, without force, after a fresh fetch and a fast-forward check
   (STATE.md:278-281). The `main` heads are the Pins table above.
 - The second round is under way (STATE.md:298). sn `v2/launch-tools` is
-  merged. sn `v2/launch-examples`, server `v2/launch-latch` and the consent
-  branches are still to merge. Step 1 freezes whatever `main` holds after
-  it, and the runbook is then read against those heads.
+  merged. sn `v2/launch-examples`, sn `v2/runtime-477` and `v2/runtime-478`,
+  server `v2/launch-latch` and the consent branches are still to merge.
+  Step 1 freezes whatever `main` holds after it, and the runbook is then read
+  against those heads.
 - `v2/dual-stack-hops` is not in `main` (STATE.md:244).
 - The localization store's `main` (`1dc9045`) holds the eight `sn_ledger_*`
   keys (VERSION2-FINAL.md §11). Every release build regenerates the app
@@ -228,7 +236,11 @@ runbook, at steps 9 and 12.
   mainnet repeats this gate" (§14 gate 2).
 - Subtensor replaces its runtime every few days
   ([mainnet/VALIDATOR-PRODUCTION-RUNTIME.md](mainnet/VALIDATOR-PRODUCTION-RUNTIME.md):39).
-  Step 2 checks it. Steps 8 and 15 repeat the check.
+  Step 2 checks it, and is repeated immediately before step 8 and before
+  step 15.
+- Mainnet moved from 475 to 477 and then, on 2026-10-13, to 478 (step 2, an
+  observation). The contracts will be deployed on 478. So gate 2 must hold on
+  478, and step 8 waits for that verdict (section 9.3, item 2).
 
 ### 2.4 R-1 to R-7 on the then-current runtime
 
@@ -254,7 +266,7 @@ runbook, at steps 9 and 12.
 | Payer | Pays for | Size, from the rehearsal | Source |
 | --- | --- | --- | --- |
 | Deployer (O4) | the six v2 actions, and the escrow registration's value | limits 4,000,000, 2,500,000, 3,000,000, 1,000,000, 150,000 and 400,000; used 2,821,690, 1,463,833, 1,935,622, 310,486, 31,329 and 285,209; value `maximumBurnRao × 10^9` wei | BOOTSTRAP-CONTRACTS.md:660,697-712 |
-| Governance Safe (O8) | `registerOperatorPool`'s value; the surplus over the burn comes back to the Safe | R-4 sent a 100 TAO ceiling, burned 3.80 TAO and used 1,594,088 gas | `scripts/runtime-rehearsal/README.md` R-4; `rehearsal/stack_test.go:31-32,190-194` |
+| Governance Safe (O8) | `registerOperatorPool`'s value, which the Safe must hold before step 15's review; the surplus over the burn comes back to the Safe | R-4 sent a 100 TAO ceiling, burned 3.80 TAO and used 1,594,088 gas. Through a SafeL2 1.4.1 `execTransaction` the dry run used 1,654,438 gas, estimated at 1,797,143 (step 15) | `scripts/runtime-rehearsal/README.md` R-4; `rehearsal/stack_test.go:31-32,190-194` |
 | Operator root key | every v2 close, commit, finalize and answer | the §8.1 table; a capturing close needs a limit of about 2.69M and is signed at about 3.2M | VERSION2-FINAL.md §8.1; `server/controller/st_controller.go:1079-1087` |
 | Validator auditor key (O10) | approvals, challenges and demands | approve: 132,524 used, limit 135,736; demand: 98,268 used, limit 104,424, plus the fee | §8.1 table |
 | Watcher key (O21) | demands and challenges | each demand pays `demandFeeWei`, 750,000 rao, plus gas; a sample starts at 256 demands and doubles | §7.1, §9.3, §10.2 |
@@ -269,6 +281,19 @@ runbook, at steps 9 and 12.
   `maximum_gas` of 1,000,000 and per-intent liability of 5·10^16 wei are below
   a capturing close, so the policy is re-signed before E_s (step 5;
   VERSION2-FINAL.md §8.1, §13).
+- **On runtime 478, as measured.** The table's sizes are from the rehearsal on
+  475. These 478 figures are provisional until the 478 audit is committed
+  (section 9.3, item 2):
+  - a capturing close used 226,055 gas, and its least gas limit fell to
+    236,399;
+  - a first claim used 187,332 gas, with a least limit of 192,318;
+  - each `moveStake` or `transferStake` uses 625 gas more;
+  - the limit that a close or a claim needs grows by 8,750 gas for each entry
+    of vault2's own staking-hotkey list. The list holds up to 128 entries,
+    which is about 1.12M more.
+
+  So the 475-era sizes, about 3.2M for a close and 2.6M for a claim, still
+  cover every list length.
 
 ### 2.7 Key custody
 
@@ -296,11 +321,11 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | --- | --- | --- | --- | --- |
 | O1 | The launch revisions: the `main` head of each repository that step 1 freezes | the Pins table or later, after the second merge round; without `v2/dual-stack-hops` | 1 | section 2.1 |
 | O2 | The mainnet route: native and EVM RPC URLs, the HTTPS leaf SPKI pin if HTTPS, and the approved native chain name | the launch used Snow's Finney archive, `ws://172.28.208.185:9944` and `http://` for EVM JSON-RPC; the route is part of each signed plan | 2, 8, 13, 20 | LAUNCH.md:124-141; BOOTSTRAP-CONTRACTS.md:208-221 |
-| O3 | The runtime identity the v2 phase config binds: version, code and metadata hashes and the reviewed source commit | what step 2 observes, after review | 8 | BOOTSTRAP-CONTRACTS.md:208-210 |
+| O3 | The runtime identity the v2 phase config binds: version, code and metadata hashes and the reviewed source commit | for runtime 478: its version, code hash and metadata hash from the owner's own `runtime-snapshot`, taken immediately before step 8, and the reviewed 478 source commit `850f2755bb05a3851f948489f0ab27b0645cebce`. The binary must list that commit; today it lists only 470, 473 and 475 (step 8.3) | 8 | BOOTSTRAP-CONTRACTS.md:208-210; `crv4/native_owner_source.go:6-19`; `mainnet/evm_phase.go:183-186` |
 | O4 | The v2 deployer: its EVM address, next nonce and signer | neither the Safe nor an auditor; funded per section 2.6 | 8 | BOOTSTRAP-CONTRACTS.md:652-655,742-743 |
 | O5 | The escrow hotkey | 32 bytes, nonzero, with no UID on SN25 at the send; not the pool hotkey | 8 | BOOTSTRAP-CONTRACTS.md:720-727, and "Back-to-back escrow registration (A7)" |
 | O6 | The escrow registration cap `maximumBurnRao` | nonzero; the value is the cap × 10^9 wei | 8 | BOOTSTRAP-CONTRACTS.md:660,733-735 |
-| O7 | The phase envelope: each action's gas limit and fees, `maximum_total_wei`, `maximum_attempts`, the native start checkpoint and send window, the source-lock, cutover and custody-fence evidence hashes, the custody identifier and the run directory | gas starts from BOOTSTRAP-CONTRACTS.md:705-708; `maximum_attempts` at most 8 across all actions, the back-to-back escrow send included | 8 | BOOTSTRAP-CONTRACTS.md:208-213,673-677; `mainnet/evm_phase.go:180` |
+| O7 | The phase envelope: each action's gas limit and fees, `maximum_total_wei`, `maximum_attempts`, the native start checkpoint and send window, the source-lock, cutover and custody-fence evidence hashes, the custody identifier and the run directory | gas starts from BOOTSTRAP-CONTRACTS.md:705-708; `maximum_attempts` at most 8 across all actions, the back-to-back escrow send included; the start checkpoint taken just before the approval is signed, and the window at most 7,200 blocks (step 8.3) | 8 | BOOTSTRAP-CONTRACTS.md:208-213,673-677; `mainnet/evm_phase.go:180` |
 | O8 | The `STSettlement2` owner and its signers | the governance Safe `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` at the v1 launch; confirm | 8, 15 | LAUNCH.md:47-48,164-166; VERSION2-FINAL.md §7.2 |
 | O9 | The v1 coordinator for `initialize` | the proxy `0xC18925925E2B7bb9059b7d696b8c92762AE86406`; confirm | 8 | LAUNCH.md:42 |
 | O10 | The auditor key and its EVM address | one address, quorum 1 at launch; the same key runs with `--ledger_auditor_key_file` | 8, 10 | BOOTSTRAP-CONTRACTS.md:740-744; VERSION2-FINAL.md §2.1 decision 2 |
@@ -379,6 +404,15 @@ first exist.
 - **Expect.** Every binary's build information names its O1 commit.
 - **Stop if** a repository's `main` lacks its pin, `v2/dual-stack-hops` is in
   it, or the store's `main` lacks the `sn_ledger_*` keys.
+- **For step 8.**
+  - The frozen sn revision must list the reviewed source of the runtime that
+    step 8 deploys on (step 8.3). That runtime is 478 (step 2). The
+    reviewed-source entries for 477 and 478 land through sn branches
+    `v2/runtime-477` and `v2/runtime-478`. Freeze after that merge. If steps
+    5 to 7 cannot wait for it, freeze sn a second time at the merged `main`,
+    and build step 8's `sn-mainnet` from that revision.
+  - Clone the sn tree under umask 022. Step 8.1's `stabi` check reads the
+    modes of checked-out files.
 
 **Step 2. Check the mainnet runtime against the rehearsal.**
 
@@ -396,24 +430,48 @@ first exist.
     /secure/ur-mainnet/runtime-snapshot.json
   ```
 
-- **Expect.** `specVersion` 475, code hash
+- **Expect.** The identity of a runtime that gate 2 holds on. The contracts
+  are then deployed on that runtime, which is now 478 (below). On `main` the
+  record of gate 2 covers only 475: `specVersion` 475, code hash
   `0x557634c8c31bc639ea6552e297dcfb781cd7d9bdd491a5352c151305db33d3a0` and
   metadata hash
   `0x983cfdabc62b0c6b08faafb47f24303999236e0022598d1b5a3ec70fbde895ff`
   (`docs/spec/runtime-475-audit.md`:84,93). The output is an unapproved
   observation, never an approval
   ([mainnet/MAINNET.md](mainnet/MAINNET.md):1653).
-- **Observed already.** The public RPC `https://lite.chain.opentensor.ai`
-  answered `state_getRuntimeVersion` with `specVersion` 477, not 475, at
-  2026-10-13 20:23 UTC. That is an observation, not the check of record. The
-  owner's `runtime-snapshot` above still decides.
-- **Stop if** any of the three differs. Gate 2 then repeats on the new runtime
-  before step 8. For 477 that work is in progress on sn branch
-  `v2/runtime-477` (section 9.3, item 2).
-  - **Gap.** `scripts/runtime-rehearsal/build.sh` builds only tag `v475`,
-    commit `d1718c99…`, against `docs/spec/runtime-v475-source.sha256`
-    (build.sh:13-14,21,45). Another runtime first needs a reviewed change of
-    those pins and a source review like `docs/spec/runtime-475-audit.md`.
+- **Observed already,** on 2026-10-13. These are observations, not the check
+  of record. The owner's own `runtime-snapshot` above still decides, and it
+  gives O3's version and hashes.
+  - **478 is live.** Mainnet installed runtime 478 at block 9,276,925, at
+    21:08:36 UTC. With it the BLAKE2b-256 hash of the on-chain `:code`
+    changed from `0x18b52484…` to `0x7e722b3a…`. Two public nodes report
+    `node-subtensor/478` at finalized block 9,276,937. The snapshot's
+    `runtime_code_hash` is the same hash of the same key
+    (`mainnet/runtime_snapshot.go:29,107-124`).
+  - v478, commit `850f2755bb05a3851f948489f0ab27b0645cebce`, changes how the
+    staking precompile dispatches `moveStake` and `transferStake`. vault2
+    depends on both for good (section 2.3).
+  - **477 ran before it.** The public RPC `https://lite.chain.opentensor.ai`
+    answered `state_getRuntimeVersion` with `specVersion` 477, not 475, at
+    20:23 UTC. Its `:code` hashed to
+    `0x18b52484d9c5d7523f704c86b17b2ab959fffbc6edb6766a77e9877f0ad19387`, and
+    those bytes equal upstream's v477 release Wasm.
+  - A runtime can land soon after it is proposed. 478 was proposed at block
+    9,276,607 and installed 318 blocks later. 475's proposal executed 196
+    blocks after it was made (`docs/spec/runtime-475-audit.md`:142-144), and
+    477's 26,475 blocks after.
+- **Repeat** this step immediately before step 8 and immediately before
+  step 15. A runtime can land between any two steps.
+- **Stop if** the version, the code hash or the metadata hash is not that of
+  a runtime gate 2 holds on. Gate 2 then repeats on that runtime before
+  step 8. For 478 that work is in progress on sn branch `v2/runtime-478`,
+  and step 8 waits for its verdict (section 9.3, item 2).
+  - **Gap, being closed.** On `main`, `scripts/runtime-rehearsal/build.sh`
+    builds only tag `v475`, commit `d1718c99…`, against
+    `docs/spec/runtime-v475-source.sha256` (build.sh:13-14,21,45). Another
+    runtime first needs a reviewed change of those pins and a source review
+    like `docs/spec/runtime-475-audit.md`. Both are in progress for 478 on
+    sn branch `v2/runtime-478`.
 
 **Step 3. Rerun the runtime rehearsal, R-1 to R-7.**
 
@@ -443,9 +501,9 @@ first exist.
     R-6).
 - **Stop if** any test fails, or the logged gas exceeds the limits of
   section 2.6.
-- `build.sh` builds the 475 node. If step 2 confirms 477, the battery that
-  counts is the one on the 477 node, which sn branch `v2/runtime-477` is
-  building (section 9.3, item 2).
+- On `main`, `build.sh` builds the 475 node. Step 2 now shows 478, so the
+  battery that counts is the one on a node built from v478. Its pins land
+  through sn branch `v2/runtime-478` (section 9.3, item 2).
 
 **Step 4. Run the release gates.**
 
@@ -616,13 +674,74 @@ This completes the "gate 5 software is released" part of §12.1 step 1.
 
 - **Who.** Owner signs the approval and every transaction; operator runs the
   commands.
-- **Inputs.** O2 to O12. Repeat step 2 first.
+- **Inputs.** O2 to O12.
+- **Start only when** all of these hold:
+  1. Gate 2 has a passing verdict on runtime 478 (section 9.3, item 2).
+  2. `sn-mainnet` is built from a `main` that lists the reviewed source of
+     runtime 478 (step 8.3).
+  3. Step 2, repeated immediately before 8.1, shows 478 with the identity
+     that gate 2 passed on. That snapshot gives O3's version and hashes.
+- **Dry run.** Steps 8.2 to 8.5 and step 15 ran end to end on a rehearsal
+  node, through the documented commands and the built `sn-mainnet`. What it
+  corrected is in the text of those steps.
+
+*Umask and ancestry.* Set the umask before the first command of step 8, in
+every shell that runs the step:
+
+```bash
+umask 077
+```
+
+The tools decide by the modes the kernel reports. The dry run met both
+refusals quoted below: `storage-prepare plan` and `apply` passed only under
+umask 077 and a protected ancestry.
+
+- **Private inputs.** `sn-mainnet` reads the phase config, the release file
+  and each signed file only as a regular file with no group or other
+  permission bit, in a directory with none, on a path without a symlink. The
+  run directory is held to the same rule
+  (`mainnet/bootstrap_root_plan.go:118-131,135-151`; `mainnet/evm_phase.go:779`).
+- **Protected files.** The custody request, the preparation plan and the
+  durable-volume declaration must each be a regular file with one link and no
+  group- or other-write bit, owned by root or the running user (connect
+  `durablevolume/host_unix.go:46-63`). Under umask 002 the request has mode
+  664 and is refused: "durable path … is not a protected physical object
+  (mode 100664, …)".
+- **Ancestry.** No directory above the run directory or above one of these
+  files, from `/` down, may be group- or other-writable, a symlink, or owned
+  by anyone but root or the running user. A root-owned sticky directory is
+  the one exception, and never as the file's own directory
+  (`:67-79,82-112`). Under a group-writable parent the refusal is "durable
+  ancestor is not protected".
+- **The preparation's directories.** These are the run directory, or its
+  parent when the request creates it; the staging directory; and the
+  directories of the marker, lease, declaration, control and fence files.
+  Each has no group or other permission bit and belongs to the running user.
+  Otherwise: "preparation path must be private and owned by the applying
+  identity" (connect `durablevolume/preparation_plan_unix.go:182-194,268-294`;
+  OWNER-CUSTODY-PREPARATION.md:26-29).
+- The umask covers only what step 8 creates. Check `/secure/ur-mainnet` and
+  every directory above it before 8.2.
 
 *8.1 Build and verify the catalog.* "Catalog" means `sim-testnet/contracts_gen.go`,
 whose `SettlementV2ReleaseArtifacts` the release file is exported from
-(BOOTSTRAP-CONTRACTS.md:677-695; `evm/README.md`:53-61). Run `stabi` under
-umask 022: its generated files must not be group-writable, and its check
-fails on mode 664 (STATE.md:9-10).
+(BOOTSTRAP-CONTRACTS.md:677-695; `evm/README.md`:53-61).
+
+- `stabi/generate.sh --check` requires mode 644 on each of its fifteen
+  generated files as they are checked out (`stabi/generate.sh:148-164,174-177`).
+  With any other mode it exits 1: "generated binding/ABI has non-portable
+  mode: ../evm/abi/STSubnet.abi.json". A clone made under umask 002 has the
+  group-writable mode 664 (STATE.md:9-10).
+- The umask at run time changes nothing, step 8's 077 included. Clone the
+  tree under umask 022 (step 1), or set the modes before the check:
+
+  ```bash
+  chmod 644 evm/abi/*.abi.json stctl/st_abi.json \
+    stabi/stsubnet.go stabi/stcoordinator.go stabi/stsettlementvault.go \
+    stabi/streservesink.go stabi/stvalidatorevidence.go stabi/stsettlement2.go
+  ```
+
+  Those are the eight ABI files, `stctl/st_abi.json` and the six bindings.
 
 ```bash
 (cd evm && forge build --deny warnings --sizes)
@@ -658,10 +777,15 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
     --plan-sha256 "sha256:$V2_CUSTODY_PLAN_DIGEST" > /secure/ur-mainnet/run-v2-preparation-result.json
   ```
 
+- A refusal prints `storage preparation: …` and exits 2
+  (`mainnet/storage_prepare_unix.go:161-164`). The two that the dry run met,
+  a request file of mode 664 and a group-writable parent, are in the note on
+  umask and ancestry above.
 - Pass the result's `declaration.path` and `declaration.sha256` on every
   `apply` and `resume` (OWNER-CUSTODY-PREPARATION.md:100-102):
   `HOST=(--durable-volumes "$HOST_DECLARATION" --durable-volumes-sha256 "$HOST_DECLARATION_SHA256")`
-  (LAUNCH.md:349-352).
+  (LAUNCH.md:349-352). The result's `declaration.sha256` already has the
+  `sha256:` prefix. Pass it whole.
 - **Gap, being closed.** The daemon-scope request for these journals is not
   written out; the documented example is the owner-local one
   (OWNER-CUSTODY-PREPARATION.md:40-56). An example is being written, and its
@@ -679,6 +803,47 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
     10^9;
   - the owner, v1 coordinator, auditors and quorum are action 3's initializer
     (`mainnet/evm_v2_contracts.go:81-86,219-295`; `mainnet/evm_phase.go:37-47,58,77-82,180`).
+- The runtime identity O3 is the file's `plan.runtime`: `runtime_version`,
+  `runtime_code_hash`, `runtime_metadata_hash` and `runtime_source_commit`
+  (`mainnet/evm_phase.go:55`; `mainnet/root_receipt_profile.go:21-26`).
+  - The contracts are deployed on runtime 478. The version and the two
+    hashes are 478's, from the owner's own snapshot of step 2, taken
+    immediately before step 8.
+  - `runtime_source_commit` is the reviewed 478 source,
+    `850f2755bb05a3851f948489f0ab27b0645cebce`.
+  - The binary admits a config only if `runtime_source_commit` is a reviewed
+    source. Today those are the commits of runtimes 470, 473 and 475, and one
+    historical source that earlier plans keep
+    (`crv4/native_owner_source.go:6-19`; `mainnet/runtime_source_profile.go:8-12`).
+    Any other commit is refused at `preview` and at `plan`: "contract phase
+    runtime/source approval is incomplete" (`mainnet/evm_phase.go:183-186`).
+  - So today's binary refuses 478's commit, as it refused 477's own,
+    `5c6e83e2f4936f257234f246957f75684c35227c`, in the dry run. The
+    reviewed-source entries for 477 and 478 land through sn branches
+    `v2/runtime-477` and `v2/runtime-478`, with their audits. Step 1's freeze
+    and the `sn-mainnet` build must include them. So step 8 waits for that
+    merge and a rebuild.
+  - Never name another runtime's commit beside the live `specVersion`, such
+    as 475's `d1718c99c34cf96abbf2bf09c0e9e48b945c76f5` under 477 or 478.
+    The check reads only the commit, so the binary would admit it, and "A
+    valid preview does not authenticate externally supplied runtime,
+    custody, cutover or network claims" (BOOTSTRAP-CONTRACTS.md:186-188).
+    The approval would then name a source review that nobody made of the
+    running runtime. That is a mislabelled approval, and it must not be
+    used.
+  - A runtime that lands during step 8 stops the next send. Before a send
+    the tool reads the live runtime and refuses a difference from the
+    config: "EVM current runtime differs from independent phase approval"
+    (`mainnet/evm_action_rpc.go:593-599`; BOOTSTRAP-CONTRACTS.md:590-592). An
+    inclusion under an unapproved runtime "remains unresolved and needs
+    separately qualified authority migration, not a fresh journal or an
+    inferred compatibility waiver" (:625-628).
+- Take the plan's native start checkpoint, `start_native_number` and
+  `start_native_hash`, just before the approval is signed.
+  - Every later `resume --online` scans forward from that block, 128 native
+    headers a call (step 8.4).
+  - The send window ends at `valid_through_native`, at most 7,200 blocks
+    after the checkpoint (`mainnet/evm_phase.go:180`).
 - **Gap, being closed.** No example config exists in the repositories. An
   example v2 phase config is being written, and its path will be cited here.
 - Preview, extract the approval bytes and sign them (BOOTSTRAP-CONTRACTS.md:194-198;
@@ -737,15 +902,18 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
 
   2. The deployer signs both before any send: `unsigned_transaction` and
      `escrow_unsigned_transaction`. Each signature is canonical binary
-     EIP-1559 bytes in its own file, pinned by its SHA-256
-     (LAUNCH.md:422-423,443). `escrow2-register`'s later `apply` prints the
-     identical transaction and digest as its own.
+     EIP-1559 bytes in its own file. The file's pin is `sha256:` and its
+     SHA-256 in 64 lowercase hex characters (LAUNCH.md:422-423,443;
+     `mainnet/bootstrap_contract_command.go:36,38,42`). `escrow2-register`'s
+     later `apply` prints the identical transaction and digest as its own.
   3. Import both, send both back to back, and complete vault2. Expect
      `signed-custody-complete`, then
-     `submitted-with-escrow-registration-awaiting-canonical-receipts`, then
-     `vault2-created`. The last comes after the readback of vault2's exact
-     runtime and getters: `CHALLENGE_BLOCKS` 14,400, `coordinator` zero, the
-     counters zero and `conservationHolds` true (BOOTSTRAP-CONTRACTS.md:774-784).
+     `submitted-with-escrow-registration-awaiting-canonical-receipts`. Then
+     repeat the last command, `resume --online`, until it prints
+     `vault2-created` (the note after sub-step 4). That status comes after
+     the readback of vault2's exact runtime and getters: `CHALLENGE_BLOCKS`
+     14,400, `coordinator` zero, the counters zero and `conservationHolds`
+     true (BOOTSTRAP-CONTRACTS.md:774-784).
 
      ```bash
      sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --signed-transaction /secure/ur-mainnet/vault2.signed.bin --signed-transaction-hash "$VAULT2_SIGNED_FILE_HASH" --escrow-signed-transaction /secure/ur-mainnet/escrow2.signed.bin --escrow-signed-transaction-hash "$ESCROW2_SIGNED_FILE_HASH"
@@ -753,9 +921,10 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
      sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --online
      ```
 
-  4. Open the escrow journal, import the same escrow bytes and complete it.
-     Expect `signature-awaiting-import`, `signed-custody-complete`, then
-     `escrow2-registered`. The last comes after the readback of the
+  4. Open the escrow journal and import the same escrow bytes. Expect
+     `signature-awaiting-import`, then `signed-custody-complete`. Then repeat
+     the last command, `resume --online`, until it prints
+     `escrow2-registered`. That status comes after the readback of the
      `EscrowRegistered` event, the UID mapping and `escrowRegistered` true,
      and `escrow_collateral` must read `(false, 0, 0, 0, 0)` (:785-796).
 
@@ -764,6 +933,25 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
      sn-mainnet bootstrap-contracts resume --action escrow2-register --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --signed-transaction /secure/ur-mainnet/escrow2.signed.bin --signed-transaction-hash "$ESCROW2_SIGNED_FILE_HASH"
      sn-mainnet bootstrap-contracts resume --action escrow2-register --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --online
      ```
+- **One `resume --online` does not reach the completed status.** Repeat it
+  until it prints the status named in the sub-step. This holds for every
+  action of steps 8.4 and 8.5.
+  - Until it reaches the receipt, each call exits 0 with an intermediate
+    status. `pending-nonce-unresolved`: no receipt yet, and the sender's
+    pending nonce is past the action's
+    (`mainnet/evm_action_rpc.go:630-633`). `receipt-awaiting-finalized-mapping`:
+    the receipt exists, and the scan has not reached its native block
+    (`:295,305`).
+  - Each call scans at most 128 native headers, and each action's journal
+    starts at the plan's `start_native_number`
+    (`mainnet/evm_action_rpc.go:292-305`; `mainnet/evm_action_store.go:404`;
+    BOOTSTRAP-CONTRACTS.md:586-587). So an action needs
+    ceil((inclusion block − start block) / 128) calls. A start checkpoint 6
+    hours old, 1,800 blocks, means about 15 calls an action.
+  - The next action's `apply` exits 3 until its predecessor has completed
+    (`mainnet/bootstrap_contract_command.go:260-263`).
+  - So take the native start checkpoint just before the approval is signed
+    (step 8.3).
 - **Stop if**:
   - `escrow-registration-reverted-nonce-consumed`. Someone registered the
     escrow hotkey first. No funds are at risk; recover by redeploying under a
@@ -771,29 +959,34 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
     remain", after the A7 paragraph; section 6).
   - `escrow-registration-allowance-exhausted` (the A7 paragraph).
   - Any readback refusal, or a nonzero escrow collateral.
+  - A call exits 1 with "EVM current runtime differs from independent phase
+    approval": the runtime changed after the approval (step 8.3).
 
 *8.5 The implementation, the proxy, the binding and the batcher.*
 
 - For `settlement2-create`, `proxy2-create`, `vault2-link` and, if O11,
   `batcher-create`, in that order, each after the previous one's completed
   status (BOOTSTRAP-CONTRACTS.md, after the command block):
-  1. `apply`;
+  1. `apply`, which exits 3 until the previous action has completed;
   2. sign its `unsigned_transaction`;
   3. `resume --signed-transaction … --signed-transaction-hash …`;
   4. `resume --online --submit`;
-  5. `resume --online`.
+  5. `resume --online`, repeated until the action's completed status (the
+     note in step 8.4).
 - **Expect.**
   - The statuses `signature-awaiting-import`, `signed-custody-complete` and
-    `submitted-awaiting-canonical-receipt`, then `settlement2-created`,
-    `proxy2-created-initialized`, `vault2-coordinator-bound` and
-    `batcher-created` (`mainnet/evm_v2_phase.go:37-49`), each after the
-    readback of BOOTSTRAP-CONTRACTS.md:797-824.
+    `submitted-awaiting-canonical-receipt`. Then the intermediate statuses of
+    step 8.4's note. Then `settlement2-created`, `proxy2-created-initialized`,
+    `vault2-coordinator-bound` and `batcher-created`
+    (`mainnet/evm_v2_phase.go:37-49`), each after the readback of
+    BOOTSTRAP-CONTRACTS.md:797-824.
   - At `vault2-link`: `installation_complete` true and `activation_ready`
     false (:826-829). The result names `vault2_address`, `settlement2_address`
     (the proxy), `settlement2_implementation_address` and, after the sixth
     action, `claim_batcher_address` (`mainnet/evm_action.go:81-84`).
-- **Stop if** any readback mismatches. Never repeat a completed CREATE, and
-  never change the accepted graph or nonces to escape an ambiguous outcome
+- **Stop if** any readback mismatches, or a call exits 1 for a changed
+  runtime (step 8.3). Never repeat a completed CREATE, and never change the
+  accepted graph or nonces to escape an ambiguous outcome
   (LAUNCH.md:443-447).
 
 *8.6 Keep the record.* The six journals' receipts are the v2 deployment record
@@ -856,16 +1049,29 @@ release of every app.
 
      ```bash
      sn-mainnet treasury approval-plan --input "$TREASURY_INPUT" \
-       --config "$ADOPTED_CONFIG" --config-sha256 "$ADOPTED_CONFIG_SHA256" \
-       --policy-plan "$TREASURY_POLICY_PLAN" --policy-plan-sha256 "$TREASURY_POLICY_PLAN_SHA256" \
+       --config "$ADOPTED_CONFIG" --config-sha256 "sha256:$ADOPTED_CONFIG_DIGEST" \
+       --policy-plan "$TREASURY_POLICY_PLAN" --policy-plan-sha256 "sha256:$TREASURY_POLICY_PLAN_DIGEST" \
        --approval-key "$TREASURY_APPROVAL_KEY" --out "$ADOPTED_APPROVAL"
      ```
+
+     - Both `-sha256` flags need the `sha256:` prefix, before the file's
+       SHA-256 in 64 lowercase hex characters. `--approval-key` is `0x` and
+       the public key's 64 lowercase hex characters.
+     - With a bare digest the command only prints "treasury approval-plan
+       requires --input, --config with --config-sha256, --policy-plan with
+       --policy-plan-sha256, --approval-key and --out"
+       (`mainnet/treasury_approval.go:202-204`; `mainnet/plan_input.go:111-113`).
+     - The input, the config and the policy plan are each read only as a
+       private regular file in an owner-private directory, as in step 8
+       (`mainnet/treasury_approval.go:211,219,223`;
+       `mainnet/bootstrap_root_plan.go:118-131,135-151`).
 
   3. Sign the printed `signing_digest`, the 32 digest bytes, with the approval
      key (Ed25519). The printed derivation gives the check command
      (`mainnet/treasury_approval.go:24-31`).
   4. Assemble the envelope, then put the printed `treasury_approval` into the
-     adopted config (:252-277):
+     adopted config (:252-277). `--signature` is the signature's 128 lowercase
+     hex characters (:256):
 
      ```bash
      sn-mainnet treasury approval-envelope --approval "$ADOPTED_APPROVAL" \
@@ -878,8 +1084,11 @@ release of every app.
      ```bash
      validator run --config="$ADOPTED_CONFIG" --progress-file="$PROGRESS_FILE" \
        --ledger_auditor_key_file="$AUDITOR_KEY_FILE" \
-       --durable-volumes="$VALIDATOR_DECLARATION" --durable-volumes-sha256="$VALIDATOR_DECLARATION_SHA256"
+       --durable-volumes="$VALIDATOR_DECLARATION" --durable-volumes-sha256="sha256:$VALIDATOR_DECLARATION_DIGEST"
      ```
+
+     The declaration's pin has the `sha256:` prefix too
+     (`validator/run.go:489`; connect `durablevolume/config.go:240-251`).
 
 - **Expect.**
   - The approval equals the old one except `config_hash` (the VA-6 test).
@@ -1006,8 +1215,12 @@ configured (§14 gate 6). Gate 5 completed at step 9.
 
      ```bash
      provider claim-daemon-v2 --config=<path> [--v1-config=<path>] [--threshold-rao=<rao>] [--claim-now] \
-       --durable-volumes=<path> --durable-volumes-sha256=<hash>
+       --durable-volumes=<path> --durable-volumes-sha256=sha256:<digest>
      ```
+
+     The pin is a "Reviewed sha256: digest" (`miner/run.go:182`), and the
+     declaration is a protected file under a protected ancestry, as in
+     step 8 (connect `durablevolume/config.go:240-251`).
 - **Expect.**
   - The daemon starts only if the batcher's code is exactly the release
     runtime (`miner/claim_v2_daemon.go:445-454`).
@@ -1059,9 +1272,13 @@ its result back; "it never signs or sends" (BOOTSTRAP-CONTRACTS.md,
 
 - **Who.** Owner, through the Safe; operator runs the tool.
 - **Do.**
-  1. Repeat step 2.
+  1. Repeat step 2, immediately before the review. Its snapshot must show a
+     runtime that gate 2 holds on. If the runtime has changed since step 8,
+     gate 2 repeats on the new one first.
   2. Review the call. `--pool-hotkey` is `0x` and the hotkey's 32 bytes in
-     hex, and `--value-wei` is `maximumBurnRao × 10^9` (O16, O17):
+     hex, and `--value-wei` is `maximumBurnRao × 10^9` (O16, O17). The Safe
+     must already hold that value, because the preflight runs the call from
+     the Safe with it:
 
      ```bash
      sn-mainnet register-operator-pool review --rpc "$EVM_RPC" --settlement2 "$SETTLEMENT2_PROXY" \
@@ -1086,26 +1303,43 @@ its result back; "it never signs or sends" (BOOTSTRAP-CONTRACTS.md,
     the event's `uid`, `transaction_hash`, `block_number` and `head_block`.
   - The surplus over the burn returns to the Safe
     (`evm/src/STSettlement2.sol:90-96`).
+  - Dry-run evidence, from a rehearsal node: through a SafeL2 1.4.1
+    `execTransaction`, the governance Safe's own version (LAUNCH.md:164), the
+    registration used 1,654,438 gas, against an `eth_estimateGas` of
+    1,797,143, and the surplus returned to the Safe.
   - Within a minute the server's driver sees the pool, and the v1 driver
     keeps only epochs below E_s
     (`server/controller/st_ledger_v2_driver.go:197-214,255-280`).
 - **Stop if**:
-  - `review` exits 3: the call must not be sent. It names the refusal:
+  - Step 2 shows a runtime that gate 2 does not hold on. Do not send.
+  - `review` exits 3: the call must not be sent. It names the refusal
+    (`mainnet/evm_v2_pool.go:43-49`):
     - before any read, a zero pool hotkey, or a value other than
       `maximumBurnRao × 10^9` wei;
     - a route that is not EVM chain 964, vault2's own escrow hotkey, or a
-      first epoch whose start block the head has reached;
-    - the preflight's revert: `InactiveOperator`, `InvalidEpoch`,
+      first epoch whose start block the head has reached.
+  - `review` exits 1 with a message that contains "revert" or "OutOfFund".
+    That is a refusal, not a read failure. Do not send, and do not retry.
+    Diagnose it.
+    - On a real node the tool does not yet name a reverted preflight. It
+      prints "eth_call: RPC error -32603: VM Exception while processing
+      transaction: revert" and exits 1. It names a revert, and exits 3, only
+      when the RPC reports the revert with error code 3 (`:273-285`).
+    - The reverts it would name are `InactiveOperator`, `InvalidEpoch`,
       `CadenceTooShort`, `NativeRefundFailed`, vault2's
       `InvalidConfiguration`, `OwnableUnauthorizedAccount` (the Safe does not
-      own `STSettlement2`) or the v1 coordinator's `UnknownOperator`.
+      own `STSettlement2`) and the v1 coordinator's `UnknownOperator`
+      (`:54-72`). Check each cause.
+    - With a Safe that holds less than `--value-wei`, `review` exits 1 with
+      "evm error: OutOfFund".
+    - A tool fix is in progress. It will name both and exit 3.
   - `readback` exits 3: the chain does not hold the reviewed registration. It
     names each difference: no receipt; a reverted transaction; no
     `PoolRegistered` event of `noId` from vault2, or one with another hotkey
     or first epoch; `pools(noId)` unregistered or different; `settlementAt`
     with another vault, hotkey or version.
-  - Either mode exits 1: a read failed, "which decides nothing". Run it again.
-    Exit 2 is a usage error.
+  - Either mode exits 1 with any other message: a read failed, "which decides
+    nothing". Run it again. Exit 2 is a usage error.
   - A reverted registration: "If it fails, nothing has changed, and E_s
     moves" (§12.1 step 5).
 - R-4 registers its pool through both modes on the rehearsal node, and PR-1
@@ -1238,7 +1472,7 @@ exists for them.
 | the watcher's report | `snclaim v2 check` output | any provable fault or "unverifiable" | challenge or demand inside the window | VERSION2-FINAL.md §10.2 |
 | claim gas | claim receipts | about 1.27M gas a claim instead of about 0.2M | a third party filled vault2's staking-hotkey list; raise daemon thresholds to about 10 α | §3, §10.1, §17 |
 | validator weights | every tempo | a tempo without weights | the escrow hotkey earns by stake in such a tempo; that is surplus | §7.3, §17 |
-| the runtime | `sn-mainnet runtime-snapshot` | a new `specVersion` | rehearse vault2 on it (gate 2) | §14, §17 |
+| the runtime | `sn-mainnet runtime-snapshot` | a `specVersion` after 478, the runtime of step 8 | rehearse vault2 on it (gate 2) | §14, §17; step 2 |
 | the treasury approval | the native head | block 9,739,882 | renew before it, as a separate successor | §13 |
 
 ## 6. Abort and rollback
@@ -1255,7 +1489,7 @@ exists for them.
 | 9, `Vault2Address` | Yes, by a release | The compiled default is never stored on the device (`sdk/sn_chain.go:352-355`; `sdk/sn_local_state.go:72-80`), so a release that clears or changes it takes effect on update. This is an inference from the code. |
 | 10, adoption | No | The block "can be neither re-pointed nor removed" (`validator/production_authority_history.go:256-259`). Until step 15 the validator still weights through `operatorAt` (§9.1). No repository path re-points it; a redeploy after adoption needs new validator code. |
 | 11, server switch | Before step 15 only | Remove the pair from st.yml and sn.yml together, then restart. v1 is untouched. After step 15, do not remove it. Without the pair the v1 driver again closes and commits every epoch, E_s and later included (`server/controller/st_ledger_v2_driver.go:263-266`), against the v1 cutoff (§8.1). And the mirror misses every v2 event while the pair is absent, with no backfill (`server/controller/st_controller.go:2598-2604,4255-4258`). Coming: a server latch, so that once the server has observed the pool's registration it fails closed without the pair. Its exact refusal text will be cited here. |
-| 15, pool registration | No | It is the commitment point. `register-operator-pool review` refuses, before any send, what the chain would refuse. A revert changes nothing, and E_s moves (§12.1 step 5). |
+| 15, pool registration | No | It is the commitment point. `register-operator-pool review` preflights the call before any send, and a call whose preflight reverts must not be sent (step 15). A revert changes nothing, and E_s moves (§12.1 step 5). |
 
 ### 6.2 After activation
 
@@ -1335,7 +1569,12 @@ Found while writing this runbook:
 | The mirror has no v2 backfill, and without the pair the v1 driver resumes epochs at or after E_s | Switch the server before step 15, and never remove the pair after it. Coming: a server latch that fails closed without the pair once it has observed the pool's registration; its refusal text will be cited here |
 | An app is built against a store without its strings | The store's `main` holds the `sn_ledger_*` keys (section 2.1); build each app against it or a later one |
 | No CI anywhere | The owner's pipeline and the hand-run suites of section 2.2 |
-| The rehearsal tooling builds only runtime 475 | Step 2's check, and a reviewed pin change before any rerun on a new runtime |
+| On `main` the rehearsal tooling builds only runtime 475, and mainnet runs 478 | Step 2's check; the 478 pins land through sn `v2/runtime-478`; a reviewed pin change before any rerun on a later runtime |
+| A new runtime lands between two steps. 478 was installed 318 blocks after it was proposed | Step 2 immediately before steps 8 and 15. A send on a changed runtime is refused, and an inclusion under an unapproved runtime stays unresolved (step 8.3) |
+| The binary lists no reviewed source for runtime 478, so it refuses the phase config | The entries for 477 and 478 on sn `v2/runtime-477` and `v2/runtime-478`; freeze and rebuild after their merge (steps 1 and 8.3). Never name another runtime's commit |
+| A shell umask of 002, or a group-writable directory above the run directory, makes the custody tools refuse | `umask 077` and the ancestry check at the start of step 8 |
+| One `resume --online` does not complete an action, and a late start checkpoint multiplies the calls | Take the start checkpoint just before the approval; repeat `resume --online` until the completed status (steps 8.3 and 8.4) |
+| On a real node `register-operator-pool review` reports a reverted preflight, or an unfunded Safe, as exit 1 | Treat an exit 1 that says "revert" or "OutOfFund" as a refusal (step 15); a tool fix is in progress |
 
 ## 8. Follow-ups after launch
 
@@ -1368,9 +1607,14 @@ Open owner decisions and work that the repositories leave open:
    - being closed: examples of the v2 phase config (step 8.3), the
      daemon-scope custody request (step 8.2), the claim daemon config and a
      watcher service and timer (step 13);
+   - being closed: the reviewed sources of runtimes 477 and 478 (step 8.3)
+     and the rehearsal pins for 478 (step 2), through sn `v2/runtime-477` and
+     `v2/runtime-478`;
+   - being closed: `register-operator-pool review` naming a reverted
+     preflight and an unfunded Safe on a real node, with exit 3 (step 15);
    - coming: the server latch of section 6.1;
    - build and run instructions for `sn25golive` (step 5);
-   - rehearsal pins for a runtime after 475 (step 2);
+   - rehearsal pins for a runtime after 478 (step 2);
    - written adoption commands (step 10).
 
    Closed since the first version of this runbook: the escrow registration's
@@ -1407,17 +1651,20 @@ the order:
 
 | Order | Steps | Runs in parallel | Owner signs |
 | --- | --- | --- | --- |
-| 1 | 1: freeze `main` after the second merge round, and build | with step 2 | |
-| 2 | 2, 3, 4: the runtime check; gate 2 again on runtime 477, with its source audit, rehearsal-node build and R-1 to R-7, on sn `v2/runtime-477`; the release gates | with each other | O26, the gate 1 confirmation |
-| 3 | 5, 6, 7: the gas policy, the server build with migrations, the validator binary and the tools | with each other, and while gate 2 repeats on 477 | step 5, with the gas approver key |
-| 4 | 8: deploy the contracts, after steps 2 to 4 pass and gate 2 has its verdict on 477 | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
+| 1 | 1: freeze `main` after the second merge round, with the reviewed sources of runtimes 477 and 478 in it, and build | with step 2 | |
+| 2 | 2, 3, 4: the runtime check; gate 2 again on runtime 478, with its rehearsal-node build and R-1 to R-7, on sn `v2/runtime-478`; the release gates | with each other | O26, the gate 1 confirmation |
+| 3 | 5, 6, 7: the gas policy, the server build with migrations, the validator binary and the tools | with each other, and while gate 2 repeats on 478 | step 5, with the gas approver key |
+| 4 | 8: deploy the contracts, after steps 2 to 4 pass, gate 2 has its verdict on 478, `sn-mainnet` is rebuilt with the reviewed 478 source, and step 2 has run again | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
 | 5 | 10: adopt the validator config, after step 8 and step 7's validator binary | with step 13 | the treasury approval, with its approval key |
 | 6 | 11, then 12: the server switch, after steps 6, 8 and 10 | with step 13 | |
-| 7 | 15: register the pool, inside blocks 9,283,228 to 9,290,428 | | the Safe |
+| 7 | 15: register the pool, inside blocks 9,283,228 to 9,290,428, after step 2 once more | | the Safe |
 
-- Step 8 waits for gate 2's verdict on runtime 477 (section 9.3, item 2).
-  Steps 5 to 7 touch nothing that the runtime decides, so they proceed
-  meanwhile.
+- Step 8 waits for gate 2's verdict on runtime 478, for the merge of the
+  reviewed 477 and 478 sources, and for a rebuild of `sn-mainnet` (section
+  9.3, item 2). Steps 5 to 7 touch nothing that the runtime decides, so they
+  proceed meanwhile.
+- Step 2 runs again immediately before step 8 and immediately before
+  step 15.
 - Step 9, the pinned app releases, moves after step 15 (section 9.3, item 4).
 - Step 13 is off the critical path. The watcher must run by the first commit,
   at block 9,348,028 or later.
@@ -1440,12 +1687,19 @@ waits for it.
    after the last gate passes" (§14). For epoch 2 the last gate, gate 6 at
    step 12, would have to pass by block 9,283,228, about 22 hours after the
    reading. §14 also calls epoch 3 "not reachable", and epoch 2 is earlier.
-2. **Gate 2 on runtime 477.** The public RPC reported `specVersion` 477 on
-   2026-10-13 (step 2). Gate 2 ran on 475, and "Any runtime change on mainnet
-   repeats this gate" (§14); "gate 2 cannot be waived" (§17). So gate 2 must
-   be repeated on 477 before step 8. A 477 source audit, a rehearsal-node
-   build and an R-1 to R-7 rerun are in progress on sn branch
-   `v2/runtime-477`. Step 8 waits for their verdict.
+2. **Gate 2 on runtime 478.** Gate 2 ran on 475. "Any runtime change on
+   mainnet repeats this gate" (§14), and "gate 2 cannot be waived" (§17).
+   Mainnet has since moved to 477 and, at block 9,276,925, to 478 (step 2).
+   The contracts will be deployed on 478, so gate 2 must hold on 478.
+   - Status on 478, as of 2026-10-13: on a node built from v478, the smoke
+     test, the transient-storage probe and R-2 to R-7 pass with `main`'s
+     bytecode. R-1 is running, and the 478 audit is not committed yet.
+   - The 477 run passed in full, with gas equal to 475's.
+   - The reviewed-source entries for 477 and 478, and the 478 pins, land
+     through sn branches `v2/runtime-477` and `v2/runtime-478`.
+   - Step 8 waits for 478's verdict, that merge, and a rebuild of
+     `sn-mainnet`. Step 2 is repeated immediately before step 8 and before
+     step 15.
 3. **O26.** Gate 1 needs the independent review of vault2, `LedgerTree.sol`
    and `STSettlement2` resolved (§14). The owner's confirmation is not given
    yet, and step 8 waits for it.
