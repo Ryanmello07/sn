@@ -168,11 +168,12 @@ That is worth doing once the balance is large relative to the claim's gas.
 - payment for a provider without a paying consent. Wallets connected through
   the apps today are login proofs, which release settlement never pays
   (`server/controller/sn_earnings_controller.go:43-45`). Those providers stay
-  unpaid, with a zero coldkey in their row, until the apps ship consent
-  signing (§11). The v1 stopgap of server 9719333c, which pays a provider
-  without signed wallet evidence its account-history wallet when no roster
-  is configured, does not apply to v2: v2 stays consent-only (owner
-  decision, 2026-10-13).
+  unpaid, with a zero coldkey in their row, until their network's owner signs
+  a network payout consent in an app (§11.1), and only from the epoch after
+  the signing on.
+  The v1 stopgap of server 9719333c, which pays a provider without signed
+  wallet evidence its account-history wallet when no roster is configured,
+  does not apply to v2: v2 stays consent-only (owner decision, 2026-10-13).
 
 **Account states** shown to users:
 
@@ -1265,12 +1266,107 @@ equivalents, must be in the shared localization store before the apps ship.
   below the transfer floor or refused by a staking-hotkey cap leaves the
   account claimable.
 
-**Not closed by v2.** App wallet connect stores a login proof that release
-settlement never pays. Provider and network consent signing exist in the SDK
-only as raw API calls, not exported to mobile (`sdk/api_sn.go:97-173`). Until
-the apps ship consent signing, app-only providers are not paid, in v2 as in
-v1. Shipping it is the largest single increase in providers paid, and it is
-independent of phase A.
+### 11.1 Network payout consent
+
+Owner decision, 2026-10-13: the SDK and every app ship network payout consent
+signing. One sr25519 signature by the coldkey, requested by the network's
+owner, covers every provider client of the network
+(`protocol/network_wallet_mapping.go`).
+
+- Today app wallet connect stores a login proof, which release settlement
+  never pays (`server/controller/sn_earnings_controller.go:43-45`). Until a
+  network signs, its app-only providers stay unpaid, in v2 as in v1.
+- This is the largest single increase in providers paid. It is independent of
+  phase A and is not an activation gate.
+
+**Server, unchanged.**
+
+- `GET /sn/epoch` reports the contract epoch.
+- `POST /sn/wallet/network-consent` takes `{coldkey_ss58, from_epoch,
+  through_epoch}` and returns the challenge `message`. Only the network
+  owner's session may ask, and the message expires 300 s after issue.
+- `POST /sn/wallet` takes `{coldkey_ss58, message, signature}` without
+  `client_id`. It checks the coldkey's signature over the exact bytes, then
+  stores the consent.
+- `POST /sn/wallet/network-consent/history` returns the consent chain from an
+  independently pinned head (domain, network, head hash and generation). The
+  apps don't use it.
+- Protocol limits (`protocol/network_wallet_mapping.go:56`,
+  `protocol/wallet_mapping_consent.go:20`):
+  - `through_epoch` is at least `from_epoch`, and the span is at most 65,535
+    epochs;
+  - each new consent's `from_epoch` is after the previous one's;
+  - a network has at most 4,096 generations.
+
+**Earnings range.**
+
+- The operator accepts only a prospective consent: `from_epoch` must exceed the
+  coordinator's current epoch at the finalized block (protocol
+  `prospectiveDigest`). So `from_epoch` is the current epoch + 1, or the
+  previous consent's `from_epoch` + 1 when that is later. A consent never
+  covers the epoch it is signed in, and a change of wallet takes effect from
+  the next epoch. The sn CLI uses the same default
+  (`miner/hotkey_wallet_cmd.go`).
+- `through_epoch` is `from_epoch` + 65,535. The consent lasts until the network
+  changes it, so there is no renewal.
+- Epochs before a network's first consent takes effect stay unpaid, because
+  committed roots never change.
+
+**SDK** (`sdk/`), exported to gomobile, cgo and wasm:
+
+- `SnNetworkConsentEpochSpan = 65535`;
+- `SnNetworkConsentChallenge(coldkey)` applies the range and returns the
+  message, the range and the expiry;
+- `SnNetworkConsentSubmit(coldkey, message, signature)` submits through
+  `POST /sn/wallet`;
+- `SnNetworkConsentStatus()` reads the network entry of `GET /sn/wallet`, the
+  newest accepted network consent. The history endpoint needs an
+  independently pinned head. The status is active while that consent's
+  `through_epoch` has not passed, so it is in force or starts next epoch.
+- The challenge and submission always use the network credential. A device
+  token is refused.
+- `BittensorWalletSession`, which every native app's wallet connector signs
+  through, gains the `consent` purpose and `SetNetworkConsentChallenge`. A
+  consent session signs only a message with the network wallet mapping
+  prefix, verbatim, for the requested coldkey and before the challenge
+  expires.
+
+**Apps** (Apple, Android, Windows, Linux, ur.io), in the settlement v2
+earnings area:
+
+- **Without a consent:**
+  1. The app says earnings are not paid until the owner signs, and offers to
+     sign.
+  2. It connects the Bittensor wallet through the app's existing connector.
+  3. It requests the challenge, and the wallet signs exactly the server's
+     message.
+  4. The app submits the signature and refreshes the status.
+- **With a consent:** the app names the coldkey and offers to change it,
+  effective from the next epoch.
+- An expired challenge, a signature mismatch and a session that is not the
+  network owner's each show their own message.
+- The app never signs anything but the server's message.
+- The eleven `sn_consent_*` keys are in the localization store for every
+  platform.
+
+**Acceptance.** §15's rules apply.
+
+| ID | Behaviour |
+| --- | --- |
+| CS-1 | Range: a first consent runs from the current epoch + 1 through 65,535 epochs on |
+| CS-2 | Range: a change starts at the later of the current epoch + 1 and the previous `from_epoch` + 1 |
+| CS-3 | The challenge is requested with the network session and no `client_id` |
+| CS-4 | The submission carries no `client_id`, and the stored consent appears in the status |
+| CS-5 | The status is active while the newest network consent's `through_epoch` has not passed, and shows a consent that starts next epoch |
+| CS-6 | Refusals are mapped: expired challenge, signature mismatch, not the network owner |
+| CS-7 | Each app goes from no consent through signing to active |
+| CS-8 | Each app changes the wallet and shows that it applies from the next epoch |
+| CS-9 | Each app signs only the server-issued message, verbatim |
+| CS-10 | Every platform and locale has the strings, and the generator reproduces each app's catalog |
+| CS-11 | The wallet session refuses a consent message for a login session, a login challenge for a consent session, a message without the prefix, another coldkey and an expired challenge |
+
+The work is on branch `v2/consent-signing` in sdk, the apps, localizations and
+this repository.
 
 ## 12. Migration
 
@@ -1699,7 +1795,7 @@ bytecode.
 | Stake-moving transactions need a gas limit far above the gas they use, and a refused precompile call consumes all the gas forwarded to it (§7.3) | Senders preflight with `eth_call` and size limits with `eth_estimateGas`; the operator gas policy is re-signed to cover a capturing close (§8.1, §13); anyone can send a close that defers more epochs than the policy covers |
 | Third parties fill vault2's own staking-hotkey list, up to 128 entries | Claims and `absorbStake` keep working; a claim then uses about 1.27M gas instead of 0.2M (R-3), about 1 α at the §3 figures, so the daemon's threshold should rise to match (§10.1). Each entry costs the griefer a transfer above the floor, which vault2 can absorb as surplus |
 | A missed close moves an epoch's share to the next epoch's earners | The 1,200-block window and alerts |
-| App users without a paying consent stay unpaid | App consent signing (§11), independent of phase A |
+| App users without a paying consent stay unpaid | Network payout consent in the SDK and every app (§11.1), independent of phase A. Epochs before a network's first consent stay unpaid |
 | The owner's availability for Ledger-signed steps | Plan steps 2, 3 and 5 of §12.1 with the owner |
 | Treasury approval expiry about 2026-12-17 UTC | A separate successor after adoption (§13) |
 | Small balances are uneconomic to claim | Accrual never expires; the threshold is published; an optional UR subsidy |
