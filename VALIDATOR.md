@@ -712,7 +712,7 @@ a trail (its SEED and EXTEND posts) alternate the family their tunnel tries firs
 trail starts on the family the trail before it did not, the first trail on IPv4. Over any
 two consecutive trails every depth therefore tries each family first once, whatever `M`.
 A retry of a hop keeps the hop's family, except after a `421` (below), which the validator
-resends with the other family first. Each request falls back to the other family when
+resends pinned to the other family. Each request falls back to the other family when
 the first fails (connect `IPV6.md` C7). The source IP is the provider's egress on the
 family that landed, and it resolves when it is that family's only live egress for the
 provider. A request whose source resolves to no provider (a family the provider has no
@@ -731,10 +731,17 @@ live indexed egress in, or one that is shared or ambiguous) is answered as retry
   signed SEED (its `seed_sig`) for a SEED. The third unattributed attempt gets the old
   answer: a SEED is poisoned (§9), an EXTEND fails the trail (`400 trail failed`, reason
   `source-egress-unresolved`). A validator sends a step at most three times.
-- **Metering.** Every attempt counts against the seed and EXTEND meters (§9). The
-  validator spaces every SEED attempt, these retries included, across all its workers at
-  three quarters of the per-`vpk` hard limit, so the retries fit inside its seed pace
-  rather than adding to it.
+- **Metering.** Every attempt counts against the seed and EXTEND meters (§9).
+- **Validator.** After a `421` the validator resends the step's identical body through
+  the same hop pinned to the other family (`tcp4` or `tcp6`, never falling back), and no
+  later attempt of the step returns to a family a `421` ruled out: the family is the one
+  the answered request reached the server on. Once both are ruled out the step fails
+  without another request. A step holds `ExtendAttempts` = 3 attempts, which must stay at
+  least the server's `VerifyUnattributedAttemptLimit` (2) plus one: the first try, the
+  resend and one retry of it. The hop latency it records counts only the attempts from
+  the last `421` on, which the server attributed to the hop. It spaces every SEED
+  attempt, these resends included, across all its workers at three quarters of the
+  per-`vpk` hard limit, so the resends fit inside its seed pace rather than adding to it.
 
 **A second family does not double a provider's budgets.** Seeds and EXTENDs from a
 resolved source also count against per-provider meters held to the same hard limits

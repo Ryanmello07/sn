@@ -33,8 +33,11 @@ import (
 	"fmt"
 	"io"
 	mathrand "math/rand"
+	"net"
 	"net/http"
+	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/urnetwork/connect"
@@ -210,8 +213,9 @@ func newTunnelClientSettings() *connect.ClientSettings {
 
 // Each lease constructs and joins its own exact-hop packet path. The
 // registered identity remains alive after request cancellation or rejection.
-// The tunnel's hostname dial tries firstIpFamily first.
-func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.Id, jsonBody []byte, firstIpFamily int) (responseBody []byte, returnErr error) {
+// The tunnel's hostname dial tries family.first first, and only it when the
+// family is pinned.
+func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.Id, jsonBody []byte, family hopIpFamily) (responseBody []byte, returnErr error) {
 	byClientJwt, err := self.owner.currentByClientJwt()
 	if err != nil {
 		return nil, err
@@ -239,7 +243,7 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 	}()
 
 	tunSettings := connect.DefaultTunSettings()
-	tunSettings.DialFirstIpFamily = firstIpFamily
+	tunSettings.DialFirstIpFamily = family.first
 	tun, err := self.owner.createTun(tunnelCtx, tunSettings)
 	if err != nil {
 		return nil, fmt.Errorf("tunnel netstack: %w", err)
@@ -270,8 +274,17 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 		}
 	})
 
+	// the family the request's one connection reached the server on, which a
+	// source-egress-unresolved answer rules out for the rest of the step
+	var landedIpFamily atomic.Int32
 	httpTransport := &http.Transport{
-		DialContext:       tun.DialContext,
+		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
+			conn, err := tun.DialContext(ctx, hopDialNetwork(network, family), address)
+			if err == nil {
+				landedIpFamily.Store(int32(connIpFamily(conn)))
+			}
+			return conn, err
+		},
 		DisableKeepAlives: true,
 		ForceAttemptHTTP2: false,
 	}
@@ -294,20 +307,50 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 		return nil, err
 	}
 	if response.StatusCode != 200 {
-		return nil, verifyPostError(hop, response.StatusCode, responseBody)
+		return nil, verifyPostError(hop, response.StatusCode, responseBody, int(landedIpFamily.Load()))
 	}
 	return responseBody, nil
 }
 
 // verifyPostError is the error for a /verify answer other than 200: the
-// server's retryable 421 is errSourceEgressUnresolved only with exactly its
-// body, and every other answer, 421 with any other body included, is an
-// ordinary failed attempt.
-func verifyPostError(hop connect.Id, statusCode int, body []byte) error {
+// server's retryable 421 is errSourceEgressUnresolved, for the family the
+// request reached the server on, only with exactly its body; every other
+// answer, 421 with any other body included, is an ordinary failed attempt.
+func verifyPostError(hop connect.Id, statusCode int, body []byte, ipFamily int) error {
 	if statusCode == http.StatusMisdirectedRequest && string(body) == verifySourceEgressUnresolvedBody {
-		return fmt.Errorf("verify post via %s: %w", hop, errSourceEgressUnresolved)
+		return &sourceEgressUnresolvedError{hop: hop, ipFamily: ipFamily}
 	}
 	return fmt.Errorf("verify post via %s: http %d: %s", hop, statusCode, truncateForLog(body))
+}
+
+// hopDialNetwork narrows a hop request's dial to its family when the request
+// is pinned to it: "tcp" becomes "tcp4" or "tcp6", so the tunnel resolves and
+// dials that family alone, never falling back to the other.
+func hopDialNetwork(network string, family hopIpFamily) string {
+	if !family.pinned || network != "tcp" {
+		return network
+	}
+	switch family.first {
+	case 4:
+		return "tcp4"
+	case 6:
+		return "tcp6"
+	default:
+		return network
+	}
+}
+
+// connIpFamily is the family of the address a tunnel connection reached, or
+// 0 when it cannot tell.
+func connIpFamily(conn net.Conn) int {
+	addrPort, err := netip.ParseAddrPort(conn.RemoteAddr().String())
+	if err != nil {
+		return 0
+	}
+	if addrPort.Addr().Unmap().Is4() {
+		return 4
+	}
+	return 6
 }
 
 // Shared identities may still receive a previous hop's delayed packets. Only

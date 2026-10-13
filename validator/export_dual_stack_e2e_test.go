@@ -34,7 +34,8 @@ func SetTunnelTransportE2EHooks(
 // within the default step timeout.
 func E2EPostHop(ctx context.Context, transport *TunnelTransport, hop connect.Id, body []byte, trail uint64, position int) ([]byte, error) {
 	engine := &TrailEngine{transport: transport, cfg: TrailEngineConfig{}.withDefaults()}
-	return engine.postStep(ctx, hop, body, hopFirstIpFamily(trail, position), nil)
+	response, _, err := engine.postStep(ctx, hop, body, hopFirstIpFamily(trail, position), nil)
+	return response, err
 }
 
 // E2EHopFirstIpFamily is the family the hop at position of the trail-th trail
@@ -42,3 +43,12 @@ func E2EPostHop(ctx context.Context, transport *TunnelTransport, hop connect.Id,
 func E2EHopFirstIpFamily(trail uint64, position int) int {
 	return hopFirstIpFamily(trail, position)
 }
+
+// E2EDefaultExtendAttempts is how many attempts a production step holds.
+func E2EDefaultExtendAttempts() int {
+	return TrailEngineConfig{}.withDefaults().ExtendAttempts
+}
+
+// E2EServerVerifyUnattributedAttemptLimit is the unit tests' mirror of the
+// server's limit.
+const E2EServerVerifyUnattributedAttemptLimit = serverVerifyUnattributedAttemptLimit

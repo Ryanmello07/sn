@@ -179,6 +179,9 @@ type e2eProvider struct {
 	client    *connect.Client
 	stateLock sync.Mutex
 	dials     []e2eDial
+	// beforeDial, when set, runs before each upstream dial of a family the
+	// provider has; an error fails that dial at once
+	beforeDial func(family int) error
 }
 
 func (self *e2eProvider) recordedDials() []e2eDial {
@@ -205,6 +208,11 @@ func startE2EProvider(t testing.TB, ctx context.Context, api *e2eApi, egress map
 			source, ok := self.egress[family]
 			if !ok {
 				return nil, &net.OpError{Op: "dial", Net: network, Err: syscall.ENETUNREACH}
+			}
+			if self.beforeDial != nil {
+				if err := self.beforeDial(family); err != nil {
+					return nil, &net.OpError{Op: "dial", Net: network, Err: err}
+				}
 			}
 			target := api.v4
 			if family == 6 {
@@ -412,11 +420,74 @@ func TestDualStackHopsEndToEnd(t *testing.T) {
 // transport and the server indexes only the family it landed on. A hop the
 // trail engine sends first on the other family egresses there, and the server
 // answers that it resolved the source to no provider (421); the step resends
-// it through the same hop trying the indexed family first. Every hop
-// resolves: on the indexed family at once, on the other after the one retry,
-// for a provider with only its IPv4 egress indexed and the mirror case with
-// only IPv6.
+// it through the same hop pinned to the indexed family. Every hop resolves:
+// on the indexed family at once, on the other after the one resend, for a
+// provider with only its IPv4 egress indexed and the mirror case with only
+// IPv6.
 func TestDualStackHopsResolveThroughOneIndexedFamily(t *testing.T) {
+	testIndexedFamilyHops(t, nil, func(trail uint64, indexedFirst bool, indexed, unindexed netip.Addr) []netip.Addr {
+		if indexedFirst {
+			return []netip.Addr{indexed}
+		}
+		return []netip.Addr{unindexed, indexed}
+	})
+}
+
+// VALIDATOR.md §8.2. When the indexed family connects more than the fallback
+// delay later than the other, a hop that tries it first still lands on the
+// other, and is answered 421; the resend, pinned to the indexed family, waits
+// for it instead of falling back again. Every hop resolves after one resend.
+func TestDualStackHopsResolveThroughASlowIndexedFamily(t *testing.T) {
+	slow := 2 * connect.DefaultDialFallbackDelay
+	testIndexedFamilyHops(t, func(indexedFamily int) func(int) error {
+		return func(family int) error {
+			if family == indexedFamily {
+				time.Sleep(slow)
+			}
+			return nil
+		}
+	}, func(trail uint64, indexedFirst bool, indexed, unindexed netip.Addr) []netip.Addr {
+		return []netip.Addr{unindexed, indexed}
+	})
+}
+
+// VALIDATOR.md §8.2. When the indexed family fails at once on the resend, the
+// step retries it pinned again and never returns to the family the 421 ruled
+// out: the hop resolves on its third attempt, and the provider saw the
+// unindexed family, the failed indexed dial and the indexed one, in order.
+func TestDualStackHopsResolveWhenTheIndexedFamilyFailsOnce(t *testing.T) {
+	testIndexedFamilyHops(t, func(indexedFamily int) func(int) error {
+		var stateLock sync.Mutex
+		armed := false
+		return func(family int) error {
+			stateLock.Lock()
+			defer stateLock.Unlock()
+			switch {
+			case family != indexedFamily:
+				armed = true
+			case armed:
+				armed = false
+				return syscall.ECONNREFUSED
+			}
+			return nil
+		}
+	}, func(trail uint64, indexedFirst bool, indexed, unindexed netip.Addr) []netip.Addr {
+		if indexedFirst {
+			return []netip.Addr{indexed}
+		}
+		return []netip.Addr{unindexed, indexed}
+	})
+}
+
+// testIndexedFamilyHops sends the SEEDs of four consecutive trails through a
+// provider of each mirror case, whose dials beforeDial (when not nil) shapes
+// given its indexed family, and requires each to resolve, having reached the
+// server from the sources sources gives.
+func testIndexedFamilyHops(
+	t *testing.T,
+	beforeDial func(indexedFamily int) func(family int) error,
+	sources func(trail uint64, indexedFirst bool, indexed, unindexed netip.Addr) []netip.Addr,
+) {
 	server.DefaultTestEnv().Run(t, func(t testing.TB) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -447,30 +518,52 @@ func TestDualStackHopsResolveThroughOneIndexedFamily(t *testing.T) {
 			{name: "transport on IPv6", v4: netip.MustParseAddr("127.0.0.5"), indexed: v6},
 		} {
 			provider := startE2EProvider(t, ctx, api, map[int]netip.Addr{4: legacy.v4, 6: v6})
+			if beforeDial != nil {
+				provider.beforeDial = beforeDial(e2eFamily(legacy.indexed))
+			}
 			registerE2EProvider(ctx, provider.id, []netip.Addr{legacy.indexed}, settings)
 			transport := newE2ETransport(t, ctx, api, doh, provider, validatorId)
 			unindexed := v6
 			if legacy.indexed == v6 {
 				unindexed = legacy.v4
 			}
-			retried := 0
+			resent := 0
 			for trail := range uint64(4) {
 				before := len(api.verifySources())
+				dialsBefore := len(provider.recordedDials())
 				e2eSeed(t, ctx, transport, provider, trail, e2eSeedBody(t, validatorId, vsk))
 				landed := api.verifySources()[before:]
-				want := []netip.Addr{legacy.indexed}
-				if validator.E2EHopFirstIpFamily(trail, 0) != e2eFamily(legacy.indexed) {
-					want = []netip.Addr{unindexed, legacy.indexed}
-					retried++
-				}
+				want := sources(trail, validator.E2EHopFirstIpFamily(trail, 0) == e2eFamily(legacy.indexed), legacy.indexed, unindexed)
 				if fmt.Sprint(landed) != fmt.Sprint(want) {
-					t.Fatalf("%s: trail %d's SEED arrived from %v, want %v", legacy.name, trail, landed, want)
+					t.Fatalf("%s: trail %d's SEED arrived from %v, want %v (dials %v)", legacy.name, trail, landed, want, provider.recordedDials()[dialsBefore:])
+				}
+				if 1 < len(want) {
+					resent++
+				}
+				// no attempt after a 421 returns to the family it ruled out
+				ruledOut := 0
+				for _, dial := range provider.recordedDials()[dialsBefore:] {
+					if dial.family == ruledOut {
+						t.Fatalf("%s: trail %d dialed family %d again after a 421 ruled it out (dials %v)", legacy.name, trail, ruledOut, provider.recordedDials()[dialsBefore:])
+					}
+					if dial.family != e2eFamily(legacy.indexed) {
+						ruledOut = dial.family
+					}
 				}
 			}
-			if retried != 2 {
-				t.Fatalf("%s: %d of four SEEDs needed the retry, want half", legacy.name, retried)
-			}
-			t.Logf("%s (indexed %s): four SEEDs resolved, %d after one retry on the indexed family", legacy.name, legacy.indexed, retried)
+			t.Logf("%s (indexed %s): four SEEDs resolved, %d after a resend on the indexed family", legacy.name, legacy.indexed, resent)
 		}
 	})
+}
+
+// VALIDATOR.md §8.2. A validator step holds the server's unattributed
+// attempts plus one attributed attempt, and the validator's unit tests mirror
+// the server's limit.
+func TestDualStackHopsStepHoldsTheServersRetryableAnswers(t *testing.T) {
+	if validator.E2EServerVerifyUnattributedAttemptLimit != model.VerifyUnattributedAttemptLimit {
+		t.Fatalf("the validator's tests mirror an unattributed attempt limit of %d, the server's is %d", validator.E2EServerVerifyUnattributedAttemptLimit, model.VerifyUnattributedAttemptLimit)
+	}
+	if got := validator.E2EDefaultExtendAttempts(); got < model.VerifyUnattributedAttemptLimit+1 {
+		t.Fatalf("a step holds %d attempts, want at least the server's %d unattributed ones plus one", got, model.VerifyUnattributedAttemptLimit)
+	}
 }

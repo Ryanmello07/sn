@@ -14,9 +14,10 @@ import (
 )
 
 // The packet exchange and registration lifetime are separate ownership units.
-// A request's tunnel tries its first IP family (4 or 6) first.
+// A request's tunnel tries its family's first IP family (4 or 6) first, and
+// only that one when the family is pinned.
 type tunnelTransportClient interface {
-	postVerify(ctx context.Context, hop connect.Id, body []byte, firstIpFamily int) ([]byte, error)
+	postVerify(ctx context.Context, hop connect.Id, body []byte, family hopIpFamily) ([]byte, error)
 	done() <-chan struct{}
 	closeAndWait(context.Context) error
 }
@@ -84,8 +85,9 @@ func (self *TunnelTransport) PostVerify(ctx context.Context, hop connect.Id, bod
 			return nil, err
 		}
 	}
-	// the trail engine alternates the family each hop tries first
-	response, err := self.client.postVerify(callCtx, hop, body, hopFirstIpFamilyOf(ctx))
+	// the trail engine alternates the family each hop tries first, and pins
+	// one after a source-egress-unresolved answer
+	response, err := self.client.postVerify(callCtx, hop, body, hopIpFamilyOf(ctx))
 	select {
 	case <-self.client.done():
 		err = errors.Join(err, self.retireClient())

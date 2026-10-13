@@ -542,7 +542,7 @@ func TestTrailEngineSeedPacingMetersEveryRetry(t *testing.T) {
 		paced++
 		return nil
 	}
-	if _, err := engine.postStep(context.Background(), connect.NewId(), []byte("seed"), 4, pace); err == nil {
+	if _, _, err := engine.postStep(context.Background(), connect.NewId(), []byte("seed"), 4, pace); err == nil {
 		t.Fatal("failing SEED retries unexpectedly succeeded")
 	}
 	if paced != 3 || transport.attempts != 3 {
@@ -550,7 +550,7 @@ func TestTrailEngineSeedPacingMetersEveryRetry(t *testing.T) {
 	}
 
 	transport.attempts = 0
-	if _, err := engine.postStep(context.Background(), connect.NewId(), []byte("extend"), 6, nil); err == nil {
+	if _, _, err := engine.postStep(context.Background(), connect.NewId(), []byte("extend"), 6, nil); err == nil {
 		t.Fatal("failing EXTEND retries unexpectedly succeeded")
 	}
 	if transport.attempts != 3 || paced != 3 {
