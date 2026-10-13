@@ -169,7 +169,8 @@ That is worth doing once the balance is large relative to the claim's gas.
   the apps today are login proofs, which release settlement never pays
   (`server/controller/sn_earnings_controller.go:43-45`). Those providers stay
   unpaid, with a zero coldkey in their row, until their network's owner signs
-  a network payout consent in an app (§11.1), and only from that epoch on.
+  a network payout consent in an app (§11.1), and only from the epoch after
+  the signing on.
   The v1 stopgap of server 9719333c, which pays a provider without signed
   wallet evidence its account-history wallet when no roster is configured,
   does not apply to v2: v2 stays consent-only (owner decision, 2026-10-13).
@@ -1298,13 +1299,17 @@ owner, covers every provider client of the network
 
 **Earnings range.**
 
-- `from_epoch` is the current epoch, or the previous consent's `from_epoch` + 1
-  when that is later. A change of wallet therefore takes effect from the next
-  epoch at the earliest.
+- The operator accepts only a prospective consent: `from_epoch` must exceed the
+  coordinator's current epoch at the finalized block (protocol
+  `prospectiveDigest`). So `from_epoch` is the current epoch + 1, or the
+  previous consent's `from_epoch` + 1 when that is later. A consent never
+  covers the epoch it is signed in, and a change of wallet takes effect from
+  the next epoch. The sn CLI uses the same default
+  (`miner/hotkey_wallet_cmd.go`).
 - `through_epoch` is `from_epoch` + 65,535. The consent lasts until the network
   changes it, so there is no renewal.
-- Epochs before a network's first consent stay unpaid, because committed roots
-  never change.
+- Epochs before a network's first consent takes effect stay unpaid, because
+  committed roots never change.
 
 **SDK** (`sdk/`), exported to gomobile, cgo and wasm:
 
@@ -1313,8 +1318,12 @@ owner, covers every provider client of the network
   message, the range and the expiry;
 - `SnNetworkConsentSubmit(coldkey, message, signature)` submits through
   `POST /sn/wallet`;
-- `SnNetworkConsentStatus()` reports whether a consent covers the current
-  epoch, with its coldkey, range and generation.
+- `SnNetworkConsentStatus()` reads the network entry of `GET /sn/wallet`, the
+  newest accepted network consent. The history endpoint needs an
+  independently pinned head. The status is active while that consent's
+  `through_epoch` has not passed, so it is in force or starts next epoch.
+- The challenge and submission always use the network credential. A device
+  token is refused.
 
 **Apps** (Apple, Android, Windows, Linux, ur.io), in the settlement v2
 earnings area:
@@ -1338,11 +1347,11 @@ earnings area:
 
 | ID | Behaviour |
 | --- | --- |
-| CS-1 | Range: a first consent runs from the current epoch through 65,535 epochs on |
-| CS-2 | Range: a change starts at the later of the current epoch and the previous `from_epoch` + 1 |
+| CS-1 | Range: a first consent runs from the current epoch + 1 through 65,535 epochs on |
+| CS-2 | Range: a change starts at the later of the current epoch + 1 and the previous `from_epoch` + 1 |
 | CS-3 | The challenge is requested with the network session and no `client_id` |
 | CS-4 | The submission carries no `client_id`, and the stored consent appears in the status |
-| CS-5 | The status is active only while a consent covers the current epoch |
+| CS-5 | The status is active while the newest network consent's `through_epoch` has not passed, and shows a consent that starts next epoch |
 | CS-6 | Refusals are mapped: expired challenge, signature mismatch, not the network owner |
 | CS-7 | Each app goes from no consent through signing to active |
 | CS-8 | Each app changes the wallet and shows that it applies from the next epoch |
