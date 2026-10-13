@@ -231,7 +231,7 @@ func (self *releaseMeasurementInputV2Owner) finish() error {
 	if self.hooks.afterClose != nil {
 		self.closeErr = errors.Join(self.closeErr, self.hooks.afterClose(file))
 	}
-	witness, err := openAttemptPrivateDirectory(directory.path, directory.storageCtx)
+	witness, err := openAttemptPrivateDirectory(directory.path, attemptPrivateDirectoryWitnessContext(directory.storageCtx))
 	self.closeErr = errors.Join(self.closeErr, err)
 	if err == nil {
 		if witness.anchor.dev != directory.anchor.dev || witness.anchor.ino != directory.anchor.ino || witness.anchor.mode != directory.anchor.mode || witness.anchor.uid != directory.anchor.uid {
