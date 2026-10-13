@@ -58,8 +58,9 @@ from, unchanged (O14). The command writes the approval file and prints its
 printf 'urnetwork-native-treasury-approval-signature-v1\n%s' "$(cat "$ADOPTED_APPROVAL")" | shasum -a 256
 ```
 
-This prints the `signing_digest`. The approval key signs those 32 bytes, not
-their hex, with Ed25519. `$SIGNATURE` is the 128 lowercase hex digits.
+This prints the hex digits of the `signing_digest`. The approval key signs
+those 32 bytes, not their hex, with Ed25519. `$SIGNATURE` is the 128 lowercase
+hex digits of the signature.
 
 ## 4. Assemble the envelope
 
