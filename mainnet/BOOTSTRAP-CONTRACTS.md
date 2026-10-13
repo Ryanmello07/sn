@@ -666,7 +666,16 @@ one bootstrap deployer at consecutive nonces:
 The config schema is `urnetwork-mainnet-settlement-v2-contract-phase-config-v1`
 and the plan schema `urnetwork-mainnet-settlement-v2-contract-phase-v1`. The
 plan has the original fields without `reserve_hotkey` and exactly the first
-five of these actions, or all six. The approval signs `urnetwork-mainnet-settlement-v2-contract-phase-approval-v1`,
+five of these actions, or all six. Its `runtime_source_commit` must be the
+source reviewed for its runtime version: a reviewed commit (v470, v473, v475
+and v477, `crv4.ReviewedNativeOwnerSourceSpec`) names only the spec version it
+declares. v475's commit with version 477 is refused, in `preview` too, with
+"contract phase runtime version differs from the one its source commit was
+reviewed for". The frontier mapping source
+(`67dcf7f791dc495064c293f080a0702cb433e51e`) declares no version and is still
+accepted, so the approver checks that the config names the runtime's reviewed
+commit. The original phase's recorded configs keep the pairs they were
+approved with. The approval signs `urnetwork-mainnet-settlement-v2-contract-phase-approval-v1`,
 a zero byte and the canonical plan JSON, and the plan hash uses the v2 plan
 schema as its domain, so neither phase's approval or hash verifies the other's
 plan. A v2 config selects only the v2 ids it approves and an original config
@@ -891,7 +900,7 @@ action's completed status.
 **Runtime rehearsal (R-1).** `TestR1SettlementV2Phase`
 (`evm_v2_rehearsal_test.go`, build tag `runtime_rehearsal`) drives exactly
 these commands, in the order above, through the command dispatcher the binary
-runs, against the runtime-475 node of `scripts/runtime-rehearsal/README.md`:
+runs, against the rehearsal node of `scripts/runtime-rehearsal/README.md`:
 
 ```sh
 RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
@@ -902,8 +911,9 @@ It starts its own node and creates netuid 25, which the phase is pinned to,
 with its emission started. It deploys the reviewed v1 coordinator
 implementation as the initializer's v1 coordinator, which needs only code
 there, and funds a fresh deployer. Its config carries the node's identity:
-`system_chain`, the genesis hash, EVM chain 964, runtime source
-`d1718c99c34cf96abbf2bf09c0e9e48b945c76f5` with the node's runtime version and
+`system_chain`, the genesis hash, EVM chain 964, the reviewed source of the
+node's runtime version (`5c6e83e2f4936f257234f246957f75684c35227c` on a 477
+node) with that version and
 the BLAKE2b-256 of its `:code` and metadata, a finalized start block, and the
 route `http://127.0.0.1:<port>` with no TLS pin. The approval covers the
 release from `contracts_gen.go`, the starting gas limits above, a fee cap of

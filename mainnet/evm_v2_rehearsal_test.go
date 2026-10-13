@@ -70,10 +70,11 @@ var r1DemandFeeWei = new(big.Int).Mul(big.NewInt(750_000), big.NewInt(1_000_000_
 
 // One rehearsal chain: blocks sealed on demand and finalized at once.
 type r1Node struct {
-	ctx  context.Context
-	sub  *crv4.Chain
-	eth  *ethclient.Client
-	http string
+	ctx    context.Context
+	sub    *crv4.Chain
+	eth    *ethclient.Client
+	http   string
+	source string
 }
 
 // Starts scripts/runtime-rehearsal/run-node.sh on free ports in a temporary
@@ -138,9 +139,13 @@ func startR1Node(t *testing.T) *r1Node {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Cleanup(n.sub.API.Client.Close)
-	if n.sub.Runtime.SpecName != "node-subtensor" || n.sub.Runtime.SpecVersion != 475 {
-		t.Fatalf("node runs %s/%d, want node-subtensor/475", n.sub.Runtime.SpecName, n.sub.Runtime.SpecVersion)
+	// R-1 runs only on a runtime whose source was reviewed; the phase binds
+	// that source to the node's own version.
+	var reviewed bool
+	if n.source, reviewed = crv4.ReviewedNativeOwnerSpecSource(uint32(n.sub.Runtime.SpecVersion)); n.sub.Runtime.SpecName != "node-subtensor" || !reviewed {
+		t.Fatalf("node runs %s/%d, which has no reviewed source", n.sub.Runtime.SpecName, n.sub.Runtime.SpecVersion)
 	}
+	t.Logf("node runs node-subtensor/%d, reviewed source %s", n.sub.Runtime.SpecVersion, n.source)
 	if n.eth, err = evmrpc.DialContext(n.ctx, n.http); err != nil {
 		t.Fatal(err)
 	}
@@ -330,8 +335,8 @@ func r1Key(t *testing.T) *ecdsa.PrivateKey {
 }
 
 // The node's identity as the phase's approval pins it: chain name, genesis,
-// runtime 475's source with this node's version, the BLAKE2b-256 of its code
-// and of its metadata, and the finalized start block.
+// the reviewed source of this node's runtime version, the BLAKE2b-256 of its
+// code and of its metadata, and the finalized start block.
 func (self *r1Node) identity(t *testing.T) (planNetwork, rootReceiptProfile, native.Hash, uint64) {
 	t.Helper()
 	var name, genesis, code, metadata string
@@ -352,7 +357,7 @@ func (self *r1Node) identity(t *testing.T) (planNetwork, rootReceiptProfile, nat
 	digest := blake2b.Sum256(raw)
 	head, number := self.head(t)
 	return planNetwork{NativeChain: name, GenesisHash: genesis, EvmChainId: mainnetEvmChainId},
-		rootReceiptProfile{RuntimeSourceCommit: crv4.NativeOwnerSource475, RuntimeVersion: version, RuntimeCodeHash: code, RuntimeMetadataHash: "0x" + hex.EncodeToString(digest[:])}, head, number
+		rootReceiptProfile{RuntimeSourceCommit: self.source, RuntimeVersion: version, RuntimeCodeHash: code, RuntimeMetadataHash: "0x" + hex.EncodeToString(digest[:])}, head, number
 }
 
 // One approved phase and its custody, driven through the top-level command.

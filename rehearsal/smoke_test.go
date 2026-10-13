@@ -108,8 +108,8 @@ func amount(value uint64) *big.Int {
 }
 
 // TestRehearsalSmoke checks, on the real staking and neuron precompiles of a
-// node built from runtime 475's source, the §7.3 runtime facts that need no
-// settlement contract, and logs each precompile call's gas.
+// node built from a reviewed runtime's source, the §7.3 runtime facts that
+// need no settlement contract, and logs each precompile call's gas.
 func TestRehearsalSmoke(t *testing.T) {
 	n := startNode(t)
 	p := deployProbe(t, n)
