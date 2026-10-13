@@ -84,10 +84,8 @@ func (self *TunnelTransport) PostVerify(ctx context.Context, hop connect.Id, bod
 			return nil, err
 		}
 	}
-	// Requests alternate the family tried first, so attempts split evenly.
-	firstIpFamily := hopFirstIpFamily(self.hopRequests)
-	self.hopRequests++
-	response, err := self.client.postVerify(callCtx, hop, body, firstIpFamily)
+	// the trail engine alternates the family each hop tries first
+	response, err := self.client.postVerify(callCtx, hop, body, hopFirstIpFamilyOf(ctx))
 	select {
 	case <-self.client.done():
 		err = errors.Join(err, self.retireClient())

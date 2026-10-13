@@ -51,9 +51,37 @@ import (
 // TrailTransport posts one signed /verify body through the given provider
 // hop's egress and returns the raw response body. Implementations must make
 // the request egress from exactly that hop (the server attributes the hop
-// from the source IP). ctx bounds the whole attempt.
+// from the source IP). ctx bounds the whole attempt, and carries the address
+// family the hop tries first (hopFirstIpFamilyOf).
 type TrailTransport interface {
 	PostVerify(ctx context.Context, hop connect.Id, jsonBody []byte) ([]byte, error)
+}
+
+// hopFirstIpFamily is the address family (4 or 6) the hop at position (0 for
+// the SEED) of the trail-th trail tries first (IPV6.md C7). Families alternate
+// along a trail, and each trail starts on the family the trail before it did
+// not, so over any two consecutive trails every position tries each family
+// first once, whatever the depth. A retry of a hop keeps its position's
+// family; the dial falls back to the other family within the attempt.
+func hopFirstIpFamily(trail uint64, position int) int {
+	if (trail+uint64(position))%2 == 0 {
+		return 4
+	}
+	return 6
+}
+
+type hopFirstIpFamilyKey struct{}
+
+// withHopFirstIpFamily marks a hop request with the family it tries first.
+func withHopFirstIpFamily(ctx context.Context, firstIpFamily int) context.Context {
+	return context.WithValue(ctx, hopFirstIpFamilyKey{}, firstIpFamily)
+}
+
+// hopFirstIpFamilyOf is the family a hop request tries first: what the trail
+// engine marked it with, or 0 (no preference) for a request it did not make.
+func hopFirstIpFamilyOf(ctx context.Context) int {
+	firstIpFamily, _ := ctx.Value(hopFirstIpFamilyKey{}).(int)
+	return firstIpFamily
 }
 
 // SeedPicker picks the validator-chosen entry provider for a new trail
@@ -623,6 +651,9 @@ type TrailEngine struct {
 
 	completed atomic.Uint64
 	failed    atomic.Uint64
+	// trails counts the trails that reached their SEED, which numbers each
+	// trail for hopFirstIpFamily.
+	trails atomic.Uint64
 }
 
 type attemptSchedule struct {
@@ -854,9 +885,10 @@ func (self *TrailEngine) verifyAssign(assign *connect.VerifyAssignResult, wantTr
 
 // postStep sends one body through hop with the step timeout, retrying the
 // identical body (idempotent, §4.3) up to ExtendAttempts within the budget.
-// beforeAttempt, when non-nil, meters every send including retries.
-func (self *TrailEngine) postStep(ctx context.Context, hop connect.Id, body []byte, beforeAttempt func(context.Context) error) ([]byte, error) {
-	stepCtx, cancel := context.WithTimeout(ctx, self.cfg.StepTimeout)
+// Every attempt tries firstIpFamily first. beforeAttempt, when non-nil,
+// meters every send including retries.
+func (self *TrailEngine) postStep(ctx context.Context, hop connect.Id, body []byte, firstIpFamily int, beforeAttempt func(context.Context) error) ([]byte, error) {
+	stepCtx, cancel := context.WithTimeout(withHopFirstIpFamily(ctx, firstIpFamily), self.cfg.StepTimeout)
 	defer cancel()
 	var lastErr error
 	for attempt := 0; attempt < self.cfg.ExtendAttempts; attempt++ {
@@ -986,7 +1018,9 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 			return err
 		}
 	}
-	responseBody, err := self.postStep(ctx, seedHop, seedBody, beforeSeed)
+	// the trail's number, which alternates the family its hops try first
+	trailNumber := self.trails.Add(1) - 1
+	responseBody, err := self.postStep(ctx, seedHop, seedBody, hopFirstIpFamily(trailNumber, 0), beforeSeed)
 	if err != nil {
 		// Seed failures are the validator's own pick — not attributable.
 		return nil, &TrailError{Kind: TrailErrorSeed, Hop: seedHop, Err: err}
@@ -1082,7 +1116,7 @@ func (self *TrailEngine) RunTrail(ctx context.Context) (*ProofRecord, error) {
 			}
 		}
 		stepStart := time.Now()
-		responseBody, err := self.postStep(ctx, pendingHop, extendBody, nil)
+		responseBody, err := self.postStep(ctx, pendingHop, extendBody, hopFirstIpFamily(trailNumber, depth-1), nil)
 		if err != nil {
 			// The assigned hop never confirmed: local failure attribution
 			// to the pending hop (§4.4/§7.2) — the exposure recorded at

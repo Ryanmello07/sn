@@ -1,8 +1,9 @@
 //go:build dualstacke2e
 
 // The dual-stack hop path end to end (connect IPV6.md C7, VALIDATOR.md §8.2).
-// The validator's real TunnelTransport (alternating first family, one tun per
-// request, the single-destination client with the fast dial failure) reaches
+// The validator's real TunnelTransport (each request's first family as the
+// trail engine marks it, one tun per request, the single-destination client
+// with the fast dial failure) reaches
 // in-process connect providers over in-memory routes. Each provider egresses
 // from its own loopback addresses to an in-process API whose /verify is the
 // server's real controller on the release gate's disposable PostgreSQL and
@@ -316,12 +317,13 @@ func e2eSeedBody(t testing.TB, validatorId connect.Id, vsk ed25519.PrivateKey) [
 	return body
 }
 
-// Sends one SEED through the provider and requires the server to have
-// resolved the request's source to it: an unresolved source is a poisoned
-// trail whose echoed first hop is synthetic.
-func e2eSeed(t testing.TB, ctx context.Context, transport *validator.TunnelTransport, provider *e2eProvider, body []byte) {
+// Sends the SEED of the trail-th trail through the provider, trying first the
+// family the trail engine would, and requires the server to have resolved the
+// request's source to the provider: an unresolved source is a poisoned trail
+// whose echoed first hop is synthetic.
+func e2eSeed(t testing.TB, ctx context.Context, transport *validator.TunnelTransport, provider *e2eProvider, trail uint64, body []byte) {
 	t.Helper()
-	response, err := transport.PostVerify(ctx, provider.id, body)
+	response, err := transport.PostVerify(validator.E2EHopRequestContext(ctx, trail, 0), provider.id, body)
 	if err != nil {
 		t.Fatalf("seed through %s: %v", provider.id, err)
 	}
@@ -334,9 +336,10 @@ func e2eSeed(t testing.TB, ctx context.Context, transport *validator.TunnelTrans
 	}
 }
 
-// IPV6.md C7, VALIDATOR.md §8.2. A dual-stack provider's hops alternate
-// families and both resolve at the server; an IPv4-only provider's IPv6-first
-// hops fail over to IPv4 at once and resolve.
+// IPV6.md C7, VALIDATOR.md §8.2. The SEEDs of consecutive trails alternate
+// their first family: through a dual-stack provider both families resolve at
+// the server, and an IPv4-only provider's IPv6-first hops fail over to IPv4 at
+// once, on its dial-failure signal, and resolve.
 func TestDualStackHopsEndToEnd(t *testing.T) {
 	server.DefaultTestEnv().Run(t, func(t testing.TB) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -369,8 +372,9 @@ func TestDualStackHopsEndToEnd(t *testing.T) {
 		for _, provider := range []*e2eProvider{dualStack, ipv4Only} {
 			transport := newE2ETransport(t, ctx, api, doh, provider, validatorId)
 			before := len(api.verifySources())
-			for range requests {
-				e2eSeed(t, ctx, transport, provider, e2eSeedBody(t, validatorId, vsk))
+			// the SEEDs of consecutive trails, which alternate their first family
+			for trail := range uint64(requests) {
+				e2eSeed(t, ctx, transport, provider, trail, e2eSeedBody(t, validatorId, vsk))
 			}
 			landed := api.verifySources()[before:]
 			wantSources := []netip.Addr{dualStackV4, dualStackV6, dualStackV4, dualStackV6}
@@ -378,7 +382,7 @@ func TestDualStackHopsEndToEnd(t *testing.T) {
 				wantSources = []netip.Addr{ipv4OnlyV4, ipv4OnlyV4, ipv4OnlyV4, ipv4OnlyV4}
 			}
 			if fmt.Sprint(landed) != fmt.Sprint(wantSources) {
-				t.Fatalf("provider %s: /verify sources %v, want %v (IPv4 first, then alternating)", provider.id, landed, wantSources)
+				t.Fatalf("provider %s: /verify sources %v, want %v (the first trail IPv4 first, then alternating)", provider.id, landed, wantSources)
 			}
 			t.Logf("provider %s: four resolved hops arrived from %v", provider.id, landed)
 		}

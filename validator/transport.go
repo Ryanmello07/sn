@@ -69,20 +69,8 @@ type TunnelTransport struct {
 	registration   *tunnelClientRegistration
 	newClient      func(context.Context, connect.Id) (tunnelTransportClient, error)
 	createTun      func(context.Context, *connect.TunSettings) (*connect.Tun, error)
-	// Requests handed to a client, which pick their first family. Guarded by
-	// the request lease.
-	hopRequests uint64
-	closed      chan struct{}
-	closeErr    error
-}
-
-// hopFirstIpFamily is the family the n-th hop request tries first: IPv4 for
-// even n and IPv6 for odd n, so the first request is IPv4-first.
-func hopFirstIpFamily(request uint64) int {
-	if request%2 == 0 {
-		return 4
-	}
-	return 6
+	closed         chan struct{}
+	closeErr       error
 }
 
 type tunnelAttemptGenerator interface {

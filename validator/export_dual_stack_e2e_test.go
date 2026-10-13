@@ -27,3 +27,10 @@ func SetTunnelTransportE2EHooks(
 		return owned, err
 	}
 }
+
+// E2EHopRequestContext marks a hop request as the trail engine marks the hop
+// at position (0 for the SEED) of its trail-th trail, with the family it tries
+// first.
+func E2EHopRequestContext(ctx context.Context, trail uint64, position int) context.Context {
+	return withHopFirstIpFamily(ctx, hopFirstIpFamily(trail, position))
+}

@@ -693,13 +693,16 @@ disambiguate shared egress — we exclude.
 - **IPv6 / churn:** index both families; expire entries when a `proxy_client` is
   released so a reassigned IP is not miscredited to the previous holder.
 
-**Address family of a hop.** The validator gives IPv4 and IPv6 equal attempts. Its hop
-requests (SEED and EXTEND posts, retries included) alternate the family their tunnel tries
-first, IPv4 for the first request, and each falls back to the other family when the first
-fails (connect `IPV6.md` C7). The source IP is the provider's egress on the family that
-landed, and it resolves when it is that family's only live egress for the provider. A
-request that lands on a family the provider has no live indexed egress in resolves to no
-provider, so a SEED is poisoned and an EXTEND fails (`source-egress-unresolved`).
+**Address family of a hop.** The validator gives IPv4 and IPv6 equal attempts. The hops of
+a trail (its SEED and EXTEND posts) alternate the family their tunnel tries first, and each
+trail starts on the family the trail before it did not, the first trail on IPv4. Over any
+two consecutive trails every depth therefore tries each family first once, whatever `M`.
+A retry of a hop keeps the hop's family. Each request falls back to the other family when
+the first fails (connect `IPV6.md` C7). The source IP is the provider's egress on the
+family that landed, and it resolves when it is that family's only live egress for the
+provider. A request that lands on a family the provider has no live indexed egress in
+resolves to no provider, so a SEED is poisoned and an EXTEND fails
+(`source-egress-unresolved`).
 
 **A second family does not double a provider's budgets.** Seeds and EXTENDs from a
 resolved source also count against per-provider meters held to the same hard limits
