@@ -17,7 +17,7 @@ import (
 // Independent reviewed alternatives retain every preexisting producer family.
 // New adjacent roots are selected by prefix, not by a frozen hand-picked list.
 const releaseEvidenceV2OldProducerGroups = "Attempt|DiskAttempt|HTTPAttemptStreamV2|SealAttemptCutV2|TrailPolicyDepth|StatsWrite|StatsSnapshotWrite|StatsMultiBatch|StatsSettlement|Deposited|ReleaseMeasurement|ReleaseStatsV2Runtime|ReleaseHeadV2|IntentStore|SteeringIntent|MeasurementStats|ExactPoolQuality|HeadEMA|ReleaseSteeringLoop|ReleaseSettlementRefresh"
-const releaseEvidenceV2NewProducerGroups = "ReleaseEvidenceV2|ReleaseActivationV2|ReleaseBootstrapV2|ReleaseActivationHistoryV2|ReleaseInitialBoundaryV2|ReleaseStartupV2|ValidatorEvidenceCensusV2|ChainEvidence|RunRelease|ValidatorEvidence|ValidatorUpload|ReleaseClientKeyHistory|ReleaseClientKeyAuthority|ReleaseRuntimeV2|ArtifactHttpObservation|NativeSourceHash|IntentV2|ReleaseNativeCaptureV2|ReleaseCaptureV2|ReleaseArchiveV2|ReleaseHistoryAdoptionV2|ReleaseNativeObservationV2"
+const releaseEvidenceV2NewProducerGroups = "ReleaseEvidenceV2|ReleaseActivationV2|ReleaseBootstrapV2|ReleaseActivationHistoryV2|ReleaseInitialBoundaryV2|ReleaseStartupV2|ValidatorEvidenceCensusV2|ChainEvidence|RunRelease|ValidatorEvidence|ValidatorUpload|ReleaseClientKeyHistory|ReleaseClientKeyAuthority|ReleaseRuntimeV2|ArtifactHttpObservation|NativeSourceHash|IntentV2|ReleaseNativeCaptureV2|ReleaseCaptureV2|ReleaseArchiveV2|ReleaseHistoryAdoptionV2|ReleaseNativeObservationV2|ProductionLoader"
 
 type releaseEvidenceV2GateGroup struct {
 	phase            string
@@ -160,7 +160,7 @@ func releaseEvidenceV2GateFixture(t *testing.T) (string, []releaseEvidenceV2Gate
 			`go test ./validator -run "$producer_tests" -count=1 -parallel=4 -timeout 90m`,
 			`go test -race ./validator -run "$producer_tests" -count=1 -parallel=4 -timeout 90m`,
 		}},
-		{phase: "solidity", variable: "validator_evidence_tests", alternatives: "ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation", packages: []string{"./protocol", "./stabi", "./sim-testnet/gencontracts"}, sources: map[string][]string{
+		{phase: "solidity", variable: "validator_evidence_tests", alternatives: "ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation|EvidencePolicy", packages: []string{"./protocol", "./stabi", "./sim-testnet/gencontracts"}, sources: map[string][]string{
 			"./protocol":                 releaseEvidenceV2GateSources(t, []string{"../protocol/validator_evidence*_test.go", "../protocol/client_key_history*_test.go"}),
 			"./stabi":                    releaseEvidenceV2GateSources(t, []string{"../stabi/validator_evidence*_test.go"}),
 			"./sim-testnet/gencontracts": releaseEvidenceV2GateSources(t, []string{"gencontracts/evidence*_test.go"}),
@@ -172,7 +172,7 @@ func releaseEvidenceV2GateFixture(t *testing.T) (string, []releaseEvidenceV2Gate
 			`go test ./sim-testnet -run "$capture_tests" -count=1` + releaseGateCaptureOwnerSkip + ` -timeout 5m`,
 			`go test -race ./sim-testnet -run "$capture_tests" -count=1` + releaseGateCaptureOwnerSkip + ` -timeout 10m`,
 		}},
-		{phase: "evidence_simulator", job: "evidence-simulator", variable: "simulator_evidence_tests", alternatives: "ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation", packages: []string{"./sim-testnet"}, sources: map[string][]string{
+		{phase: "evidence_simulator", job: "evidence-simulator", variable: "simulator_evidence_tests", alternatives: "ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation|EvidencePolicy", packages: []string{"./sim-testnet"}, sources: map[string][]string{
 			"./sim-testnet": releaseEvidenceV2GateSources(t, []string{"evidence_deployment*_test.go", "evidence_carry*_test.go", "runtime_evidence*_test.go", "runtime_reserved_provisional_test.go", "evidence_relay*_test.go", "evidence_relay_launch_budget_test.go", "evidence_relay_launch_runtime_test.go", "evm_nonce_turn_test.go", "adversary_client_key_batch_test.go"}),
 		}, commands: []string{
 			`go test ./sim-testnet -run "$simulator_evidence_tests" -count=1` + ` -skip "$simulator_evidence_serial_skip_tests"` + ` -timeout 10m`,
@@ -243,7 +243,7 @@ func TestProducerGateStateSelectionEvidenceV2RejectsEveryNewFamilyOmission(t *te
 	script, groups := releaseEvidenceV2GateFixture(t)
 	for _, index := range []int{0, 1, 3} {
 		group := groups[index]
-		families := "ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation"
+		families := "ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation|EvidencePolicy"
 		if index == 0 {
 			families = releaseEvidenceV2NewProducerGroups
 		}
