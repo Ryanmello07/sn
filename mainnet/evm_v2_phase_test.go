@@ -20,6 +20,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/urfoundation/sn/crv4"
 	"github.com/urfoundation/sn/ss58"
 	"github.com/urfoundation/sn/stabi"
 )
@@ -540,6 +541,54 @@ func TestEvmV2PreviewRefusesForeignInputs(t *testing.T) {
 	}
 	if _, err := loadEvmV2PhasePreview(t.Context(), original.configPath, "vault2-create"); err == nil || !strings.Contains(err.Error(), "not the five-action settlement v2 phase") {
 		t.Fatalf("original graph previewed as settlement v2: %v", err)
+	}
+}
+
+// SV-8: the v2 graph binds a reviewed runtime source to the spec version it
+// declares. Every reviewed pair passes, as does the frontier mapping source,
+// which declares none. A reviewed source named for another version is refused,
+// already in unsigned review, and the original phase keeps the pairs its
+// recorded approvals hold.
+func TestEvmV2PhaseBindsReviewedSourceToItsSpecVersion(t *testing.T) {
+	f := newEvmV2Fixture(t)
+	mismatch := "contract phase runtime version differs from the one its source commit was reviewed for"
+	pair := func(config evmPhaseConfig, source string, spec uint32) evmPhaseConfig {
+		changed := copyEvmPhaseConfig(config)
+		changed.Plan.Runtime.RuntimeSourceCommit, changed.Plan.Runtime.RuntimeVersion.SpecVersion = source, spec
+		return changed
+	}
+	reviewed := map[string]uint32{crv4.NativeOwnerSource470: 470, crv4.NativeOwnerSource473: 473, crv4.NativeOwnerSource475: 475, crv4.NativeOwnerSource477: 477}
+	for source, spec := range reviewed {
+		if err := pair(f.config, source, spec).validateStructure(); err != nil {
+			t.Fatalf("reviewed source %s refused at its own version %d: %v", source, spec, err)
+		}
+		for _, other := range []uint32{spec - 1, spec + 1, 470, 473, 475, 477} {
+			if other == spec {
+				continue
+			}
+			if err := pair(f.config, source, other).validateStructure(); err == nil || err.Error() != mismatch {
+				t.Fatalf("reviewed source %s labelled runtime %d: %v", source, other, err)
+			}
+		}
+	}
+	for _, spec := range []uint32{1, 475, 477, 478} {
+		if err := pair(f.config, frontierMappingSourceCommit, spec).validateStructure(); err != nil {
+			t.Fatalf("frontier mapping source refused at version %d: %v", spec, err)
+		}
+	}
+	// 475's review on the 477 runtime, as an unsigned draft.
+	draft := pair(f.config, crv4.NativeOwnerSource475, 477)
+	draft.Signature = ""
+	raw, err := json.Marshal(draft)
+	if err != nil || os.WriteFile(f.configPath, raw, 0600) != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadEvmV2PhasePreview(t.Context(), f.configPath, "vault2-create"); err == nil || err.Error() != mismatch {
+		t.Fatalf("mislabelled draft previewed: %v", err)
+	}
+	original := newEvmVaultFixture(t)
+	if err := pair(original.config, crv4.NativeOwnerSource475, 477).validateStructure(); err != nil {
+		t.Fatalf("original phase lost a recorded source and version pair: %v", err)
 	}
 }
 
