@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {Vm} from "forge-std/Vm.sol";
+import {Vm, VmSafe} from "forge-std/Vm.sol";
 
 import {STClaimBatcher} from "../src/STClaimBatcher.sol";
 import {ISTSettlementVault2} from "../src/interfaces/ISTSettlementVault2.sol";
@@ -157,8 +157,11 @@ contract V2ClaimBatcherEdgesTest is Test {
     // CB-4: an attempted item receives exactly its cap, also with the 29
     // siblings of the deepest ledger and the vault's address cold: the 20,000
     // gas of bookkeeping cover the encoding. They stop covering it for proofs
-    // no ledger has (vault2 refuses any proof longer than 29).
+    // no ledger has (vault2 refuses any proof longer than 29). The encoding's
+    // gas is the release build's; a coverage build is unoptimized and
+    // instrumented, so it is skipped, as are the next two.
     function test_CB4_anItemWithARealProofReceivesItsCapAtItsRequirement() public {
+        vm.skip(vm.isContext(VmSafe.ForgeContext.Coverage));
         uint256 overhead = _probeOverhead();
         emit log_named_uint("probe overhead", overhead);
         uint256[7] memory lengths = [uint256(0), 1, 29, 64, 128, 256, 1024];
@@ -184,6 +187,7 @@ contract V2ClaimBatcherEdgesTest is Test {
     // all, still receives its whole cap: the batcher's memory does not grow
     // with the items it encodes.
     function test_CB4_theLastItemOfAFullBatchReceivesItsCap() public {
+        vm.skip(vm.isContext(VmSafe.ForgeContext.Coverage));
         uint256 overhead = _probeOverhead();
         uint256 count = 418;
         uint256 cap = 100_000;
@@ -218,6 +222,7 @@ contract V2ClaimBatcherEdgesTest is Test {
     // whatever its gas, and attempts a prefix; each attempted item receives
     // its cap.
     function testFuzz_CB4_aBatchOfRealProofsCompletesAtAnyGas(uint256 limit) public {
+        vm.skip(vm.isContext(VmSafe.ForgeContext.Coverage));
         EdgeGasProbeVault probe = new EdgeGasProbeVault();
         uint256 cap = 200_000;
         limit = bound(limit, 80_000, 6 * _needed(cap));
