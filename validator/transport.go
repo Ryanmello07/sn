@@ -92,10 +92,12 @@ type tunnelAttemptTun interface {
 // completion: the packet pump must exit before the generator can retire its
 // clients and return their message buffers.
 type tunnelAttempt struct {
-	cancel         context.CancelFunc
-	generator      tunnelAttemptGenerator
-	tun            tunnelAttemptTun
-	packetClient   tunnelAttemptPacketClient
+	cancel       context.CancelFunc
+	generator    tunnelAttemptGenerator
+	tun          tunnelAttemptTun
+	packetClient tunnelAttemptPacketClient
+	// Closes the contracts a joined hop leaves open on its retained identity.
+	closeContracts func()
 	retireClient   func(context.Context) error
 	removeIdentity func(context.Context) error
 	pumpDone       <-chan struct{}
@@ -138,6 +140,12 @@ func (self *tunnelAttempt) closeAndWait(ctx context.Context) error {
 		case <-ctx.Done():
 			closeErrors = append(closeErrors, fmt.Errorf("join tunnel packet pump: %w", ctx.Err()))
 		}
+	}
+	// A joined packet path sends nothing more for this hop, so its contracts
+	// close now and return their escrow instead of waiting out the send
+	// sequence's idle or ack timeout. An unjoined path retires the identity.
+	if self.closeContracts != nil && len(closeErrors) == 0 {
+		self.closeContracts()
 	}
 	if self.retireClient != nil {
 		if err := self.retireClient(ctx); err != nil {
@@ -196,6 +204,14 @@ func (self *TunnelTransport) currentByClientJwt() (string, error) {
 	return byClientJwt, nil
 }
 
+// A hop carries one /verify exchange of a few kilobytes, so every contract it
+// requests is this one small size. connect's defaults open at 1 MiB and size
+// each prefetched successor toward 128 MiB (32.75 MiB for the second contract),
+// and the platform escrows every grant from the validator's balance until the
+// contract closes. The platform raises a request to its own minimum grant. The
+// size stays well above the 16 KiB transport message ceiling a contract must fit.
+const tunnelContractTransferByteCount = connect.ByteCount(256 << 10)
+
 // Returns fresh settings for every derived tunnel client. Provider clients
 // advertise opportunistic encryption and may initiate the TLS session on their
 // return sequence. An encryption-off validator can carry the plaintext proof,
@@ -205,9 +221,20 @@ func (self *TunnelTransport) currentByClientJwt() (string, error) {
 func newTunnelClientSettings() *connect.ClientSettings {
 	clientSettings := connect.DefaultClientSettings()
 	clientSettings.EncryptionSettings.Mode = connect.EncryptionModeOpportunistic
+	// The reply to a provider-initiated handshake rides the validator's own
+	// regular contract to that provider. The default asks for a companion
+	// contract instead, which the platform refuses because public providers
+	// publish no stream key, so each such request waited out its timeout.
+	clientSettings.EncryptionSettings.EncryptionControlUseCompanion = false
 	// Providers must be able to read the derived client's identity key before
 	// the generator admits tunnel traffic, not merely after a delivery ack.
 	clientSettings.ClientKeyRegistrationRequired = true
+	// Equal initial and standard sizes keep every contract of a send sequence,
+	// including its prefetched successor, at the one small size.
+	contractSettings := clientSettings.ContractManagerSettings
+	contractSettings.InitialContractTransferByteCount = tunnelContractTransferByteCount
+	contractSettings.InitialNetworkPeerContractTransferByteCount = tunnelContractTransferByteCount
+	contractSettings.StandardContractTransferByteCount = tunnelContractTransferByteCount
 	return clientSettings
 }
 
@@ -230,6 +257,12 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 	}
 	tunnelCtx, tunnelCancel := context.WithCancel(ctx)
 	attempt := &tunnelAttempt{cancel: tunnelCancel}
+	// The exclusive lease runs one hop at a time on this identity. Once this
+	// hop's packet path has joined, the only data sequences left on the client
+	// belong to finished hops, so flushing the client closes their contracts.
+	// The flush also restarts the client's control sequence; contract close
+	// reports retry until the platform acknowledges them.
+	attempt.closeContracts = self.client.Flush
 	self.packetCleanup = attempt
 	defer func() {
 		closeErr := attempt.close()
@@ -307,7 +340,7 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 		return nil, err
 	}
 	if response.StatusCode != 200 {
-		return nil, verifyPostError(hop, response.StatusCode, responseBody, int(landedIpFamily.Load()))
+		return nil, tunnelVerifyStatusFailure(response.StatusCode, verifyPostError(hop, response.StatusCode, responseBody, int(landedIpFamily.Load())))
 	}
 	return responseBody, nil
 }

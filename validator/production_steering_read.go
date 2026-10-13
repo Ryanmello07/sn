@@ -115,6 +115,178 @@ func retryableProductionSteeringReadBounded(err error, transportOrigin bool, dep
 	return retryable && transient
 }
 
+// A read whose every failure was a deadline. Replaying retained history joins
+// one timeout per object read, so a slow backend can exceed the classifier's
+// depth and size allowance and turn into a hard failure on size alone. This
+// keeps the deadline verdict and a sample, never a hard, refused, native or
+// unknown leaf.
+type productionSteeringReadDeadline struct {
+	leaves int
+	sample string
+}
+
+func (self *productionSteeringReadDeadline) Error() string {
+	if self.sample == "" {
+		return fmt.Sprintf("production steering read ran out of time (%d deadline leaves)", self.leaves)
+	}
+	return fmt.Sprintf("production steering read ran out of time (%d deadline leaves; first: %s)", self.leaves, self.sample)
+}
+
+// The collapsed graph's only verdict.
+func (*productionSteeringReadDeadline) Unwrap() error { return context.DeadlineExceeded }
+
+// The production read capture is still finite, but deep and large enough for
+// a complete history replay. A single join wider than the ordinary 128
+// children stays malformed.
+const (
+	productionSteeringDeadlineDepth  = 128
+	productionSteeringDeadlineLeaves = 1 << 16
+	productionSteeringDeadlineWidth  = 128
+	productionSteeringDeadlineSample = 256
+)
+
+// Taken by the same single capture that freezes a production read's original
+// (observeProductionSteeringRead); the original is never opened twice.
+type productionSteeringDeadlineCensus struct {
+	nodes         int
+	deadlines     int
+	cancellations int
+	// The ordinary 512-occurrence or depth-32 bound would have refused.
+	exceeded bool
+	// Any leaf or marker that is not a deadline, timeout or cancellation.
+	other  bool
+	sample string
+}
+
+func (self *productionSteeringDeadlineCensus) noteURL(cause *url.Error) {
+	if self.sample != "" || cause == nil {
+		return
+	}
+	self.sample = cause.Op
+	if parsed, err := url.Parse(cause.URL); err == nil {
+		self.sample += " " + parsed.Redacted()
+	}
+	if len(self.sample) > productionSteeringDeadlineSample {
+		self.sample = self.sample[:productionSteeringDeadlineSample]
+	}
+}
+
+// An already observed subgraph is frozen, so reading its values cannot reach
+// its mutable original.
+func (self *productionSteeringDeadlineCensus) addFrozen(value error) {
+	walk := productionSteeringDeadlineWalk{remaining: productionSteeringDeadlineLeaves, expired: true}
+	if !walk.visit(value, 0) {
+		self.other = true
+		return
+	}
+	self.deadlines += walk.deadlines
+	self.cancellations += walk.cancellations
+	if self.sample == "" {
+		self.sample = walk.sample
+	}
+}
+
+// Only a graph the ordinary bound refused can collapse, and only when every
+// leaf was a deadline or timeout. A cancellation counts only when the bounded
+// operation itself expired, because that expiry canceled its sibling reads.
+func (self *productionSteeringDeadlineCensus) collapses(expired bool) bool {
+	return self.exceeded && !self.other && self.deadlines > 0 && (self.cancellations == 0 || expired)
+}
+
+// Walks an already observed (frozen) graph; it never meets a raw original.
+type productionSteeringDeadlineWalk struct {
+	remaining     int
+	expired       bool
+	deadlines     int
+	cancellations int
+	sample        string
+}
+
+func (self *productionSteeringDeadlineWalk) visit(err error, depth int) bool {
+	err = releaseObservedValue(err)
+	if err == nil || depth > productionSteeringDeadlineDepth || self.remaining <= 0 {
+		return false
+	}
+	self.remaining--
+	value := reflect.ValueOf(err)
+	switch value.Kind() {
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		if value.IsNil() {
+			return false
+		}
+	}
+	switch err {
+	case context.DeadlineExceeded, os.ErrDeadlineExceeded:
+		self.deadlines++
+		return true
+	case context.Canceled:
+		self.cancellations++
+		return self.expired
+	}
+	switch cause := err.(type) {
+	case *os.PathError, *os.LinkError, *TrailFatalError, *releaseObservedHard, *releaseObservedRefusal, *releaseObservedNativeRead:
+		return false
+	case *releaseObservedNetworkRead:
+		network, ok := cause.original.(net.Error)
+		if !ok || !network.Timeout() {
+			return false
+		}
+		self.deadlines++
+		return true
+	case *productionSteeringReadDeadline:
+		self.deadlines += cause.leaves
+		return cause.leaves > 0
+	case *url.Error:
+		if self.sample == "" {
+			census := productionSteeringDeadlineCensus{}
+			census.noteURL(cause)
+			self.sample = census.sample
+		}
+		return self.visit(cause.Err, depth+1)
+	case *net.OpError:
+		return self.visit(cause.Err, depth+1)
+	case *attemptStreamHttpReadError:
+		return self.visit(cause.cause, depth+1)
+	case *attemptStreamHTTPIncompleteError:
+		return self.visit(cause.cause, depth+1)
+	case *chainRpcMissingResponseError:
+		return self.visit(cause.cause, depth+1)
+	case *attemptReplayReadInterruption:
+		return self.visit(cause.cause, depth+1)
+	case *productionSteeringReadWait:
+		return self.visit(cause.cause, depth+1)
+	case *releaseObservedCause:
+		return self.visit(cause.cause, depth+1)
+	case *releaseObservedCauses:
+		return self.visitAll(cause.causes, depth+1)
+	case interface{ Is(error) bool }, interface{ As(any) bool }:
+		return false
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		return self.visitAll(joined.Unwrap(), depth+1)
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return self.visit(wrapped.Unwrap(), depth+1)
+	}
+	if network, ok := err.(net.Error); ok && network.Timeout() {
+		self.deadlines++
+		return true
+	}
+	return false
+}
+
+func (self *productionSteeringDeadlineWalk) visitAll(causes []error, depth int) bool {
+	if len(causes) == 0 || len(causes) > productionSteeringDeadlineWidth {
+		return false
+	}
+	for _, cause := range causes {
+		if !self.visit(cause, depth) {
+			return false
+		}
+	}
+	return true
+}
+
 // The real owner has exhausted its bounded read budget. It can poll again;
 // fresh preparation still has to authenticate all retained intent state first.
 type productionSteeringReadWait struct {
@@ -185,7 +357,9 @@ func (self *ReleaseSteerer) productionRead(ctx context.Context, phase production
 		if err := errors.Join(evidenceReadContextError(ctx), evidenceReadContextError(operation), evidenceReadContextError(attempt)); err != nil {
 			lastErr = errors.Join(lastErr, err)
 		} else {
-			lastErr = observeReleaseError(errors.Join(read(attempt), evidenceReadContextError(attempt)))
+			attemptErr := errors.Join(read(attempt), evidenceReadContextError(attempt))
+			expired := evidenceReadContextError(attempt) == context.DeadlineExceeded && evidenceReadContextError(ctx) == nil
+			lastErr = observeProductionSteeringRead(attemptErr, expired)
 		}
 		attemptCancel()
 		ownerErr := errors.Join(evidenceReadContextError(ctx), evidenceReadContextError(operation))

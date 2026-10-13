@@ -62,7 +62,7 @@ func (self *TunnelTransport) PostVerify(ctx context.Context, hop connect.Id, bod
 	}()
 	select {
 	case <-callCtx.Done():
-		return nil, callCtx.Err()
+		return nil, tunnelVerifyFailure(trailStageLease, callCtx.Err())
 	case <-self.ctx.Done():
 		return nil, self.ctx.Err()
 	case <-self.clientLease:
@@ -82,12 +82,15 @@ func (self *TunnelTransport) PostVerify(ctx context.Context, hop connect.Id, bod
 	}
 	if self.client == nil {
 		if err := self.waitForClientRegistration(callCtx, hop); err != nil {
-			return nil, err
+			return nil, tunnelVerifyFailure(trailStageRegistration, err)
 		}
 	}
+	observation := newTunnelVerifyObservation(self.client, hop)
 	// the trail engine alternates the family each hop tries first, and pins
 	// one after a source-egress-unresolved answer
-	response, err := self.client.postVerify(callCtx, hop, body, hopIpFamilyOf(ctx))
+	response, err := self.client.postVerify(observation.context(callCtx), hop, body, hopIpFamilyOf(ctx))
+	observation.close()
+	err = observation.failure(err)
 	select {
 	case <-self.client.done():
 		err = errors.Join(err, self.retireClient())

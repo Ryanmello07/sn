@@ -170,7 +170,7 @@ func newReleaseSteererV2Context(ctx context.Context, cfg *ReleaseConfig, chain *
 	ema.v2.provisionalEpochGaps = runtime.history != nil && runtime.history.retainedStartup && provisionalClosedNativeInputEnabled(&ownedCfg)
 	ema.v2.historyAdoption = runtime.history.historyAdoption
 	ema.v2.nativeGapBridge = runtime.history.nativeGapBridge
-	self := &ReleaseSteerer{cfg: &ownedCfg, chain: chain, native: native, hotkey: runtime.hotkey, contexts: byNo, operators: operators, intents: intents, headEMA: ema, runtimeV2: runtime}
+	self := &ReleaseSteerer{cfg: &ownedCfg, chain: chain, native: native, hotkey: runtime.hotkey, contexts: byNo, operators: operators, intents: intents, headEMA: ema, runtimeV2: runtime, settlementV2: releaseSettlementV2Addresses(&ownedCfg)}
 	if err := requireReleaseEvidenceV2Runtime(self); err != nil {
 		return nil, err
 	}
@@ -345,8 +345,13 @@ func (self *ReleaseSteerer) submitOnceV2(ctx context.Context) (resultErr error) 
 	preparingProduction := isOwnerRecycleProductionConfig(self.cfg)
 	defer func() {
 		var wait *productionSteeringReadWait
-		if preparingProduction && !errors.As(resultErr, &wait) && retryableProductionSteeringRead(resultErr) && !errors.Is(ctx.Err(), context.Canceled) {
-			resultErr = &productionSteeringReadWait{phase: productionReadPreparation, cause: resultErr}
+		if preparingProduction && resultErr != nil && !errors.As(resultErr, &wait) && !errors.Is(ctx.Err(), context.Canceled) {
+			cause := observeProductionSteeringRead(resultErr, evidenceReadContextError(ctx) == context.DeadlineExceeded)
+			if retryableProductionSteeringRead(cause) {
+				resultErr = &productionSteeringReadWait{phase: productionReadPreparation, cause: cause}
+			} else {
+				resultErr = cause
+			}
 		}
 	}()
 	var nativeHash types.Hash

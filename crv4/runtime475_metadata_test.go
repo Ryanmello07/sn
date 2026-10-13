@@ -139,19 +139,34 @@ func TestRuntime475ValidatorProducerCapability(t *testing.T) {
 }
 
 // Source membership is explicit; neither the version number nor an unknown
-// commit grants native owner or post-migration capability.
+// commit grants native owner or post-migration capability. Each reviewed
+// source declares exactly one spec version, and no other version names it.
 func TestNativeOwnerSourceCatalog(t *testing.T) {
-	for _, source := range []string{NativeOwnerSource470, NativeOwnerSource473, NativeOwnerSource475} {
+	for source, spec := range map[string]uint32{NativeOwnerSource470: 470, NativeOwnerSource473: 473, NativeOwnerSource475: 475, NativeOwnerSource477: 477} {
 		if !ReviewedNativeOwnerSource(source) {
 			t.Fatal("reviewed native owner source refused", source)
 		}
+		if declared, reviewed := ReviewedNativeOwnerSourceSpec(source); !reviewed || declared != spec {
+			t.Fatal("reviewed source lost its own spec version", source, declared)
+		}
+		if named, reviewed := ReviewedNativeOwnerSpecSource(spec); !reviewed || named != source {
+			t.Fatal("spec version lost its reviewed source", spec, named)
+		}
 	}
-	for _, source := range []string{"", strings.Repeat("0", 40), strings.ToUpper(NativeOwnerSource475), NativeOwnerSource475[:39]} {
+	for _, source := range []string{"", strings.Repeat("0", 40), strings.ToUpper(NativeOwnerSource475), NativeOwnerSource475[:39], strings.ToUpper(NativeOwnerSource477), NativeOwnerSource477[:39]} {
 		if ReviewedNativeOwnerSource(source) || ReviewedPostAlphaMigrationSource(source) {
 			t.Fatal("unreviewed source acquired capability", source)
 		}
+		if spec, reviewed := ReviewedNativeOwnerSourceSpec(source); reviewed || spec != 0 {
+			t.Fatal("unreviewed source declared a spec version", source, spec)
+		}
 	}
-	if ReviewedPostAlphaMigrationSource(NativeOwnerSource470) || !ReviewedPostAlphaMigrationSource(NativeOwnerSource473) || !ReviewedPostAlphaMigrationSource(NativeOwnerSource475) {
+	for _, spec := range []uint32{0, 471, 474, 476} {
+		if source, reviewed := ReviewedNativeOwnerSpecSource(spec); reviewed || source != "" {
+			t.Fatal("unreviewed spec version named a source", spec, source)
+		}
+	}
+	if ReviewedPostAlphaMigrationSource(NativeOwnerSource470) || !ReviewedPostAlphaMigrationSource(NativeOwnerSource473) || !ReviewedPostAlphaMigrationSource(NativeOwnerSource475) || !ReviewedPostAlphaMigrationSource(NativeOwnerSource477) {
 		t.Fatal("post-migration source membership changed")
 	}
 }

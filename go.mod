@@ -15,6 +15,7 @@ require (
 	github.com/quic-go/quic-go v0.61.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/urnetwork/connect v0.0.0
+	github.com/urnetwork/glog v0.0.0
 	github.com/urnetwork/sdk v0.0.0
 	github.com/urnetwork/server v0.0.0
 	github.com/vedhavyas/go-subkey/v2 v2.0.0
@@ -169,7 +170,6 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	github.com/urnetwork/glog v0.0.0 // indirect
 	github.com/urnetwork/goidenticons v0.0.0 // indirect
 	github.com/urnetwork/proxy v0.0.0 // indirect
 	github.com/urnetwork/userwireguard v0.0.0 // indirect

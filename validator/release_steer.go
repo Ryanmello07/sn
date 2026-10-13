@@ -41,6 +41,8 @@ type ReleaseSteerer struct {
 
 	sourceRolePredecessorV2 *releaseSourceRoleWitnessV2
 	productionReadHooks     releaseHttpGetRetryHooks
+	// The settlement v2 contracts that move a pool's weight destination (§9.1).
+	settlementV2 SettlementV2Addresses
 
 	// A native-tempo egress window is detached exactly once and then reused for
 	// retries in that epoch. Without this cache, a transient EVM read failure
@@ -95,7 +97,7 @@ func NewReleaseSteerer(cfg *ReleaseConfig, chain *ChainClient, native *crv4.Chai
 	if err != nil {
 		return nil, err
 	}
-	return &ReleaseSteerer{cfg: cfg, chain: chain, native: native, hotkey: hotkey, contexts: byNO, operators: operators, intents: intents, headEMA: headEMA}, nil
+	return &ReleaseSteerer{cfg: cfg, chain: chain, native: native, hotkey: hotkey, contexts: byNO, operators: operators, intents: intents, headEMA: headEMA, settlementV2: releaseSettlementV2Addresses(cfg)}, nil
 }
 
 func (s *ReleaseSteerer) validatePinnedChains(ctx context.Context, snapshot *ReleaseSnapshot, nativeState *crv4.EpochScheduleState, nativeHash types.Hash) error {
@@ -448,11 +450,15 @@ func (s *ReleaseSteerer) gatherPools(ctx context.Context, snapshot *ReleaseSnaps
 		if measurement == nil {
 			return nil, nil, nil, fmt.Errorf("active no_id %d has no isolated measurement context", noID)
 		}
-		uid, found := hotkeyUIDs[op.PoolHotkey]
+		poolHotkey, err := s.chain.releasePoolHotkeyContext(ctx, s.settlementV2, snapshot.BlockNumber, snapshot.BlockHash, snapshot.BlockNumber, snapshot.BlockHash, noID, currentEpoch, op.PoolHotkey)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		uid, found := hotkeyUIDs[poolHotkey]
 		if !found {
 			return nil, nil, nil, fmt.Errorf("active no_id %d pool hotkey has no live UID", noID)
 		}
-		*poolObservations = append(*poolObservations, ReleasePoolMeasurement{NoID: noID, UID: uid, PoolHotkey: releaseHex32(op.PoolHotkey)})
+		*poolObservations = append(*poolObservations, ReleasePoolMeasurement{NoID: noID, UID: uid, PoolHotkey: releaseHex32(poolHotkey)})
 		deposit, err := s.chain.ReleaseEpochDepositAtHashContext(ctx, snapshot.BlockNumber, snapshot.BlockHash, snapshot.Epoch, noIDBig)
 		if err != nil {
 			return nil, nil, nil, err

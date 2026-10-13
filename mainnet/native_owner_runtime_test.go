@@ -25,6 +25,7 @@ var nativeOwnerSuccessorTestSources = []struct {
 }{
 	{source: crv4.NativeOwnerSource473, spec: 473},
 	{source: crv4.NativeOwnerSource475, spec: 475},
+	{source: crv4.NativeOwnerSource477, spec: 477},
 }
 
 // Mutations must be encoded and independently pinned before exercising a reader.

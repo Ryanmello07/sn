@@ -207,7 +207,7 @@ func TestReleaseSemanticCensusRejectsIncompleteSettlementClosureOwners(t *testin
 		t.Fatal("aggregate accepted the original redundant implicit-deadline closure pair")
 	}
 	for _, command := range []string{
-		"go test -parallel=4 -timeout 90m ./... -count=1",
+		releaseGateAggregateNormalCommand,
 		"go test -race -parallel=4 -timeout 90m ./validator -count=1",
 	} {
 		if strings.Count(script, command) != 1 {

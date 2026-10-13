@@ -60,7 +60,7 @@ func TestNativeGapBridgeDecodePinsCanonicalScope(t *testing.T) {
 	encoded := encodeNativeGapBridgeTest(t, bridge)
 	pin := ReleaseMeasurementContentHash(encoded)
 	decoded, err := DecodeReleaseNativeGapBridge(encoded, pin)
-	if err != nil || *decoded != bridge {
+	if err != nil || !reflect.DeepEqual(*decoded, bridge) {
 		t.Fatalf("canonical pinned bridge was refused: %v", err)
 	}
 	for _, wrong := range []string{"", ReleaseMeasurementContentHash([]byte("other")), strings.ToUpper(pin), strings.TrimPrefix(pin, "sha256:"), pin + "0"} {
@@ -117,7 +117,7 @@ func TestNativeGapBridgeReadsOnlyThePinnedRegularFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	bridge, err := ReadReleaseNativeGapBridge(path, pin)
-	if err != nil || *bridge != nativeGapBridgeTest() {
+	if err != nil || !reflect.DeepEqual(*bridge, nativeGapBridgeTest()) {
 		t.Fatalf("pinned regular bridge file was refused: %v", err)
 	}
 	link := filepath.Join(root, "link.json")
@@ -153,7 +153,7 @@ func TestNativeGapBridgeConfigureRequiresItsExactOwner(t *testing.T) {
 	}
 	cfg := owner()
 	source := bridge
-	if err := source.configure(cfg); err != nil || cfg.nativeGapBridge == nil || *cfg.nativeGapBridge != bridge {
+	if err := source.configure(cfg); err != nil || cfg.nativeGapBridge == nil || !reflect.DeepEqual(*cfg.nativeGapBridge, bridge) {
 		t.Fatalf("exact owner refused the bridge: %v", err)
 	}
 	source.FirstNativeEpoch++
@@ -215,7 +215,7 @@ func TestNativeGapBridgeCLIRequiresPathAndPinTogether(t *testing.T) {
 		t.Fatalf("production run with a bridge did not parse: %v", err)
 	}
 	bridge, err := nativeGapBridgeFromOpts(opts)
-	if err != nil || bridge == nil || *bridge != nativeGapBridgeTest() {
+	if err != nil || bridge == nil || !reflect.DeepEqual(*bridge, nativeGapBridgeTest()) {
 		t.Fatalf("pinned bridge flag was refused: %v", err)
 	}
 	plain, err := parseValidatorArgsForTest(t, []string{"run", "--config=/etc/sn-validator/validator.yml"})
@@ -250,7 +250,7 @@ func TestNativeGapBridgeMatchesRetainedHistory(t *testing.T) {
 	bridge := nativeGapBridgeTest()
 	const L, F = nativeGapBridgeTestLast, nativeGapBridgeTestFirst
 	pending, err := bridge.matchHistory(t.Context(), []*SteeringIntent{nativeGapBridgeTestIntent(L-2, "applied"), nativeGapBridgeTestIntent(L-1, "applied"), nativeGapBridgeTestIntent(L, "applied")})
-	if err != nil || pending == nil || pending.crossed || pending.bridge != bridge {
+	if err != nil || pending == nil || pending.crossed || !reflect.DeepEqual(pending.bridge, bridge) {
 		t.Fatalf("current bridged predecessor was refused: %v", err)
 	}
 	for _, next := range []uint64{F, F + 9} {

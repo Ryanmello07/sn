@@ -1754,6 +1754,31 @@ func TestReleaseGatesExerciseContractSenderRoleDiagnostic(t *testing.T) {
 	}
 }
 
+// The reviewed classification of every tracked Go module in the release
+// repositories. A module is live when a released binary or library builds from
+// it; the source freeze verifies each live module tidy and only inventories
+// the others.
+var releaseSourceFreezeLiveModules = []string{
+	"connect", "connect/sctp", "glog", "goidenticons", "proxy", "sdk", "sdk/build",
+	"sdk/cgo", "sdk/js", "server", "sn", "sn/third_party/go-substrate-rpc-client",
+	"sn/third_party/npipe", "userwireguard", "warp", "xops/echo", "xops/router",
+}
+
+var releaseSourceFreezeNonReleaseModules = []string{
+	"connect/tools/flightgate-devices", "connect/vlessinterop", "sdk/cgo/build",
+	"sdk/packaging", "server/connect/sim-latency/baseline",
+}
+
+// One of the freeze script's module arrays, in its declared order.
+func releaseSourceFreezeModuleArray(t *testing.T, script, name string) []string {
+	t.Helper()
+	declarations := regexp.MustCompile(`(?m)^`+name+`=\(([^)]*)\)$`).FindAllStringSubmatch(script, -1)
+	if len(declarations) != 1 {
+		t.Fatalf("source freeze declares %s %d times, want 1", name, len(declarations))
+	}
+	return strings.Fields(declarations[0][1])
+}
+
 // Construct all twelve repositories and every classified Go module without
 // making ordinary tests depend on the developer's current dirty worktree.
 func releaseSourceFreezeFixture(t *testing.T) string {
@@ -1775,11 +1800,7 @@ func releaseSourceFreezeFixture(t *testing.T) string {
 		"goidenticons": "urnetwork/goidenticons", "proxy": "urnetwork/proxy", "userwireguard": "urnetwork/userwireguard",
 		"warp": "urnetwork/warp", "vault": "urnetwork/vault", "xops": "urnetwork/xops", "config": "urnetwork/config",
 	}
-	modules := []string{
-		"connect", "glog", "goidenticons", "proxy", "sdk", "sdk/build",
-		"sdk/cgo", "sdk/js", "server", "server/connect/sim-latency/baseline", "sn",
-		"sn/third_party/npipe", "userwireguard", "warp", "xops/echo", "xops/router",
-	}
+	modules := slices.Concat(releaseSourceFreezeLiveModules, releaseSourceFreezeNonReleaseModules)
 	for repo, branch := range branches {
 		root := filepath.Join(workspace, repo)
 		if err := os.MkdirAll(root, 0o700); err != nil {
@@ -1841,6 +1862,9 @@ func releaseSourceFreezeFixture(t *testing.T) string {
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", gitConfig)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	// Git before 2.32 ignores GIT_CONFIG_GLOBAL; a missing rewrite must then
+	// refuse the GitHub transport rather than fetch from or push to it.
+	t.Setenv("GIT_ALLOW_PROTOCOL", "file")
 	return workspace
 }
 
@@ -2150,13 +2174,110 @@ func TestReleaseSourceFreezeExcludesNonReleaseDatasetQualification(t *testing.T)
 		t.Fatal(err)
 	}
 	script := string(scriptBytes)
-	if !strings.Contains(script, "non_release_modules=(server/connect/sim-latency/baseline)") ||
+	const dataset = "server/connect/sim-latency/baseline"
+	if !slices.Contains(releaseSourceFreezeModuleArray(t, script, "non_release_modules"), dataset) ||
+		slices.Contains(releaseSourceFreezeModuleArray(t, script, "live_modules"), dataset) ||
 		!strings.Contains(script, `"${live_modules[@]}" "${non_release_modules[@]}"`) ||
 		!strings.Contains(script, "GOWORK=off go mod tidy -diff") {
 		t.Fatal("source freeze does not classify the excluded dataset separately from every live tidy module")
 	}
 	if strings.Contains(script, "/verify.sh") || strings.Contains(script, "MANIFEST.sha256") {
 		t.Fatal("source freeze executes qualification for an excluded dataset")
+	}
+}
+
+// The freeze classifies exactly the reviewed census: a module cannot move
+// between the classes, join one or leave one without this review changing. Only
+// the live array reaches the tidy loop.
+func TestReleaseSourceFreezeClassifiesEveryReleaseModule(t *testing.T) {
+	scriptBytes, err := os.ReadFile("../scripts/check-release-source-freeze.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(scriptBytes)
+	if live := releaseSourceFreezeModuleArray(t, script, "live_modules"); !slices.Equal(live, releaseSourceFreezeLiveModules) {
+		t.Errorf("source freeze live modules %q, want %q", live, releaseSourceFreezeLiveModules)
+	}
+	if nonRelease := releaseSourceFreezeModuleArray(t, script, "non_release_modules"); !slices.Equal(nonRelease, releaseSourceFreezeNonReleaseModules) {
+		t.Errorf("source freeze non-release modules %q, want %q", nonRelease, releaseSourceFreezeNonReleaseModules)
+	}
+	for _, module := range releaseSourceFreezeNonReleaseModules {
+		if slices.Contains(releaseSourceFreezeLiveModules, module) {
+			t.Errorf("%s is classified both live and non-release", module)
+		}
+	}
+	if strings.Count(script, `for module in "${live_modules[@]}"; do`) != 1 || strings.Count(script, "go mod tidy") != 1 {
+		t.Error("source freeze does not verify exactly the live modules tidy")
+	}
+}
+
+// Replace a fixture module's go.mod with one that requires its unused parent
+// module, which go mod tidy drops without a network, and publish the commit.
+func releaseSourceFreezeUntidyModule(t *testing.T, workspace, module string) {
+	t.Helper()
+	repo, relative, nested := strings.Cut(module, "/")
+	if !nested {
+		t.Fatalf("%s has no parent module to require", module)
+	}
+	root := filepath.Join(workspace, repo)
+	parent := strings.Repeat("../", strings.Count(relative, "/")+1)
+	manifest := "module example.invalid/" + strings.ReplaceAll(module, "/", "-") + "\n\ngo 1.24\n\nrequire example.invalid/" + repo + " v0.0.0\n\nreplace example.invalid/" + repo + " => " + parent + "\n"
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(relative), "go.mod"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	branch := strings.TrimSpace(string(testGitOutput(t, root, "rev-parse", "--abbrev-ref", "HEAD")))
+	runTestGit(t, root, "commit", "-qam", "leave "+module+" untidy")
+	runTestGit(t, root, "update-ref", "refs/remotes/origin/"+branch, "HEAD")
+	runTestGit(t, root, "push", "-q", "--force", "origin", "HEAD:refs/heads/"+branch)
+}
+
+// The two modules that back a release replacement are live: the freeze refuses
+// either one untidy, at that module, before it reaches the next.
+func TestReleaseSourceFreezeRejectsUntidyReplacementModule(t *testing.T) {
+	for _, module := range []string{"connect/sctp", "sn/third_party/go-substrate-rpc-client"} {
+		t.Run(module, func(t *testing.T) {
+			workspace := releaseSourceFreezeFixture(t)
+			releaseSourceFreezeUntidyModule(t, workspace, module)
+			output, err := exec.Command("../scripts/check-release-source-freeze.sh", workspace).CombinedOutput()
+			if err == nil {
+				t.Fatalf("untidy live module %s was accepted:\n%s", module, output)
+			}
+			repo, _, _ := strings.Cut(module, "/")
+			if !strings.Contains(string(output), "diff current/go.mod tidy/go.mod") ||
+				!strings.Contains(string(output), "-require example.invalid/"+repo+" v0.0.0") {
+				t.Fatalf("untidy live module %s was refused without its tidy difference: %v\n%s", module, err, output)
+			}
+			verified := regexp.MustCompile(`(?m)^verify tidy Go module: (.+)$`).FindAllStringSubmatch(string(output), -1)
+			if len(verified) == 0 || verified[len(verified)-1][1] != module {
+				t.Fatalf("source freeze did not stop at untidy %s:\n%s", module, output)
+			}
+		})
+	}
+}
+
+// A non-release module is inventoried and never verified tidy: the freeze
+// records the complete workspace with every one of them left untidy.
+func TestReleaseSourceFreezeDoesNotTidyNonReleaseModules(t *testing.T) {
+	workspace := releaseSourceFreezeFixture(t)
+	for _, module := range releaseSourceFreezeNonReleaseModules {
+		releaseSourceFreezeUntidyModule(t, workspace, module)
+	}
+	var stderr strings.Builder
+	command := exec.Command("../scripts/check-release-source-freeze.sh", workspace)
+	command.Stderr = &stderr
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("untidy non-release modules were refused: %v\n%s", err, stderr.String())
+	}
+	if lines := strings.Split(strings.TrimSpace(string(output)), "\n"); len(lines) != 12 {
+		t.Fatalf("source freeze recorded %d repositories, want 12: %s", len(lines), output)
+	}
+	verified := []string{}
+	for _, match := range regexp.MustCompile(`(?m)^verify tidy Go module: (.+)$`).FindAllStringSubmatch(stderr.String(), -1) {
+		verified = append(verified, match[1])
+	}
+	if !slices.Equal(verified, releaseSourceFreezeLiveModules) {
+		t.Fatalf("source freeze verified %q tidy, want exactly the live modules %q", verified, releaseSourceFreezeLiveModules)
 	}
 }
 
