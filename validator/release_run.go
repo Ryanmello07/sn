@@ -637,7 +637,7 @@ func startReleaseOperatorWithAdmission(ctx context.Context, cfg *ReleaseConfig, 
 	platformTransport := connect.NewPlatformTransportWithDefaults(ctx, strategy, identityClient.RouteManager(), op.ConnectURL, &connect.ClientAuth{
 		ByJwt: byClientJWT, InstanceId: instanceID, AppVersion: RequireVersion(),
 	})
-	transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: op.APIURL, ConnectUrl: op.ConnectURL, ByClientJwt: api.GetByJwt, SourceClientId: clientID})
+	transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: op.APIURL, ConnectUrl: op.ConnectURL, ByClientJwt: api.GetByJwt, SourceClientId: clientID, Clients: op.Concurrency})
 	refreshSub := api.AddJwtRefreshListener(clientauth.JwtRefreshListenerFunc(func(jwt string) {
 		if err := clientauth.WriteToken(op.ClientJWTFile, jwt); err != nil {
 			releaseDiagnostic(ctx, "operator", "jwt_save_failed", 0, false, 0, releaseDiagnosticFacts{operatorId: op.NoID, operatorKnown: true, cause: releaseDiagnosticHardError})

@@ -275,7 +275,7 @@ func newProductionReleaseOperator(ctx context.Context, cfg *ReleaseConfig, op Op
 		identity := connect.NewClient(ctx, clientId, outOfBand, settings)
 		instanceId := connect.NewId()
 		platform := connect.NewPlatformTransportWithDefaults(ctx, strategy, identity.RouteManager(), op.ConnectURL, &connect.ClientAuth{ByJwt: token, InstanceId: instanceId, AppVersion: RequireVersion()})
-		transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: op.APIURL, ConnectUrl: op.ConnectURL, ByClientJwt: credential, SourceClientId: clientId, CloseReportDomainHash: domainHash})
+		transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: op.APIURL, ConnectUrl: op.ConnectURL, ByClientJwt: credential, SourceClientId: clientId, CloseReportDomainHash: domainHash, Clients: op.Concurrency})
 		withdraw := func(code string) {
 			owner.recoveryRequired.Store(true)
 			owner.ready.Store(false)
