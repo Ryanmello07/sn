@@ -603,6 +603,47 @@ func TestEvmV2OfflineCustodyPreparesFirstAction(t *testing.T) {
 	}
 }
 
+// SV-8, A7: vault2's apply prints the escrow envelope only from the complete,
+// consistent graph. An approval whose action 1 is missing or inconsistent
+// refuses apply before vault2's journal opens, an envelope prints or a route
+// is read.
+func TestEvmV2Vault2ApplyRefusesEscrowFaults(t *testing.T) {
+	escrowCall, escrowValue, edges := "vault2 escrow registration must be one exact uint64 call to the derived vault2", "vault2 escrow registration selector, nonzero burn cap or exact wei funding differs", "settlement v2 actions must be one deployer's consecutive nonces with zero-value CREATEs"
+	escrow := func(f *evmCreateFixture) *evmPhaseAction { return &f.config.Plan.Actions[1] }
+	for _, fault := range []struct {
+		name, expected string
+		edit           func(*evmCreateFixture)
+	}{
+		{"missing", "contract phase lacks exact identity, scope or finite bounds", func(f *evmCreateFixture) {
+			f.config.Plan.Actions = slices.Delete(slices.Clone(f.config.Plan.Actions), 1, 2)
+		}},
+		{"renamed", "contract phase action sequence differs", func(f *evmCreateFixture) { escrow(f).Id = "escrow-register" }},
+		{"target", escrowCall, func(f *evmCreateFixture) {
+			target := crypto.CreateAddress(escrow(f).Sender, 2)
+			escrow(f).To = &target
+		}},
+		{"create", escrowCall, func(f *evmCreateFixture) { escrow(f).To = nil }},
+		{"calldata", escrowCall, func(f *evmCreateFixture) { escrow(f).Data = escrow(f).Data[:len(escrow(f).Data)-2] }},
+		{"selector", escrowValue, func(f *evmCreateFixture) { escrow(f).Data = "0x" + "00" + escrow(f).Data[4:] }},
+		{"zero-cap", escrowValue, func(f *evmCreateFixture) {
+			escrow(f).Data, escrow(f).ValueWei = "0x"+hex.EncodeToString(stabi.NewSTSettlementVault2().PackRegisterEscrow(0)), "0"
+		}},
+		{"value", escrowValue, func(f *evmCreateFixture) { escrow(f).ValueWei = "1999999999" }},
+		{"nonce", edges, func(f *evmCreateFixture) { escrow(f).Nonce = 9 }},
+		{"sender", edges, func(f *evmCreateFixture) { escrow(f).Sender = common.Address{42} }},
+	} {
+		f := newEvmV2Fixture(t)
+		fault.edit(f)
+		f.publishApproval()
+		var stdout, stderr bytes.Buffer
+		code := runMain(f.storage.Context, []string{"bootstrap-contracts", "apply", "--config", f.configPath, "--run-dir", f.config.Plan.RunDirectory, "--accept-plan-hash", f.config.Plan.hash(), "--action", "vault2-create"}, &stdout, &stderr)
+		_, journal := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, "vault2-create.json"))
+		if code != 2 || !strings.Contains(stderr.String(), "contract phase authority: "+fault.expected) || stdout.Len() != 0 || !errors.Is(journal, os.ErrNotExist) || len(f.counts) != 0 {
+			t.Fatalf("%s: apply printed or opened custody: %d %q %q %v", fault.name, code, stdout.String(), stderr.String(), journal)
+		}
+	}
+}
+
 // SV-8: defensive selection refusals. A projection must be the five-action
 // graph and carry its exact predecessors and its prefix's review values.
 func TestEvmV2SelectionRefusesInconsistentProjection(t *testing.T) {
@@ -692,6 +733,11 @@ func TestEvmV2ResultCompletesOnlyAtBinding(t *testing.T) {
 			collateral := (index == 1 || index == 4) && receipt != nil && receipt.Status == 1
 			if collateral != (result.EscrowCollateral != nil) || collateral && *result.EscrowCollateral != (contractEscrowCollateral{DrainRatio: "0"}) {
 				t.Fatalf("action %d escrow collateral report: %+v", index, result.EscrowCollateral)
+			}
+			// A7: only vault2's results carry the escrow registration's envelope.
+			digest, unsigned := f.config.Plan.Actions[1].envelope()
+			if index == 0 && (result.EscrowSigningDigest != digest || result.EscrowUnsignedTransaction != unsigned) || index != 0 && (result.EscrowSigningDigest != "" || result.EscrowUnsignedTransaction != "") {
+				t.Fatalf("action %d escrow envelope: %+v", index, result)
 			}
 		}
 	}

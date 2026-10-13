@@ -835,9 +835,14 @@ journal.
 reveals the escrow hotkey as soon as its CREATE is broadcast. Anyone who
 registers that hotkey first, under their own coldkey, makes `registerEscrow`
 fail for good. So the registration is the deployer's very next nonce, and
-vault2's journal can also hold the registration's original signed bytes:
-import them with `--escrow-signed-transaction` and its pin beside vault2's own
-bytes. `resume --action vault2-create --online --submit` then sends vault2's
+vault2's journal can also hold the registration's original signed bytes.
+Every `vault2-create` result, `apply`'s included, prints the registration's
+envelope, the approved action 1, as `escrow_signing_digest` and
+`escrow_unsigned_transaction` beside vault2's own `signing_digest` and
+`unsigned_transaction`, so the deployer signs both before any send;
+`escrow2-register`'s journal later prints the same bytes as its own. Import
+the registration's signature with `--escrow-signed-transaction` and its pin
+beside vault2's own bytes. `resume --action vault2-create --online --submit` then sends vault2's
 transaction and, right after it in the same invocation, the registration's
 bytes, each after its own durable attempt within the one allowance. The status
 is `submitted-with-escrow-registration-awaiting-canonical-receipts`, or
@@ -902,7 +907,8 @@ the BLAKE2b-256 of its `:code` and metadata, a finalized start block, and the
 route `http://127.0.0.1:<port>` with no TLS pin. The approval covers the
 release from `contracts_gen.go`, the starting gas limits above, a fee cap of
 twice the node's gas price and the recommended demand fee. Each unsigned
-transaction is signed outside the command; vault2 and its escrow registration
+transaction a command prints is signed outside it, the escrow registration's
+from vault2's `apply`; vault2 and its escrow registration
 go out back to back and are sealed into one block, and each later action is
 sealed into its own. Every action completes only after its readback against
 the real precompiles. The custody declaration is the synthetic one of every
@@ -918,4 +924,5 @@ seconds, with the escrow registration in vault2's block and no registration
 collateral on the escrow position; with the claim batcher's creation added as
 the sixth action, it passed in 72 seconds, and in 100 seconds on a loaded
 machine against vault2 after its gas reduction, the batcher read back at its
-own block.
+own block. On 2026-10-13 it passed in 85 seconds signing only the envelopes
+the commands printed, with the same gas.

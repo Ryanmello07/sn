@@ -106,6 +106,15 @@ func (self evmPhaseAction) unsigned() (*types.Transaction, error) {
 	return types.NewTx(&types.DynamicFeeTx{ChainID: big.NewInt(mainnetEvmChainId), Nonce: self.Nonce, To: self.To, Data: data, Value: value, Gas: self.Gas, GasFeeCap: fee, GasTipCap: tip, AccessList: types.AccessList{}}), nil
 }
 
+// The signing digest and exact unsigned bytes an external signer signs. Every
+// journal prints its envelope through this one encoding, so the same approved
+// action always prints the same bytes. Callers render only admitted actions.
+func (self evmPhaseAction) envelope() (string, string) {
+	tx, _ := self.unsigned()
+	raw, _ := tx.MarshalBinary()
+	return types.LatestSignerForChainID(big.NewInt(mainnetEvmChainId)).Hash(tx).Hex(), "0x" + hex.EncodeToString(raw)
+}
+
 // Public signed bytes are decoded, sender-recovered and compared to every
 // approved envelope field. Alternate valid signatures cannot replace custody.
 func (self evmPhaseAction) signed(raw []byte) (*types.Transaction, error) {
