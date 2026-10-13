@@ -1,11 +1,11 @@
 # Settlement v2 launch examples
 
-These are templates for the steps of the settlement v2 launch runbook,
-`VERSION2-LAUNCH.md`, that had no written example. Replace every `<...>`
-placeholder. A placeholder starting `O` and a number names an owner input of
-the runbook's section 3; the others name a value that a step produces or that
-is derived. In JSON and YAML a placeholder is a quoted string, also where a
-number belongs: write numbers bare. Paths follow the runbook's
+These are templates, and one command sequence, for the steps of the settlement
+v2 launch runbook, `VERSION2-LAUNCH.md`, that had none written. Replace every
+`<...>` placeholder. A placeholder starting `O` and a number names an owner
+input of the runbook's section 3; the others name a value that a step produces
+or that is derived. In JSON and YAML a placeholder is a quoted string, also
+where a number belongs: write numbers bare. Paths follow the runbook's
 `/secure/ur-mainnet` layout. A test fills each file's placeholders with
 synthetic values and runs it through the real parser.
 
@@ -13,11 +13,13 @@ synthetic values and runs it through the real parser.
 | --- | --- | --- | --- |
 | [settlement-v2.unsigned.example.json](settlement-v2.unsigned.example.json) | 8.3 | O2 to O12 | `TestSettlementV2LaunchPhaseConfigExample` (SV-8) |
 | [settlement-v2-custody-request.example.json](settlement-v2-custody-request.example.json), [settlement-v2-custody-fence.example.json](settlement-v2-custody-fence.example.json) | 8.2 | O7 (run directory), O11 | `TestSettlementV2LaunchCustodyRequestExample` (SV-8) |
-| [validator-ledger-auditor.example.conf](validator-ledger-auditor.example.conf) | 10 | O10, O15 | `TestSettlementV2LaunchAuditorDropInExample`, `validator/TestSettlementV2LaunchAuditorDropInParses` (VA-3) |
+| [SETTLEMENT-V2-ADOPTION.md](SETTLEMENT-V2-ADOPTION.md), the command sequence | 10 | O14, O15 | `TestSettlementV2AdoptionDocumentIsTheVA6Sequence`, `validator/TestSettlementV2AdoptionDocumentNamesTheLoaderRefusals` (VA-6) |
+| [validator-ledger-auditor.example.conf](validator-ledger-auditor.example.conf) | 10 | O10, O15 | `TestSettlementV2LaunchAuditorDropInExample`, `validator/TestSettlementV2LaunchAuditorDropInParses`, `validator/TestSettlementV2AdoptionDocumentRestartIsTheDropIn` (VA-3) |
 | [claim-daemon-v2.example.yml](claim-daemon-v2.example.yml) | 13 | O2, O11, O22 | `miner/TestClaimV2LaunchConfigExample` (E-5) |
 | [settlement-v2-watcher.example.service](settlement-v2-watcher.example.service), [settlement-v2-watcher.example.timer](settlement-v2-watcher.example.timer) | 13 | O2, O21 | `miner/onchain/TestV2WatcherUnitExample` (CL-1) |
 
-The tests without a directory are in `settlement_v2_launch_examples_test.go`.
+The tests without a directory are in `settlement_v2_launch_examples_test.go`
+and `settlement_v2_adoption_test.go`.
 
 ## Contract phase config (step 8.3)
 
