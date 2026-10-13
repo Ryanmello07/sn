@@ -1288,8 +1288,9 @@ owner, covers every provider client of the network
 - `POST /sn/wallet` takes `{coldkey_ss58, message, signature}` without
   `client_id`. It checks the coldkey's signature over the exact bytes, then
   stores the consent.
-- `POST /sn/wallet/network-consent/history` returns the consent chain. The
-  latest generation is the current consent.
+- `POST /sn/wallet/network-consent/history` returns the consent chain from an
+  independently pinned head (domain, network, head hash and generation). The
+  apps don't use it.
 - Protocol limits (`protocol/network_wallet_mapping.go:56`,
   `protocol/wallet_mapping_consent.go:20`):
   - `through_epoch` is at least `from_epoch`, and the span is at most 65,535
@@ -1324,6 +1325,11 @@ owner, covers every provider client of the network
   `through_epoch` has not passed, so it is in force or starts next epoch.
 - The challenge and submission always use the network credential. A device
   token is refused.
+- `BittensorWalletSession`, which every native app's wallet connector signs
+  through, gains the `consent` purpose and `SetNetworkConsentChallenge`. A
+  consent session signs only a message with the network wallet mapping
+  prefix, verbatim, for the requested coldkey and before the challenge
+  expires.
 
 **Apps** (Apple, Android, Windows, Linux, ur.io), in the settlement v2
 earnings area:
@@ -1357,6 +1363,7 @@ earnings area:
 | CS-8 | Each app changes the wallet and shows that it applies from the next epoch |
 | CS-9 | Each app signs only the server-issued message, verbatim |
 | CS-10 | Every platform and locale has the strings, and the generator reproduces each app's catalog |
+| CS-11 | The wallet session refuses a consent message for a login session, a login challenge for a consent session, a message without the prefix, another coldkey and an expired challenge |
 
 The work is on branch `v2/consent-signing` in sdk, the apps, localizations and
 this repository.
