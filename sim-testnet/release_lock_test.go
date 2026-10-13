@@ -845,8 +845,41 @@ func TestFoundryStorageLayoutHashIsCanonicalAndComplete(t *testing.T) {
 	}
 }
 
+// The lock binds only the sibling source checkouts, but LoadResolved always
+// reads its vault's main/st.yml and wallet public keys, and the observation
+// fences every release repository as a clean checkout. This clean synthetic
+// testnet vault keeps the real sibling vault out of the check.
+func releaseLockCheckoutVault(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "main"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	values := strings.Join([]string{
+		"testnet-netuid: 7",
+		"testnet-wallet: vault-wallet:wallets/absent",
+		"testnet-wallet-password: vault-file:wallets/absent.password",
+		"testnet-chain-id: 945",
+		"testnet-authority: 127.0.0.1:9944",
+		"testnet-minio-hostname: 127.0.0.1",
+		"testnet-operator-api-origins: [https://no1.example, https://no2.example]",
+		"testnet-spending-limit-tao-rao: 200000000000",
+		"testnet-spending-limit-alpha-rao: 20000000000000",
+		`testnet-spending-limit-evm-gas-wei: "160000000000000000000"`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(root, "main", "st.yml"), []byte(values), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runTestGit(t, root, "init", "-q")
+	runTestGit(t, root, "config", "user.email", "sim-testnet@example.invalid")
+	runTestGit(t, root, "config", "user.name", "sim-testnet")
+	runTestGit(t, root, "add", ".")
+	runTestGit(t, root, "commit", "-qm", "synthetic testnet vault")
+	return root
+}
+
 func TestReleaseLockMatchesCheckout(t *testing.T) {
-	cfg, err := LoadResolved(LoadOptions{ConfigPath: "testnet.yml", RequireSecrets: false})
+	cfg, err := LoadResolved(LoadOptions{ConfigPath: "testnet.yml", VaultRepo: releaseLockCheckoutVault(t), RequireSecrets: false})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1841,6 +1841,9 @@ func releaseSourceFreezeFixture(t *testing.T) string {
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", gitConfig)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	// Git before 2.32 ignores GIT_CONFIG_GLOBAL; a missing rewrite must then
+	// refuse the GitHub transport rather than fetch from or push to it.
+	t.Setenv("GIT_ALLOW_PROTOCOL", "file")
 	return workspace
 }
 
