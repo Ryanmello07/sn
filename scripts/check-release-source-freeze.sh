@@ -5,8 +5,13 @@ sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="${1:-$(dirname "$sn_repo")}"
 
 release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config)
+# A module is live when a released binary or library builds from it: a release
+# build's main module, or a module whose packages one links. connect/sctp backs
+# every github.com/pion/sctp replacement, and SN's substrate RPC fork backs
+# SN's and the server's replacement of the centrifuge client.
 live_modules=(
   connect
+  connect/sctp
   glog
   goidenticons
   proxy
@@ -16,6 +21,7 @@ live_modules=(
   sdk/js
   server
   sn
+  sn/third_party/go-substrate-rpc-client
   sn/third_party/npipe
   userwireguard
   warp
@@ -23,10 +29,22 @@ live_modules=(
   xops/router
 )
 
-# This separate dataset module is outside SN release qualification. Its module
-# boundary keeps preserved analysis inputs out of executable server packages.
-# Repository provenance and the complete module inventory still include it.
-non_release_modules=(server/connect/sim-latency/baseline)
+# These modules are outside SN release qualification: no release build links
+# or requires them. Repository provenance and the complete module inventory
+# still include them.
+# - connect/tools/flightgate-devices drives the physical two-phone rig.
+# - connect/vlessinterop tests the VLESS client against Xray-core.
+# - sdk/cgo/build holds native build output and no package.
+# - sdk/packaging builds and publishes the language packages around sdk/cgo.
+# - server/connect/sim-latency/baseline is a separate dataset. Its module
+#   boundary keeps preserved analysis inputs out of executable server packages.
+non_release_modules=(
+  connect/tools/flightgate-devices
+  connect/vlessinterop
+  sdk/cgo/build
+  sdk/packaging
+  server/connect/sim-latency/baseline
+)
 
 expected_upstream() {
   case "$1" in
