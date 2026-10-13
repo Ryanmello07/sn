@@ -261,7 +261,18 @@ func registerE2EProvider(ctx context.Context, id connect.Id, egress []netip.Addr
 }
 
 // A validator transport whose registered clients reach one provider and whose
-// hop tuns resolve the API name through the test DoH server.
+// hop tuns resolve the API name through the test DoH server, on the host.
+//
+// One transport is one validator identity, and the tests give each trail its
+// own, as a validator's consecutive trails go through providers picked from
+// the whole fleet. An identity's next attempt through the provider it has just
+// used opens new transfer sequences there once the attempt before has closed
+// its contracts (tunnelHopContracts), and on a carrier the provider does not
+// know to be reliable, as these in-memory routes, it takes the new sequence
+// only after its first packet is resent, a second or more later. That wait is
+// no family's: a production hop resolves the API name through its tunnel and
+// so waits before its family race starts, while here, resolving on the host,
+// it would hold both families' first packets back together.
 func newE2ETransport(t testing.TB, ctx context.Context, api *e2eApi, doh *httptest.Server, provider *e2eProvider, validatorId connect.Id) *validator.TunnelTransport {
 	t.Helper()
 	strategySettings := connect.DefaultClientStrategySettings()
@@ -391,11 +402,11 @@ func TestDualStackHopsEndToEnd(t *testing.T) {
 
 		const requests = 4
 		for _, provider := range []*e2eProvider{dualStack, ipv4Only} {
-			transport := newE2ETransport(t, ctx, api, doh, provider, validatorId)
 			before := len(api.verifySources())
-			// the SEEDs of consecutive trails, which alternate their first family
+			// the SEEDs of consecutive trails, which alternate their first
+			// family, each on its own identity (newE2ETransport)
 			for trail := range uint64(requests) {
-				e2eSeed(t, ctx, transport, provider, trail, e2eSeedBody(t, validatorId, vsk))
+				e2eSeed(t, ctx, newE2ETransport(t, ctx, api, doh, provider, validatorId), provider, trail, e2eSeedBody(t, validatorId, vsk))
 			}
 			landed := api.verifySources()[before:]
 			wantSources := []netip.Addr{dualStackV4, dualStackV6, dualStackV4, dualStackV6}
@@ -529,7 +540,6 @@ func testIndexedFamilyHops(
 				provider.beforeDial = beforeDial(e2eFamily(legacy.indexed))
 			}
 			registerE2EProvider(ctx, provider.id, []netip.Addr{legacy.indexed}, settings)
-			transport := newE2ETransport(t, ctx, api, doh, provider, validatorId)
 			unindexed := v6
 			if legacy.indexed == v6 {
 				unindexed = legacy.v4
@@ -538,7 +548,9 @@ func testIndexedFamilyHops(
 			for trail := range uint64(4) {
 				before := len(api.verifySources())
 				dialsBefore := len(provider.recordedDials())
-				e2eSeed(t, ctx, transport, provider, trail, e2eSeedBody(t, validatorId, vsk))
+				// each trail on its own identity (newE2ETransport); a step's
+				// resend rides the identity of its first attempt
+				e2eSeed(t, ctx, newE2ETransport(t, ctx, api, doh, provider, validatorId), provider, trail, e2eSeedBody(t, validatorId, vsk))
 				landed := api.verifySources()[before:]
 				want := sources(trail, validator.E2EHopFirstIpFamily(trail, 0) == e2eFamily(legacy.indexed), legacy.indexed, unindexed)
 				if fmt.Sprint(landed) != fmt.Sprint(want) {
