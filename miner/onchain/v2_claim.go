@@ -153,6 +153,11 @@ func cmdV2Claim(ctx context.Context, opts docopt.Opts) error {
 		return err
 	}
 	defer client.Close()
+	if batcher != nil {
+		if err := VerifyClaimBatcher(ctx, client, *batcher); err != nil {
+			return fmt.Errorf("--batch: %w", err)
+		}
+	}
 
 	accounts, err := fetchV2Accounts(ctx, api, coldkey)
 	if err != nil {
@@ -334,29 +339,30 @@ func sendV2Claim(ctx context.Context, sender *v2Sender, reader *v2Reader, claim 
 	return nil
 }
 
-// sendV2Batch claims two or more accounts through the claim batcher, in as
-// few transactions as the most gas one may name allows. Each round
-// preflights every claim left alone (PrepareClaimBatch): a refusal is done
-// when another sender claimed first and otherwise fails that account alone.
-// A claim the batch did not attempt goes in the next round; a last one goes
+// sendV2Batch claims two or more accounts through the claim batcher, in
+// rounds of at most ClaimBatchMaxClaims claims. Each round preflights its
+// claims alone (PrepareClaimBatch): a refusal is done when another sender
+// claimed first and otherwise fails that account alone. A claim the batch did
+// not attempt, or that did not fit, goes in a later round; a last one goes
 // alone to vault2.
 func sendV2Batch(ctx context.Context, sender *v2Sender, reader *v2Reader, batcher common.Address, claims []*v2Claim) error {
 	var failures []error
 	for len(claims) > 1 {
-		items := make([]stabi.STClaimBatcherClaim, len(claims))
-		for i, claim := range claims {
+		round, later := claims[:min(len(claims), ClaimBatchMaxClaims)], claims[min(len(claims), ClaimBatchMaxClaims):]
+		items := make([]stabi.STClaimBatcherClaim, len(round))
+		for i, claim := range round {
 			items[i] = claim.item()
 		}
 		refusals, batch, err := PrepareClaimBatch(ctx, sender.client, sender.from, batcher, sender.vault, items)
 		var passed []*v2Claim
 		for i, refusal := range refusals {
 			if refusal == nil {
-				passed = append(passed, claims[i])
+				passed = append(passed, round[i])
 				continue
 			}
-			refusal = fmt.Errorf("pool %d account %d: preflight: %w", claims[i].account.NoID, claims[i].account.Index, refusal)
+			refusal = fmt.Errorf("pool %d account %d: preflight: %w", round[i].account.NoID, round[i].account.Index, refusal)
 			if v2Reverted(refusal) {
-				done, rerr := claims[i].done(ctx, reader)
+				done, rerr := round[i].done(ctx, reader)
 				if rerr == nil && done {
 					continue
 				}
@@ -368,12 +374,15 @@ func sendV2Batch(ctx context.Context, sender *v2Sender, reader *v2Reader, batche
 			return errors.Join(append(failures, err)...)
 		}
 		if batch == nil {
-			claims = passed
-			break
+			claims = append(passed, later...)
+			if len(later) == 0 {
+				break
+			}
+			continue
 		}
 		inBatch := make([]*v2Claim, len(batch.Items))
 		for i, index := range batch.Items {
-			inBatch[i] = claims[index]
+			inBatch[i] = round[index]
 		}
 		receipt, err := runTx(ctx, sender.client, sender.chainID, txRequest{contract: batcher, from: sender.from, key: sender.key, calldata: batch.Calldata, gasLimit: batch.GasLimit, dryRun: sender.dryRun}, func(uint64, error) {
 			fmt.Printf("settlement v2 batch claim intent\n")
@@ -414,7 +423,7 @@ func sendV2Batch(ctx context.Context, sender *v2Sender, reader *v2Reader, batche
 		if len(rest) == len(inBatch) {
 			return errors.Join(append(failures, fmt.Errorf("tx %s attempted none of its %d claims", receipt.TxHash, len(inBatch)))...)
 		}
-		claims = append(rest, passed[len(inBatch):]...)
+		claims = append(append(rest, passed[len(inBatch):]...), later...)
 	}
 	for _, claim := range claims {
 		if err := sendV2Claim(ctx, sender, reader, claim); err != nil {

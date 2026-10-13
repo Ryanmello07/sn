@@ -318,15 +318,19 @@ func (self *claimDaemonV2) submit(ctx context.Context, units []*ClaimUnitV2, to 
 }
 
 // A batch claims two or more due accounts in one transaction through the
-// claim batcher (§10.2). Each unit is verified alone against its finalized
-// root, as for a single claim, then preflighted alone; a refused preflight is
-// a refused claim (A6). The units the batch holds are signed together, the
-// rest of the due units wait for the next pass, and a single passing unit
-// is claimed alone.
+// claim batcher (§10.2), at most onchain.ClaimBatchMaxClaims, since every
+// unit keeps the batch's signed bytes. Each unit is verified alone against
+// its finalized root, as for a single claim, then preflighted alone; a
+// refused preflight is a refused claim (A6). The units the batch holds are
+// signed together, the rest of the due units wait for the next pass, and a
+// single passing unit is claimed alone.
 func (self *claimDaemonV2) processBatch(ctx context.Context, keys []string) error {
 	var units []*ClaimUnitV2
 	var accounts []*claimAccountV2
 	for _, key := range keys {
+		if len(units) == onchain.ClaimBatchMaxClaims {
+			break
+		}
 		unit, account := self.queue.Units[key], self.accounts[key]
 		claimed, err := readClaimedV2(ctx, self.cfg, account)
 		if err != nil {
@@ -357,7 +361,7 @@ func (self *claimDaemonV2) processBatch(ctx context.Context, keys []string) erro
 	signed := make([]*ClaimUnitV2, len(batch.Items))
 	for i, index := range batch.Items {
 		unit := units[index]
-		unit.Status, unit.Attempts, unit.NextRetryAt, unit.LastError, unit.UpdatedAt = "submitting", unit.Attempts+1, "", "", self.stamp()
+		unit.Status, unit.NextRetryAt, unit.LastError, unit.UpdatedAt = "submitting", "", "", self.stamp()
 		signed[i] = unit
 	}
 	if err := self.store.save(self.queue); err != nil {
@@ -382,14 +386,19 @@ func (self *claimDaemonV2) processBatch(ctx context.Context, keys []string) erro
 }
 
 // Preflights each unit's claim alone and sizes the batch from the first RPC
-// endpoint that serves the configured chain. A refused preflight settles its
-// unit as a refused claim; without a batch, a single passing unit is claimed
-// alone. Every unit retries when nothing could be preflighted.
+// endpoint that serves the configured chain. Each unit counts an attempt, as
+// a lone claim does before its preflight, so failures back off alike. A
+// refused preflight settles its unit as a refused claim; without a batch, a
+// single passing unit is claimed alone. Every unit retries when nothing
+// could be preflighted.
 func (self *claimDaemonV2) prepareBatch(ctx context.Context, units []*ClaimUnitV2, accounts []*claimAccountV2) (*onchain.ClaimBatch, error) {
+	for _, unit := range units {
+		unit.Attempts++
+	}
 	retryAll := func(message string) (*onchain.ClaimBatch, error) {
 		var err error
 		for _, unit := range units {
-			err = errors.Join(err, self.retry(unit, time.Minute, message))
+			err = errors.Join(err, self.retry(unit, claimRetry(unit.Attempts), message))
 		}
 		return nil, err
 	}
@@ -419,16 +428,29 @@ func (self *claimDaemonV2) prepareBatch(ctx context.Context, units []*ClaimUnitV
 	}
 	if err != nil {
 		for _, i := range passed {
-			if saveErr := self.retry(units[i], time.Minute, "claim batch is not ready: "+err.Error()); saveErr != nil {
+			if saveErr := self.retry(units[i], claimRetry(units[i].Attempts), "claim batch is not ready: "+err.Error()); saveErr != nil {
 				return nil, saveErr
 			}
 		}
 		return nil, nil
 	}
 	if batch == nil && len(passed) == 1 {
+		// Claimed alone, the unit counts its attempt there.
+		units[passed[0]].Attempts--
 		return nil, self.process(ctx, units[passed[0]], accounts[passed[0]])
 	}
 	return batch, nil
+}
+
+// A configured batcher must be the release claim batcher: any other address
+// would refuse or misreport every batch. The daemon checks it once at start.
+func verifyClaimV2Batcher(ctx context.Context, cfg *ClaimDaemonV2Config) error {
+	client, err := dialClaimV2(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("claim batcher %s: %w", cfg.Batcher, err)
+	}
+	defer client.Close()
+	return onchain.VerifyClaimBatcher(ctx, client, common.HexToAddress(cfg.Batcher))
 }
 
 // The units of one batch settle together from its finalized receipt: a paid
@@ -574,6 +596,13 @@ func (self *claimDaemonV2) run(ctx context.Context, snapshots <-chan map[string]
 // The caller retains the store until this returns; the reader is joined first.
 func runClaimDaemonV2WithStore(ctx context.Context, cfg *ClaimDaemonV2Config, store *claimQueueV2Store, admission *claimAdmission, threshold uint64, demand bool) error {
 	defer admission.forget(cfg.StateDir)
+	if cfg.Batcher != "" {
+		if err := verifyClaimV2Batcher(ctx, cfg); err != nil && ctx.Err() == nil {
+			return err
+		} else if err != nil {
+			return nil
+		}
+	}
 	queue, err := store.load()
 	if err != nil {
 		return err

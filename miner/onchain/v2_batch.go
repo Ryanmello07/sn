@@ -9,6 +9,7 @@ package onchain
 // eth_call, whose answer counts the items attempted.
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/urfoundation/sn/stabi"
@@ -26,8 +28,8 @@ import (
 // ClaimBatchGasPerClaim is the default gas cap of each batched claim. A claim
 // uses 170,000 to 187,000 gas, but the runtime admits its staking-precompile
 // transfer only if the gas forwarded covers the transfer's declared weight:
-// at depth 29 on runtime 475 a single claim's least gas limit was 2,443,929,
-// and eth_estimateGas, whose search stops within 10%, gave up to 2,573,957
+// at depth 29 on runtime 475 a single claim's least gas limit was 2,443,953,
+// and eth_estimateGas, whose search stops within 10%, gave up to 2,574,029
 // (R-6, R-7). Senders cap each item at this or at the largest single-claim
 // estimate of the batch, whichever is higher.
 const ClaimBatchGasPerClaim uint64 = 2_600_000
@@ -40,20 +42,66 @@ const ClaimBatchGasPerClaim uint64 = 2_600_000
 // gas limit, although eth_getBlockByNumber reports 75,000,000.
 const ClaimBatchMaxGas uint64 = 64_998_500
 
+// ClaimBatchMaxClaims is the most claims the claim tools put in one batch.
+// The daemon keeps a batch's signed transaction in every unit it claims, so
+// its queue grows with the square of the batch: at depth 29, 2,112 bytes of
+// calldata a claim, 62 claims fill the queue's 16 MiB durable head and 32
+// about half of it. R-7 measured 147,740 gas a claim in a batch of 32,
+// against 146,435 in the 418 one transaction holds.
+const ClaimBatchMaxClaims = 32
+
+// claimBatchGasMargin is the gas the claim tools keep below the most a
+// transaction may name, against a change of the runtime constants that set it.
+const claimBatchGasMargin = 10_000
+
 // claimBatchTolerance is how close, in gas, SizeClaimBatch comes to the least
 // gas limit at which a batch attempts every item.
 const claimBatchTolerance = 10_000
+
+// claimBatchCeiling is the most gas the claim tools name for a batch when the
+// latest block reports blockGasLimit. The pool takes a transaction that names
+// at most the normal dispatch class's extrinsic weight limit, 13/15 of the
+// block's, less 1,500 gas of extension weight (R-7: 64,998,500 of 75,000,000,
+// exact to the gas), and at most ClaimBatchMaxGas; the tools keep
+// claimBatchGasMargin below that.
+func claimBatchCeiling(blockGasLimit uint64) uint64 {
+	normal := blockGasLimit/15*13 + blockGasLimit%15*13/15
+	takes := min(ClaimBatchMaxGas, normal-min(normal, 1_500))
+	return takes - min(takes, claimBatchGasMargin)
+}
+
+// VerifyClaimBatcher refuses a batcher address whose code is not exactly the
+// release claim batcher's, ClaimBatcherRuntime: any other would refuse or
+// misreport every batch.
+func VerifyClaimBatcher(ctx context.Context, client *ethclient.Client, batcher common.Address) error {
+	code, err := retryOnchainRead(ctx, func(ctx context.Context) ([]byte, error) {
+		cctx, cancel := context.WithTimeout(ctx, callTimeout)
+		defer cancel()
+		return client.CodeAt(cctx, batcher, nil)
+	})
+	if err != nil {
+		return fmt.Errorf("claim batcher %s code: %w", batcher.Hex(), err)
+	}
+	if len(code) == 0 {
+		return fmt.Errorf("claim batcher %s has no code", batcher.Hex())
+	}
+	if want := common.FromHex(ClaimBatcherRuntime); !bytes.Equal(code, want) {
+		return fmt.Errorf("%s is not the release claim batcher: its code hash is %s, the release runtime's %s", batcher.Hex(), crypto.Keccak256Hash(code).Hex(), crypto.Keccak256Hash(want).Hex())
+	}
+	return nil
+}
 
 // claimBatcher packs and decodes STClaimBatcher calls and events.
 var claimBatcher = stabi.NewSTClaimBatcher()
 
 // SizeClaimBatch sizes a batch of items for from to send through batcher:
-// how many of them, from the first, a transaction offering them all attempts
-// at the most gas it may name, the block gas limit or ClaimBatchMaxGas (a
-// prefix that surely fits once the others' calldata is gone, and the others
-// wait for a later batch), the calldata claiming those, and the gas limit to
-// send it with: the least within claimBatchTolerance at which an eth_call
-// attempts them all, plus the 20% headroom of every estimate, up to that most.
+// how many of them, from the first and at most ClaimBatchMaxClaims, a
+// transaction offering them attempts at the most gas the tools name,
+// claimBatchCeiling of the latest block's gas limit (a prefix that surely
+// fits once the others' calldata is gone, and the others wait for a later
+// batch), the calldata claiming those, and the gas limit to send it with: the
+// least within claimBatchTolerance at which an eth_call attempts them all,
+// plus the 20% headroom of every estimate, up to that most.
 func SizeClaimBatch(ctx context.Context, client *ethclient.Client, from, batcher, vault common.Address, items []stabi.STClaimBatcherClaim, gasPerClaim uint64) (int, []byte, uint64, error) {
 	// Only the gas limit is read: Subtensor's EVM headers are not geth's.
 	var latest struct {
@@ -69,7 +117,8 @@ func SizeClaimBatch(ctx context.Context, client *ethclient.Client, from, batcher
 	if latest.GasLimit == nil {
 		return 0, nil, 0, errors.New("block gas limit: the latest block names none")
 	}
-	ceiling := min(uint64(*latest.GasLimit), ClaimBatchMaxGas)
+	ceiling := claimBatchCeiling(uint64(*latest.GasLimit))
+	items = items[:min(len(items), ClaimBatchMaxClaims)]
 	attempted := func(data []byte, gas uint64) (uint64, error) {
 		out, err := retryOnchainRead(ctx, func(ctx context.Context) ([]byte, error) {
 			cctx, cancel := context.WithTimeout(ctx, callTimeout)

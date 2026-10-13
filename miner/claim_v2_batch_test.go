@@ -5,10 +5,15 @@
 package miner
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"slices"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -22,6 +27,7 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/urfoundation/sn/internal/durablehead"
+	"github.com/urfoundation/sn/merkle"
 	"github.com/urfoundation/sn/miner/onchain"
 	"github.com/urfoundation/sn/stabi"
 )
@@ -59,6 +65,26 @@ type claimV2TestBatcherModel struct {
 	refuseCalls bool
 	dropVault   bool
 	caller      *common.Address
+	// code, when set, is the batcher address's code in place of the
+	// release runtime.
+	code []byte
+}
+
+// answerCode answers eth_getCode: the release claim batcher's runtime at the
+// model's address, or its code knob, and no code elsewhere.
+func (self *claimV2TestChain) answerCode(params []json.RawMessage) (any, *claimV2TestRPCError) {
+	var address common.Address
+	if len(params) != 2 || json.Unmarshal(params[0], &address) != nil {
+		self.t.Errorf("eth_getCode request: %s", params)
+	}
+	self.calls = append(self.calls, "code")
+	if self.batch == nil || address != self.batch.address {
+		return "0x", nil
+	}
+	if self.batch.code != nil {
+		return hexutil.Encode(self.batch.code), nil
+	}
+	return onchain.ClaimBatcherRuntime, nil
 }
 
 // answerBatch answers eth_call and eth_estimateGas of claimMany: the items
@@ -434,7 +460,7 @@ func TestClaimV2BatchPreflightsEachClaim(t *testing.T) {
 		t.Fatalf("preflights: %d sends", len(sends))
 	}
 	daemon.requireBatch(sends[0], 2, daemon.batchCalldata(1, 2))
-	daemon.requireOpen(3, 0, time.Minute, "claim preflight: execution reverted: runtime transfer refusal")
+	daemon.requireOpen(3, 1, time.Minute, "claim preflight: execution reverted: runtime transfer refusal")
 
 	chain, daemon = newClaimV2BatchTest(t)
 	chain.with(func() {
@@ -458,7 +484,7 @@ func TestClaimV2BatchPreflightsEachClaim(t *testing.T) {
 		t.Fatal("refused preflights sent a batch")
 	}
 	for _, index := range []uint64{1, 2, 3} {
-		daemon.requireOpen(index, 0, time.Minute, "claim preflight: ")
+		daemon.requireOpen(index, 1, time.Minute, "claim preflight: ")
 	}
 }
 
@@ -523,7 +549,7 @@ func TestClaimV2BatchNotReadyRetries(t *testing.T) {
 	}
 	daemon.step(false)
 	for _, index := range []uint64{1, 2, 3} {
-		daemon.requireOpen(index, 0, time.Minute, "claim batch is not ready: key_file: ")
+		daemon.requireOpen(index, 1, time.Minute, "claim batch is not ready: key_file: ")
 	}
 
 	chain, daemon = newClaimV2BatchTest(t)
@@ -537,7 +563,7 @@ func TestClaimV2BatchNotReadyRetries(t *testing.T) {
 	})
 	daemon.step(false)
 	for _, index := range []uint64{1, 2, 3} {
-		daemon.requireOpen(index, 0, time.Minute, "claim batch is not ready: "+chain.server.URL+": chain id ")
+		daemon.requireOpen(index, 1, time.Minute, "claim batch is not ready: "+chain.server.URL+": chain id ")
 	}
 
 	chain, daemon = newClaimV2BatchTest(t)
@@ -546,9 +572,9 @@ func TestClaimV2BatchNotReadyRetries(t *testing.T) {
 	if len(chain.sent()) != 0 {
 		t.Fatal("an unsized batch was sent")
 	}
-	daemon.requireOpen(1, 0, time.Minute, "claim batch is not ready: batch preflight at ")
-	daemon.requireOpen(2, 0, time.Minute, "claim batch is not ready: batch preflight at ")
-	daemon.requireOpen(3, 0, time.Minute, "claim preflight: ")
+	daemon.requireOpen(1, 1, time.Minute, "claim batch is not ready: batch preflight at ")
+	daemon.requireOpen(2, 1, time.Minute, "claim batch is not ready: batch preflight at ")
+	daemon.requireOpen(3, 1, time.Minute, "claim preflight: ")
 	_ = chain
 }
 
@@ -845,5 +871,163 @@ func TestClaimV2BatchStorageFailureStops(t *testing.T) {
 				t.Fatalf("storage failure: %v", err)
 			}
 		})
+	}
+}
+
+// A pool whose accounts 1..due all belong to the configured coldkey, each
+// with 5 α to claim, and a daemon claiming through the batcher.
+func newClaimV2ManyDueTest(t *testing.T, due int) (*claimV2TestChain, *claimV2TestDaemon) {
+	t.Helper()
+	chain := newClaimV2TestChain(t)
+	chain.batch = &claimV2TestBatcherModel{address: common.HexToAddress(claimV2TestBatcher)}
+	accounts := []merkle.LedgerAccount{claimV2TestAccount(claimV2TestOther, 1)}
+	for range due {
+		accounts = append(accounts, claimV2TestAccount(claimV2TestColdkey, 5))
+	}
+	chain.finalize(accounts...)
+	daemon := newClaimV2TestDaemon(t, chain, ClaimV2DefaultThresholdRao)
+	daemon.cfg.Batcher = claimV2TestBatcher
+	return chain, daemon
+}
+
+// CL-5 (review of 77f86ead): every unit of a batch keeps the batch's whole
+// signed transaction, so a batch of n units puts n copies of n claims in the
+// queue, whose durable head holds 16 MiB; at depth 29 about 62 claims fill
+// it, and a batch of all of them could never be checkpointed, so each pass
+// would prepare it again and nothing would be sent. The daemon batches at
+// most onchain.ClaimBatchMaxClaims due units, in due order: 120 due accounts
+// go out as batches of 32, 32, 32 and 24, and every one is paid.
+func TestClaimV2BatchHoldsAtMostTheCap(t *testing.T) {
+	const due = 120
+	chain, daemon := newClaimV2ManyDueTest(t, due)
+	// Due units of equal deadlines are in key order, which orders their
+	// indexes as text.
+	order := make([]string, due)
+	for i := range order {
+		order[i] = fmt.Sprint(i + 1)
+	}
+	sort.Strings(order)
+	for pass, size := range []int{32, 32, 32, 24} {
+		daemon.step(false)
+		sends := chain.sent()
+		if len(sends) != pass+1 {
+			unit := daemon.durable(1)
+			t.Fatalf("pass %d sent %d transactions; unit 1: %+v", pass+1, len(sends), unit)
+		}
+		indexes := make([]uint64, size)
+		for i := range indexes {
+			index, err := strconv.ParseUint(order[32*pass+i], 10, 64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			indexes[i] = index
+		}
+		daemon.requireBatch(sends[pass], uint64(size), daemon.batchCalldata(indexes...))
+	}
+	for index := uint64(1); index <= due; index++ {
+		daemon.requireIdle(index, 5)
+	}
+}
+
+// CL-5, §10.1 Refusals (review of 77f86ead): a unit refused at a batch's
+// preflight counts its attempt as a claim refused alone does, so the backoff
+// doubles alike, from a minute to an hour; uncounted, two or more refused
+// units would be preflighted every minute for as long as the runtime
+// refuses them.
+func TestClaimV2BatchPreflightRefusalsBackOff(t *testing.T) {
+	delays := func(batcher string) []time.Duration {
+		chain, daemon := newClaimV2BatchTest(t)
+		daemon.cfg.Batcher = batcher
+		chain.with(func() { chain.refuseClaims = true })
+		var delays []time.Duration
+		for range 5 {
+			// One poll handles one lone claim, so step until unit 1 was refused again.
+			for range 3 {
+				daemon.step(false)
+			}
+			unit := daemon.durable(1)
+			next, err := time.Parse(time.RFC3339Nano, unit.NextRetryAt)
+			if err != nil || unit.Status != "open" || !strings.Contains(unit.LastError, "runtime transfer refusal") {
+				t.Fatalf("refused unit: %+v", unit)
+			}
+			delays = append(delays, next.Sub(daemon.clock))
+			daemon.advance(next.Sub(daemon.clock))
+		}
+		if len(chain.sent()) != 0 {
+			t.Fatalf("a refused claim was sent")
+		}
+		return delays
+	}
+	alone, batched := delays(""), delays(claimV2TestBatcher)
+	want := []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 16 * time.Minute}
+	if !slices.Equal(alone, want) || !slices.Equal(batched, want) {
+		t.Fatalf("retry delays after each refused preflight: alone %v, with a batcher %v, want %v", alone, batched, want)
+	}
+}
+
+// CL-5: the daemon refuses to start with a batcher whose code is not exactly
+// the release claim batcher's, which would refuse or misreport every batch,
+// and with one whose code it cannot read; it starts with the release code.
+func TestClaimV2DaemonRefusesAnotherBatcher(t *testing.T) {
+	batcher := common.HexToAddress(claimV2TestBatcher).Hex()
+	other := []byte{0x60, 0x00}
+	for _, test := range []struct {
+		name   string
+		mutate func(*claimV2TestChain)
+		want   string
+	}{
+		{"no code", func(chain *claimV2TestChain) { chain.batch.code = []byte{} }, "claim batcher " + batcher + " has no code"},
+		{"another contract", func(chain *claimV2TestChain) { chain.batch.code = other }, batcher + " is not the release claim batcher: its code hash is " + crypto.Keccak256Hash(other).Hex() +
+			", the release runtime's " + crypto.Keccak256Hash(common.FromHex(onchain.ClaimBatcherRuntime)).Hex()},
+		{"unread code", func(chain *claimV2TestChain) { chain.failMethod = "eth_getCode" }, "claim batcher " + batcher + " code: synthetic eth_getCode refusal"},
+		{"no endpoint", func(chain *claimV2TestChain) { chain.failMethod = "eth_chainId" }, "claim batcher " + claimV2TestBatcher + ": " + chain0URL},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			chain, daemon := newClaimV2BatchTest(t)
+			chain.with(func() { test.mutate(chain) })
+			want := strings.ReplaceAll(test.want, chain0URL, chain.server.URL)
+			err := runClaimDaemonV2WithStore(daemon.ctx, daemon.cfg, daemon.store, &claimAdmission{}, ClaimV2DefaultThresholdRao, false)
+			if err == nil || !strings.HasPrefix(err.Error(), want) || len(chain.sent()) != 0 {
+				t.Fatalf("daemon start: %v, want %q", err, want)
+			}
+		})
+	}
+	chain, daemon := newClaimV2BatchTest(t)
+	if err := verifyClaimV2Batcher(daemon.ctx, daemon.cfg); err != nil || chain.count("code") != 1 {
+		t.Fatalf("the release batcher: %v, %d code reads", err, chain.count("code"))
+	}
+	// A shutdown during the check is the shutdown, never a failure.
+	canceled, cancel := context.WithCancel(daemon.ctx)
+	cancel()
+	if err := runClaimDaemonV2WithStore(canceled, daemon.cfg, daemon.store, &claimAdmission{}, ClaimV2DefaultThresholdRao, false); err != nil {
+		t.Fatalf("shutdown during the batcher check: %v", err)
+	}
+}
+
+// chain0URL stands for the fixture's endpoint in an expected error.
+const chain0URL = "<endpoint>"
+
+// CL-5, §10.1: a batch in flight keeps its exact bytes, which name the
+// configured batcher, so removing or changing `batcher` while one is in
+// flight stops the daemon at start: the bytes no longer authenticate, and
+// nonce custody fails closed.
+func TestClaimV2BatchInFlightNeedsItsBatcher(t *testing.T) {
+	chain, daemon := newClaimV2BatchTest(t)
+	chain.with(func() { chain.sendFailures = 1 })
+	daemon.step(false)
+	if unit := daemon.durable(1); unit.Status != "uncertain" || unit.RawTxHex == "" {
+		t.Fatalf("batch in flight: %+v", unit)
+	}
+	removed := *daemon.cfg
+	removed.Batcher = ""
+	changed := *daemon.cfg
+	changed.Batcher = "0x00000000000000000000000000000000000b47c5"
+	chain.with(func() { chain.batch.address = common.HexToAddress(changed.Batcher) })
+	sent := len(chain.sent())
+	for name, cfg := range map[string]*ClaimDaemonV2Config{"removed": &removed, "changed": &changed} {
+		err := runClaimDaemonV2WithStore(daemon.ctx, cfg, daemon.store, &claimAdmission{}, ClaimV2DefaultThresholdRao, false)
+		if err == nil || !strings.Contains(err.Error(), "signed v2 claim has another chain, target or value") || len(chain.sent()) != sent {
+			t.Fatalf("batcher %s with a batch in flight: %v", name, err)
+		}
 	}
 }

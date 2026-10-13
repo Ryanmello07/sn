@@ -72,11 +72,11 @@ Options:
                        each unless batched. v2 check: compare every account
                        of the latest finalized root with the pending root.
     --batch=<batcher>  v2 claim with all: claim two or more accounts through
-                       the STClaimBatcher at this address, as many per
-                       transaction as one block holds. Each claim's gas is
-                       capped at the larger of 2,600,000 and its own
-                       estimate, and the batch's gas limit comes from
-                       eth_call; vault2 pays each account's coldkey.
+                       the release STClaimBatcher at this address, whose
+                       code is checked, at most 32 per transaction. Each
+                       claim's gas is capped at the larger of 2,600,000 and
+                       its own estimate, and the batch's gas limit comes
+                       from eth_call; vault2 pays each account's coldkey.
     --challenge        v2 check: send checkPath for a provable fault, which
                        deletes the pending root.
     --demand           v2 check: when the pending root's objects are missing
