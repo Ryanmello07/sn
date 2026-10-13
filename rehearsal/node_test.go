@@ -31,11 +31,13 @@ const (
 
 // node is one rehearsal chain. Blocks are sealed on demand, one per submitted
 // transaction, and finalized at once. staking and neuron are the precompile
-// interfaces the contracts compile against (evm/src/interfaces).
+// interfaces the contracts compile against (evm/src/interfaces). http is the
+// EVM JSON-RPC route that the eth client and sn-mainnet read.
 type node struct {
 	ctx     context.Context
 	sub     *crv4.Chain
 	eth     *ethclient.Client
+	http    string
 	staking artifact
 	neuron  artifact
 }
@@ -119,7 +121,8 @@ func startNode(t *testing.T) *node {
 	if n.sub.Runtime.SpecName != specName || n.sub.Runtime.SpecVersion != specVersion {
 		t.Fatalf("node runs %s/%d, want %s/%d", n.sub.Runtime.SpecName, n.sub.Runtime.SpecVersion, specName, specVersion)
 	}
-	if n.eth, err = evmrpc.DialContext(n.ctx, "http://"+endpoint); err != nil {
+	n.http = "http://" + endpoint
+	if n.eth, err = evmrpc.DialContext(n.ctx, n.http); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(n.eth.Close)

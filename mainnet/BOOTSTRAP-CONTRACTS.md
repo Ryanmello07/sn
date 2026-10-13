@@ -926,3 +926,57 @@ the sixth action, it passed in 72 seconds, and in 100 seconds on a loaded
 machine against vault2 after its gas reduction, the batcher read back at its
 own block. On 2026-10-13 it passed in 85 seconds signing only the envelopes
 the commands printed, with the same gas.
+
+## Settlement v2 activation
+
+Phase A activates when the governance Safe sends STSettlement2's
+`registerOperatorPool(noId, poolHotkeyV2, maximumBurnRao, E_s)`, with value
+`maximumBurnRao × 10^9` wei, as a direct call, the way v1's `registerOperator`
+went (`VERSION2-FINAL.md` §12.1 step 5, §14). `register-operator-pool` builds
+and preflights that call and reads its result back; it never signs or sends.
+Every flag is required. Its reads are `eth_chainId`, `eth_blockNumber`, then
+each `eth_call` at that head block, and for readback the Safe transaction's
+`eth_getTransactionReceipt`, read before the head:
+
+```sh
+sn-mainnet register-operator-pool review --rpc "$EVM_RPC" --settlement2 "$SETTLEMENT2_PROXY" \
+  --safe "$GOVERNANCE_SAFE" --no-id 1 --pool-hotkey "$POOL_HOTKEY_V2" \
+  --maximum-burn-rao "$MAXIMUM_BURN_RAO" --value-wei "$VALUE_WEI" --first-epoch "$E_S"
+sn-mainnet register-operator-pool readback --rpc "$EVM_RPC" --settlement2 "$SETTLEMENT2_PROXY" \
+  --no-id 1 --pool-hotkey "$POOL_HOTKEY_V2" --first-epoch "$E_S" --transaction-hash "$SAFE_TRANSACTION_HASH"
+```
+
+The hotkey is `0x` and its 32 bytes in hex, as in the phase config. `review`
+refuses, before any read, a zero pool hotkey and a value other than
+`maximumBurnRao × 10^9` wei; then a route that is not EVM chain 964, vault2's
+own escrow hotkey (`escrowHotkey()` of STSettlement2's `vault()`), and a first
+epoch whose start block, `epochStartBlock(E_s)` on STSettlement2's
+`v1Coordinator()`, the head has reached. It then runs the exact call as an
+`eth_call` from the Safe with its value and names the revert:
+`InactiveOperator`, `InvalidEpoch`, `CadenceTooShort`, `NativeRefundFailed`,
+vault2's `InvalidConfiguration`, `OwnableUnauthorizedAccount` (the Safe does
+not own STSettlement2) or the v1 coordinator's `UnknownOperator`; any other
+revert is refused with its data. Its result, schema
+`urnetwork-mainnet-settlement-v2-pool-registration-review-v1`, is the call
+for review and Safe import, `to`, `value_wei`, `data`, `function` and `args`
+(`noId`, `hotkey`, `maximumBurnRao`, `firstEpoch`), with `chain_id`, `safe`,
+`vault2`, `escrow_hotkey`, `v1_coordinator`, `head_block`,
+`first_epoch_start_block`, `blocks_remaining` and `preflight_uid`, the UID
+the preflight registered at the head. The Safe sends exactly `to`,
+`value_wei` and `data`.
+
+`readback` names every difference from the reviewed registration: no receipt;
+a reverted transaction; no `PoolRegistered` event of `noId` from vault2 in the
+receipt, or one with another hotkey or first epoch; `pools(noId)` unregistered
+or with another first epoch or hotkey; and `settlementAt(noId, E_s)` with a
+vault other than vault2, another hotkey or a version other than 2. Its result,
+schema `urnetwork-mainnet-settlement-v2-pool-registration-readback-v1`, names
+`chain_id`, `settlement2`, `vault2`, `no_id`, `pool_hotkey`, `first_epoch`,
+the event's `uid`, `transaction_hash`, `block_number` and `head_block`.
+
+Both modes exit 0 with their result, 2 for a usage error, 3 for a refusal or
+a difference (the call must not be sent, or the chain does not hold the
+reviewed registration) and 1 when a read fails, which decides nothing.
+`evm_v2_pool_test.go` (PR-1 to PR-5) runs both against the reviewed contracts
+on the in-repo end-to-end chain, and R-4 (`rehearsal/r4_registration_test.go`)
+registers its pool through them on the rehearsal node.

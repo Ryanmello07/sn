@@ -295,7 +295,13 @@ tempo of 360. Measured:
   moved the pruned pool's stake into the pruned escrow. `registerPoolUid`
   re-registered the pool hotkey for its payer (gas 1,449,949; `UidExists`
   once registered). `absorbStake` moved 35,094,897,822 rao that vault2 held
-  on the v1 escrow hotkey into escrow as surplus (gas 127,124).
+  on the v1 escrow hotkey into escrow as surplus (gas 127,124). Since
+  2026-10-13 the registration runs through `sn-mainnet register-operator-pool`
+  (`mainnet/BOOTSTRAP-CONTRACTS.md`, settlement v2 activation), which R-4
+  builds from `mainnet/` with `go build`: review's `eth_call` preflight from
+  the owner predicted UID 7, the owner sent exactly the printed call, and
+  readback confirmed the event, `pools` and `settlementAt`, with the same
+  burn and gas (R-4 took 252 seconds).
 - **R-5 approval, demand and answer.** Finalize was refused without a quorum
   (`QuorumNotReached`), then inside the window (`ChallengeWindowOpen`); an
   approval needed an auditor and the exact pending root (`Unauthorized`,

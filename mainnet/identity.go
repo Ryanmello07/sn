@@ -98,17 +98,20 @@ type rpcReply struct {
 	Id      int             `json:"id"`
 	Result  json.RawMessage `json:"result"`
 	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
+		Code    int             `json:"code"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data"`
 	} `json:"error"`
 }
 
 // Retains the method and exact server code so optional read capabilities can
-// distinguish an unsupported method without parsing display text.
+// distinguish an unsupported method without parsing display text. data is the
+// server's raw error data, such as an eth_call's revert bytes.
 type rpcCallError struct {
 	method  string
 	code    int
 	message string
+	data    json.RawMessage
 }
 
 // Preserves the established RPC diagnostic spelling for existing callers.
@@ -232,7 +235,7 @@ func (self *rpcClient) callAdmittedReadResult(ctx context.Context, method string
 						attemptCancel()
 						return errors.Join(fmt.Errorf("%w: %s: reply has both result and error", errRpcIntegrity, method), requestErr)
 					}
-					requestErr = errors.Join(&rpcCallError{method: method, code: reply.Error.Code, message: reply.Error.Message}, requestErr)
+					requestErr = errors.Join(&rpcCallError{method: method, code: reply.Error.Code, message: reply.Error.Message, data: reply.Error.Data}, requestErr)
 					if !rpcTransientReadError(reply.Error.Code, reply.Error.Message) {
 						attemptCancel()
 						return requestErr
