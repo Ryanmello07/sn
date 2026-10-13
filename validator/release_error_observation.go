@@ -322,6 +322,10 @@ func (self *releaseErrorObservation) capture(err error, depth int) error {
 		observed.value = &copy
 	case *attemptReplayReadInterruption:
 		observed.value = &attemptReplayReadInterruption{cause: self.capture(cause.cause, depth+1)}
+	case *releaseSteeringFailureLimitError:
+		copy := *cause
+		copy.cause = self.optional(cause.cause, depth+1)
+		observed.value = &copy
 	case *provisionalClosedNativeInput:
 		self.notDeadline()
 		copy := *cause

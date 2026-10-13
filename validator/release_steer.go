@@ -993,6 +993,19 @@ const ReleaseSteeringFailureLimit = 10
 
 const releaseSteeringFailureLimit = ReleaseSteeringFailureLimit
 
+// The spent failure budget keeps its own text when release observation
+// freezes the graph, so the supervisor's error still names the limit.
+type releaseSteeringFailureLimitError struct {
+	failures int
+	cause    error
+}
+
+func (self *releaseSteeringFailureLimitError) Error() string {
+	return fmt.Sprintf("release steering failed %d consecutive attempts: %v", self.failures, self.cause)
+}
+
+func (self *releaseSteeringFailureLimitError) Unwrap() error { return self.cause }
+
 // runReleaseSteeringLoop retries an incomplete native epoch until the exact
 // intent is finalized. Merely observing an epoch never suppresses a retry.
 // Repeated failures become process-visible, and advancing past an incomplete
@@ -1164,7 +1177,7 @@ func runReleaseSteeringLoopWithWaitAndPermissions(ctx context.Context, epoch fun
 			fmt.Printf("release steer: finalized scheduler attempt %d: %v\n", failures, err)
 		}
 		if failures >= releaseSteeringFailureLimit {
-			return releaseRuntimeError(ctx, fmt.Errorf("release steering failed %d consecutive attempts: %w", failures, pendingErr))
+			return releaseRuntimeError(ctx, &releaseSteeringFailureLimitError{failures: failures, cause: pendingErr})
 		}
 		if !wait() {
 			return releaseRuntimeError(ctx, errors.Join(pendingErr, schedulerErr))
