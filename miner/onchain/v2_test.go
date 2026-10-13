@@ -106,6 +106,9 @@ type v2TestChain struct {
 	batcher  common.Address
 	pools    map[uint64][]stabi.ISTSettlementVault2Root
 	gasLimit uint64
+	// batcherCode, when set, is the batcher address's code in place of the
+	// release runtime.
+	batcherCode []byte
 	// exhaust makes a claim of (pool, index) fail as a runtime refusal
 	// does: without revert data, and in a batch consuming its whole gas cap.
 	// itemGas, when set, replaces the gas a paid batch item uses;
@@ -286,6 +289,21 @@ func (c *v2TestChain) answer(method string, params []json.RawMessage) (any, map[
 			return "0xc350", nil
 		}
 		return hexutil.Bytes(out), nil
+	case "eth_getCode":
+		var account common.Address
+		if len(params) != 2 || json.Unmarshal(params[0], &account) != nil {
+			c.t.Errorf("code request: %s", params)
+		}
+		if c.count(method) {
+			return nil, rpcError(-32000, "synthetic code refusal", nil)
+		}
+		if account != c.batcher || c.batcher == (common.Address{}) {
+			return "0x", nil
+		}
+		if c.batcherCode != nil {
+			return hexutil.Bytes(c.batcherCode), nil
+		}
+		return ClaimBatcherRuntime, nil
 	case "eth_getTransactionCount":
 		var account common.Address
 		if len(params) != 2 || json.Unmarshal(params[0], &account) != nil || account != common.HexToAddress(testKeyAddr) || string(params[1]) != `"pending"` {

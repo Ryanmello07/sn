@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 
 	"github.com/urfoundation/sn/merkle"
@@ -245,6 +247,20 @@ func v2BatchLeast(n uint64) uint64 {
 	return v2TestBatchBase + (n-1)*v2TestItemGas + v2TestBatchNeeded
 }
 
+// v2BatchBlock is a block gas limit at which the tools name exactly ceiling
+// gas for a batch.
+func v2BatchBlock(t *testing.T, ceiling uint64) uint64 {
+	t.Helper()
+	limit := (ceiling + 1_500 + claimBatchGasMargin) * 15 / 13
+	for claimBatchCeiling(limit) < ceiling {
+		limit++
+	}
+	if claimBatchCeiling(limit) != ceiling {
+		t.Fatalf("no block gas limit gives a ceiling of %d", ceiling)
+	}
+	return limit
+}
+
 // The output lines of alice's claim in pool, paid by caller.
 func v2BatchPaid(pool uint64, caller string) string {
 	return fmt.Sprintf("Claimed: pool %d, account 1, root 0\n  coldkey:     %s (0x%s)\n  cumulative:  %d.000000000 α (%d000000000 rao)\n  paid:        %d.000000000 α (%d000000000 rao)\n  caller:      %s\n",
@@ -304,10 +320,10 @@ func TestV2ClaimAllBatchesTheAccounts(t *testing.T) {
 			t.Fatalf("output lacks %q:\n%s", want, output)
 		}
 	}
-	// Each claim's estimate is its preflight; the batch is offered at the
-	// most gas a transaction may name, its limit found in 13 more calls, and
-	// the send preflights it once more.
-	if s.c.observed() != "eth_call:claimMany=15 eth_call:claimed=4 eth_call:roots=4 eth_chainId=1 eth_estimateGas:claim=3 eth_estimateGas:claimMany=1 eth_gasPrice=1 eth_getBlockByNumber:0x30d40=3 eth_getBlockByNumber:finalized=2 eth_getBlockByNumber:latest=1 eth_getTransactionCount=1 eth_getTransactionReceipt=1 send:claimMany=1" {
+	// The batcher's code is read once; each claim's estimate is its
+	// preflight; the batch is offered at the most gas the tools name, its
+	// limit found in 13 more calls, and the send preflights it once more.
+	if s.c.observed() != "eth_call:claimMany=15 eth_call:claimed=4 eth_call:roots=4 eth_chainId=1 eth_estimateGas:claim=3 eth_estimateGas:claimMany=1 eth_gasPrice=1 eth_getBlockByNumber:0x30d40=3 eth_getBlockByNumber:finalized=2 eth_getBlockByNumber:latest=1 eth_getCode=1 eth_getTransactionCount=1 eth_getTransactionReceipt=1 send:claimMany=1" {
 		t.Fatalf("observed %s", s.c.observed())
 	}
 }
@@ -322,17 +338,18 @@ func TestV2ClaimAllBatchCapsAtTheLargestEstimate(t *testing.T) {
 	}
 }
 
-// CL-1: claims beyond what one block's gas limit attempts go in the next
+// CL-1: claims beyond what the most gas the tools name for a batch attempts,
+// 13/15 of the block gas limit less 1,500 gas and the margin, go in the next
 // transaction, and a last one alone to vault2.
 func TestV2ClaimAllBatchSplitsAtTheBlockGasLimit(t *testing.T) {
 	s := newV2BatchScenario(t)
-	s.c.gasLimit = v2BatchLeast(3) - 1
+	s.c.gasLimit = v2BatchBlock(t, v2BatchLeast(3)-1)
 	output, err := s.c.run(s.c.claimArgv("--all", "--batch="+v2TestBatcher))
 	sent := s.c.transactions()
 	if err != nil || len(sent) != 2 || !strings.Contains(output, "  claims:      2 of 3, each capped at 2600000 gas\n") {
 		t.Fatalf("split: %v, %d transactions\n%s", err, len(sent), output)
 	}
-	if sent[0].Gas() != s.c.gasLimit || !bytes.Equal(sent[0].Data(), s.calldata(t, ClaimBatchGasPerClaim, 3, 4)) || *sent[0].To() != common.HexToAddress(v2TestBatcher) {
+	if sent[0].Gas() != v2BatchLeast(3)-1 || !bytes.Equal(sent[0].Data(), s.calldata(t, ClaimBatchGasPerClaim, 3, 4)) || *sent[0].To() != common.HexToAddress(v2TestBatcher) {
 		t.Fatalf("first transaction: gas %d to %s data 0x%x", sent[0].Gas(), sent[0].To(), sent[0].Data())
 	}
 	requireV2Tx(t, sent[1], 8, 60_000, 0, s.single(t, 6))
@@ -486,6 +503,7 @@ func TestV2ClaimAllEdges(t *testing.T) {
 // for one claim, a reverted batch, a batch without events or without vault2's
 // Claimed for a paid item, and one that attempted nothing.
 func TestV2ClaimAllBatchRefusals(t *testing.T) {
+	small := v2BatchBlock(t, v2BatchLeast(1)-1)
 	for _, c := range []struct {
 		name   string
 		mutate func(*v2BatchScenario)
@@ -494,10 +512,14 @@ func TestV2ClaimAllBatchRefusals(t *testing.T) {
 	}{
 		{"block gas limit", func(s *v2BatchScenario) { s.c.failAt["eth_getBlockByNumber:latest"] = 1 }, "block gas limit: synthetic block refusal", 0},
 		{"no block gas limit", func(s *v2BatchScenario) { s.c.gasLimit = 0 }, "block gas limit: the latest block names none", 0},
-		{"batch preflight", func(s *v2BatchScenario) { s.c.failAt["eth_call:claimMany"] = 1 }, fmt.Sprintf("batch preflight at %d gas: synthetic refusal of eth_call:claimMany", ClaimBatchMaxGas), 0},
-		{"not a batcher", func(s *v2BatchScenario) { s.c.garbage["claimMany"] = true }, fmt.Sprintf("batch preflight at %d gas: %s is not a claim batcher: claimMany answered 0x", ClaimBatchMaxGas, common.HexToAddress(v2TestBatcher).Hex()), 0},
-		{"overcount", func(s *v2BatchScenario) { s.c.batchAnswer = big.NewInt(4) }, fmt.Sprintf("a batch of 3 claims attempts 4 at %d gas", ClaimBatchMaxGas), 0},
-		{"too small a block", func(s *v2BatchScenario) { s.c.gasLimit = v2BatchLeast(1) - 1 }, fmt.Sprintf("a batch of 3 claims attempts 0 at %d gas", v2BatchLeast(1)-1), 0},
+		{"batch preflight", func(s *v2BatchScenario) { s.c.failAt["eth_call:claimMany"] = 1 }, fmt.Sprintf("batch preflight at %d gas: synthetic refusal of eth_call:claimMany", claimBatchCeiling(75_000_000)), 0},
+		{"not a batcher", func(s *v2BatchScenario) { s.c.garbage["claimMany"] = true }, fmt.Sprintf("batch preflight at %d gas: %s is not a claim batcher: claimMany answered 0x", claimBatchCeiling(75_000_000), common.HexToAddress(v2TestBatcher).Hex()), 0},
+		{"overcount", func(s *v2BatchScenario) { s.c.batchAnswer = big.NewInt(4) }, fmt.Sprintf("a batch of 3 claims attempts 4 at %d gas", claimBatchCeiling(75_000_000)), 0},
+		{"too small a block", func(s *v2BatchScenario) { s.c.gasLimit = small }, fmt.Sprintf("a batch of 3 claims attempts 0 at %d gas", v2BatchLeast(1)-1), 0},
+		{"batcher code", func(s *v2BatchScenario) { s.c.failAt["eth_getCode"] = 1 }, "--batch: claim batcher " + common.HexToAddress(v2TestBatcher).Hex() + " code: synthetic code refusal", 0},
+		{"no batcher code", func(s *v2BatchScenario) { s.c.batcherCode = []byte{} }, "--batch: claim batcher " + common.HexToAddress(v2TestBatcher).Hex() + " has no code", 0},
+		{"another contract's code", func(s *v2BatchScenario) { s.c.batcherCode = []byte{0x60, 0x00} }, "--batch: " + common.HexToAddress(v2TestBatcher).Hex() + " is not the release claim batcher: its code hash is " +
+			crypto.Keccak256Hash([]byte{0x60, 0x00}).Hex() + ", the release runtime's 0x2964c2882e0e4f85c2295563da92ead2fa8669d0045059eefbefa187ffd22c26", 0},
 		{"reverted", func(s *v2BatchScenario) { s.c.revertBatch = true }, " reverted on-chain (status 0, block 200000, gas used 0)", 1},
 		{"no events", func(s *v2BatchScenario) { s.c.mute = true }, " reports 0 of its 3 items", 1},
 		{"no Claimed", func(s *v2BatchScenario) { s.c.muteVault = true }, " but " + common.HexToAddress(v2TestVault).Hex() + " emitted no Claimed for it", 1},
@@ -603,7 +625,7 @@ func TestV2RefusalName(t *testing.T) {
 // CL-1: the last claim, sent alone after a batch, fails alone.
 func TestV2ClaimAllBatchLastClaimFails(t *testing.T) {
 	s := newV2BatchScenario(t)
-	s.c.gasLimit = v2BatchLeast(3) - 1
+	s.c.gasLimit = v2BatchBlock(t, v2BatchLeast(3)-1)
 	s.c.before = func(key string) {
 		if key == "send:claimMany" {
 			s.c.exhaust[[2]uint64{6, 1}] = true
@@ -629,6 +651,125 @@ func TestV2ClaimAllUsage(t *testing.T) {
 	for _, flags := range [][]string{{"--batch=" + v2TestBatcher}, {"--all", "--no_id=3"}, {"--all", "--index=1"}} {
 		if _, err := parseArgv(t, c.claimArgv(flags...)); err == nil {
 			t.Fatalf("usage accepted %q", flags)
+		}
+	}
+}
+
+// CL-1: the most gas the tools name for a batch is 13/15 of the block gas
+// limit less 1,500 gas, as the pool takes (R-7), and at most ClaimBatchMaxGas,
+// less claimBatchGasMargin, without overflow or underflow.
+func TestV2ClaimBatchCeiling(t *testing.T) {
+	for limit, want := range map[uint64]uint64{
+		75_000_000:     64_988_500,
+		30_000_000:     25_988_500,
+		90_000_000:     64_988_500,
+		13_846:         499,
+		13_000:         0,
+		0:              0,
+		math.MaxUint64: 64_988_500,
+	} {
+		if got := claimBatchCeiling(limit); got != want {
+			t.Fatalf("ceiling at a block gas limit of %d: %d, want %d", limit, got, want)
+		}
+	}
+	if claimBatchCeiling(75_000_000)+claimBatchGasMargin != ClaimBatchMaxGas {
+		t.Fatal("at runtime 475's block gas limit the pool takes ClaimBatchMaxGas")
+	}
+}
+
+// CL-1 (review of 77f86ead): when the block gas limit binds, a batch names no
+// more gas than the pool of that limit takes, 13/15 of it less 1,500 gas,
+// rather than the block gas limit itself, which the pool refuses.
+func TestV2ClaimAllBatchNamesNoMoreGasThanThePoolTakes(t *testing.T) {
+	s := newV2BatchScenario(t)
+	s.c.gasLimit = v2BatchLeast(3) - 1
+	output, err := s.c.run(s.c.claimArgv("--all", "--batch="+v2TestBatcher))
+	sent := s.c.transactions()
+	if err != nil || len(sent) == 0 {
+		t.Fatalf("claim --all --batch: %v\n%s", err, output)
+	}
+	takes := s.c.gasLimit*13/15 - 1_500
+	if gas := sent[0].Gas(); gas > takes {
+		t.Fatalf("the batch names %d gas; a pool of that block gas limit takes at most %d", gas, takes)
+	}
+}
+
+// CL-1: SizeClaimBatch sizes at most ClaimBatchMaxClaims of its items, which
+// the gas would allow.
+func TestV2SizeClaimBatchHoldsAtMostTheCap(t *testing.T) {
+	s := newV2BatchScenario(t)
+	client, _, err := dialOne(t.Context(), s.c.rpc.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	items := make([]stabi.STClaimBatcherClaim, ClaimBatchMaxClaims+8)
+	for i := range items {
+		items[i] = s.item(t, 3)
+	}
+	count, calldata, gasLimit, err := SizeClaimBatch(t.Context(), client, common.HexToAddress(testKeyAddr), s.c.batcher, s.c.vault, items, ClaimBatchGasPerClaim)
+	// The model's eth_call pays each copy, as it commits nothing.
+	least := v2BatchLeast(ClaimBatchMaxClaims)
+	if err != nil || count != ClaimBatchMaxClaims || !bytes.Equal(calldata, claimBatcher.PackClaimMany(s.c.vault, items[:ClaimBatchMaxClaims], new(big.Int).SetUint64(ClaimBatchGasPerClaim))) ||
+		gasLimit < least+least/5 || gasLimit > least+claimBatchTolerance+(least+claimBatchTolerance)/5 {
+		t.Fatalf("a batch of %d items: %d items, gas %d (least %d), %v", len(items), count, gasLimit, least, err)
+	}
+}
+
+// newV2ManyPoolScenario is alice as account 1 of a finalized root in each of
+// the 34 pools 100 to 133, each with anything claimable.
+func newV2ManyPoolScenario(t *testing.T) (*v2BatchScenario, []uint64) {
+	t.Helper()
+	s := newV2BatchScenario(t)
+	var entries []v2TestEntry
+	var pools []uint64
+	for pool := uint64(100); pool < 134; pool++ {
+		tree := v2TestTree(t, []merkle.LedgerAccount{{Coldkey: v2TestKey(1), Cumulative: *uint256.NewInt(1_000_000_000)}, {Coldkey: s.alice, Cumulative: *uint256.NewInt(pool * 1_000_000_000)}})
+		s.trees[pool] = tree
+		s.c.pools[pool] = []stabi.ISTSettlementVault2Root{v2TestRoot(tree, 10, [32]byte{byte(pool)})}
+		entries = append(entries, v2TestEntry{Vault: strings.ToLower(v2TestVault), NoID: pool, Index: 1, RootIndex: v2Ptr(uint64(0)), Cumulative: fmt.Sprint(pool * 1_000_000_000), Proof: v2TestProofJSON(t, tree, 1), Claimed: "0"})
+		pools = append(pools, pool)
+	}
+	s.c.setAccounts(entries...)
+	return s, pools
+}
+
+// CL-1: --all --batch sends at most ClaimBatchMaxClaims claims a
+// transaction: 34 accounts go out as a batch of 32, then one of 2.
+func TestV2ClaimAllBatchSendsAtMostTheCapATransaction(t *testing.T) {
+	s, pools := newV2ManyPoolScenario(t)
+	output, err := s.c.run(s.c.claimArgv("--all", "--batch="+v2TestBatcher))
+	sent := s.c.transactions()
+	if err != nil || len(sent) != 2 || !bytes.Equal(sent[0].Data(), s.calldata(t, ClaimBatchGasPerClaim, pools[:ClaimBatchMaxClaims]...)) ||
+		!bytes.Equal(sent[1].Data(), s.calldata(t, ClaimBatchGasPerClaim, pools[ClaimBatchMaxClaims:]...)) ||
+		!strings.Contains(output, "  claims:      32 of 32, each capped at 2600000 gas\n") || !strings.Contains(output, "  claims:      2 of 2, each capped at 2600000 gas\n") {
+		t.Fatalf("34 accounts: %v, %d transactions\n%s", err, len(sent), output)
+	}
+	for _, pool := range pools {
+		if !strings.Contains(output, v2BatchPaid(pool, v2TestBatcher)) {
+			t.Fatalf("pool %d was not paid:\n%s", pool, output)
+		}
+	}
+}
+
+// CL-1, SPEC A6: a round whose preflights leave fewer than two claims sends no
+// batch; the claim that passed waits for the next round with the claims
+// after the round. 31 of the first 32 accounts refused, the one left and the
+// last two go out in one batch, and each refusal fails its account alone.
+func TestV2ClaimAllBatchRoundWithoutABatchMovesOn(t *testing.T) {
+	s, pools := newV2ManyPoolScenario(t)
+	for _, pool := range pools[1:ClaimBatchMaxClaims] {
+		s.c.exhaust[[2]uint64{pool, 1}] = true
+	}
+	output, err := s.c.run(s.c.claimArgv("--all", "--batch="+v2TestBatcher))
+	sent := s.c.transactions()
+	if err == nil || strings.Count(err.Error(), ": preflight: ") != ClaimBatchMaxClaims-1 || len(sent) != 1 ||
+		!bytes.Equal(sent[0].Data(), s.calldata(t, ClaimBatchGasPerClaim, pools[0], pools[32], pools[33])) {
+		t.Fatalf("refused round: %v, %d transactions\n%s", err, len(sent), output)
+	}
+	for _, pool := range []uint64{pools[0], pools[32], pools[33]} {
+		if !strings.Contains(output, v2BatchPaid(pool, v2TestBatcher)) {
+			t.Fatalf("pool %d was not paid:\n%s", pool, output)
 		}
 	}
 }

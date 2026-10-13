@@ -1144,14 +1144,22 @@ run the unchanged v1 daemon in the same process with the same relayer key:
   the unit open under a backoff.
 - **Batching.** Given a claim batcher's address (`batcher` in its config),
   the daemon claims the due units of one pass in one `claimMany` transaction
-  when two or more are due. Each is verified against its finalized root and
-  preflighted alone; a refused preflight is a refused claim. The batch's gas
-  limit is the least at which an `eth_call` of it attempts every claim, plus
-  20%, within the most gas one transaction may name. Every unit of the batch
-  keeps its exact signed bytes until its finalized receipt settles each one
-  by the batcher's event: paid, by vault2's `Claimed` with the batcher as
-  caller; refused, under the refusal rules above; not attempted, open again
-  at once. A lone due unit is claimed directly.
+  when two or more are due, at most 32 (`onchain.ClaimBatchMaxClaims`): every
+  unit keeps the batch's whole signed transaction, so the queue grows with
+  the square of the batch, and at depth 29 about 62 claims would fill its
+  16 MiB durable head. The daemon refuses to start unless the batcher's code
+  is exactly the release runtime. Each unit is verified against its
+  finalized root and preflighted alone, counting an attempt as a lone claim
+  does; a refused preflight is a refused claim. The batch's gas limit is the
+  least at which an `eth_call` of it attempts every claim, plus 20%, within
+  the most gas the tools name (§10.2). Every unit of the batch keeps its
+  exact signed bytes until its finalized receipt settles each one by the
+  batcher's event: paid, by vault2's `Claimed` with the batcher as caller;
+  refused, under the refusal rules above; not attempted, open again at once.
+  Those bytes name the batcher, so a daemon whose `batcher` was changed or
+  removed while a batch is in flight stops at start: the bytes no longer
+  authenticate and nonce custody fails closed. Restore the setting until the
+  batch settles. A lone due unit is claimed directly.
 - **Reused as they are:** locks, durable head, nonce admission, finality
   helpers and the relayer key.
 
@@ -1185,13 +1193,17 @@ nothing. A batch succeeds at any gas limit, so `eth_estimateGas` cannot size
 it: senders find the least limit at which an `eth_call` attempts every claim
 and add 20%. They cap each claim at the larger of 2,600,000 gas, a single
 claim's least limit with margin, and the batch's largest single-claim
-estimate. Measured on runtime 475 at depth 29 (R-7): a transaction may name at
-most 64,998,500 gas, below the 75,000,000 block gas limit, and so holds at
-most 418 claims; from ten claims on a batch uses 15 to 18% less gas than the
-same claims alone (148,596 per claim in a batch of 20, against 169,968 to
-187,102 alone), and its gas limit grows by about 149,000 per claim where each
-single claim needs about 2.44M. A batch of one costs 6% more than a claim
-alone, so the tools send a lone claim directly. The deployment phase can
+estimate. The tools name at most 13/15 of the latest block's gas limit less
+1,500 gas, the most the pool takes, and at most 64,998,500, less a
+10,000-gas margin; they put at most 32 claims in a batch (§10.1), and refuse
+a batcher whose code is not exactly the release runtime. Measured on runtime
+475 at depth 29 (R-7): a transaction may name at most 64,998,500 gas, below
+the 75,000,000 block gas limit, and so holds at most 418 claims; from ten
+claims on a batch uses 15 to 18% less gas than the same claims alone
+(148,611 per claim in a batch of 20 and 147,740 in one of 32, against
+169,992 to 187,126 alone), and its gas limit grows by about 149,000 per
+claim where each single claim needs about 2.44M. A batch of one costs 6%
+more than a claim alone, so the tools send a lone claim directly. The deployment phase can
 create the batcher (§8.5).
 
 ## 11. Apps and SDK
@@ -1566,7 +1578,7 @@ handler that never reaches a claim fails instead of passing silently.
 | CL-2 | SDK display: every account state; v1 shown separately; "unavailable" rather than zero |
 | CL-3 | `snclaim v2 check` reports "unverifiable", never "no fault", when objects are missing or do not reproduce the root; a challenge against a root that has left the pending slot counts as done |
 | CL-4 | SDK and app v2 claims (§11): an account is claimed only when its vault is the pinned vault2 and its proof verifies against vault2's root; `claimed` is read from chain; preflight, `eth_estimateGas` and the gas key's balance; a third party's earlier claim counts as done; a floor or staking-hotkey refusal leaves the account claimable; the confirmed amount comes from the `Claimed` event; each app shows v2 beside v1, offers no v2 claim without `Vault2Address`, and presents every claim outcome |
-| CL-5 | Batched claims (§10.2): `snclaim v2 claim --all --batch` and the daemon with a batcher claim two or more accounts in one transaction; each claim is verified and preflighted alone; the batch is sized by `eth_call` within the most gas a transaction may name; each item's outcome settles its own account (paid, refused, not attempted); a third party's earlier claim counts as done; the daemon keeps the batch's exact signed bytes in every unit until its finalized receipt; a lone claim goes directly to vault2 |
+| CL-5 | Batched claims (§10.2): `snclaim v2 claim --all --batch` and the daemon with a batcher claim two or more accounts in one transaction, at most 32; each claim is verified and preflighted alone; the batch is sized by `eth_call` within the most gas the tools name, 13/15 of the block gas limit less 1,500 gas and a 10,000-gas margin; each item's outcome settles its own account (paid, refused, not attempted); a third party's earlier claim counts as done; a refused preflight backs off as a lone claim's does; the daemon keeps the batch's exact signed bytes in every unit until its finalized receipt, and a daemon whose `batcher` changed or went away while a batch is in flight stops at start; both tools refuse a batcher whose code is not the release runtime; a lone claim goes directly to vault2 |
 
 ### 15.8 Runtime rehearsal (R)
 
@@ -1581,7 +1593,7 @@ bytecode.
 | R-4 | Pool registration, also at a nonzero collateral lock share, whose lock vault2 never moves or counts; re-registration after pruning; stake on a pruned hotkey, the escrow's included; `absorbStake` from the v1 escrow hotkey |
 | R-5 | Approvals from an auditor address; a demand paying `demandFeeWei`, and its answer |
 | R-6 | Gas used and gas limit needed, at depth 29, for a claim, a demand, an approval, a capturing close, a close deferring one epoch and one deferring many, a commit, an answer and a finalize; the operator's transactions, a capturing close with a few deferred epochs included, fit the re-signed operator gas policy (§8.1, §13) |
-| R-7 | Batched claims (§10.2), at depth 29: the block gas limit and the most gas one transaction may name; the gas used and the least gas limit of single claims and of batches of 1, 5, 10, 20 and the most one transaction holds, each batch capped at the default gas per claim and paying every item; a batch whose broken proof and claim below the transfer floor are each refused alone, with exact events, while the claims around them pay |
+| R-7 | Batched claims (§10.2), at depth 29: the block gas limit and the most gas one transaction may name, exactly 13/15 of it less 1,500 gas whatever the calldata; the gas used and the least gas limit of single claims and of batches of 1, 5, 10, 20, 32 and the most one transaction holds, each batch capped at the default gas per claim and paying every item; a batch whose broken proof and claim below the transfer floor are each refused alone, with exact events, while the claims around them pay |
 
 ### 15.9 Guarantee traceability
 
@@ -1611,6 +1623,7 @@ bytecode.
 | CB-6 | An empty batch calls nothing; a cap whose requirement overflows reverts |
 | CB-7 | The deployment phase's optional sixth action creates the batcher at the deployer's next nonce after the binding; anything but the exact argument-free release creation is refused, and it completes only on readback of its exact runtime (SV-8) |
 | CB-EV | Every batcher event, with its exact fields |
+| CB-8 | A `vault` argument other than vault2, which only the sender chooses, harms only that sender's batch: much revert data, no code or a short answer reverts it, and re-entry interleaves its events, which the claim tools refuse |
 | CB-SIZE | The batcher's sizes from the release build |
 
 ## 16. Later phases

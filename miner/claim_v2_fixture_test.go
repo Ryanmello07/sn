@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -171,9 +173,16 @@ func (self *claimV2TestChain) ServeHTTP(writer http.ResponseWriter, request *htt
 		delete(response, "result")
 		response["error"] = callErr
 	}
-	if err := json.NewEncoder(writer).Encode(response); err != nil {
+	if err := json.NewEncoder(writer).Encode(response); err != nil && !claimV2TestAbandoned(err) {
 		self.t.Error(err)
 	}
+}
+
+// claimV2TestAbandoned reports a write to a client that abandoned its
+// request: the read strategy races connections and closes the losers, which a
+// large body can still be writing to.
+func claimV2TestAbandoned(err error) bool {
+	return errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
 
 // The pinned GET /sn/ledger/account body for the latest finalized root.
@@ -208,7 +217,7 @@ func (self *claimV2TestChain) serveAccounts(writer http.ResponseWriter, request 
 			accounts = append(accounts, entry)
 		}
 	}
-	if err := json.NewEncoder(writer).Encode(map[string]any{"coldkey": coldkey, "accounts": accounts}); err != nil {
+	if err := json.NewEncoder(writer).Encode(map[string]any{"coldkey": coldkey, "accounts": accounts}); err != nil && !claimV2TestAbandoned(err) {
 		self.t.Error(err)
 	}
 }
@@ -274,6 +283,8 @@ func (self *claimV2TestChain) rpc(method string, params []json.RawMessage) (any,
 			return hexutil.EncodeUint64(max(self.estimate, 200_000)), nil
 		}
 		return self.view(data)
+	case "eth_getCode":
+		return self.answerCode(params)
 	case "eth_sendRawTransaction":
 		return self.mine(params[0])
 	case "eth_getTransactionReceipt":
