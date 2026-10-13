@@ -444,7 +444,7 @@ own usage. This is decision 3.
 
 **Fixed inputs.** A covered epoch's provider rows are built once, at the first
 root that covers it. Later roots list the same chunks. Rebuilding an epoch's
-rows needs an explicit operator command naming the epoch, which the
+rows needs an explicit operator command naming the epoch (§8.6), which the
 validator records, and the validator accepts new rows only for an epoch
 whose earlier rows it refused (§9.2).
 
@@ -966,6 +966,20 @@ It uses the same builder checks, plan hash, approval and receipts
 readback of exact runtime code, getters and storage slots. v1's launch
 skipped readback (`mainnet/LAUNCH.md:50-58`); v2 must not. The receipts are
 the v2 deployment record. The launch readiness digest is unchanged.
+
+### 8.6 Operator commands
+
+The server's `bringyourctl st` commands for a v2 epoch of the configured
+pool. Each names the epoch, and `--by` names who runs it. `--by` is
+recorded, not authenticated: running a command at all takes the operator's
+database access, so any operator may withdraw any request. A refused command
+panics with its reason and exits non-zero.
+
+| Command | Does |
+| --- | --- |
+| `v2-unrecoverable --epoch=<e> --by=<operator>` | Declares the epoch's inputs unrecoverable, so roots list it as `providers: null` (§6.4), and records who declared it. Refused once the epoch's rows are recorded; a repeat changes nothing |
+| `v2-rebuild --epoch=<e> --by=<operator>` | Requests that the epoch's recorded rows, or its null declaration, be built again from v1's inputs (§6.4 fixed inputs), and records and logs who requested it. The next root builds them again unless the pending root lists them and can still finalize; the new rows replace the record and end the request. Refused for an epoch the latest finalized root covers and for one with nothing recorded |
+| `v2-rebuild-withdraw --epoch=<e> --by=<operator>` | Withdraws the epoch's pending rebuild request, which leaves its record as before the request, so the driver treats the epoch as if none had been made, and logs who requested and who withdrew it. A compare-and-set clears the request only while it is the one read and the record holds the rows or declaration read with it. Rows built for the request but recorded after the withdrawal never replace the record: when they differ, the driver's step is refused and its retry lists the recorded rows. Refused for an epoch with nothing recorded in the pool, for one without a pending request, as once rows rebuilt for it have ended the request, and when rows are rebuilt, or the request changes, between the read and the withdrawal |
 
 ## 9. Validator
 
