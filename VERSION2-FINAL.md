@@ -1256,12 +1256,20 @@ equivalents, must be in the shared localization store before the apps ship.
   `claimed` is read from chain too;
 - the transaction goes only to vault2, with no value, and vault2 pays the
   leaf's coldkey;
-- each claim is preflighted with `eth_call` from the gas key and its limit
-  taken from `eth_estimateGas`, because a claim uses about 236,000 gas but
-  needs a limit of about 2.5M (§8.1). The gas key's balance must cover the
-  limit, with the SDK's margin, at the gas price. A v2 claim therefore needs
-  about 0.02 TAO on the device gas key; with less, the app offers its
-  existing gas top-up (`needs_gas`);
+- each claim is preflighted with `eth_call` from the gas key, and signed
+  with the larger of `eth_estimateGas` plus a quarter and 2,600,000 gas, the
+  limit a claim needed before runtime 478 (§8.1). On 478 a claim's estimate
+  follows vault2's staking-hotkey list, which third parties can lengthen
+  before the claim is included (§7.3), so the SDK never signs below that
+  limit and gives it to external signers, and ur.io sends it to the wallet
+  (`sdk/sn_ledger_claim.go:54-58,318-339`; mmm
+  `ur.io/react/src/app/sn/ledgerV2.js:168-175`). The gas key's balance must
+  cover the limit at the gas price: 0.0143 TAO at 5 gwei with legacy
+  pricing, the node's price plus 10%. About 0.02 TAO on the device gas key
+  therefore holds up to about 7 gwei, and EIP-1559 pricing, a fee cap of
+  twice the base fee plus the tip, needs about 0.031 TAO
+  (`sdk/sn_claims.go:907-940`). With less, the app offers its existing gas
+  top-up (`needs_gas`);
 - `NothingToClaim` after a third party's claim counts as done (§5). A claim
   below the transfer floor or refused by a staking-hotkey cap leaves the
   account claimable.
