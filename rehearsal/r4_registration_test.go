@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
@@ -32,18 +33,29 @@ func buildSnMainnet(t *testing.T) string {
 	return binary
 }
 
-// runSnMainnet runs one sn-mainnet command that must succeed and decodes its
-// JSON result.
-func runSnMainnet(t *testing.T, binary string, result any, args ...string) {
+// runSnMainnet runs one sn-mainnet command and returns its output, its
+// diagnostics and its exit code.
+func runSnMainnet(t *testing.T, binary string, args ...string) (string, string, int) {
 	t.Helper()
 	command := exec.Command(binary, args...)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
-	if err := command.Run(); err != nil {
-		t.Fatalf("sn-mainnet %v: %v\n%s", args, err, stderr.String())
+	if err := command.Run(); err != nil && command.ProcessState == nil {
+		t.Fatalf("sn-mainnet %v: %v", args, err)
 	}
-	if err := json.Unmarshal(stdout.Bytes(), result); err != nil {
-		t.Fatalf("sn-mainnet %v: %v\n%s", args, err, stdout.String())
+	return stdout.String(), stderr.String(), command.ProcessState.ExitCode()
+}
+
+// snMainnetResult runs one sn-mainnet command that must succeed and decodes
+// its JSON result.
+func snMainnetResult(t *testing.T, binary string, result any, args ...string) {
+	t.Helper()
+	stdout, stderr, code := runSnMainnet(t, binary, args...)
+	if code != 0 {
+		t.Fatalf("sn-mainnet %v: exit %d\n%s", args, code, stderr)
+	}
+	if err := json.Unmarshal([]byte(stdout), result); err != nil {
+		t.Fatalf("sn-mainnet %v: %v\n%s", args, err, stdout)
 	}
 }
 
@@ -78,7 +90,7 @@ func TestR4Registration(t *testing.T) {
 			Data         hexutil.Bytes  `json:"data"`
 			PreflightUid uint16         `json:"preflight_uid"`
 		}
-		runSnMainnet(t, binary, &review, append([]string{"register-operator-pool", "review", "--safe", s.owner.address.Hex(), "--maximum-burn-rao", strconv.FormatUint(maximumBurn, 10), "--value-wei", raoWei(maximumBurn).String()}, inputs...)...)
+		snMainnetResult(t, binary, &review, append([]string{"register-operator-pool", "review", "--safe", s.owner.address.Hex(), "--maximum-burn-rao", strconv.FormatUint(maximumBurn, 10), "--value-wei", raoWei(maximumBurn).String()}, inputs...)...)
 		value, _ := new(big.Int).SetString(review.ValueWei, 10)
 		if review.To != s.settlement || value == nil || value.Cmp(raoWei(maximumBurn)) != 0 || !bytes.Equal(review.Data, s.settlementArtifact.pack(t, "registerOperatorPool", id(2), pool2, uint64(maximumBurn), uint64(1))) {
 			t.Fatalf("reviewed call: %+v", review)
@@ -90,7 +102,7 @@ func TestR4Registration(t *testing.T) {
 		var readback struct {
 			Uid uint16 `json:"uid"`
 		}
-		runSnMainnet(t, binary, &readback, append([]string{"register-operator-pool", "readback", "--transaction-hash", receipt.TxHash.Hex()}, inputs...)...)
+		snMainnetResult(t, binary, &readback, append([]string{"register-operator-pool", "readback", "--transaction-hash", receipt.TxHash.Hex()}, inputs...)...)
 		uid, registered := n.uid(t, s.netuid, pool2)
 		if !registered || n.owner(t, pool2) != s.vaultColdkey || review.PreflightUid != uid || readback.Uid != uid {
 			t.Fatalf("pool 2's hotkey: registered %v, owner %x, UID %d, preflight %d, readback %d", registered, n.owner(t, pool2), uid, review.PreflightUid, readback.Uid)
@@ -232,6 +244,56 @@ func TestR4Registration(t *testing.T) {
 		}
 		t.Logf("absorbStake: %d rao from the v1 escrow hotkey became %d rao of surplus, gas %d", held, gained, receipt.GasUsed)
 	})
+}
+
+// R-4, PR-6. TestR4RegistrationRefusals: sn-mainnet register-operator-pool
+// names what the node answers for a registration the chain refuses, and exits
+// 3, never 1. The node answers a revert with code -32603 and the revert's
+// bytes as data, a runtime refusal such as a burn above the cap as a revert
+// with no data, and a sender short of the value as the EVM error OutOfFund.
+// Readback names a reverted view the same way (VERSION2-FINAL.md §15.8).
+func TestR4RegistrationRefusals(t *testing.T) {
+	t.Parallel()
+	binary := buildSnMainnet(t)
+	n := startNode(t)
+	s := deployStack(t, n, stackConfig{operators: 3, shortFrom: 2})
+	pool2, pool3 := hexutil.Encode(s.operators[2].pool[:]), hexutil.Encode(s.operators[3].pool[:])
+	fresh := newAccount(t)
+	ceiling, value := strconv.FormatUint(maximumBurn, 10), raoWei(maximumBurn).String()
+	review := func(safe common.Address, noId, hotkey, burn, wei, firstEpoch string) (string, string, int) {
+		return runSnMainnet(t, binary, "register-operator-pool", "review", "--rpc", n.http, "--settlement2", s.settlement.Hex(), "--safe", safe.Hex(),
+			"--no-id", noId, "--pool-hotkey", hotkey, "--maximum-burn-rao", burn, "--value-wei", wei, "--first-epoch", firstEpoch)
+	}
+	if stdout, stderr, code := review(s.owner.address, "2", pool2, ceiling, value, "1"); code != 0 || stdout == "" {
+		t.Fatalf("the owner's review of pool 2: exit %d\n%s", code, stderr)
+	}
+	for _, refusal := range []struct {
+		name                                string
+		safe                                common.Address
+		noId, hotkey, burn, wei, firstEpoch string
+		want                                string
+	}{
+		{"a Safe that does not own STSettlement2", s.auditor.address, "2", pool2, ceiling, value, "1", "OwnableUnauthorizedAccount: the Safe does not own STSettlement2"},
+		{"a registered pool", s.owner.address, "1", hexutil.Encode(fresh[:]), ceiling, value, "1", "InvalidConfiguration: vault2 refuses the pool"},
+		{"a zero burn cap", s.owner.address, "2", pool2, "0", "0", "1", "InvalidConfiguration: vault2 refuses the pool"},
+		{"a first epoch with a short cadence", s.owner.address, "3", pool3, ceiling, value, "2", "CadenceTooShort: the first epoch's v1 policy is shorter than its commit window plus vault2's challenge window"},
+		{"a no_id that is no v1 operator", s.owner.address, "9", hexutil.Encode(fresh[:]), ceiling, value, "1", "UnknownOperator: no_id is not a v1 operator"},
+		{"an unfunded Safe", newEVMKey(t).address, "2", pool2, ceiling, value, "1", "OutOfFund: the Safe holds less than the value"},
+		{"an owner short of the value", s.owner.address, "2", pool2, strconv.FormatUint(1_000_000*tao, 10), raoWei(1_000_000 * tao).String(), "1", "OutOfFund: the Safe holds less than the value"},
+		{"a burn above the cap", s.owner.address, "2", pool2, "1", raoWei(1).String(), "1", `the call failed with "VM Exception while processing transaction: revert" and data 0x`},
+	} {
+		stdout, stderr, code := review(refusal.safe, refusal.noId, refusal.hotkey, refusal.burn, refusal.wei, refusal.firstEpoch)
+		if code != 3 || stdout != "" || !strings.Contains(stderr, "registerOperatorPool refused: "+refusal.want) {
+			t.Fatalf("%s: exit %d, want 3 and %q\n%s", refusal.name, code, refusal.want, stderr)
+		}
+	}
+	// settlementAt reverts for a no_id that has neither a v2 pool nor a v1
+	// operator; readback reports it as a difference.
+	stdout, stderr, code := runSnMainnet(t, binary, "register-operator-pool", "readback", "--rpc", n.http, "--settlement2", s.settlement.Hex(),
+		"--no-id", "9", "--pool-hotkey", hexutil.Encode(fresh[:]), "--first-epoch", "1", "--transaction-hash", common.Hash{9}.Hex())
+	if code != 3 || stdout != "" || !strings.Contains(stderr, "registerOperatorPool readback differs: UnknownOperator: no_id is not a v1 operator") {
+		t.Fatalf("readback of no v1 operator: exit %d\n%s", code, stderr)
+	}
 }
 
 // balance returns an EVM account's balance in wei.
