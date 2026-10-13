@@ -1,0 +1,399 @@
+# Runtime rehearsal node
+
+Activation gate 2 (`VERSION2-FINAL.md` §14) runs the exact release bytecode of
+the settlement contracts against the real Subtensor precompiles. Anvil cannot
+run them, the testnet campaign closed and there is no localnet, so this
+directory builds a node from the upstream source of runtime 475, the runtime
+mainnet (EVM chain 964) runs, and starts a one-node dev chain on it. The Go
+harness and its tests are in `rehearsal/`.
+
+## Build
+
+```sh
+PROTOC=/path/to/protoc CARGO_TARGET_DIR=/path/to/target \
+  scripts/runtime-rehearsal/build.sh /path/to/subtensor-checkout
+```
+
+`build.sh` clones `https://github.com/opentensor/subtensor.git` into the
+checkout directory if it does not exist, and checks that the tag `v475` names
+`d1718c99c34cf96abbf2bf09c0e9e48b945c76f5`. It checks out that commit, requires
+a clean tree, `spec_version: 475` in `runtime/src/lib.rs` and every digest of
+`docs/spec/runtime-v475-source.sha256`, then builds:
+
+```sh
+cargo build --locked --profile release -p node-subtensor \
+  --features "metadata-hash fast-runtime" -j 10
+```
+
+(`RUNTIME_REHEARSAL_JOBS` overrides the `-j 10`.)
+
+Upstream's localnet (`scripts/localnet.sh`, `fast_runtime=True`) builds the
+workspace with `pow-faucet metadata-hash fast-runtime`. `metadata-hash` is also
+in mainnet's release build, and `fast-runtime` gives fast blocks. `pow-faucet`
+only adds a proof-of-work faucet call and drops the default subnet-registration
+rate limit to 0, so it is left out and the runtime keeps mainnet's call set.
+
+The script runs cargo inside the checkout, so rustup selects its
+`rust-toolchain.toml` (1.89, target `wasm32v1-none`), and sets
+`WASM_BUILD_WORKSPACE_HINT` to the checkout. Without the hint, a target
+directory outside the checkout hides `Cargo.lock` from the runtime's Wasm
+build, which then resolves unlocked dependencies and fails
+(`ruint@1.20.1 requires rustc 1.90`). The build also needs `protoc`, `clang`,
+`jq`, `xxd` and `b2sum`. Finally the script checks that the dev chain's
+genesis `:code` is the built Wasm byte for byte and writes the record
+`release/runtime-rehearsal-build.txt` in the target directory.
+
+Measured on 2026-10-11 on a 24-thread host shared with other jobs, at `-j 10`:
+the build from scratch took about 37 minutes (2,243 s wall clock, including one
+restart that kept every compiled crate, after the missing workspace hint
+above), and a rebuild of the node crate alone 266 s. The runtime Wasm of that
+build is:
+
+| Artifact | Bytes | SHA-256 | BLAKE2b-256 |
+| --- | ---: | --- | --- |
+| `node_subtensor_runtime.compact.compressed.wasm` | 2,862,456 | `4bdb6b5dada78e742db06c94523dea8734d737832b5f6a118ecf8d26f6813ce4` | `a486ccc60a0ff5c2a3362e19470186fda365edcda1dfc688ba3d88e36e60fca6` |
+
+The BLAKE2b-256 is the chain's `state_getStorageHash(":code")`. It differs from
+mainnet's 475 Wasm (2,632,482 bytes, SHA-256 `00ef6bf4…`), as expected:
+`fast-runtime` changes constants, and `docs/spec/runtime-475-audit.md` explains
+why even a production-feature rebuild is not expected to match byte for byte.
+
+## Run
+
+```sh
+RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor scripts/runtime-rehearsal/run-node.sh
+```
+
+`run-node.sh` starts the `dev` chain spec: one authority, Alice as sudo, and
+Alice, Bob and Charlie with 1,000,000 TAO each. It patches two raw genesis
+values: the EVM chain ID becomes mainnet's 964 (`EVMChainId.ChainId`), and
+contract creation is open to every account (`EVM.DisableWhitelistCheck`).
+Blocks are sealed on demand, and finalized at once, by the RPC
+`engine_createBlock(true, true, null)`; there is no GRANDPA. Substrate and
+Ethereum JSON-RPC share one port on 127.0.0.1. The node takes no peers
+(`--no-mdns --reserved-only`): rehearsal chains share one genesis, and two on
+one host would otherwise find each other and exchange transactions. It uses
+the single-state transaction pool, which validates a submission against the
+newest block (the fork-aware pool could still use the block before), bans
+nothing, and runs no offchain workers. Optional environment:
+`RUNTIME_REHEARSAL_BASE_PATH` (default a new temporary directory),
+`RUNTIME_REHEARSAL_RPC_PORT` (9944), `RUNTIME_REHEARSAL_P2P_PORT` (30333) and
+`RUNTIME_REHEARSAL_SEALING` (`manual`; `instant`, or a period in milliseconds
+to seal on a timer).
+
+Differences from mainnet: `fast-runtime` sets 250 ms slots, a default subnet
+tempo of 10 (mainnet 360), up to 32 epochs per block (mainnet 2) and short
+rate limits and swap delays. The weight formulas, and so the gas schedule,
+are mainnet's (40,000 weight per gas). The dev genesis has no SN25 state. With
+tempo 10, the default 10-block admin freeze window closes a subnet's admin
+calls in 9 of every 10 blocks; set `AdminUtils.sudo_set_admin_freeze_window(0)`
+first. A second subnet within 7,200 blocks needs
+`AdminUtils.sudo_set_network_rate_limit(0)`. The activity cutoff is
+`ActivityCutoffFactorMilli × tempo / 1000`: 138 blocks at tempo 10.
+
+eth_call and eth_estimateGas run at the latest block, a transaction in the
+next one; a window-bound call must hold at both.
+
+## Go harness and smoke test
+
+```sh
+RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
+  go test -tags runtime_rehearsal ./rehearsal/ -run TestRehearsalSmoke -v
+```
+
+Run it from the repository root with `forge` on `PATH`. The test files of
+`rehearsal/` carry the `runtime_rehearsal` build tag. Each test starts its own
+node through `run-node.sh` on free ports in a temporary directory and stops it
+at the end; the node is ready in about 10 s. The
+helpers sign extrinsics with the repository's signer (`chain.EncodeSignedCall`
+over a `crv4.DialChainContext` connection), seal each transaction into its own
+block, check dispatch success with `crv4.VerifyFinalizedExtrinsicContext`, and
+read storage with the `chain` readers. They fund SS58 and EVM accounts (an EVM
+account's balance is its mapped account's), create a subnet, register
+hotkeys, stake for any coldkey, including a contract's mapped coldkey
+blake2b-256("evm:" ‖ h160) (`ss58.EvmMirrorPubkey`), dispatch as sudo, seal
+blocks (100 empty blocks take about 1 s), build contracts with `forge` and the
+pinned toolchain and deploy their creation bytecode, send and simulate EVM
+calls, and read stake through the staking precompile (`getStake`) and through
+storage (`TotalHotkeyAlpha`).
+
+The smoke test deploys `evm/test/rehearsal/RehearsalProbe.sol`, which calls a
+precompile as itself, measures the call's gas and reports the call value it
+receives. Its mapped coldkey owns stake on an emitting subnet. After two tempos
+of dividends the staked hotkeys' share price is above 1; tempo 0 then stops
+epochs, so each delta is the operation's alone, and a hotkey registered after
+that keeps share price 1.
+Measured on 2026-10-11 (the test takes about 18 s):
+
+- **getStake** through the probe equals the direct precompile read. The
+  hotkey's `TotalHotkeyAlpha` is the probe's stake plus its owner's take plus
+  1 rao of share-pool floor.
+- **Moves and transfers** (eight amounts each, from 100,000,007 to
+  5,000,000,003 rao): the source lost exactly the amount, in `getStake` and in
+  `TotalHotkeyAlpha`, and the destination's `TotalHotkeyAlpha` gained exactly
+  the amount, every time. The destination's `getStake` was one rao short in 1
+  of 8 `moveStake` and 1 of 8 `transferStake` calls onto a hotkey at share
+  price above 1, and in 3 of 4 whole-position calls there; it was exact in 16
+  of 16 calls onto a hotkey at share price 1.
+- **Floor**: below 100,000 rao of TAO the runtime refuses a same-subnet
+  `moveStake` or `transferStake` with `AmountTooLow`. At price 9.014779842 TAO
+  per alpha, 11,092 alpha rao was refused and 11,093 accepted, for both calls,
+  which is ceil(100,000 / price). The price stayed the same across blocks of
+  emission.
+- **Whole position**: `moveStake` with 2^64−1, 2^64 and 2^256−1, and
+  `transferStake` with 2^64−1, each moved the whole position.
+  2^64−2 was refused with `NotEnoughStakeToWithdraw`.
+- **Rollback**: a transaction that reverts after a successful `moveStake`
+  leaves both positions unchanged.
+- **Registration**: `registerLimit` and `burnedRegister` from the probe
+  register a hotkey owned by the probe's mapped coldkey, which pays the burn
+  (1,417,205,419 and 1,782,243,972 rao) with zero call value; `getUid` then
+  returns `(true, uid)` with the stored UID, and `(false, 0)` for an
+  unregistered hotkey.
+- **Registration collateral** (`pallets/subtensor/src/subnets/collateral.rs`;
+  `CollateralLockShare` defaults to 0, and the subnet owner or root sets it
+  with `AdminUtils.sudo_set_collateral_lock_share`): at lock share
+  2^15/65535 a `registerLimit` from the probe paid the full price,
+  2,236,996,529 rao, swapped it into alpha, burned half of that alpha and
+  staked and locked the other half, 115,828,883 alpha rao, on the (hotkey,
+  probe coldkey) position. `getStake` returned exactly the lock, and the
+  precompile's `getMinerCollateral(uint16,bytes32,bytes32)` returned
+  `(true, 115828883, 2^64, 0, 0)` (exists, locked, drain ratio 1 as Q64.64
+  bits, minimum locked, earned), and `(false, 0, 0, 0, 0)` for a position
+  without collateral. With free stake added on top, `moveStake` and
+  `transferStake` of the free amount plus 1 rao, and of 2^64−1, were refused
+  with `StakeUnavailable`; exactly `getStake − locked` moved, leaving the lock.
+- **Locked alpha** (`staking/lock.rs`, `AccountFlags`): every coldkey,
+  including a contract's mapped coldkey, rejects incoming conviction-locked
+  alpha unless it opts in (`getRejectLockedAlpha` returned true for the
+  probe). A third party that locked 4,949,971,706 of its 9,899,943,412 rao
+  could not `transfer_stake` the whole position to the probe
+  (`AccountRejectsLockedAlpha`); its unlocked part moved.
+- **Call value** (`SubtensorEvmBalanceConverter`, `runtime/src/lib.rs`): the
+  runtime moves floor(value / 10^9) rao. Sent 1, 999,999,999, 1,000,000,000
+  and 1,999,999,999 wei, the contract saw that exact `msg.value`, while its
+  balance and its mapped account gained 0, 0, 1 and 1 rao, and the sender was
+  debited the same whole rao beyond the fee: the sub-rao part never moves.
+- **Refusals**: an `eth_call` from the contract's address to the precompile
+  returns `evm error: Other("dispatch execution failed: <Error>")`. Inside a
+  contract the call fails with empty return data and consumes all the gas
+  forwarded to it: a refused transaction used 9,844,446 of its 10,000,000 gas.
+- **Gas** (maximum over the move and transfer sweeps; transaction figures
+  vary by a few gas units with the random keys in calldata):
+
+  | Call | In the probe | Transaction used | `eth_estimateGas` limit |
+  | --- | ---: | ---: | ---: |
+  | `getStake` (view) | 4,748 | | |
+  | `getUid` (view) | 995 | | |
+  | `getMinerCollateral` (view) | 1,013 | | |
+  | `moveStake` | 81,753 | 107,665 | 2,427,799 |
+  | `transferStake` | 79,321 | 105,233 | 2,420,524 |
+  | `registerLimit` | 1,409,550 | 1,434,798 | 1,493,416 |
+  | `burnedRegister` | 1,396,194 | 1,421,266 | 1,479,461 |
+
+  The runtime charges a dispatch's actual weight as gas, but admits it only if
+  the gas forwarded covers its declared weight, which for `move_stake` and
+  `transfer_stake` includes walking a full 256-entry `StakingHotkeys` list. A
+  transaction that moves stake therefore needs a gas limit of about 2.4M
+  while it uses about 105,000.
+- **Emission**: no validator set weights, and Yuma's fallback paid the staked
+  hotkeys validator emission in proportion to their stake every tempo. In an
+  epoch without weight-derived emission it pays active permit holders by stake
+  (every UID by stake if none is active), so the escrow hotkey stays at share
+  price 1 only while validators set weights; R-3 needs one.
+
+`TestRehearsalTransientStorage` deploys a Yul probe of EIP-1153 transient
+storage (`rehearsal/transient_test.go`). Measured on 2026-10-12: TLOAD and
+TSTORE run, and the storage is empty at the start of every transaction, but a
+write made in a call frame that reverts survives the revert, which EIP-1153
+forbids. After the probe wrote 1 and called itself to write 2 and revert, it
+read 2. Frontier keeps one transient map per transaction and rolls back only
+persistent storage (`SubstrateStackState` in
+`vendor/frontier/frame/evm/src/runner/stack.rs` of the runtime source). A
+reentrancy flag kept there would stay set after a guarded call reverts inside a
+caller that catches the revert, such as a batch of claims, and refuse every
+later call in that transaction, so the settlement contracts keep their guards
+in persistent storage.
+
+## R battery
+
+```sh
+RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
+  go test -tags runtime_rehearsal ./rehearsal/ -v -timeout 60m
+```
+
+The whole package, the smoke test, the transient-storage probe and R-2 to
+R-6 each on its own node in parallel, took 8 minutes 22 seconds on
+2026-10-12 (R-7, added the same day, takes about 6 minutes on its own node).
+Sealing runs at about 110 to 125 blocks a second whether or not blocks
+finalize or several callers seal at once, so a 14,400-block challenge window
+takes about 2 minutes.
+
+Each R test deploys directly, from the exact forge artifacts, the stack
+STSettlement2 needs: the v1 reserve sink, vault and coordinator proxy (in
+`Deploy.s.sol`'s order, the v1 escrow registered), one v1 operator per pool,
+then vault2, its escrow registration on the next nonce (SPEC A7), the
+STSettlement2 proxy with one auditor and quorum 1, and the pool through
+`registerOperatorPool`. R-1, the deployment through §8.5's phase with
+readback, runs from `mainnet/` as `TestR1SettlementV2Phase`, with the same
+`runtime_rehearsal` tag and `RUNTIME_REHEARSAL_NODE`
+(`mainnet/BOOTSTRAP-CONTRACTS.md`). Epoch 0 holds the deployment (300 blocks);
+epoch 1, every pool's first epoch, has the shortest cadence STSettlement2
+accepts, a 10-block commit window plus `CHALLENGE_BLOCKS`, 14,410 blocks.
+Tests that close many epochs continue with 100-block epochs (R-2, R-3 and R-4
+from epoch 2, R-5 from epoch 3). R-2, R-4 and R-5 stop subnet epochs (tempo
+0) so that no dividend moves a position between two reads; R-3 runs SN25's
+tempo of 360. Measured:
+
+- **R-1 deployment** (`TestR1SettlementV2Phase`, 100 seconds). The settlement
+  v2 phase of `bootstrap-contracts` deployed the final vault2 and its escrow
+  registration, sent back to back and sealed into one block, then the
+  STSettlement2 implementation, the initialized proxy and vault2's binding,
+  and, as the optional sixth action, the claim batcher. Each completed only
+  after its readback against the real precompiles, and the escrow position
+  held no registration collateral. Gas used of the approved limits:
+  `vault2-create` 2,821,690 of 4,000,000, `escrow2-register` 1,463,833 of
+  2,500,000, `settlement2-create` 1,935,622 of 3,000,000, `proxy2-create`
+  310,486 of 1,000,000, `vault2-link` 31,329 of 150,000 and `batcher-create`
+  285,209 of 400,000.
+- **R-2 capture.** A pool holding nothing funded 0 without a runtime call
+  (gas 110,018). With 88,974,634,979 rao on the pool, the close moved exactly
+  that and escrow gained exactly that (gas 230,818). A pool registered at a
+  collateral lock share of 2^15/65535 held 1,481,130,231 rao of locked
+  collateral: alone it funded 0, and with stake added the close moved exactly
+  `getStake − locked`, 38,742,541,778 of 40,223,672,009 rao, leaving the
+  lock. Dust: 5,569 alpha rao, transferred to vault2 at a price where it was
+  worth 120,016 rao of TAO, fell to 7,507 rao when the price fell; the close
+  reverted (runtime `AmountTooLow`) and recorded nothing, and the next close
+  deferred that epoch and captured the dust with a top-up.
+- **R-3 claim.** Claims paid with a real `transferStake`: escrow lost exactly
+  the amount and the account gained it or one rao less (one rao less in all
+  three, the escrow having earned dividends). A 4,861 rao claim, below
+  the floor at price 10.284, reverted (`AmountTooLow`); a claim to a coldkey
+  holding 128 staking hotkeys reverted (`TooManyStakingHotkeys`); both stayed
+  claimable, and the second paid once the coldkey freed one entry. Third
+  parties' `add_stake`, `move_stake` off and onto the escrow hotkey,
+  `remove_stake` and a `transfer_stake` to vault2 never lowered vault2's
+  escrow position; a transfer carrying conviction-locked alpha to vault2 was
+  refused (`AccountRejectsLockedAlpha`). Over two tempos without weights the
+  escrow hotkey earned 3,595,812,938 rao (Yuma's fallback pays validator
+  emission by stake to active permit holders); over two tempos while a
+  validator holding most of the stake weighted a miner it earned nothing.
+  Simulated from vault2, `transferStake` with 2^64 − 1 would move the whole
+  escrow position; vault2 never sends it, and no pool can fund 2^64 − 1 rao,
+  so its `AmountTooLarge` guard cannot be reached on a real chain. Third
+  parties could add hotkeys to vault2's own `StakingHotkeys` only until it
+  held 128; `absorbStake` and claims still worked, but a claim then used
+  1,256,716 gas instead of 154,218, and `absorbStake` 1,220,874: the runtime
+  charges a walk of the origin coldkey's list.
+- **R-4 registration.** `registerOperatorPool` registered the pool hotkey
+  under vault2's coldkey, burned 3.80 TAO and refunded the rest of the 100 TAO
+  ceiling to the owner through STSettlement2 (gas 1,594,088); a second
+  registration and a too-short first epoch were refused. With immunity 0 and
+  the subnet full, registrations pruned the oldest UIDs first, the escrow
+  hotkey before the pool hotkey; both kept stake and owner, and the close
+  moved the pruned pool's stake into the pruned escrow. `registerPoolUid`
+  re-registered the pool hotkey for its payer (gas 1,449,949; `UidExists`
+  once registered). `absorbStake` moved 35,094,897,822 rao that vault2 held
+  on the v1 escrow hotkey into escrow as surplus (gas 127,124).
+- **R-5 approval, demand and answer.** Finalize was refused without a quorum
+  (`QuorumNotReached`), then inside the window (`ChallengeWindowOpen`); an
+  approval needed an auditor and the exact pending root (`Unauthorized`,
+  `PendingMismatch`, `AlreadyApproved`). A demand paying 1 rao short of
+  `demandFeeWei` was refused (`InvalidDemandFee`); one paying it raised vault2's
+  account by exactly 1,000,000 rao, blocked finalize (`DemandOpen`) until the
+  operator's answer, and could not be repeated (`AlreadyDemanded`, then
+  `NoFault`).
+- **R-6 gas**, on ledgers of 2^29 accounts (depth 29, the deepest vault2
+  takes), against the SN25 operator gas policy's `maximum_gas` of 1,000,000
+  (`server/local/sn25golive/sn25-mainnet-gas-params.json`). "Before" is the
+  same run against vault2 as it was before its gas reduction (snv2
+  `7202d7cb`), on the same day:
+
+  | Transaction | Sender | Gas used | Before | Gas limit needed |
+  | --- | --- | ---: | ---: | ---: |
+  | close, capturing | operator | 225,430 | 298,949 | 2,688,632 |
+  | close, nothing to capture | operator | 126,610 | 131,501 | 144,347 |
+  | close deferring 1 epoch | operator | 131,633 | 158,174 | 149,526 |
+  | close deferring 144 epochs | operator | 2,409,622 | 5,456,724 | 2,949,195 |
+  | commit | operator | 205,288 | 297,958 | 225,484 |
+  | answer (checkPath) | operator | 149,074 | 158,843 | 154,089 |
+  | finalize | operator | 94,389 | 179,386 | 100,877 |
+  | approve | auditor | 132,524 | 134,343 | 135,736 |
+  | demand | anyone | 98,268 | 104,481 | 104,424 |
+  | claim, vault2's first | anyone | 186,682 | 236,314 | 2,572,701 |
+  | claim, an account's first | anyone | 186,707 | 202,102 | 2,572,776 |
+  | claim, an account's first after its neighbour's | anyone | 169,595 | 202,102 | 2,521,578 |
+  | claim, a repeat | anyone | 169,606 | 185,026 | 2,521,610 |
+
+  Each deferred epoch costs about 15,900 gas (before, 37,000), and about
+  19,500 of limit. A close that captures, and a claim, need about 2.5 to 2.7
+  million gas of limit because the runtime admits `moveStake` and
+  `transferStake` only if the forwarded gas covers their declared weight; the
+  capturing close is above the policy's `maximum_gas`, as is a close
+  deferring more than about 43 epochs (before, 17). The limits are
+  `eth_estimateGas` values, which this node computes with Frontier's
+  `rpc-binary-search-estimate`: its search stops once a step moves the bound
+  by less than 10%, so a limit can exceed the least sufficient one by up to
+  that much and need not fall with the gas used.
+- **R-7 batched claims** (`TestR7ClaimBatch`, 320 seconds, and
+  `TestR7MaxGasDoesNotDependOnCalldata`, 12 seconds), on a root of 2^29
+  accounts: claims through `STClaimBatcher` (`evm/src/STClaimBatcher.sol`),
+  each item capped at the tooling's default gas per claim of 2,600,000
+  (`onchain.ClaimBatchGasPerClaim`), and each batch sent with exactly the
+  least gas limit at which an `eth_call` of it attempts every item, which then
+  paid every item. A batch succeeds at any gas limit, attempting only the
+  items its gas covers, so `eth_estimateGas` cannot size one; the tooling
+  finds the limit with `eth_call` and adds 20%. The tools put at most 32
+  claims in a batch (`onchain.ClaimBatchMaxClaims`): the daemon keeps a
+  batch's signed bytes in each of its units.
+
+  The block gas limit is 75,000,000, but the pool refuses a transaction that
+  names more than 64,998,500 gas (`exceeds block gas limit`): the normal
+  dispatch class's extrinsic weight limit, the 75% normal share of the 4 s
+  block less the 10% kept for block initialization, at 40,000 weight per
+  gas, less the transaction's own extension weight
+  (`onchain.ClaimBatchMaxGas`). R-7 checks that this is exactly 13/15 of the
+  block gas limit less 1,500 gas, from which the tools keep a 10,000-gas
+  margin, and that it is the same with 0, 100,000 and 900,000 bytes of
+  calldata. Two accounts' claimed watermarks share a slot of vault2, so
+  consecutive accounts alternate between a claim that writes its slot's
+  first value and one after its neighbour's: alone they used 187,115 to
+  187,126 and 169,992 to 170,015 gas; `eth_estimateGas` gave a limit of up to
+  2,574,029, and the least limit that paid was up to 2,443,953, below the
+  default cap. Each batch claims consecutive accounts, so about half of each
+  kind.
+
+  | Claims | Gas used | Per claim | Least gas limit |
+  | --- | ---: | ---: | ---: |
+  | 1, batched | 180,926 | 180,926 | 2,704,281 |
+  | 5, batched | 783,491 | 156,698 | 3,319,253 |
+  | 10, batched | 1,509,076 | 150,907 | 4,058,837 |
+  | 20, batched | 2,972,226 | 148,611 | 5,549,988 |
+  | 32, the most the tools batch | 4,727,690 | 147,740 | 7,339,052 |
+  | 418, the most one transaction holds | 61,210,029 | 146,435 | 64,902,281 |
+
+  Against the same claims sent alone, a batch of 10 uses 15.5% less gas, a
+  batch of 20 16.8%, one of 32 17.3% and the largest 18.0%: the 21,000
+  intrinsic gas of a transaction and vault2's first, cold reads are paid
+  once. A batch of 32 costs under 1% more a claim than the largest. Its least
+  limit grows by about 149,000 gas per claim, because only the last item
+  needs the 2.6M the runtime admits a transfer with; ten single claims need
+  ten limits of about 2.44M. A batch of one, an account after its
+  neighbour's, used 6% more than such a claim alone, so the tooling sends a
+  lone claim directly. The most one transaction holds is searched by batch
+  size, since offering more accounts than fit also spends their calldata's
+  intrinsic gas; with shallower trees, and so shorter proofs, more than 418
+  claims fit. Against vault2 before its gas reduction (snv2 `7202d7cb`)
+  single claims used about 202,500 gas, a batch of 20 166,340 per claim, and
+  one transaction held 339 claims.
+
+  A last batch of four, whose second claim had a broken proof and whose third
+  was below the transfer floor, paid the first and the fourth and reported
+  the second's `InvalidProof` and the third's runtime refusal, which returns
+  nothing, as selector zero; both accounts stayed claimable. It used
+  2,974,627 gas: the runtime consumes all the gas forwarded to a precompile
+  call it refuses, so the refused claim used nearly all of its 2.6M cap, and
+  the tools preflight each claim to keep refusals out of a batch. vault2's
+  reentrancy flag, persistent storage, was clear again for the claim after
+  each refusal.

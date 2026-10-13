@@ -47,6 +47,7 @@ type releaseRuntimeV2 struct {
 	preparation          *releaseProductionPreparation
 	nativeReservations   map[uint64]uint64                       // no_id -> native epoch, owned by gate
 	nativeInputNoIdKVs   map[uint64]*releaseRuntimeNativeInputV2 // one unpublished/adopting cut per operator, owned by gate
+	settlementV2Verified bool                                    // the settlement_v2 identity check passed, owned by gate
 }
 
 // Semantic startup is called while the complete disk census is still dormant.
@@ -374,6 +375,15 @@ func (self *releaseRuntimeV2) advance(ctx context.Context, snapshot *ReleaseSnap
 func (self *releaseRuntimeV2) advanceOwned(ctx context.Context, snapshot *ReleaseSnapshot) error {
 	if snapshot == nil || snapshot.Epoch == nil || !snapshot.Epoch.IsUint64() || len(self.runtimes) == 0 {
 		return errors.New("release V2 live census or snapshot is unavailable")
+	}
+	// The first advance happens at startup's first finalized snapshot,
+	// production's before preparation is ready and legacy's before any worker
+	// starts. The settlement_v2 identity check runs there until it passes once.
+	if !self.settlementV2Verified {
+		if err := verifyReleaseSettlementV2Context(ctx, self.chain, &self.cfg, snapshot.BlockNumber, snapshot.BlockHash); err != nil {
+			return err
+		}
+		self.settlementV2Verified = true
 	}
 	if err := self.reconcileNativeInputsOwned(ctx, snapshot); err != nil {
 		return err

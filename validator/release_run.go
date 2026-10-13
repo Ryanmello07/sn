@@ -1132,6 +1132,12 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 			return fmt.Errorf("release V2 initial terminal publication: %w", err)
 		}
 	}
+	// The audit starts only after the runtime confirmed the settlement_v2
+	// contracts in its first advance.
+	ledgerAudit, err := newReleaseSettlementV2Audit(ctx, cfg, chain, runtimeV2.settlementV2Confirmed)
+	if err != nil {
+		return fmt.Errorf("settlement v2 ledger audit startup: %w", err)
+	}
 	workersOwnResources = true
 	// Children earlier processes left go to a slow background sweep that
 	// starts after startup and never blocks steering. It ends with this run.
@@ -1153,6 +1159,7 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 			}
 			return runReleaseSettlementRefresh(ctx, time.Duration(cfg.PollSeconds)*time.Second, chain.ReleaseSnapshotContext, runtimeV2.advance, func(*ReleaseSnapshot) {}, waitReleaseSnapshotRetry)
 		},
+		ledgerAudit: ledgerAudit.worker(),
 		newSteerer: func([]*ReleaseMeasurementContext) (releaseSteererRunner, error) {
 			return steerer, nil
 		},
@@ -1163,8 +1170,8 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	})
 }
 
-func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference, bridge *ReleaseNativeGapBridge) {
-	ctx := context.Background()
+func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference, ledger SettlementV2RuntimeOptions, bridge *ReleaseNativeGapBridge) {
+	ctx := WithSettlementV2RuntimeOptions(context.Background(), ledger)
 	if reference.Path != "" || reference.Sha256 != "" {
 		ctx = durablevolume.WithReference(ctx, reference)
 	}
