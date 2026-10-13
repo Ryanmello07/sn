@@ -1,0 +1,404 @@
+//go:build dualstacke2e
+
+// The dual-stack hop path end to end (connect IPV6.md C7, VALIDATOR.md §8.2).
+// The validator's real TunnelTransport (alternating first family, one tun per
+// request, the single-destination client with the fast dial failure) reaches
+// in-process connect providers over in-memory routes. Each provider egresses
+// from its own loopback addresses to an in-process API whose /verify is the
+// server's real controller on the release gate's disposable PostgreSQL and
+// Redis. Nothing leaves loopback. Run it the way the release gate runs its
+// server database suites, with this tag:
+//
+//	source server/local/release-gate-services.sh
+//	release_gate_services_start "$root" "$workspace" sn/deploy/testnet/release.lock.yml
+//	cd server && export WARP_ENV=local WARP_SERVICE=test WARP_DOMAIN=bringyour.com WARP_BLOCK=test WARP_VERSION=0.0.0
+//	source "$release_gate_service_root/environment.sh" && source test-env.sh
+//	cd ../sn && go test -tags dualstacke2e -run TestDualStackHopsEndToEnd ./validator/
+//	release_gate_services_cleanup
+package validator_test
+
+import (
+	"bytes"
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/netip"
+	"sync"
+	"syscall"
+	"testing"
+	"time"
+
+	"golang.org/x/net/dns/dnsmessage"
+
+	"github.com/urnetwork/connect"
+	"github.com/urnetwork/server"
+	"github.com/urnetwork/server/controller"
+	"github.com/urnetwork/server/model"
+	"github.com/urnetwork/server/router"
+
+	"github.com/urfoundation/sn/validator"
+)
+
+const e2eApiHost = "verify.e2e.test"
+
+// The provider-side API addresses inside each hop's tun: TEST-NET-1 and
+// ORCHIDv2, never routed. They pass the client's public-destination policy and
+// sit outside the provider's synthetic-speed ranges; a provider maps them to
+// the loopback API and never dials them.
+var (
+	e2eApiV4 = netip.MustParseAddr("192.0.2.80")
+	e2eApiV6 = netip.MustParseAddr("2001:20::80")
+)
+
+func e2eFamily(addr netip.Addr) int {
+	if addr.Unmap().Is4() {
+		return 4
+	}
+	return 6
+}
+
+// The loopback API on both families: the generator's client endpoints and the
+// server's real /verify, which records each request's source address.
+type e2eApi struct {
+	v4, v6    netip.AddrPort
+	stateLock sync.Mutex
+	sources   []netip.Addr
+}
+
+func (self *e2eApi) verifySources() []netip.Addr {
+	self.stateLock.Lock()
+	defer self.stateLock.Unlock()
+	return append([]netip.Addr(nil), self.sources...)
+}
+
+func newE2EApi(t testing.TB) *e2eApi {
+	t.Helper()
+	self := &e2eApi{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/network/auth-client", func(w http.ResponseWriter, r *http.Request) {
+		claims, _ := json.Marshal(map[string]string{"client_id": connect.NewId().String()})
+		token := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`)) + "." + base64.RawURLEncoding.EncodeToString(claims) + "."
+		_ = json.NewEncoder(w).Encode(map[string]string{"by_client_jwt": token})
+	})
+	mux.HandleFunc("/connect/control", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"pack":"","error":null}`)
+	})
+	mux.HandleFunc("/verify", func(w http.ResponseWriter, r *http.Request) {
+		if remote, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+			self.stateLock.Lock()
+			self.sources = append(self.sources, remote.Addr().Unmap())
+			self.stateLock.Unlock()
+		}
+		router.WrapWithInputNoAuth(controller.Verify, w, r)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{}`)
+	})
+	for _, bind := range []string{"127.0.0.1:0", "[::1]:0"} {
+		listener, err := net.Listen("tcp", bind)
+		if err != nil {
+			t.Fatal(err)
+		}
+		api := &http.Server{Handler: mux}
+		go func() { _ = api.Serve(listener) }()
+		t.Cleanup(func() { _ = api.Close() })
+		addrPort := netip.MustParseAddrPort(listener.Addr().String())
+		if e2eFamily(addrPort.Addr()) == 4 {
+			self.v4 = addrPort
+		} else {
+			self.v6 = addrPort
+		}
+	}
+	return self
+}
+
+// Answers the API name with both provider-side addresses.
+func newE2EDoh(t testing.TB) *httptest.Server {
+	t.Helper()
+	doh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wire, err := base64.RawURLEncoding.DecodeString(r.URL.Query().Get("dns"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var parser dnsmessage.Parser
+		header, err := parser.Start(wire)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		question, err := parser.Question()
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		builder := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: header.ID, Response: true, RecursionAvailable: true})
+		_ = builder.StartQuestions()
+		_ = builder.Question(question)
+		_ = builder.StartAnswers()
+		resource := dnsmessage.ResourceHeader{Name: question.Name, Class: dnsmessage.ClassINET, TTL: 60}
+		if question.Name.String() == e2eApiHost+"." {
+			switch question.Type {
+			case dnsmessage.TypeA:
+				_ = builder.AResource(resource, dnsmessage.AResource{A: e2eApiV4.As4()})
+			case dnsmessage.TypeAAAA:
+				_ = builder.AAAAResource(resource, dnsmessage.AAAAResource{AAAA: e2eApiV6.As16()})
+			}
+		}
+		response, err := builder.Finish()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/dns-message")
+		_, _ = w.Write(response)
+	}))
+	t.Cleanup(doh.Close)
+	return doh
+}
+
+// One dial the provider attempted: the destination family and when.
+type e2eDial struct {
+	family int
+	at     time.Time
+}
+
+// An in-process provider whose upstream dials leave from its own loopback
+// address per family; a family it lacks fails like an IPv4-only host.
+type e2eProvider struct {
+	id        connect.Id
+	egress    map[int]netip.Addr
+	client    *connect.Client
+	stateLock sync.Mutex
+	dials     []e2eDial
+}
+
+func (self *e2eProvider) recordedDials() []e2eDial {
+	self.stateLock.Lock()
+	defer self.stateLock.Unlock()
+	return append([]e2eDial(nil), self.dials...)
+}
+
+func startE2EProvider(t testing.TB, ctx context.Context, api *e2eApi, egress map[int]netip.Addr) *e2eProvider {
+	t.Helper()
+	self := &e2eProvider{id: connect.NewId(), egress: egress}
+	self.client = connect.NewClient(ctx, self.id, connect.NewNoContractClientOob(), connect.DefaultClientSettings())
+	natSettings := connect.DefaultLocalUserNatSettings()
+	natSettings.TcpBufferSettings.DialContextSettings = &connect.DialContextSettings{
+		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
+			destination, err := netip.ParseAddrPort(address)
+			if err != nil {
+				return nil, err
+			}
+			family := e2eFamily(destination.Addr())
+			self.stateLock.Lock()
+			self.dials = append(self.dials, e2eDial{family: family, at: time.Now()})
+			self.stateLock.Unlock()
+			source, ok := self.egress[family]
+			if !ok {
+				return nil, &net.OpError{Op: "dial", Net: network, Err: syscall.ENETUNREACH}
+			}
+			target := api.v4
+			if family == 6 {
+				target = api.v6
+			}
+			if destination.Addr() != map[int]netip.Addr{4: e2eApiV4, 6: e2eApiV6}[family] {
+				return nil, &net.OpError{Op: "dial", Net: network, Err: syscall.ECONNREFUSED}
+			}
+			dialer := net.Dialer{LocalAddr: &net.TCPAddr{IP: source.AsSlice()}}
+			return dialer.DialContext(ctx, "tcp", target.String())
+		},
+	}
+	nat := connect.NewLocalUserNat(ctx, "e2e provider", natSettings)
+	provider := connect.NewRemoteUserNatProvider(self.client, nat, connect.DefaultRemoteUserNatProviderSettings())
+	t.Cleanup(func() {
+		provider.Close()
+		nat.Close()
+		self.client.Cancel()
+	})
+	return self
+}
+
+// Routes one registered validator client to the provider in memory, in place
+// of the platform relay.
+func (self *e2eProvider) wire(client *connect.Client) {
+	send, receive := make(chan []byte), make(chan []byte)
+	client.RouteManager().UpdateTransport(connect.NewSendGatewayTransport(), []connect.Route{send})
+	client.RouteManager().UpdateTransport(connect.NewReceiveGatewayTransport(), []connect.Route{receive})
+	client.ContractManager().AddNoContractPeer(self.id)
+	self.client.RouteManager().UpdateTransport(connect.NewReceiveGatewayTransport(), []connect.Route{send})
+	self.client.RouteManager().UpdateTransport(connect.NewSendClientTransport(connect.DestinationId(client.ClientId())), []connect.Route{receive})
+	self.client.ContractManager().AddNoContractPeer(client.ClientId())
+}
+
+// Registers the provider at the server: provide modes and one egress feed per
+// family it has, as its platform connections would.
+func registerE2EProvider(ctx context.Context, id connect.Id, egress []netip.Addr, settings *model.VerifySettings) {
+	modes, err := json.Marshal([]model.ProvideMode{model.ProvideModePublic})
+	server.Raise(err)
+	server.Redis(ctx, func(r server.RedisClient) {
+		server.Raise(r.Set(ctx, fmt.Sprintf("{pm_%s}pms", server.Id(id)), modes, 0).Err())
+	})
+	for _, ip := range egress {
+		model.FeedVerifyEgress(ctx, server.Id(id), ip, settings)
+	}
+}
+
+// A validator transport whose registered clients reach one provider and whose
+// hop tuns resolve the API name through the test DoH server.
+func newE2ETransport(t testing.TB, ctx context.Context, api *e2eApi, doh *httptest.Server, provider *e2eProvider, validatorId connect.Id) *validator.TunnelTransport {
+	t.Helper()
+	strategySettings := connect.DefaultClientStrategySettings()
+	strategySettings.EnableResilient = false
+	// the generator's API calls reach the loopback API by name, with no
+	// resolver; every other dial (the unused platform url) is refused
+	strategySettings.DialContextSettings = &connect.DialContextSettings{
+		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil || host != e2eApiHost {
+				return nil, &net.OpError{Op: "dial", Net: network, Err: syscall.ECONNREFUSED}
+			}
+			var dialer net.Dialer
+			return dialer.DialContext(ctx, "tcp", api.v4.String())
+		},
+	}
+	strategy := connect.NewClientStrategy(ctx, strategySettings)
+	t.Cleanup(strategy.Close)
+	transport := validator.NewTunnelTransport(ctx, strategy, validator.TunnelTransportConfig{
+		ApiUrl:         "http://" + e2eApiHost,
+		ConnectUrl:     "http://127.0.0.1:9",
+		ByClientJwt:    func() string { return "validator-identity" },
+		SourceClientId: validatorId,
+	})
+	t.Cleanup(func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = transport.CloseAndWait(closeCtx)
+	})
+	validator.SetTunnelTransportE2EHooks(transport,
+		func(ctx context.Context, settings *connect.TunSettings) (*connect.Tun, error) {
+			return connect.CreateTunWithResolver(ctx, settings, &connect.DnsResolverSettings{
+				EnableLocalDoh:   true,
+				LocalDohUrlsIpv4: []string{doh.URL},
+			})
+		},
+		provider.wire,
+	)
+	return transport
+}
+
+// A signed SEED body, exactly as the trail engine builds it.
+func e2eSeedBody(t testing.TB, validatorId connect.Id, vsk ed25519.PrivateKey) []byte {
+	t.Helper()
+	vpk := vsk.Public().(ed25519.PublicKey)
+	nonce := make([]byte, connect.VerifyNonceSize)
+	if _, err := rand.Read(nonce); err != nil {
+		t.Fatal(err)
+	}
+	message, err := connect.BuildVerifySeedMessage(vpk, nonce, byte(connect.VerifyMMin))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(&connect.VerifySeedArgs{
+		ClientId: validatorId, Vpk: vpk, ClientNonce: nonce,
+		SeedSig: connect.SignVerifyMessage(vsk, message), M: connect.VerifyMMin,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+// Sends one SEED through the provider and requires the server to have
+// resolved the request's source to it: an unresolved source is a poisoned
+// trail whose echoed first hop is synthetic.
+func e2eSeed(t testing.TB, ctx context.Context, transport *validator.TunnelTransport, provider *e2eProvider, body []byte) {
+	t.Helper()
+	response, err := transport.PostVerify(ctx, provider.id, body)
+	if err != nil {
+		t.Fatalf("seed through %s: %v", provider.id, err)
+	}
+	var assign connect.VerifyAssignResult
+	if err := json.Unmarshal(response, &assign); err != nil {
+		t.Fatalf("seed response %s: %v", response, err)
+	}
+	if len(assign.Trail) != 1 || assign.Trail[0] != provider.id {
+		t.Fatalf("seed through %s echoed trail %v: the server did not resolve the source to the provider", provider.id, assign.Trail)
+	}
+}
+
+// IPV6.md C7, VALIDATOR.md §8.2. A dual-stack provider's hops alternate
+// families and both resolve at the server; an IPv4-only provider's IPv6-first
+// hops fail over to IPv4 at once and resolve.
+func TestDualStackHopsEndToEnd(t *testing.T) {
+	server.DefaultTestEnv().Run(t, func(t testing.TB) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		seed := bytes.Repeat([]byte{0x42}, ed25519.SeedSize)
+		controller.SetVerifyServerKeys([]*controller.VerifyServerKey{{ServerKeyId: 7, PrivateKey: ed25519.NewKeyFromSeed(seed)}})
+		settings := model.DefaultVerifySettings()
+		controller.SetVerifySettings(settings)
+
+		api := newE2EApi(t)
+		doh := newE2EDoh(t)
+		dualStackV4, dualStackV6 := netip.MustParseAddr("127.0.0.2"), netip.MustParseAddr("::1")
+		ipv4OnlyV4 := netip.MustParseAddr("127.0.0.3")
+		dualStack := startE2EProvider(t, ctx, api, map[int]netip.Addr{4: dualStackV4, 6: dualStackV6})
+		ipv4Only := startE2EProvider(t, ctx, api, map[int]netip.Addr{4: ipv4OnlyV4})
+		registerE2EProvider(ctx, dualStack.id, []netip.Addr{dualStackV4, dualStackV6}, settings)
+		registerE2EProvider(ctx, ipv4Only.id, []netip.Addr{ipv4OnlyV4}, settings)
+		// next hops a SEED may assign; nothing ever dials their egress
+		for i := 0; i < 2; i++ {
+			registerE2EProvider(ctx, connect.NewId(), []netip.Addr{netip.AddrFrom4([4]byte{203, 0, 113, byte(10 + i)})}, settings)
+		}
+		_, vsk, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		validatorId := connect.NewId()
+		model.SetClientPublicKey(ctx, server.Id(validatorId), vsk.Public().(ed25519.PublicKey))
+
+		const requests = 4
+		for _, provider := range []*e2eProvider{dualStack, ipv4Only} {
+			transport := newE2ETransport(t, ctx, api, doh, provider, validatorId)
+			before := len(api.verifySources())
+			for range requests {
+				e2eSeed(t, ctx, transport, provider, e2eSeedBody(t, validatorId, vsk))
+			}
+			landed := api.verifySources()[before:]
+			wantSources := []netip.Addr{dualStackV4, dualStackV6, dualStackV4, dualStackV6}
+			if provider == ipv4Only {
+				wantSources = []netip.Addr{ipv4OnlyV4, ipv4OnlyV4, ipv4OnlyV4, ipv4OnlyV4}
+			}
+			if fmt.Sprint(landed) != fmt.Sprint(wantSources) {
+				t.Fatalf("provider %s: /verify sources %v, want %v (IPv4 first, then alternating)", provider.id, landed, wantSources)
+			}
+			t.Logf("provider %s: four resolved hops arrived from %v", provider.id, landed)
+		}
+
+		// the IPv4-only provider was asked for IPv6 on its IPv6-first requests
+		// and failed over to IPv4 well inside the fallback delay each time
+		dials := ipv4Only.recordedDials()
+		fastFallbacks := 0
+		for i, dial := range dials {
+			if dial.family != 6 {
+				continue
+			}
+			if len(dials) <= i+1 || dials[i+1].family != 4 || connect.DefaultDialFallbackDelay/2 <= dials[i+1].at.Sub(dial.at) {
+				t.Fatalf("IPv4-only provider dials %v: IPv6 at %d not followed by IPv4 within %s", dials, i, connect.DefaultDialFallbackDelay/2)
+			}
+			t.Logf("IPv4-only provider: an IPv6-first hop reached IPv4 %s after its IPv6 dial", dials[i+1].at.Sub(dial.at))
+			fastFallbacks++
+		}
+		if fastFallbacks != requests/2 {
+			t.Fatalf("IPv4-only provider saw %d IPv6-first fallbacks, want %d", fastFallbacks, requests/2)
+		}
+	})
+}
