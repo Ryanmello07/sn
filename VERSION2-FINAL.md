@@ -946,7 +946,7 @@ authenticated `GET /sn/pool/claim` stays for v1 epochs.
 ### 8.5 Deployment tooling (this repository)
 
 `sn-mainnet bootstrap-contracts` accepts a fixed list of nine action ids, of
-which eight can execute (`mainnet/evm_phase.go:165,171,187`;
+which eight can execute (`mainnet/evm_phase.go:174,180,196`;
 `mainnet/bootstrap_contract_command.go:32,42`). Phase A adds a
 v2 contract phase:
 
@@ -1738,6 +1738,20 @@ bytecode.
 | CB-EV | Every batcher event, with its exact fields |
 | CB-8 | A `vault` argument other than vault2, which only the sender chooses, harms only that sender's batch: much revert data, no code or a short answer reverts it, and re-entry interleaves its events, which the claim tools refuse |
 | CB-SIZE | The batcher's sizes from the release build |
+
+### 15.11 Pool registration tool (PR)
+
+`sn-mainnet register-operator-pool` reviews and reads back the activation call
+of §12.1 step 5 (`mainnet/BOOTSTRAP-CONTRACTS.md`, "Settlement v2
+activation"). It never signs or sends.
+
+| ID | Behaviour |
+| --- | --- |
+| PR-1 | Review, send and readback against the binding: `review` prints the Safe's exact call, its calldata with the decoded arguments, the contracts `STSettlement2` names, the head, E_s's start block and the blocks remaining, after an `eth_call` preflight from the Safe. The Safe's send of the printed call registers the pool with the UID the preflight predicted. `readback` confirms the event, `vault2.pools` and `settlementAt`, and a second review is refused |
+| PR-2 | Local refusals: before any read, a zero pool hotkey and a value other than `maximumBurnRao × 10^9` wei; then a route that is not EVM chain 964, vault2's escrow hotkey as the pool hotkey, and a first epoch whose start block the head has reached, each before the preflight and each exit 3 with nothing printed. One block before E_s starts, review passes. A usage error exits 2 before any read |
+| PR-3 | Preflight mappings: the preflight from the Safe names each refusal of `registerOperatorPool`, `InactiveOperator`, `InvalidEpoch`, `CadenceTooShort`, `NativeRefundFailed`, vault2's `InvalidConfiguration`, `OwnableUnauthorizedAccount` and the v1 coordinator's `UnknownOperator`; an unnamed revert and one without data are refused. Each exits 3 and prints nothing |
+| PR-4 | Readback differences: no receipt; a reverted transaction; no `PoolRegistered` event of `noId` from vault2, or one with another hotkey or first epoch; `pools(noId)` unregistered or with another first epoch or hotkey; `settlementAt(noId, E_s)` with another vault, hotkey or version. Each exits 3 with exactly its differences |
+| PR-5 | Read failures: an RPC error at each read, an answer its binding cannot decode and an output that cannot be written each stop both modes with exit 1 and no output. The read profile refuses every other method, so neither mode can send |
 
 ## 16. Later phases
 

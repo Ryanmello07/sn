@@ -10,7 +10,7 @@ citations hold at them:
 
 | Repository | `main` head |
 | --- | --- |
-| sn, this repository | `b50c09a2` |
+| sn, this repository | the revision that holds this runbook |
 | server (`server/`) | `548a90e0` |
 | sdk (`sdk/`) | `7b024e09` |
 | connect | `f7318bca` |
@@ -22,9 +22,10 @@ citations hold at them:
 | mmm | `64173fd13` |
 | web | `9526a97b` |
 
-A second round is being merged now: sn `v2/launch-tools` and
-`v2/launch-examples`, server `v2/launch-latch`, and the consent branches
-(STATE.md:298). Step 1 freezes whatever `main` holds after it.
+The second round is under way (STATE.md:298). sn `v2/launch-tools`
+(`c296b255`) is merged. Still to merge are sn `v2/launch-examples`, server
+`v2/launch-latch` and the consent branches, mmm's at `9e2e8c2b5`. Step 1
+freezes whatever `main` holds after it.
 
 The orchestration log is [VERSION2-STATE.md](VERSION2-STATE.md), cited as
 STATE.md. It is a snapshot of 2026-10-13 20:15 UTC; its lines 1 to 286 keep
@@ -62,9 +63,12 @@ Conventions:
     UUPS, owned by the governance Safe;
   - optionally `STClaimBatcher` (`evm/src/STClaimBatcher.sol`), immutable,
     ownerless and stateless (§10.2).
-- **Deployment tooling**: the settlement v2 phase of `sn-mainnet
-  bootstrap-contracts`
-  ([mainnet/BOOTSTRAP-CONTRACTS.md](mainnet/BOOTSTRAP-CONTRACTS.md):650-921).
+- **Deployment tooling**
+  ([mainnet/BOOTSTRAP-CONTRACTS.md](mainnet/BOOTSTRAP-CONTRACTS.md)):
+  - the settlement v2 phase of `sn-mainnet bootstrap-contracts` ("Settlement
+    v2 contract phase");
+  - `sn-mainnet register-operator-pool`, which reviews and reads back the
+    activation call ("Settlement v2 activation").
 - **Operator server** (VERSION2-FINAL.md §8):
   - the v2 epoch driver and the ledger builder;
   - `GET /sn/ledger/object` and `GET /sn/ledger/account`, public
@@ -124,9 +128,8 @@ when that root finalizes, at least 14,400 blocks after its commit (§5).
   unchanged (§13).
 - **Network payout consent** ships on its own. The owner chose network payout
   consent signing in the SDK and every app (owner decision, 2026-10-13). It is
-  VERSION2-FINAL.md §11.1 on sn branch `v2/consent-signing`, `066985fd`. One
-  sr25519 signature by the coldkey, requested by the network's owner, covers
-  every provider client of the network.
+  VERSION2-FINAL.md §11.1. One sr25519 signature by the coldkey, requested by
+  the network's owner, covers every provider client of the network.
   - It is independent of activation and is not an activation gate (§11.1).
   - The operator accepts only a prospective consent: its `from_epoch` must
     exceed the current epoch at the finalized block. A consent therefore takes
@@ -139,6 +142,11 @@ when that root finalizes, at least 14,400 blocks after its commit (§5).
     signs, an app-only provider stays unpaid, in v2 as in v1.
   - Recommended: step 7's app release carries consent signing, so network
     owners can sign at least one epoch before E_s and be paid from E_s.
+  - Every native app signs the consent through ur.io's bridge page, so ur.io
+    is deployed before, or with, any app release that carries consent signing
+    (STATE.md:268). It needs the consent bridge page (mmm `v2/consent-signing`,
+    `9e2e8c2b5`) and the bridge fix (mmm `main`, `64173fd13`; STATE.md:297)
+    (step 7).
 - **The legacy USDC reconcile** is a separate, adjacent track. Its run order
   is:
   1. `bringyourctl payouts correct-legacy-attempts`, dry run, then `--apply`;
@@ -176,10 +184,10 @@ runbook, at steps 9 and 12.
   into main. Pull and push." (STATE.md:244). The first round is merged and
   pushed, without force, after a fresh fetch and a fast-forward check
   (STATE.md:278-281). The `main` heads are the Pins table above.
-- A second round is being merged: sn `v2/launch-tools` and
-  `v2/launch-examples`, server `v2/launch-latch`, and the consent branches
-  (STATE.md:298). Step 1 freezes whatever `main` holds after it, and the
-  runbook is then read against those heads.
+- The second round is under way (STATE.md:298). sn `v2/launch-tools` is
+  merged. sn `v2/launch-examples`, server `v2/launch-latch` and the consent
+  branches are still to merge. Step 1 freezes whatever `main` holds after
+  it, and the runbook is then read against those heads.
 - `v2/dual-stack-hops` is not in `main` (STATE.md:244).
 - The localization store's `main` (`1dc9045`) holds the eight `sn_ledger_*`
   keys (VERSION2-FINAL.md §11). Every release build regenerates the app
@@ -292,7 +300,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | O4 | The v2 deployer: its EVM address, next nonce and signer | neither the Safe nor an auditor; funded per section 2.6 | 8 | BOOTSTRAP-CONTRACTS.md:652-655,742-743 |
 | O5 | The escrow hotkey | 32 bytes, nonzero, with no UID on SN25 at the send; not the pool hotkey | 8 | BOOTSTRAP-CONTRACTS.md:720-727, and "Back-to-back escrow registration (A7)" |
 | O6 | The escrow registration cap `maximumBurnRao` | nonzero; the value is the cap × 10^9 wei | 8 | BOOTSTRAP-CONTRACTS.md:660,733-735 |
-| O7 | The phase envelope: each action's gas limit and fees, `maximum_total_wei`, `maximum_attempts`, the native start checkpoint and send window, the source-lock, cutover and custody-fence evidence hashes, the custody identifier and the run directory | gas starts from BOOTSTRAP-CONTRACTS.md:705-708; `maximum_attempts` at most 8 across all actions, the back-to-back escrow send included | 8 | BOOTSTRAP-CONTRACTS.md:208-213,673-677; `mainnet/evm_phase.go:171` |
+| O7 | The phase envelope: each action's gas limit and fees, `maximum_total_wei`, `maximum_attempts`, the native start checkpoint and send window, the source-lock, cutover and custody-fence evidence hashes, the custody identifier and the run directory | gas starts from BOOTSTRAP-CONTRACTS.md:705-708; `maximum_attempts` at most 8 across all actions, the back-to-back escrow send included | 8 | BOOTSTRAP-CONTRACTS.md:208-213,673-677; `mainnet/evm_phase.go:180` |
 | O8 | The `STSettlement2` owner and its signers | the governance Safe `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` at the v1 launch; confirm | 8, 15 | LAUNCH.md:47-48,164-166; VERSION2-FINAL.md §7.2 |
 | O9 | The v1 coordinator for `initialize` | the proxy `0xC18925925E2B7bb9059b7d696b8c92762AE86406`; confirm | 8 | LAUNCH.md:42 |
 | O10 | The auditor key and its EVM address | one address, quorum 1 at launch; the same key runs with `--ledger_auditor_key_file` | 8, 10 | BOOTSTRAP-CONTRACTS.md:740-744; VERSION2-FINAL.md §2.1 decision 2 |
@@ -580,8 +588,11 @@ This completes the "gate 5 software is released" part of §12.1 step 1.
   4. Recommended: let this release carry network payout consent signing
      (section 1.3). A consent takes effect from the epoch after its signing,
      so a network that signs at least one epoch before E_s is paid from E_s.
-     The release then also needs the eleven `sn_consent_*` keys in the
-     localization store (§11.1 on `v2/consent-signing`).
+     Two things then come first:
+     1. Deploy ur.io with the consent bridge page (mmm `v2/consent-signing`,
+        `9e2e8c2b5`) and the bridge fix (mmm `main`, `64173fd13`). Every
+        native app signs the consent through that page (STATE.md:268,297).
+     2. Put the eleven `sn_consent_*` keys in the localization store (§11.1).
 - **Expect.**
   - The validator's config and history hash as before (§13; VA-6,
     `validator/settlement_v2_test.go:43-47`).
@@ -593,10 +604,13 @@ This completes the "gate 5 software is released" part of §12.1 step 1.
     - linux `app/src/SnLedgerPresentation.hpp:112`;
     - apple `app/network/Main/Account/Earnings/SnLedgerPresentation.swift:55-64`;
     - mmm `ur.io/react/src/app/load/readViews.js:44-45`.
-- **Stop if** the validator's config hash changes under the new binary, or an
-  app build fails. Against a store without the keys, the Android build fails
-  and ur.io's prebuild refuses with "store key missing" (mmm
-  `ur.io/react/scripts/build-locales.mjs:82`).
+- **Stop if**:
+  - the validator's config hash changes under the new binary;
+  - an app build fails. Against a store without the keys, the Android build
+    fails and ur.io's prebuild refuses with "store key missing" (mmm
+    `ur.io/react/scripts/build-locales.mjs:82`);
+  - an app release carries consent signing while ur.io is not deployed with
+    both the consent bridge page and the bridge fix. Hold that release.
 
 **Step 8. Deploy the v2 contracts with readback.**
 
@@ -664,7 +678,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
   - the burn cap is action 1's calldata, with `value_wei` equal to the cap ×
     10^9;
   - the owner, v1 coordinator, auditors and quorum are action 3's initializer
-    (`mainnet/evm_v2_contracts.go:81-86,219-295`; `mainnet/evm_phase.go:37-47,58,77-82,171`).
+    (`mainnet/evm_v2_contracts.go:81-86,219-295`; `mainnet/evm_phase.go:37-47,58,77-82,180`).
 - **Gap, being closed.** No example config exists in the repositories. An
   example v2 phase config is being written, and its path will be cited here.
 - Preview, extract the approval bytes and sign them (BOOTSTRAP-CONTRACTS.md:194-198;
@@ -709,23 +723,23 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
   registration (A7)").
 - The commands are the block after that paragraph. Append `"${HOST[@]}"` to
   each `apply` and `resume`. The statuses are the ones R-1 asserts
-  (`mainnet/evm_v2_rehearsal_test.go:540-549`).
-  1. Open vault2's journal. Expect `signature-awaiting-import` and vault2's
-     `unsigned_transaction`:
+  (`mainnet/evm_v2_rehearsal_test.go:545-556`).
+  1. Open vault2's journal. Expect `signature-awaiting-import`. The result
+     prints vault2's `signing_digest` and `unsigned_transaction` and, beside
+     them, the escrow registration's `escrow_signing_digest` and
+     `escrow_unsigned_transaction`, the approved action 1
+     (BOOTSTRAP-CONTRACTS.md, "Back-to-back escrow registration (A7)";
+     `mainnet/evm_action.go:90-91`):
 
      ```bash
      sn-mainnet bootstrap-contracts apply --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH"
      ```
 
-  2. The deployer signs two envelopes before any send: vault2's, and the
-     escrow registration's, which is the approved plan's action 1. Each
-     signature is canonical binary EIP-1559 bytes in its own file, pinned by
-     its SHA-256 (LAUNCH.md:422-423,443).
-     - **Gap, being closed.** No command prints the escrow registration's
-       envelope before its journal opens. R-1 signs it from the approved
-       plan's action 1 (`mainnet/evm_v2_rehearsal_test.go:395-405,540-543`).
-       `apply --action vault2-create` is being changed to print it too; the
-       exact command will be cited here.
+  2. The deployer signs both before any send: `unsigned_transaction` and
+     `escrow_unsigned_transaction`. Each signature is canonical binary
+     EIP-1559 bytes in its own file, pinned by its SHA-256
+     (LAUNCH.md:422-423,443). `escrow2-register`'s later `apply` prints the
+     identical transaction and digest as its own.
   3. Import both, send both back to back, and complete vault2. Expect
      `signed-custody-complete`, then
      `submitted-with-escrow-registration-awaiting-canonical-receipts`, then
@@ -777,7 +791,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime
   - At `vault2-link`: `installation_complete` true and `activation_ready`
     false (:826-829). The result names `vault2_address`, `settlement2_address`
     (the proxy), `settlement2_implementation_address` and, after the sixth
-    action, `claim_batcher_address` (`mainnet/evm_action.go:83-86`).
+    action, `claim_batcher_address` (`mainnet/evm_action.go:81-84`).
 - **Stop if** any readback mismatches. Never repeat a completed CREATE, and
   never change the accepted graph or nonces to escape an ambiguous outcome
   (LAUNCH.md:443-447).
@@ -1036,32 +1050,67 @@ configured (§14 gate 6). Gate 5 completed at step 9.
 
 **Step 15. Register the pool. This is the activation.**
 
-- **Who.** Owner, through the Safe.
+The Safe sends `registerOperatorPool(1, poolHotkeyV2, maximumBurnRao, E_s)`
+with value `maximumBurnRao × 10^9` wei, as a direct call, the way v1's
+`registerOperator` went (§12.1 step 5; LAUNCH.md:47-56).
+`sn-mainnet register-operator-pool` builds and preflights that call and reads
+its result back; "it never signs or sends" (BOOTSTRAP-CONTRACTS.md,
+"Settlement v2 activation"). Every flag is required.
+
+- **Who.** Owner, through the Safe; operator runs the tool.
 - **Do.**
   1. Repeat step 2.
-  2. Send `registerOperatorPool(1, poolHotkeyV2, maximumBurnRao, E_s)` from the
-     Safe, with value `maximumBurnRao × 10^9` wei (O16, O17; §12.1 step 5).
-     v1's `registerOperator` went the same way, as a direct Safe
-     `execTransaction` (LAUNCH.md:47-56).
-- **Gap, being closed.** No repository command builds or reviews this
-  transaction, or reads back its result. The tooling mentions it only in the
-  bindings and the catalog. An `sn-mainnet` command that builds, preflights
-  and reads back `registerOperatorPool` is being written; the exact command
-  will be cited here.
+  2. Review the call. `--pool-hotkey` is `0x` and the hotkey's 32 bytes in
+     hex, and `--value-wei` is `maximumBurnRao × 10^9` (O16, O17):
+
+     ```bash
+     sn-mainnet register-operator-pool review --rpc "$EVM_RPC" --settlement2 "$SETTLEMENT2_PROXY" \
+       --safe "$GOVERNANCE_SAFE" --no-id 1 --pool-hotkey "$POOL_HOTKEY_V2" \
+       --maximum-burn-rao "$MAXIMUM_BURN_RAO" --value-wei "$VALUE_WEI" --first-epoch "$E_S"
+     ```
+
+  3. The Safe sends exactly the printed `to`, `value_wei` and `data`.
+  4. Read the registration back, with the Safe transaction's hash:
+
+     ```bash
+     sn-mainnet register-operator-pool readback --rpc "$EVM_RPC" --settlement2 "$SETTLEMENT2_PROXY" \
+       --no-id 1 --pool-hotkey "$POOL_HOTKEY_V2" --first-epoch "$E_S" --transaction-hash "$SAFE_TRANSACTION_HASH"
+     ```
+
 - **Expect.**
-  - The event `PoolRegistered(noId, hotkey, uid, firstEpoch)`
-    (`evm/src/STSettlementVault2.sol:176`).
-  - The surplus over the burn returned to the Safe
+  - `review` exits 0. It prints the call, `to`, `value_wei`, `data`,
+    `function` and `args`, with `first_epoch_start_block`, `blocks_remaining`
+    and `preflight_uid`, the UID the preflight registered at the head.
+  - `readback` exits 0. It has confirmed vault2's `PoolRegistered` event,
+    `pools(noId)` and `settlementAt(noId, E_s)` with version 2, and it prints
+    the event's `uid`, `transaction_hash`, `block_number` and `head_block`.
+  - The surplus over the burn returns to the Safe
     (`evm/src/STSettlement2.sol:90-96`).
-  - `settlementAt(1, E_s)` returns vault2, the hotkey and version 2
-    (:99-108).
   - Within a minute the server's driver sees the pool, and the v1 driver
     keeps only epochs below E_s
     (`server/controller/st_ledger_v2_driver.go:197-214,255-280`).
-- **Stop if** it reverts: `InactiveOperator`, `InvalidEpoch`,
-  `CadenceTooShort`, `NativeRefundFailed` (`evm/src/STSettlement2.sol:79-96`)
-  or `InvalidConfiguration` (`evm/src/STSettlementVault2.sol:166-171`). "If it
-  fails, nothing has changed, and E_s moves" (§12.1 step 5).
+- **Stop if**:
+  - `review` exits 3: the call must not be sent. It names the refusal:
+    - before any read, a zero pool hotkey, or a value other than
+      `maximumBurnRao × 10^9` wei;
+    - a route that is not EVM chain 964, vault2's own escrow hotkey, or a
+      first epoch whose start block the head has reached;
+    - the preflight's revert: `InactiveOperator`, `InvalidEpoch`,
+      `CadenceTooShort`, `NativeRefundFailed`, vault2's
+      `InvalidConfiguration`, `OwnableUnauthorizedAccount` (the Safe does not
+      own `STSettlement2`) or the v1 coordinator's `UnknownOperator`.
+  - `readback` exits 3: the chain does not hold the reviewed registration. It
+    names each difference: no receipt; a reverted transaction; no
+    `PoolRegistered` event of `noId` from vault2, or one with another hotkey
+    or first epoch; `pools(noId)` unregistered or different; `settlementAt`
+    with another vault, hotkey or version.
+  - Either mode exits 1: a read failed, "which decides nothing". Run it again.
+    Exit 2 is a usage error.
+  - A reverted registration: "If it fails, nothing has changed, and E_s
+    moves" (§12.1 step 5).
+- R-4 registers its pool through both modes on the rehearsal node, and PR-1
+  to PR-5 run them on the in-repo chain (`rehearsal/r4_registration_test.go`
+  and `mainnet/evm_v2_pool_test.go`).
 
 **Step 16. The switch at the start of E_s.**
 
@@ -1206,7 +1255,7 @@ exists for them.
 | 9, `Vault2Address` | Yes, by a release | The compiled default is never stored on the device (`sdk/sn_chain.go:352-355`; `sdk/sn_local_state.go:72-80`), so a release that clears or changes it takes effect on update. This is an inference from the code. |
 | 10, adoption | No | The block "can be neither re-pointed nor removed" (`validator/production_authority_history.go:256-259`). Until step 15 the validator still weights through `operatorAt` (§9.1). No repository path re-points it; a redeploy after adoption needs new validator code. |
 | 11, server switch | Before step 15 only | Remove the pair from st.yml and sn.yml together, then restart. v1 is untouched. After step 15, do not remove it. Without the pair the v1 driver again closes and commits every epoch, E_s and later included (`server/controller/st_ledger_v2_driver.go:263-266`), against the v1 cutoff (§8.1). And the mirror misses every v2 event while the pair is absent, with no backfill (`server/controller/st_controller.go:2598-2604,4255-4258`). Coming: a server latch, so that once the server has observed the pool's registration it fails closed without the pair. Its exact refusal text will be cited here. |
-| 15, pool registration | No | It is the commitment point. A revert changes nothing, and E_s moves (§12.1 step 5). |
+| 15, pool registration | No | It is the commitment point. `register-operator-pool review` refuses, before any send, what the chain would refuse. A revert changes nothing, and E_s moves (§12.1 step 5). |
 
 ### 6.2 After activation
 
@@ -1269,7 +1318,7 @@ From VERSION2-FINAL.md §17:
 | Stake moves need a gas limit far above their use, and a refused precompile call burns all its forwarded gas | Preflight with `eth_call`, size with `eth_estimateGas`; the re-signed gas policy (step 5); anyone can send a long deferring close |
 | Third parties fill vault2's staking-hotkey list | Claims and `absorbStake` keep working at about 1.27M gas; raise daemon thresholds to about 10 α |
 | A missed close moves an epoch's share to the next epoch's earners | The 1,200-block window and the alerts (section 5) |
-| App users without a paying consent stay unpaid | Network payout consent in the SDK and every app (§11.1 on `v2/consent-signing`), independent of phase A and not a gate. A consent takes effect from the epoch after its signing, and epochs before a network's first consent stay unpaid. Ship it with step 7's release, so networks can sign before E_s |
+| App users without a paying consent stay unpaid | Network payout consent in the SDK and every app (§11.1), independent of phase A and not a gate. A consent takes effect from the epoch after its signing, and epochs before a network's first consent stay unpaid. Ship it with step 7's release, after ur.io has the consent bridge page, so networks can sign before E_s |
 | The owner's availability for Ledger-signed steps | Plan steps 5, 8, 10 and 15 with the owner |
 | The treasury approval expires about 2026-12-17 | A separate successor after adoption (step 14 note) |
 | Small balances are uneconomic to claim | Accrual never expires; the published threshold; an optional UR subsidy |
@@ -1307,24 +1356,26 @@ Open owner decisions and work that the repositories leave open:
    the `mainnet` package exceeded the 90-minute budget on the build machine
    (STATE.md:133). No CI runs any of this (section 2.2).
 5. **The phase C sweep**, with `E_sweep >= E_s + 8` (§16).
-6. **Network payout consent** (§11.1 on `v2/consent-signing`, `066985fd`),
-   the largest single increase in providers paid. It ships on its own,
-   independent of activation. If it misses step 7's release, release it as
-   soon as it is ready: a network's app-only providers stay unpaid until the
-   epoch after it signs.
+6. **Network payout consent** (§11.1), the largest single increase in
+   providers paid. It ships on its own, independent of activation, after
+   ur.io has the consent bridge page (step 7). If it misses step 7's release,
+   release it as soon as it is ready: a network's app-only providers stay
+   unpaid until the epoch after it signs.
 7. **The Windows v2 Claim colour**, blue or lime (STATE.md:200).
 8. **Tooling gaps** marked in section 4:
-   - being closed: building, preflighting and reading back
-     `registerOperatorPool` (step 15);
-   - being closed: printing the escrow registration's envelope (step 8.4);
    - being closed: the validator unit's auditor flag, through a systemd
      drop-in (step 10);
    - being closed: examples of the v2 phase config (step 8.3), the
      daemon-scope custody request (step 8.2), the claim daemon config and a
      watcher service and timer (step 13);
+   - coming: the server latch of section 6.1;
    - build and run instructions for `sn25golive` (step 5);
    - rehearsal pins for a runtime after 475 (step 2);
    - written adoption commands (step 10).
+
+   Closed since the first version of this runbook: the escrow registration's
+   envelope (step 8.4) and the `registerOperatorPool` review and readback
+   (step 15).
 
 ## 9. Schedule for E_s = 2
 
