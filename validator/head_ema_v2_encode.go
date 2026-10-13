@@ -6,7 +6,6 @@ package validator
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"reflect"
 	"sort"
@@ -52,17 +51,6 @@ func (self *headEMAStoreV2JSONWriter) indent(depth int) error {
 	}
 	return nil
 }
-
-// encoding/json writes each invalid UTF-8 byte as one replacement: a literal
-// U+FFFD under the default jsonv2 experiment, or a \ufffd escape without it.
-// One probe of the linked encoder keeps this writer exact in either build.
-var headEMAStoreV2InvalidUTF8 = func() string {
-	encoded, err := json.Marshal(string([]byte{0xff}))
-	if err != nil || len(encoded) < 2 {
-		return "\\ufffd"
-	}
-	return string(encoded[1 : len(encoded)-1])
-}()
 
 // Match encoding/json's default HTML-safe string grammar, including invalid
 // UTF-8 replacement and U+2028/U+2029. Runtime-generated decimals are ASCII,
@@ -113,7 +101,7 @@ func (self *headEMAStoreV2JSONWriter) quoted(value string) error {
 		}
 		runeValue, width := utf8.DecodeRuneInString(value[index:])
 		if runeValue == utf8.RuneError && width == 1 {
-			if err := self.emit(headEMAStoreV2InvalidUTF8); err != nil {
+			if err := self.emit(encodingJSONInvalidUTF8Replacement); err != nil {
 				return err
 			}
 		} else if runeValue == '\u2028' {

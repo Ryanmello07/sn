@@ -63,17 +63,6 @@ func (self *attemptSettlementV2JSONCount) add(size uint64) error {
 	return nil
 }
 
-// encoding/json writes each invalid UTF-8 byte as one replacement: a literal
-// U+FFFD under the default jsonv2 experiment, or a \ufffd escape without it.
-// Its width is measured once from the linked encoder this count must equal.
-var attemptSettlementV2InvalidUTF8Width = func() uint64 {
-	encoded, err := json.Marshal(string([]byte{0xff}))
-	if err != nil || len(encoded) < 2 {
-		return 6
-	}
-	return uint64(len(encoded) - 2)
-}()
-
 // encoding/json escapes HTML, control characters, invalid UTF-8 and the two
 // JavaScript line separators. UUIDs have their separately fixed wire width.
 func (self *attemptSettlementV2JSONCount) string(value string) error {
@@ -89,7 +78,7 @@ func (self *attemptSettlementV2JSONCount) string(value string) error {
 		case character < 0x20 || character == '<' || character == '>' || character == '&' || character == '\u2028' || character == '\u2029':
 			size = 6
 		case character == utf8.RuneError && width == 1:
-			size = attemptSettlementV2InvalidUTF8Width
+			size = uint64(len(encodingJSONInvalidUTF8Replacement))
 		}
 		if err := self.add(size); err != nil {
 			return err
