@@ -104,9 +104,23 @@ when that root finalizes, at least 14,400 blocks after its commit (§5).
   The v1 contracts, deployment id, evidence journal, `verify.yml`,
   `provider_work.yml`, the policy file and the launch readiness digest are
   unchanged (§13).
-- **App consent signing** (§11, "Not closed by v2"). App-only providers stay
-  unpaid in v2, as in v1, and v2 stays consent-only (§3; owner decision,
-  2026-10-13).
+- **Network payout consent** ships on its own. The owner chose network payout
+  consent signing in the SDK and every app (owner decision, 2026-10-13). It is
+  VERSION2-FINAL.md §11.1 on sn branch `v2/consent-signing`, `066985fd`. One
+  sr25519 signature by the coldkey, requested by the network's owner, covers
+  every provider client of the network.
+  - It is independent of activation and is not an activation gate (§11.1).
+  - The operator accepts only a prospective consent: its `from_epoch` must
+    exceed the current epoch at the finalized block. A consent therefore takes
+    effect from the epoch after its signing, and epochs before a network's
+    first consent stay unpaid (§11.1, "Earnings range").
+  - v1 also pays consent-selected wallets (§2.1, decision 4). A consent signed
+    before E_s therefore counts for the v1 epochs from the one after its
+    signing, and then for v2.
+  - v2 stays consent-only (§3; owner decision, 2026-10-13). Until its network
+    signs, an app-only provider stays unpaid, in v2 as in v1.
+  - Recommended: step 7's app release carries consent signing, so network
+    owners can sign at least one epoch before E_s and be paid from E_s.
 - **The legacy USDC reconcile** is a separate, adjacent track. Its run order
   is:
   1. `bringyourctl payouts correct-legacy-attempts`, dry run, then `--apply`;
@@ -267,7 +281,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | O12 | The demand fee | decided: 750,000 rao, 750,000,000,000,000 wei (owner decision, 2026-10-12); the command has no default | 8 | VERSION2-FINAL.md §7.1; BOOTSTRAP-CONTRACTS.md:723-728 |
 | O13 | The re-signed operator gas policy: `revision`, `previous_policy_sha256`, `maximum_gas`, `maximum_intent_liability_wei`, `maximum_lifetime_liability_wei`, the validity window and the attempt caps | `maximum_gas` about 3.5M; intent liability at least `maximum_gas` × the 30 gwei fee cap; `maximum_intent_attempts` at most 3; same bindings | 5 | VERSION2-FINAL.md §8.1, §13; `server/local/sn25golive/gas.go:26-28` |
 | O14 | The treasury re-sign inputs: the input file and the unsigned policy plan the live approval was drafted from, with their SHA-256, and the approval key's signature | unchanged; only `config_hash` may change | 10 | `mainnet/treasury_approval_test.go:466-512`; `validator/production_authority_history.go:368-388` |
-| O15 | The adopted validator config: its absolute path, the predecessor's retained authority bundle, the progress file, the durable-volume declaration, and how the service command line gains `--ledger_auditor_key_file` | all paths absolute | 10 | `validator/treasury_approval_draft.go:71-77`; `validator/run.go:112-117` |
+| O15 | The adopted validator config: its absolute path, the predecessor's retained authority bundle, the progress file, the durable-volume declaration, and how the service command line gains `--ledger_auditor_key_file` | all paths absolute; the recommended default for the flag is a systemd drop-in for the validator unit (step 10) | 10 | `validator/treasury_approval_draft.go:71-77`; `validator/run.go:112-117` |
 | O16 | The v2 pool hotkey (`poolHotkeyV2`) | new; nonzero; not the escrow hotkey; not used by another pool | 15 | `evm/src/STSettlementVault2.sol:166-171`; VERSION2-FINAL.md §12.1 |
 | O17 | The pool registration cap `maximumBurnRao` and the value sent | the rehearsal sent the cap × 10^9 wei at the runtime's default MaxBurn of 100 TAO | 15 | `rehearsal/stack_test.go:31-32,190-194` |
 | O18 | E_s and the registration date | E_s is the first epoch that starts at least two days after the last gate passes; registration one to two days before E_s starts | 14, 15 | VERSION2-FINAL.md §12.1 step 5, §14 |
@@ -533,6 +547,11 @@ This completes the "gate 5 software is released" part of §12.1 step 1.
   3. Release the SDK and the apps with the v2 display and claims, and without
      `Vault2Address`. Build the apps against SDK `b9b2bf78` or later, which
      carries the claim API in `sdk/sn_ledger_claim.go`.
+  4. Recommended: let this release carry network payout consent signing
+     (section 1.3). A consent takes effect from the epoch after its signing,
+     so a network that signs at least one epoch before E_s is paid from E_s.
+     The release then also needs the eleven `sn_consent_*` keys in the
+     localization store (§11.1 on `v2/consent-signing`).
 - **Expect.**
   - The validator's config and history hash as before (§13; VA-6,
     `validator/settlement_v2_test.go:43-47`).
@@ -598,9 +617,10 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
   `apply` and `resume` (OWNER-CUSTODY-PREPARATION.md:100-102):
   `HOST=(--durable-volumes "$HOST_DECLARATION" --durable-volumes-sha256 "$HOST_DECLARATION_SHA256")`
   (LAUNCH.md:349-352).
-- **Gap.** The daemon-scope request for these journals is not written out;
-  the documented example is the owner-local one
-  (OWNER-CUSTODY-PREPARATION.md:40-56).
+- **Gap, being closed.** The daemon-scope request for these journals is not
+  written out; the documented example is the owner-local one
+  (OWNER-CUSTODY-PREPARATION.md:40-56). An example is being written, and its
+  path will be cited here.
 
 *8.3 Draft, preview, approve and plan.*
 
@@ -614,7 +634,8 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
     10^9;
   - the owner, v1 coordinator, auditors and quorum are action 3's initializer
     (`mainnet/evm_v2_contracts.go:81-86,219-295`; `mainnet/evm_phase.go:37-47,58,77-82,171`).
-- **Gap.** No example config exists in the repositories.
+- **Gap, being closed.** No example config exists in the repositories. An
+  example v2 phase config is being written, and its path will be cited here.
 - Preview, extract the approval bytes and sign them (BOOTSTRAP-CONTRACTS.md:194-198;
   LAUNCH.md:369-376):
 
@@ -668,9 +689,11 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
      escrow registration's, which is the approved plan's action 1. Each
      signature is canonical binary EIP-1559 bytes in its own file, pinned by
      its SHA-256 (LAUNCH.md:422-423,443).
-     - **Gap.** No command prints the escrow registration's envelope before
-       its journal opens. R-1 signs it from the approved plan's action 1
-       (`mainnet/evm_v2_rehearsal_test.go:395-405,540-543`).
+     - **Gap, being closed.** No command prints the escrow registration's
+       envelope before its journal opens. R-1 signs it from the approved
+       plan's action 1 (`mainnet/evm_v2_rehearsal_test.go:395-405,540-543`).
+       `apply --action vault2-create` is being changed to print it too; the
+       exact command will be cited here.
   3. Import both, send both back to back, and complete vault2. Expect
      `signed-custody-complete`, then
      `submitted-with-escrow-registration-awaiting-canonical-receipts`, then
@@ -826,12 +849,14 @@ release of every app.
     beyond its config hash"
     (`validator/production_authority_history.go:374,382,385`);
   - "settlement_v2 … at block … returned …" (`validator/settlement_v2.go:67`).
-- **Gap.** The repository's validator unit runs
+- **Gap, being closed.** The repository's validator unit runs
   `run --config=… --progress-file=…` and adds no auditor flag
   (`mainnet/repair_validator_authority.go:181-183`), and its installer never
   overwrites a unit ([mainnet/VALIDATOR-ACTIVATION.md](mainnet/VALIDATOR-ACTIVATION.md):198-204).
   Without the flag "none is sent" (`validator/run.go:142-143`), and no root is
-  ever approved. The owner decides how the service gains the flag (O15).
+  ever approved. The recommended default (O15) is a systemd drop-in for the
+  validator unit that adds `--ledger_auditor_key_file`. It is being written,
+  with a test, and its path will be cited here.
 - Adoption is one-way: "once adopted it can be neither re-pointed nor removed"
   (`validator/production_authority_history.go:256-259`).
 - Step 11 follows directly. The server's reserved upload lane pins the
@@ -896,8 +921,11 @@ configured (§14 gate 6). Gate 5 completed at step 9.
 
 - **Who.** Operator.
 - **Do.**
-  - Confirm the validator runs the adopted config with the auditor flag, and
-    that its v2 identity check passed.
+  - Confirm the validator runs the adopted config, and that its v2 identity
+    check passed.
+  - Confirm the running validator unit carries `--ledger_auditor_key_file`,
+    through the step 10 drop-in. Without it the audit sends no approval
+    (`validator/run.go:142-143`). The check will be cited with the drop-in.
   - Confirm every server service runs the step 6 build with the step 5 policy
     and the step 11 config.
   - Confirm the step 9 app releases are out.
@@ -941,8 +969,10 @@ configured (§14 gate 6). Gate 5 completed at step 9.
     1.9 α (`miner/run.go:195-197`).
 - **Stop if** the daemon refuses its batcher, or refuses a threshold below the
   floor (`miner/claim_v2_daemon.go:640-642`).
-- **Gap.** Nothing in the repositories schedules the watcher or installs it as
-  a service, and no example daemon config exists (O21, O22).
+- **Gap, being closed.** Nothing in the repositories schedules the watcher or
+  installs it as a service, and no example daemon config exists (O21, O22). An
+  example claim daemon config and a watcher service and timer are being
+  written, and their paths will be cited here.
 
 ### Phase C. Activate
 
@@ -976,9 +1006,11 @@ configured (§14 gate 6). Gate 5 completed at step 9.
      Safe, with value `maximumBurnRao × 10^9` wei (O16, O17; §12.1 step 5).
      v1's `registerOperator` went the same way, as a direct Safe
      `execTransaction` (LAUNCH.md:47-56).
-- **Gap.** No repository command builds or reviews this transaction, or reads
-  back its result. The tooling mentions it only in the bindings and the
-  catalog.
+- **Gap, being closed.** No repository command builds or reviews this
+  transaction, or reads back its result. The tooling mentions it only in the
+  bindings and the catalog. An `sn-mainnet` command that builds, preflights
+  and reads back `registerOperatorPool` is being written; the exact command
+  will be cited here.
 - **Expect.**
   - The event `PoolRegistered(noId, hotkey, uid, firstEpoch)`
     (`evm/src/STSettlementVault2.sol:176`).
@@ -1136,7 +1168,7 @@ exists for them.
 | 8, contracts | No, but they can be abandoned | vault2 is immutable. Until a pool registers it holds nothing and nothing depends on it (BOOTSTRAP-CONTRACTS.md:856-866). A redeploy needs a new approval, a fresh escrow hotkey and fresh nonces. After step 10 a redeploy also meets the validator's one-way adoption (row 10). |
 | 9, `Vault2Address` | Yes, by a release | The compiled default is never stored on the device (`sdk/sn_chain.go:352-355`; `sdk/sn_local_state.go:72-80`), so a release that clears or changes it takes effect on update. This is an inference from the code. |
 | 10, adoption | No | The block "can be neither re-pointed nor removed" (`validator/production_authority_history.go:256-259`). Until step 15 the validator still weights through `operatorAt` (§9.1). No repository path re-points it; a redeploy after adoption needs new validator code. |
-| 11, server switch | Before step 15 only | Remove the pair from st.yml and sn.yml together, then restart. v1 is untouched. After step 15, do not remove it. Without the pair the v1 driver again closes and commits every epoch, E_s and later included (`server/controller/st_ledger_v2_driver.go:263-266`), against the v1 cutoff (§8.1). And the mirror misses every v2 event while the pair is absent, with no backfill (`server/controller/st_controller.go:2598-2604,4255-4258`). |
+| 11, server switch | Before step 15 only | Remove the pair from st.yml and sn.yml together, then restart. v1 is untouched. After step 15, do not remove it. Without the pair the v1 driver again closes and commits every epoch, E_s and later included (`server/controller/st_ledger_v2_driver.go:263-266`), against the v1 cutoff (§8.1). And the mirror misses every v2 event while the pair is absent, with no backfill (`server/controller/st_controller.go:2598-2604,4255-4258`). Coming: a server latch, so that once the server has observed the pool's registration it fails closed without the pair. Its exact refusal text will be cited here. |
 | 15, pool registration | No | It is the commitment point. A revert changes nothing, and E_s moves (§12.1 step 5). |
 
 ### 6.2 After activation
@@ -1200,7 +1232,7 @@ From VERSION2-FINAL.md §17:
 | Stake moves need a gas limit far above their use, and a refused precompile call burns all its forwarded gas | Preflight with `eth_call`, size with `eth_estimateGas`; the re-signed gas policy (step 5); anyone can send a long deferring close |
 | Third parties fill vault2's staking-hotkey list | Claims and `absorbStake` keep working at about 1.27M gas; raise daemon thresholds to about 10 α |
 | A missed close moves an epoch's share to the next epoch's earners | The 1,200-block window and the alerts (section 5) |
-| App users without a paying consent stay unpaid | App consent signing, independent of phase A |
+| App users without a paying consent stay unpaid | Network payout consent in the SDK and every app (§11.1 on `v2/consent-signing`), independent of phase A and not a gate. A consent takes effect from the epoch after its signing, and epochs before a network's first consent stay unpaid. Ship it with step 7's release, so networks can sign before E_s |
 | The owner's availability for Ledger-signed steps | Plan steps 5, 8, 10 and 15 with the owner |
 | The treasury approval expires about 2026-12-17 | A separate successor after adoption (step 14 note) |
 | Small balances are uneconomic to claim | Accrual never expires; the published threshold; an optional UR subsidy |
@@ -1211,10 +1243,10 @@ Found while writing this runbook:
 
 | Risk | Mitigation |
 | --- | --- |
-| The validator unit carries no `--ledger_auditor_key_file`, so no root is approved | Step 10's gap; check the flag in step 12 |
+| The validator unit carries no `--ledger_auditor_key_file`, so no root is approved | The systemd drop-in of step 10, being written; check the flag in step 12 |
 | st.yml and sn.yml disagree, which refuses every mainnet send, v1 included | One change for both files, `sn25golive st-check` and the step 11 stop conditions |
 | A failed `vault2.pools` read delays v1 closes and commits | The log line of section 5; RPC health |
-| The mirror has no v2 backfill, and without the pair the v1 driver resumes epochs at or after E_s | Switch the server before step 15, and never remove the pair after it |
+| The mirror has no v2 backfill, and without the pair the v1 driver resumes epochs at or after E_s | Switch the server before step 15, and never remove the pair after it. Coming: a server latch that fails closed without the pair once it has observed the pool's registration; its refusal text will be cited here |
 | The app catalogs lack the v2 strings | The store's `main` gains the keys before any build (section 2.1) |
 | No CI anywhere | The owner's pipeline and the hand-run suites of section 2.2 |
 | The rehearsal tooling builds only runtime 475 | Step 2's check, and a reviewed pin change before any rerun on a new runtime |
@@ -1238,23 +1270,21 @@ Open owner decisions and work that the repositories leave open:
    the `mainnet` package exceeded the 90-minute budget on the build machine
    (STATE.md:133). No CI runs any of this (section 2.2).
 5. **The phase C sweep**, with `E_sweep >= E_s + 8` (§16).
-6. **App consent signing**, the largest single increase in providers paid
-   (§11).
+6. **Network payout consent** (§11.1 on `v2/consent-signing`, `066985fd`),
+   the largest single increase in providers paid. It ships on its own,
+   independent of activation. If it misses step 7's release, release it as
+   soon as it is ready: a network's app-only providers stay unpaid until the
+   epoch after it signs.
 7. **The Windows v2 Claim colour**, blue or lime (STATE.md:200).
 8. **Tooling gaps** marked in section 4:
-   - building and reading back `registerOperatorPool` (step 15);
-   - printing the escrow registration's envelope (step 8.4);
-   - the validator unit's auditor flag (step 10);
+   - being closed: building, preflighting and reading back
+     `registerOperatorPool` (step 15);
+   - being closed: printing the escrow registration's envelope (step 8.4);
+   - being closed: the validator unit's auditor flag, through a systemd
+     drop-in (step 10);
+   - being closed: examples of the v2 phase config (step 8.3), the
+     daemon-scope custody request (step 8.2), the claim daemon config and a
+     watcher service and timer (step 13);
    - build and run instructions for `sn25golive` (step 5);
-   - a schedule or service for the watcher, and an example daemon config
-     (step 13);
    - rehearsal pins for a runtime after 475 (step 2);
-   - written adoption commands (step 10), an example v2 phase config
-     (step 8.3) and the daemon-scope custody request (step 8.2).
-9. **Document corrections.**
-   - BOOTSTRAP-CONTRACTS.md:688 gives vault2 as 11,780 runtime bytes; the
-     catalog's is 12,815.
-   - VERSION2-FINAL.md:947-949 and :1325 cite line numbers that have moved.
-   - VERSION2-FINAL.md:1324 says the validator checks the contracts "at load";
-     the code checks at its first finalized snapshot
-     (`validator/release_runtime_v2.go:378-386`).
+   - written adoption commands (step 10).
