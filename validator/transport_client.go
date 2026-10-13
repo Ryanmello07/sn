@@ -60,7 +60,7 @@ func (self *TunnelTransport) PostVerify(ctx context.Context, hop connect.Id, bod
 	}()
 	select {
 	case <-callCtx.Done():
-		return nil, callCtx.Err()
+		return nil, tunnelVerifyFailure(trailStageLease, callCtx.Err())
 	case <-self.ctx.Done():
 		return nil, self.ctx.Err()
 	case <-self.clientLease:
@@ -80,10 +80,13 @@ func (self *TunnelTransport) PostVerify(ctx context.Context, hop connect.Id, bod
 	}
 	if self.client == nil {
 		if err := self.waitForClientRegistration(callCtx, hop); err != nil {
-			return nil, err
+			return nil, tunnelVerifyFailure(trailStageRegistration, err)
 		}
 	}
-	response, err := self.client.postVerify(callCtx, hop, body)
+	observation := newTunnelVerifyObservation(self.client, hop)
+	response, err := self.client.postVerify(observation.context(callCtx), hop, body)
+	observation.close()
+	err = observation.failure(err)
 	select {
 	case <-self.client.done():
 		err = errors.Join(err, self.retireClient())
