@@ -334,7 +334,7 @@ without replacement within the trail**, from the eligible set:
 
 ```
 eligible(trail) = { c : c has an active ProvideMode }
-               ∩ { c : c has exactly one known egress IP (§8.1, §8.2) }
+               ∩ { c : c has a known egress IP, at most one per family (§8.1, §8.2) }
                ∩ { c : c holds an eligibility token (§5.3) }
                \ { hops already in trail }  \ { validator's own client_id }
 ```
@@ -645,9 +645,15 @@ today — **this is new work**:
   the original "known ip hashes from providers" so the table does not hold raw
   provider IPs at rest. Look up by hashing the source IP.
 
-Only providers satisfying the one-provider-⇄-one-egress-IP invariant (§8.2) are
-present in this index; everyone else is absent and therefore ineligible. Do the
+Only providers satisfying the one-provider-⇄-one-egress-IP-per-family invariant (§8.2)
+are present in this index; everyone else is absent and therefore ineligible. Do the
 lookup in **constant-ish time** regardless of hit/miss (§9).
+
+As built, the forward entry `verify_egress_v2_<hash>` names the one provider egressing
+from an exact address (keyed hash, never the raw IP), and the reverse hash
+`{vce3_<clientId>}` holds one field per live address of that provider:
+`<address hash>_<family>_<prefix hash>`. A source resolves when the forward entry names
+the provider and the source is the only live address of its family in the reverse hash.
 
 **Egress-IP-hash on the trail (head score, D27).** Two granularities, do not conflate:
 the reverse index above resolves a hop to a `client_id` at the **exact egress IP**
@@ -659,22 +665,31 @@ the reverse index above resolves a hop to a `client_id` at the **exact egress IP
 their own trails**. The prefix hash never exposes the raw exit IP, and coarsening to a
 prefix is what makes IPs *shareable*: two distinct exact exit IPs in the same prefix (two
 `client_id`s, possibly two fleets) collapse to one hash — counted **split** across the
-fleets claiming it (§11.1), so co-located supply is not double-counted.
+fleets claiming it (§11.1), so co-located supply is not double-counted. A provider with
+an egress in each family records **one** hash: its IPv4 prefix while it has exactly one
+live IPv4 egress, from whichever family the hop landed on, else the hop's own prefix. A
+second family does not double a provider's head score.
 
-### 8.2 Eligibility invariant: one provider ⇄ one egress IP
+### 8.2 Eligibility invariant: one provider ⇄ one egress IP per family
 
 The hop lookup must be unambiguous, so eligibility enforces a **bijection** between
-eligible providers and egress IPs. We do not attempt to disambiguate shared egress —
-we exclude.
+eligible providers and egress IPs within each address family. We do not attempt to
+disambiguate shared egress — we exclude.
 
-- **Exclude any `client_id` that currently has more than one egress IP.** A
-  multi-egress provider is simply not eligible to be sampled (§5.1) until it is back
-  to a single egress IP. (CGNAT-style ambiguity is explicitly a non-goal.)
+- **Exclude any `client_id` that currently has more than one egress IP in one family.**
+  A provider may hold one live IPv4 and one live IPv6 egress (connect `IPV6.md` A runs
+  one transport per family), and a hop resolves when its source is its family's only
+  live egress for that provider. A provider with two live egress IPs of one family is
+  not eligible to be sampled (§5.1) and neither of them resolves, until it is back to
+  one; its egress in the other family still resolves. (CGNAT-style ambiguity is
+  explicitly a non-goal.)
 - **The reverse index must be unique.** If an egress IP is ever observed backing
   more than one `client_id`, that IP resolves to *no* provider — drop it, never guess.
 - Maintain the invariant where `proxy_client` egresses are allocated/released
-  (`network_client_proxy_model.go:583`): on a provider gaining a second egress IP,
-  remove it from the eligible index; on returning to a single egress IP, re-add it.
+  (`network_client_proxy_model.go:583`): on a provider gaining a second egress IP in
+  one family, remove it from the eligible index; on returning to one per family, re-add
+  it. Each address keeps its own lease and expiry, so one family's lapsing leaves the
+  other attributed.
 - **IPv6 / churn:** index both families; expire entries when a `proxy_client` is
   released so a reassigned IP is not miscredited to the previous holder.
 
@@ -682,9 +697,21 @@ we exclude.
 requests (SEED and EXTEND posts, retries included) alternate the family their tunnel tries
 first, IPv4 for the first request, and each falls back to the other family when the first
 fails (connect `IPV6.md` C7). The source IP is the provider's egress on the family that
-landed, and only the provider's one indexed egress IP resolves: a request that lands on
-the provider's other family resolves to no provider, so a SEED is poisoned and an EXTEND
-fails.
+landed, and it resolves when it is that family's only live egress for the provider. A
+request that lands on a family the provider has no live indexed egress in resolves to no
+provider, so a SEED is poisoned and an EXTEND fails (`source-egress-unresolved`).
+
+**A second family does not double a provider's budgets.** Seeds and EXTENDs from a
+resolved source also count against per-provider meters held to the same hard limits
+(`hard_seed_per_minute_per_source`, `hard_extend_per_minute_per_source`), so the two
+families' source IPs share one budget; the concurrent-trail cap
+(`hard_active_trails_per_source`) counts per `vpk`, whatever the source; and the head
+score's egress-IP-hash is one per provider (§8.1).
+
+**Rolling deploy.** The server's reverse index moved from v2 (bare address hashes) to v3
+(fields carry the family). Writers feed only v3; readers also read v2, whose entries
+lapse one egress TTL after the last v2 writer stops. A v2 entry's family is unknown, so
+it counts against both families until it lapses.
 
 > **Bijection (attribution) vs. splitting (head score) — no contradiction.** The
 > exact-IP bijection here keeps **hop attribution** unambiguous: one exact egress IP ⇄
