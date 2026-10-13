@@ -1,9 +1,9 @@
 //go:build dualstacke2e
 
 // The dual-stack hop path end to end (connect IPV6.md C7, VALIDATOR.md §8.2).
-// The validator's real TunnelTransport (each request's first family as the
-// trail engine marks it, one tun per request, the single-destination client
-// with the fast dial failure) reaches
+// The validator's real TunnelTransport, driven as the trail engine's step
+// drives it (the family each hop tries first, and its retries; one tun per
+// request; the single-destination client with the fast dial failure), reaches
 // in-process connect providers over in-memory routes. Each provider egresses
 // from its own loopback addresses to an in-process API whose /verify is the
 // server's real controller on the release gate's disposable PostgreSQL and
@@ -14,7 +14,7 @@
 //	release_gate_services_start "$root" "$workspace" sn/deploy/testnet/release.lock.yml
 //	cd server && export WARP_ENV=local WARP_SERVICE=test WARP_DOMAIN=bringyour.com WARP_BLOCK=test WARP_VERSION=0.0.0
 //	source "$release_gate_service_root/environment.sh" && source test-env.sh
-//	cd ../sn && go test -tags dualstacke2e -run TestDualStackHopsEndToEnd ./validator/
+//	cd ../sn && go test -tags dualstacke2e -run TestDualStackHops ./validator/
 //	release_gate_services_cleanup
 package validator_test
 
@@ -317,13 +317,13 @@ func e2eSeedBody(t testing.TB, validatorId connect.Id, vsk ed25519.PrivateKey) [
 	return body
 }
 
-// Sends the SEED of the trail-th trail through the provider, trying first the
-// family the trail engine would, and requires the server to have resolved the
-// request's source to the provider: an unresolved source is a poisoned trail
-// whose echoed first hop is synthetic.
+// Sends the SEED of the trail-th trail through the provider as the trail
+// engine's step does, and requires the server to have resolved the request's
+// source to the provider: an unresolved source is a poisoned trail whose
+// echoed first hop is synthetic.
 func e2eSeed(t testing.TB, ctx context.Context, transport *validator.TunnelTransport, provider *e2eProvider, trail uint64, body []byte) {
 	t.Helper()
-	response, err := transport.PostVerify(validator.E2EHopRequestContext(ctx, trail, 0), provider.id, body)
+	response, err := validator.E2EPostHop(ctx, transport, provider.id, body, trail, 0)
 	if err != nil {
 		t.Fatalf("seed through %s: %v", provider.id, err)
 	}
@@ -403,6 +403,74 @@ func TestDualStackHopsEndToEnd(t *testing.T) {
 		}
 		if fastFallbacks != requests/2 {
 			t.Fatalf("IPv4-only provider saw %d IPv6-first fallbacks, want %d", fastFallbacks, requests/2)
+		}
+	})
+}
+
+// IPV6.md C7, VALIDATOR.md §8.2. Pinned per-family transports (IPV6.md A2 to
+// A4) are not enabled yet, so a provider on a dual-stack host runs one
+// transport and the server indexes only the family it landed on. A hop the
+// trail engine sends first on the other family egresses there, and the server
+// answers that it resolved the source to no provider (421); the step resends
+// it through the same hop trying the indexed family first. Every hop
+// resolves: on the indexed family at once, on the other after the one retry,
+// for a provider with only its IPv4 egress indexed and the mirror case with
+// only IPv6.
+func TestDualStackHopsResolveThroughOneIndexedFamily(t *testing.T) {
+	server.DefaultTestEnv().Run(t, func(t testing.TB) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		controller.SetVerifyServerKeys([]*controller.VerifyServerKey{{ServerKeyId: 7, PrivateKey: ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))}})
+		settings := model.DefaultVerifySettings()
+		controller.SetVerifySettings(settings)
+
+		api := newE2EApi(t)
+		doh := newE2EDoh(t)
+		// next hops a SEED may assign; nothing ever dials their egress
+		for i := 0; i < 2; i++ {
+			registerE2EProvider(ctx, connect.NewId(), []netip.Addr{netip.AddrFrom4([4]byte{203, 0, 113, byte(20 + i)})}, settings)
+		}
+		_, vsk, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		validatorId := connect.NewId()
+		model.SetClientPublicKey(ctx, server.Id(validatorId), vsk.Public().(ed25519.PublicKey))
+
+		v6 := netip.MustParseAddr("::1")
+		for _, legacy := range []struct {
+			name    string
+			v4      netip.Addr
+			indexed netip.Addr
+		}{
+			{name: "transport on IPv4", v4: netip.MustParseAddr("127.0.0.4"), indexed: netip.MustParseAddr("127.0.0.4")},
+			{name: "transport on IPv6", v4: netip.MustParseAddr("127.0.0.5"), indexed: v6},
+		} {
+			provider := startE2EProvider(t, ctx, api, map[int]netip.Addr{4: legacy.v4, 6: v6})
+			registerE2EProvider(ctx, provider.id, []netip.Addr{legacy.indexed}, settings)
+			transport := newE2ETransport(t, ctx, api, doh, provider, validatorId)
+			unindexed := v6
+			if legacy.indexed == v6 {
+				unindexed = legacy.v4
+			}
+			retried := 0
+			for trail := range uint64(4) {
+				before := len(api.verifySources())
+				e2eSeed(t, ctx, transport, provider, trail, e2eSeedBody(t, validatorId, vsk))
+				landed := api.verifySources()[before:]
+				want := []netip.Addr{legacy.indexed}
+				if validator.E2EHopFirstIpFamily(trail, 0) != e2eFamily(legacy.indexed) {
+					want = []netip.Addr{unindexed, legacy.indexed}
+					retried++
+				}
+				if fmt.Sprint(landed) != fmt.Sprint(want) {
+					t.Fatalf("%s: trail %d's SEED arrived from %v, want %v", legacy.name, trail, landed, want)
+				}
+			}
+			if retried != 2 {
+				t.Fatalf("%s: %d of four SEEDs needed the retry, want half", legacy.name, retried)
+			}
+			t.Logf("%s (indexed %s): four SEEDs resolved, %d after one retry on the indexed family", legacy.name, legacy.indexed, retried)
 		}
 	})
 }

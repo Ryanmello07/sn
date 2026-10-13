@@ -109,8 +109,9 @@ func TestTrailHopsAlternateFirstIpFamilyAlongAndAcrossTrails(t *testing.T) {
 	}
 }
 
-// IPV6.md C7. Every attempt of a step, retries included, tries the step's
-// family first: the hop's position decides it, not how often it was tried.
+// IPV6.md C7. A retry after an ordinary failure tries the same family first:
+// only the server's source-egress-unresolved answer moves a step to the other
+// family.
 func TestTrailEngineRetriesKeepTheHopsFirstIpFamily(t *testing.T) {
 	for _, family := range []int{4, 6} {
 		transport := &failingTrailTransport{}
@@ -122,6 +123,264 @@ func TestTrailEngineRetriesKeepTheHopsFirstIpFamily(t *testing.T) {
 			t.Fatalf("attempts tried %v first, want %v", transport.firstIpFamilies, want)
 		}
 	}
+}
+
+// scriptedTrailTransport answers a step's attempts in turn from a script and
+// records, per attempt, the hop, the body, the family tried first and the
+// deadline.
+type scriptedTrailTransport struct {
+	answers   []scriptedTrailAnswer
+	hops      []connect.Id
+	bodies    [][]byte
+	families  []int
+	deadlines []time.Time
+}
+
+type scriptedTrailAnswer struct {
+	body []byte
+	err  error
+	// block holds the attempt until its context ends, then answers
+	block bool
+}
+
+func (self *scriptedTrailTransport) PostVerify(ctx context.Context, hop connect.Id, body []byte) ([]byte, error) {
+	self.hops = append(self.hops, hop)
+	self.bodies = append(self.bodies, body)
+	self.families = append(self.families, hopFirstIpFamilyOf(ctx))
+	deadline, _ := ctx.Deadline()
+	self.deadlines = append(self.deadlines, deadline)
+	answer := self.answers[len(self.families)-1]
+	if answer.block {
+		<-ctx.Done()
+	}
+	return answer.body, answer.err
+}
+
+// the transport's error for the server's retryable answer
+func sourceEgressUnresolvedAnswer(hop connect.Id) scriptedTrailAnswer {
+	return scriptedTrailAnswer{err: verifyPostError(hop, http.StatusMisdirectedRequest, []byte(verifySourceEgressUnresolvedBody))}
+}
+
+func scriptedTrailStep(t *testing.T, firstIpFamily int, answers ...scriptedTrailAnswer) (*scriptedTrailTransport, connect.Id, []byte, error) {
+	t.Helper()
+	transport := &scriptedTrailTransport{answers: answers}
+	engine := &TrailEngine{transport: transport, cfg: TrailEngineConfig{StepTimeout: time.Second, ExtendAttempts: 3}}
+	hop := connect.NewId()
+	response, err := engine.postStep(context.Background(), hop, []byte("extend"), firstIpFamily, nil)
+	for i := range transport.hops {
+		if transport.hops[i] != hop || string(transport.bodies[i]) != "extend" {
+			t.Fatalf("attempt %d went to %s with %q, want the same hop and the identical body", i, transport.hops[i], transport.bodies[i])
+		}
+	}
+	return transport, hop, response, err
+}
+
+// VALIDATOR.md §8.2. The server answers a hop request it resolved to no
+// provider with HTTP 421 and exactly "source-egress-unresolved\n"; only that
+// answer is the retryable one. Any other body on a 421, and that body on any
+// other status, is an ordinary failed attempt.
+func TestVerifyPostErrorRecognizesOnlyTheExactRetryableAnswer(t *testing.T) {
+	hop := connect.NewId()
+	if err := verifyPostError(hop, http.StatusMisdirectedRequest, []byte("source-egress-unresolved\n")); !errors.Is(err, errSourceEgressUnresolved) {
+		t.Fatalf("421 with the exact body = %v, want the retryable answer", err)
+	}
+	for _, c := range []struct {
+		status int
+		body   string
+	}{
+		{http.StatusMisdirectedRequest, "source-egress-unresolved"},
+		{http.StatusMisdirectedRequest, "source-egress-unresolved\n\n"},
+		{http.StatusMisdirectedRequest, " source-egress-unresolved\n"},
+		{http.StatusMisdirectedRequest, "Source-Egress-Unresolved\n"},
+		{http.StatusMisdirectedRequest, "source-egress-mismatch\n"},
+		{http.StatusMisdirectedRequest, ""},
+		{http.StatusBadRequest, "source-egress-unresolved\n"},
+		{http.StatusConflict, "source-egress-unresolved\n"},
+		{http.StatusTooManyRequests, "source-egress-unresolved\n"},
+		{http.StatusServiceUnavailable, "source-egress-unresolved\n"},
+		{http.StatusBadRequest, "400 trail failed"},
+	} {
+		err := verifyPostError(hop, c.status, []byte(c.body))
+		if err == nil || errors.Is(err, errSourceEgressUnresolved) {
+			t.Fatalf("%d %q = %v, want an ordinary failure", c.status, c.body, err)
+		}
+	}
+}
+
+// VALIDATOR.md §8.2. A step answered source-egress-unresolved is resent once,
+// identically and through the same hop, trying the other family first, and
+// the retry's success is the step's answer.
+func TestTrailStepRetriesTheOtherFamilyOnceOnSourceEgressUnresolved(t *testing.T) {
+	for _, family := range []int{4, 6} {
+		transport, hop, response, err := scriptedTrailStep(t, family,
+			sourceEgressUnresolvedAnswer(connect.Id{}),
+			scriptedTrailAnswer{body: []byte("assign")},
+		)
+		if err != nil || string(response) != "assign" {
+			t.Fatalf("step through %s = %q, %v, want the retry's answer", hop, response, err)
+		}
+		if want := []int{family, otherIpFamily(family)}; !reflect.DeepEqual(transport.families, want) {
+			t.Fatalf("attempts tried %v first, want %v", transport.families, want)
+		}
+	}
+}
+
+// VALIDATOR.md §8.2. The server answers at most two of a step's attempts
+// source-egress-unresolved: each moves the next attempt to the other family,
+// and the third attempt takes the server's terminal answer, an EXTEND's
+// failure or a SEED's poisoned ASSIGN, and sends nothing more.
+func TestTrailStepTakesTheTerminalAnswerAfterTwoSourceEgressUnresolved(t *testing.T) {
+	terminal := errors.New("verify post: http 400: 400 trail failed")
+	transport, _, _, err := scriptedTrailStep(t, 4,
+		sourceEgressUnresolvedAnswer(connect.Id{}),
+		sourceEgressUnresolvedAnswer(connect.Id{}),
+		scriptedTrailAnswer{err: terminal},
+	)
+	if !errors.Is(err, terminal) || errors.Is(err, errSourceEgressUnresolved) {
+		t.Fatalf("step = %v, want the terminal answer", err)
+	}
+	if want := []int{4, 6, 4}; !reflect.DeepEqual(transport.families, want) {
+		t.Fatalf("attempts tried %v first, want %v", transport.families, want)
+	}
+	transport, _, response, err := scriptedTrailStep(t, 6,
+		sourceEgressUnresolvedAnswer(connect.Id{}),
+		sourceEgressUnresolvedAnswer(connect.Id{}),
+		scriptedTrailAnswer{body: []byte("poisoned assign")},
+	)
+	if err != nil || string(response) != "poisoned assign" {
+		t.Fatalf("step = %q, %v, want the third attempt's answer", response, err)
+	}
+	if want := []int{6, 4, 6}; !reflect.DeepEqual(transport.families, want) {
+		t.Fatalf("attempts tried %v first, want %v", transport.families, want)
+	}
+}
+
+// VALIDATOR.md §8.2. A step whose attempts fail any other way, a 421 with
+// another body among them, never moves to the other family.
+func TestTrailStepNeverRetriesTheOtherFamilyOnOtherFailures(t *testing.T) {
+	hop := connect.NewId()
+	transport, _, _, err := scriptedTrailStep(t, 6,
+		scriptedTrailAnswer{err: verifyPostError(hop, http.StatusMisdirectedRequest, []byte("source-egress-unresolved"))},
+		scriptedTrailAnswer{err: verifyPostError(hop, http.StatusBadRequest, []byte("400 trail failed"))},
+		scriptedTrailAnswer{err: errors.New("verify post: connection reset")},
+	)
+	if err == nil {
+		t.Fatal("failing attempts unexpectedly succeeded")
+	}
+	if want := []int{6, 6, 6}; !reflect.DeepEqual(transport.families, want) {
+		t.Fatalf("attempts tried %v first, want %v", transport.families, want)
+	}
+}
+
+// VALIDATOR.md §8.2. The server counts a SEED's retry against its rate
+// meters, so the retry waits for the shared SEED pace like every other SEED
+// attempt: the pace, at three quarters of the per-vpk hard limit, holds the
+// retries inside it instead of adding to it.
+func TestTrailEngineSeedPaceMetersTheSourceEgressRetry(t *testing.T) {
+	transport := &scriptedTrailTransport{answers: []scriptedTrailAnswer{
+		sourceEgressUnresolvedAnswer(connect.Id{}),
+		{body: []byte("assign")},
+	}}
+	engine := &TrailEngine{transport: transport, cfg: TrailEngineConfig{StepTimeout: time.Second, ExtendAttempts: 3}}
+	paced := 0
+	pace := func(context.Context) error {
+		paced++
+		return nil
+	}
+	if _, err := engine.postStep(context.Background(), connect.NewId(), []byte("seed"), 4, pace); err != nil {
+		t.Fatal(err)
+	}
+	if paced != 2 || len(transport.families) != 2 {
+		t.Fatalf("SEED pace/transport attempts = %d/%d, want 2/2", paced, len(transport.families))
+	}
+}
+
+// VALIDATOR.md §8.2. The retry runs inside the step's deadline: it carries
+// the first attempt's deadline, and an answer that arrives once the deadline
+// has passed is not retried at all.
+func TestTrailStepRetryStaysWithinTheStepDeadline(t *testing.T) {
+	start := time.Now()
+	transport, _, _, err := scriptedTrailStep(t, 4,
+		sourceEgressUnresolvedAnswer(connect.Id{}),
+		scriptedTrailAnswer{body: []byte("assign")},
+	)
+	end := time.Now()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(transport.deadlines) != 2 || transport.deadlines[0].IsZero() || !transport.deadlines[1].Equal(transport.deadlines[0]) {
+		t.Fatalf("attempt deadlines %v, want the step's one deadline on both", transport.deadlines)
+	}
+	// the step timeout, one second, from when the step began
+	if deadline := transport.deadlines[0]; deadline.Before(start.Add(time.Second)) || end.Add(time.Second).Before(deadline) {
+		t.Fatalf("step deadline %v, want one second after the step began (%v to %v)", deadline, start, end)
+	}
+
+	transport, _, _, err = scriptedTrailStep(t, 4,
+		scriptedTrailAnswer{err: verifyPostError(connect.Id{}, http.StatusMisdirectedRequest, []byte(verifySourceEgressUnresolvedBody)), block: true},
+		scriptedTrailAnswer{body: []byte("assign")},
+	)
+	if err == nil || len(transport.families) != 1 {
+		t.Fatalf("an answer after the step deadline was retried: %d attempts, %v", len(transport.families), err)
+	}
+}
+
+// IPV6.md C7, VALIDATOR.md §8.2. Retries never move the alternation: a hop
+// whose first attempt is answered source-egress-unresolved retries on the
+// other family, the next hop still takes its position's family, and the next
+// trail still starts on the other family from this one.
+func TestTrailHopFamiliesFollowPositionsAcrossRetries(t *testing.T) {
+	server, validatorKey, clientId := newMockVerifyServer(t, 12)
+	transport := &unresolvedOnceTrailTransport{server: server, positions: map[int]bool{0: true, 2: true}}
+	seedHop := server.providers[0]
+	engine := NewTrailEngine(
+		clientId,
+		validatorKey,
+		transport,
+		NewStaticServerKeyRing(server.serverPublicKeys()),
+		func(ctx context.Context) (connect.Id, error) { return seedHop, nil },
+		NewStatsEngine(StatsConfig{AMin: 1}),
+		nil,
+		func() uint64 { return 42 },
+		TrailEngineConfig{M: 4, StepTimeout: 2 * time.Second, ExtendAttempts: 3, Pace: time.Millisecond},
+	)
+	if _, err := engine.RunTrail(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// positions 0 and 2 answered source-egress-unresolved once
+	if want := []int{4, 6, 6, 4, 6, 6}; !reflect.DeepEqual(transport.families, want) {
+		t.Fatalf("the first trail's attempts tried %v first, want %v", transport.families, want)
+	}
+	transport.families, transport.positions = nil, nil
+	if _, err := engine.RunTrail(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if want := []int{6, 4, 6, 4}; !reflect.DeepEqual(transport.families, want) {
+		t.Fatalf("the second trail's attempts tried %v first, want %v", transport.families, want)
+	}
+}
+
+// unresolvedOnceTrailTransport is the mock /verify server, answering the
+// first attempt of the hops at the given positions source-egress-unresolved
+// before the server sees it, and recording the family each attempt tries
+// first.
+type unresolvedOnceTrailTransport struct {
+	server    *mockVerifyServer
+	positions map[int]bool
+	position  int
+	retried   bool
+	families  []int
+}
+
+func (self *unresolvedOnceTrailTransport) PostVerify(ctx context.Context, hop connect.Id, body []byte) ([]byte, error) {
+	self.families = append(self.families, hopFirstIpFamilyOf(ctx))
+	if self.positions[self.position] && !self.retried {
+		self.retried = true
+		return nil, verifyPostError(hop, http.StatusMisdirectedRequest, []byte(verifySourceEgressUnresolvedBody))
+	}
+	self.position++
+	self.retried = false
+	return self.server.PostVerify(ctx, hop, body)
 }
 
 // IPV6.md C7. The transport hands each request's client the family the

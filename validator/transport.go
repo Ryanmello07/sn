@@ -294,9 +294,20 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 		return nil, err
 	}
 	if response.StatusCode != 200 {
-		return nil, fmt.Errorf("verify post via %s: http %d: %s", hop, response.StatusCode, truncateForLog(responseBody))
+		return nil, verifyPostError(hop, response.StatusCode, responseBody)
 	}
 	return responseBody, nil
+}
+
+// verifyPostError is the error for a /verify answer other than 200: the
+// server's retryable 421 is errSourceEgressUnresolved only with exactly its
+// body, and every other answer, 421 with any other body included, is an
+// ordinary failed attempt.
+func verifyPostError(hop connect.Id, statusCode int, body []byte) error {
+	if statusCode == http.StatusMisdirectedRequest && string(body) == verifySourceEgressUnresolvedBody {
+		return fmt.Errorf("verify post via %s: %w", hop, errSourceEgressUnresolved)
+	}
+	return fmt.Errorf("verify post via %s: http %d: %s", hop, statusCode, truncateForLog(body))
 }
 
 // Shared identities may still receive a previous hop's delayed packets. Only

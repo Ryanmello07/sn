@@ -28,9 +28,17 @@ func SetTunnelTransportE2EHooks(
 	}
 }
 
-// E2EHopRequestContext marks a hop request as the trail engine marks the hop
-// at position (0 for the SEED) of its trail-th trail, with the family it tries
-// first.
-func E2EHopRequestContext(ctx context.Context, trail uint64, position int) context.Context {
-	return withHopFirstIpFamily(ctx, hopFirstIpFamily(trail, position))
+// E2EPostHop sends one hop's body through the transport as the trail engine's
+// step does for the hop at position (0 for the SEED) of its trail-th trail:
+// trying first the family the hop's position gives, with the engine's retries,
+// within the default step timeout.
+func E2EPostHop(ctx context.Context, transport *TunnelTransport, hop connect.Id, body []byte, trail uint64, position int) ([]byte, error) {
+	engine := &TrailEngine{transport: transport, cfg: TrailEngineConfig{}.withDefaults()}
+	return engine.postStep(ctx, hop, body, hopFirstIpFamily(trail, position), nil)
+}
+
+// E2EHopFirstIpFamily is the family the hop at position of the trail-th trail
+// tries first.
+func E2EHopFirstIpFamily(trail uint64, position int) int {
+	return hopFirstIpFamily(trail, position)
 }

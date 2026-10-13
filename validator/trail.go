@@ -61,14 +61,37 @@ type TrailTransport interface {
 // the SEED) of the trail-th trail tries first (IPV6.md C7). Families alternate
 // along a trail, and each trail starts on the family the trail before it did
 // not, so over any two consecutive trails every position tries each family
-// first once, whatever the depth. A retry of a hop keeps its position's
-// family; the dial falls back to the other family within the attempt.
+// first once, whatever the depth. Retries never move the alternation: an
+// attempt after errSourceEgressUnresolved tries the other family first for
+// the rest of its step (postStep), any other retry keeps the family of the
+// attempt before it, and the next hop and the next trail take their families
+// from their positions alone.
 func hopFirstIpFamily(trail uint64, position int) int {
 	if (trail+uint64(position))%2 == 0 {
 		return 4
 	}
 	return 6
 }
+
+// otherIpFamily is the family a hop request did not try first.
+func otherIpFamily(firstIpFamily int) int {
+	if firstIpFamily == 4 {
+		return 6
+	}
+	return 4
+}
+
+// errSourceEgressUnresolved is the server's retryable answer to a hop request
+// whose source address it resolved to no provider (VALIDATOR.md §8.2): the
+// request left the hop on a family the server has not indexed for that
+// provider, as a provider with one family-agnostic transport has only the
+// family it landed on indexed. Nothing was recorded, so the identical body
+// may go again through the same hop. A TrailTransport returns it, wrapped, for
+// exactly HTTP 421 with the body verifySourceEgressUnresolvedBody.
+var errSourceEgressUnresolved = errors.New("source egress unresolved")
+
+// verifySourceEgressUnresolvedBody is the whole body of the server's 421.
+const verifySourceEgressUnresolvedBody = "source-egress-unresolved\n"
 
 type hopFirstIpFamilyKey struct{}
 
@@ -885,11 +908,19 @@ func (self *TrailEngine) verifyAssign(assign *connect.VerifyAssignResult, wantTr
 
 // postStep sends one body through hop with the step timeout, retrying the
 // identical body (idempotent, §4.3) up to ExtendAttempts within the budget.
-// Every attempt tries firstIpFamily first. beforeAttempt, when non-nil,
-// meters every send including retries.
+// The first attempt tries firstIpFamily first. An attempt answered
+// errSourceEgressUnresolved is resent through the same hop trying the other
+// family first, so a hop that landed on the family the server has not indexed
+// for its provider falls back to the one it has (§8.2); any other failure is
+// retried on the same family. The server answers at most two of a step's
+// attempts that way, so ExtendAttempts=3 holds a first try and both retries,
+// and the third unattributed attempt gets its terminal answer. Every attempt
+// shares the step's deadline. beforeAttempt, when non-nil, meters every send
+// including retries.
 func (self *TrailEngine) postStep(ctx context.Context, hop connect.Id, body []byte, firstIpFamily int, beforeAttempt func(context.Context) error) ([]byte, error) {
-	stepCtx, cancel := context.WithTimeout(withHopFirstIpFamily(ctx, firstIpFamily), self.cfg.StepTimeout)
+	stepCtx, cancel := context.WithTimeout(ctx, self.cfg.StepTimeout)
 	defer cancel()
+	attemptIpFamily := firstIpFamily
 	var lastErr error
 	for attempt := 0; attempt < self.cfg.ExtendAttempts; attempt++ {
 		if beforeAttempt != nil {
@@ -897,11 +928,14 @@ func (self *TrailEngine) postStep(ctx context.Context, hop connect.Id, body []by
 				return nil, fmt.Errorf("seed attempt pace: %w", err)
 			}
 		}
-		responseBody, err := self.transport.PostVerify(stepCtx, hop, body)
+		responseBody, err := self.transport.PostVerify(withHopFirstIpFamily(stepCtx, attemptIpFamily), hop, body)
 		if err == nil {
 			return responseBody, nil
 		}
 		lastErr = err
+		if errors.Is(err, errSourceEgressUnresolved) {
+			attemptIpFamily = otherIpFamily(attemptIpFamily)
+		}
 		select {
 		case <-stepCtx.Done():
 			return nil, fmt.Errorf("step timeout after %d attempts: %w", attempt+1, lastErr)
