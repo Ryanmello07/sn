@@ -4,14 +4,32 @@ Prepared 2026-10-13. This is the runbook for deploying and activating
 settlement v2, phase A of [VERSION2-FINAL.md](VERSION2-FINAL.md), on SN25
 mainnet. The owner runs it. The plan of record wins wherever the two differ.
 
-Pins. This runbook was written against sn `f5c18d10` (branch `snv2`), the
-operator server (`server/`) at `bb4be01b`, the app SDK (`sdk/`) at `b9b2bf78`,
-android `03bd83aa5`, windows `9ddf4c6`, apple `e5a758da`, linux `986c649`,
-mmm `8f808773b`, the localization store (`localizations/`) at `ba3fc8b` and
-connect at `029fb40d`. The orchestration log
-`/home/by/urnetwork/v2/STATE.md` (cited as STATE.md) records them at lines 136
-and 233. Nothing here has been run against mainnet. Unprefixed paths are in
-this repository.
+Pins. The first round of merges is done and pushed (STATE.md:276-281,297).
+These `main` heads are the runbook's premises, and its file and line
+citations hold at them:
+
+| Repository | `main` head |
+| --- | --- |
+| sn, this repository | `b50c09a2` |
+| server (`server/`) | `548a90e0` |
+| sdk (`sdk/`) | `7b024e09` |
+| connect | `f7318bca` |
+| localizations (`localizations/`) | `1dc9045` |
+| apple | `2e9cc9f8` |
+| android | `8566ba53c` |
+| windows | `c1f10c5` |
+| linux | `faba790` |
+| mmm | `64173fd13` |
+| web | `9526a97b` |
+
+A second round is being merged now: sn `v2/launch-tools` and
+`v2/launch-examples`, server `v2/launch-latch`, and the consent branches
+(STATE.md:298). Step 1 freezes whatever `main` holds after it.
+
+The orchestration log is [VERSION2-STATE.md](VERSION2-STATE.md), cited as
+STATE.md. It is a snapshot of 2026-10-13 20:15 UTC; its lines 1 to 286 keep
+the log's numbers. Nothing here has been run against mainnet. Unprefixed paths
+are in this repository.
 
 Conventions:
 
@@ -138,8 +156,8 @@ when that root finalizes, at least 14,400 blocks after its commit (§5).
   sn.yml, or with a binary built from a revision that has both. This is an
   inference from the code, not a documented rule.
 - **The dual-stack validator change** (`v2/dual-stack-hops`) is still in
-  progress and is excluded from the main merge (STATE.md:244;
-  `/home/by/urnetwork/v2/MERGE.md` rule 6). It has its own rollout order: the
+  progress. The merge into `main` excluded it, and it stays out of scope
+  until it is finished (STATE.md:244). It has its own rollout order: the
   server's API and taskworker first, then its connect service, then the
   validators, with providers and clients in any order (connect `IPV6.md`
   lines 312-317 on that branch). Its egress-index "v2" and "v3" are unrelated
@@ -154,21 +172,22 @@ runbook, at steps 9 and 12.
 
 ### 2.1 Code merged to main and deployed
 
-- The owner's instruction of 2026-10-13 merges the finished branches into
-  `main` (MERGE.md; STATE.md:244). The merge agents do not push; the owner
-  reviews and pushes (MERGE.md rule 5).
-- The reviewed `main` of sn, server, sdk, connect, the five app repositories
-  and the localization store contains the pins above, and not
-  `v2/dual-stack-hops`.
-- The localization store's `main` must hold the v2 strings before any app is
-  built (VERSION2-FINAL.md §11). The eight `sn_ledger_*` keys exist only on its
-  local, unpushed `snv2` branch at `ba3fc8b`; its `main` (`d1f0b2a`) has none.
-  Every release build regenerates the app catalogs from the store
-  (`localizations/README.md`:23-25), so an app built from the store's `main`
-  loses the v2 strings.
+- The owner's instruction of 2026-10-13 was "Commit changes. Merge branches
+  into main. Pull and push." (STATE.md:244). The first round is merged and
+  pushed, without force, after a fresh fetch and a fast-forward check
+  (STATE.md:278-281). The `main` heads are the Pins table above.
+- A second round is being merged: sn `v2/launch-tools` and
+  `v2/launch-examples`, server `v2/launch-latch`, and the consent branches
+  (STATE.md:298). Step 1 freezes whatever `main` holds after it, and the
+  runbook is then read against those heads.
+- `v2/dual-stack-hops` is not in `main` (STATE.md:244).
+- The localization store's `main` (`1dc9045`) holds the eight `sn_ledger_*`
+  keys (VERSION2-FINAL.md §11). Every release build regenerates the app
+  catalogs from the store (`localizations/README.md`:23-25), so each app is
+  built against that store or a later one.
 - The server is rebuilt against the sn revision that carries the new
   successor class (VERSION2-FINAL.md §13, Server row).
-- Every launch binary is built from that `main` (step 1).
+- Every launch binary is built from the frozen `main` (step 1).
 
 ### 2.2 CI green
 
@@ -186,7 +205,7 @@ runbook, at steps 9 and 12.
     `TestSnPayoutAgainstSdkHeader` and `TestSettlementV2Wiring`
     (`tests/sn_payout_test.go`);
   - linux: meson, msgfmt and the glibc floor, and meson's `unit` test, which
-    builds `tests/SnLedgerPresentationTest.cpp` (`app/meson.build:612,848`);
+    builds `tests/SnLedgerPresentationTest.cpp` (`app/meson.build:612,849`);
   - android: the `androidTest` compile, and the unit tests
     `app/app/src/test/java/com/bringyour/network/ui/wallet/SnLedger{Tile,Claim,Wiring,Strings}Test.kt`;
   - mmm: `npm run test:sn-ledger-v2` in `ur.io/react` (`ur.io/react/package.json:79`).
@@ -226,7 +245,7 @@ runbook, at steps 9 and 12.
 
 | Payer | Pays for | Size, from the rehearsal | Source |
 | --- | --- | --- | --- |
-| Deployer (O4) | the six v2 actions, and the escrow registration's value | limits 4,000,000, 2,500,000, 3,000,000, 1,000,000, 150,000 and 400,000; used 2,821,690, 1,463,833, 1,935,622, 310,486, 31,329 and 285,209; value `maximumBurnRao × 10^9` wei | BOOTSTRAP-CONTRACTS.md:660,696-711 |
+| Deployer (O4) | the six v2 actions, and the escrow registration's value | limits 4,000,000, 2,500,000, 3,000,000, 1,000,000, 150,000 and 400,000; used 2,821,690, 1,463,833, 1,935,622, 310,486, 31,329 and 285,209; value `maximumBurnRao × 10^9` wei | BOOTSTRAP-CONTRACTS.md:660,697-712 |
 | Governance Safe (O8) | `registerOperatorPool`'s value; the surplus over the burn comes back to the Safe | R-4 sent a 100 TAO ceiling, burned 3.80 TAO and used 1,594,088 gas | `scripts/runtime-rehearsal/README.md` R-4; `rehearsal/stack_test.go:31-32,190-194` |
 | Operator root key | every v2 close, commit, finalize and answer | the §8.1 table; a capturing close needs a limit of about 2.69M and is signed at about 3.2M | VERSION2-FINAL.md §8.1; `server/controller/st_controller.go:1079-1087` |
 | Validator auditor key (O10) | approvals, challenges and demands | approve: 132,524 used, limit 135,736; demand: 98,268 used, limit 104,424, plus the fee | §8.1 table |
@@ -235,7 +254,7 @@ runbook, at steps 9 and 12.
 | App gas key | v2 claims from the apps | about 0.02 TAO on the device gas key | §11 |
 
 - The deployer's `maximum_total_wei` covers every limit times its fee cap,
-  plus the escrow funding (BOOTSTRAP-CONTRACTS.md:710-711). Each send's
+  plus the escrow funding (BOOTSTRAP-CONTRACTS.md:711-712). Each send's
   admission also needs the deployer's pending balance to cover the selected
   action and every later reservation of the same sender (:239-244).
 - The operator gas policy caps every operator transaction. Today's
@@ -267,24 +286,24 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 
 | ID | Input | Constraint or default | Used in | Source |
 | --- | --- | --- | --- | --- |
-| O1 | The launch revisions: the reviewed `main` commit of sn, server, sdk, connect, the five apps and the localization store | contain the pins above; exclude `v2/dual-stack-hops` | 1 | §2.1 |
+| O1 | The launch revisions: the `main` head of each repository that step 1 freezes | the Pins table or later, after the second merge round; without `v2/dual-stack-hops` | 1 | section 2.1 |
 | O2 | The mainnet route: native and EVM RPC URLs, the HTTPS leaf SPKI pin if HTTPS, and the approved native chain name | the launch used Snow's Finney archive, `ws://172.28.208.185:9944` and `http://` for EVM JSON-RPC; the route is part of each signed plan | 2, 8, 13, 20 | LAUNCH.md:124-141; BOOTSTRAP-CONTRACTS.md:208-221 |
 | O3 | The runtime identity the v2 phase config binds: version, code and metadata hashes and the reviewed source commit | what step 2 observes, after review | 8 | BOOTSTRAP-CONTRACTS.md:208-210 |
-| O4 | The v2 deployer: its EVM address, next nonce and signer | neither the Safe nor an auditor; funded per section 2.6 | 8 | BOOTSTRAP-CONTRACTS.md:652-655,741-742 |
-| O5 | The escrow hotkey | 32 bytes, nonzero, with no UID on SN25 at the send; not the pool hotkey | 8 | BOOTSTRAP-CONTRACTS.md:719-726,845-846 |
-| O6 | The escrow registration cap `maximumBurnRao` | nonzero; the value is the cap × 10^9 wei | 8 | BOOTSTRAP-CONTRACTS.md:660,732-734 |
-| O7 | The phase envelope: each action's gas limit and fees, `maximum_total_wei`, `maximum_attempts`, the native start checkpoint and send window, the source-lock, cutover and custody-fence evidence hashes, the custody identifier and the run directory | gas starts from BOOTSTRAP-CONTRACTS.md:704-707; `maximum_attempts` at most 8 across all actions, the back-to-back escrow send included | 8 | BOOTSTRAP-CONTRACTS.md:208-213,673-677; `mainnet/evm_phase.go:171` |
+| O4 | The v2 deployer: its EVM address, next nonce and signer | neither the Safe nor an auditor; funded per section 2.6 | 8 | BOOTSTRAP-CONTRACTS.md:652-655,742-743 |
+| O5 | The escrow hotkey | 32 bytes, nonzero, with no UID on SN25 at the send; not the pool hotkey | 8 | BOOTSTRAP-CONTRACTS.md:720-727, and "Back-to-back escrow registration (A7)" |
+| O6 | The escrow registration cap `maximumBurnRao` | nonzero; the value is the cap × 10^9 wei | 8 | BOOTSTRAP-CONTRACTS.md:660,733-735 |
+| O7 | The phase envelope: each action's gas limit and fees, `maximum_total_wei`, `maximum_attempts`, the native start checkpoint and send window, the source-lock, cutover and custody-fence evidence hashes, the custody identifier and the run directory | gas starts from BOOTSTRAP-CONTRACTS.md:705-708; `maximum_attempts` at most 8 across all actions, the back-to-back escrow send included | 8 | BOOTSTRAP-CONTRACTS.md:208-213,673-677; `mainnet/evm_phase.go:171` |
 | O8 | The `STSettlement2` owner and its signers | the governance Safe `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` at the v1 launch; confirm | 8, 15 | LAUNCH.md:47-48,164-166; VERSION2-FINAL.md §7.2 |
 | O9 | The v1 coordinator for `initialize` | the proxy `0xC18925925E2B7bb9059b7d696b8c92762AE86406`; confirm | 8 | LAUNCH.md:42 |
-| O10 | The auditor key and its EVM address | one address, quorum 1 at launch; the same key runs with `--ledger_auditor_key_file` | 8, 10 | BOOTSTRAP-CONTRACTS.md:739-743; VERSION2-FINAL.md §2.1 decision 2 |
+| O10 | The auditor key and its EVM address | one address, quorum 1 at launch; the same key runs with `--ledger_auditor_key_file` | 8, 10 | BOOTSTRAP-CONTRACTS.md:740-744; VERSION2-FINAL.md §2.1 decision 2 |
 | O11 | Whether to create the claim batcher | optional sixth action | 8, 13 | VERSION2-FINAL.md §8.5 |
-| O12 | The demand fee | decided: 750,000 rao, 750,000,000,000,000 wei (owner decision, 2026-10-12); the command has no default | 8 | VERSION2-FINAL.md §7.1; BOOTSTRAP-CONTRACTS.md:723-728 |
+| O12 | The demand fee | decided: 750,000 rao, 750,000,000,000,000 wei (owner decision, 2026-10-12); the command has no default | 8 | VERSION2-FINAL.md §7.1; BOOTSTRAP-CONTRACTS.md:724-729 |
 | O13 | The re-signed operator gas policy: `revision`, `previous_policy_sha256`, `maximum_gas`, `maximum_intent_liability_wei`, `maximum_lifetime_liability_wei`, the validity window and the attempt caps | `maximum_gas` about 3.5M; intent liability at least `maximum_gas` × the 30 gwei fee cap; `maximum_intent_attempts` at most 3; same bindings | 5 | VERSION2-FINAL.md §8.1, §13; `server/local/sn25golive/gas.go:26-28` |
 | O14 | The treasury re-sign inputs: the input file and the unsigned policy plan the live approval was drafted from, with their SHA-256, and the approval key's signature | unchanged; only `config_hash` may change | 10 | `mainnet/treasury_approval_test.go:466-512`; `validator/production_authority_history.go:368-388` |
 | O15 | The adopted validator config: its absolute path, the predecessor's retained authority bundle, the progress file, the durable-volume declaration, and how the service command line gains `--ledger_auditor_key_file` | all paths absolute; the recommended default for the flag is a systemd drop-in for the validator unit (step 10) | 10 | `validator/treasury_approval_draft.go:71-77`; `validator/run.go:112-117` |
 | O16 | The v2 pool hotkey (`poolHotkeyV2`) | new; nonzero; not the escrow hotkey; not used by another pool | 15 | `evm/src/STSettlementVault2.sol:166-171`; VERSION2-FINAL.md §12.1 |
 | O17 | The pool registration cap `maximumBurnRao` and the value sent | the rehearsal sent the cap × 10^9 wei at the runtime's default MaxBurn of 100 TAO | 15 | `rehearsal/stack_test.go:31-32,190-194` |
-| O18 | E_s and the registration date | E_s is the first epoch that starts at least two days after the last gate passes; registration one to two days before E_s starts | 14, 15 | VERSION2-FINAL.md §12.1 step 5, §14 |
+| O18 | E_s and the registration date | decided: E_s is epoch 2, which starts at block 9,297,628 (owner decision, 2026-10-13: "we are launching v2 now to be active the next ur epoch"). Section 9 gives its schedule and the departures the owner must still accept | 14, 15 | section 9; VERSION2-FINAL.md §12.1 step 5, §14 |
 | O19 | `v2_prune_alert_positions` | default 3 | 11 | `server/controller/st_ledger_v2_prune.go:33-35` |
 | O20 | `--ledger_max_bytes` | default 2147483648 (2 GiB); a runtime flag, raised without a re-sign | 10 | `validator/run.go:144-145`; VERSION2-FINAL.md §6.6 |
 | O21 | The watcher: host, key, RPC and fee budget, and how often it runs | a host other than the validator's | 13 | VERSION2-FINAL.md §10.2 |
@@ -385,7 +404,7 @@ first exist.
 - **Who.** Operator.
 - **Do.** From the repository root, with `forge` on `PATH`
   (`scripts/runtime-rehearsal/README.md`:12-15,104,220-223;
-  BOOTSTRAP-CONTRACTS.md:890-893):
+  BOOTSTRAP-CONTRACTS.md, "Runtime rehearsal (R-1)"):
 
   ```bash
   PROTOC=/path/to/protoc CARGO_TARGET_DIR=/path/to/target \
@@ -401,7 +420,7 @@ first exist.
     `release/runtime-rehearsal-build.txt` in the target directory
     (README:17-44).
   - Every test passes. R-2 to R-6 took 8 minutes 22 seconds, R-7 about 6 and
-    R-1 80 to 100 seconds (README:225-227; BOOTSTRAP-CONTRACTS.md:915-921).
+    R-1 80 to 100 seconds (README:225-227; BOOTSTRAP-CONTRACTS.md, "Runtime rehearsal (R-1)").
   - R-1 uses the approved 750,000 rao fee and completes every action under
     the step 8 limits.
   - R-6's operator transactions fit the policy that step 5 re-signs (§15.8
@@ -576,8 +595,9 @@ This completes the "gate 5 software is released" part of §12.1 step 1.
 
 *8.1 Build and verify the catalog.* "Catalog" means `sim-testnet/contracts_gen.go`,
 whose `SettlementV2ReleaseArtifacts` the release file is exported from
-(BOOTSTRAP-CONTRACTS.md:677-694; `evm/README.md`:53-61). Run `stabi` under
-umask 022 (`/home/by/urnetwork/v2/SYNC.md` rule 4; STATE.md:9).
+(BOOTSTRAP-CONTRACTS.md:677-695; `evm/README.md`:53-61). Run `stabi` under
+umask 022: its generated files must not be group-writable, and its check
+fails on mode 664 (STATE.md:9-10).
 
 ```bash
 (cd evm && forge build --deny warnings --sizes)
@@ -596,7 +616,7 @@ go run ./sim-testnet/gencontracts --release-v2-json evm/out sim-testnet/contract
 - **Stop if** either check fails.
 
 *8.2 Prepare custody.* Prepare one fresh `mainnet-evm-action` snapshot for each
-approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
+approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:765-768 and "Runtime rehearsal (R-1)";
 [mainnet/OWNER-CUSTODY-PREPARATION.md](mainnet/OWNER-CUSTODY-PREPARATION.md):40-56,105-109).
 
 - The journals are `vault2-create.json`, `escrow2-register.json`,
@@ -650,7 +670,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
     /secure/ur-mainnet/settlement-v2.approval.bin
   ```
 
-- Review the preview before signing (BOOTSTRAP-CONTRACTS.md:751-758):
+- Review the preview before signing (BOOTSTRAP-CONTRACTS.md:752-759):
   - `vault2_constructor`: the escrow hotkey O5 and the fee
     750,000,000,000,000 wei;
   - the predicted addresses and runtime hashes of vault2, the implementation,
@@ -674,8 +694,9 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
 
 - Vault2's creation reveals the escrow hotkey. Anyone who registers it first
   makes `registerEscrow` fail for good, so the registration is the deployer's
-  very next nonce (BOOTSTRAP-CONTRACTS.md:834-854).
-- The commands are BOOTSTRAP-CONTRACTS.md:871-877. Append `"${HOST[@]}"` to
+  very next nonce (BOOTSTRAP-CONTRACTS.md, "Back-to-back escrow
+  registration (A7)").
+- The commands are the block after that paragraph. Append `"${HOST[@]}"` to
   each `apply` and `resume`. The statuses are the ones R-1 asserts
   (`mainnet/evm_v2_rehearsal_test.go:540-549`).
   1. Open vault2's journal. Expect `signature-awaiting-import` and vault2's
@@ -699,7 +720,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
      `submitted-with-escrow-registration-awaiting-canonical-receipts`, then
      `vault2-created`. The last comes after the readback of vault2's exact
      runtime and getters: `CHALLENGE_BLOCKS` 14,400, `coordinator` zero, the
-     counters zero and `conservationHolds` true (BOOTSTRAP-CONTRACTS.md:773-783).
+     counters zero and `conservationHolds` true (BOOTSTRAP-CONTRACTS.md:774-784).
 
      ```bash
      sn-mainnet bootstrap-contracts resume --action vault2-create --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH" --signed-transaction /secure/ur-mainnet/vault2.signed.bin --signed-transaction-hash "$VAULT2_SIGNED_FILE_HASH" --escrow-signed-transaction /secure/ur-mainnet/escrow2.signed.bin --escrow-signed-transaction-hash "$ESCROW2_SIGNED_FILE_HASH"
@@ -711,7 +732,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
      Expect `signature-awaiting-import`, `signed-custody-complete`, then
      `escrow2-registered`. The last comes after the readback of the
      `EscrowRegistered` event, the UID mapping and `escrowRegistered` true,
-     and `escrow_collateral` must read `(false, 0, 0, 0, 0)` (:784-795).
+     and `escrow_collateral` must read `(false, 0, 0, 0, 0)` (:785-796).
 
      ```bash
      sn-mainnet bootstrap-contracts apply --action escrow2-register --config /secure/ur-mainnet/settlement-v2.json --run-dir /secure/ur-mainnet/run-v2 --accept-plan-hash "$SETTLEMENT_V2_HASH"
@@ -721,16 +742,16 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
 - **Stop if**:
   - `escrow-registration-reverted-nonce-consumed`. Someone registered the
     escrow hotkey first. No funds are at risk; recover by redeploying under a
-    new approval with a fresh escrow hotkey and fresh nonces (:856-861;
-    section 6).
-  - `escrow-registration-allowance-exhausted` (:843-844).
+    new approval with a fresh escrow hotkey and fresh nonces ("Two residuals
+    remain", after the A7 paragraph; section 6).
+  - `escrow-registration-allowance-exhausted` (the A7 paragraph).
   - Any readback refusal, or a nonzero escrow collateral.
 
 *8.5 The implementation, the proxy, the binding and the batcher.*
 
 - For `settlement2-create`, `proxy2-create`, `vault2-link` and, if O11,
   `batcher-create`, in that order, each after the previous one's completed
-  status (BOOTSTRAP-CONTRACTS.md:880-883):
+  status (BOOTSTRAP-CONTRACTS.md, after the command block):
   1. `apply`;
   2. sign its `unsigned_transaction`;
   3. `resume --signed-transaction … --signed-transaction-hash …`;
@@ -741,9 +762,9 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
     `submitted-awaiting-canonical-receipt`, then `settlement2-created`,
     `proxy2-created-initialized`, `vault2-coordinator-bound` and
     `batcher-created` (`mainnet/evm_v2_phase.go:37-49`), each after the
-    readback of BOOTSTRAP-CONTRACTS.md:796-823.
+    readback of BOOTSTRAP-CONTRACTS.md:797-824.
   - At `vault2-link`: `installation_complete` true and `activation_ready`
-    false (:825-828). The result names `vault2_address`, `settlement2_address`
+    false (:826-829). The result names `vault2_address`, `settlement2_address`
     (the proxy), `settlement2_implementation_address` and, after the sixth
     action, `claim_batcher_address` (`mainnet/evm_action.go:83-86`).
 - **Stop if** any readback mismatches. Never repeat a completed CREATE, and
@@ -751,7 +772,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:764-767,908-911;
   (LAUNCH.md:443-447).
 
 *8.6 Keep the record.* The six journals' receipts are the v2 deployment record
-(BOOTSTRAP-CONTRACTS.md:828-832). Retain the run directory, the config, the
+(BOOTSTRAP-CONTRACTS.md:829-833). Retain the run directory, the config, the
 release file and every signed file. The launch readiness digest is unchanged
 (§8.5).
 
@@ -782,7 +803,7 @@ release of every app.
   config (`server/controller/sn_ledger_v2_handler.go:193`).
 - The releases land before step 15 (O23). The SDK can also read
   `Vault2Address` from the network space's `sn_chain` values
-  (`sdk/network_space.go:91`), but no app writes them.
+  (`sdk/network_space.go:92`), but no app writes them.
 
 **Step 10. Adopt the validator config and re-sign the treasury approval.**
 
@@ -841,7 +862,7 @@ release of every app.
   - At its first finalized snapshot the validator confirms
     `STSettlement2.vault()`, `STSettlement2.v1Coordinator()` and
     `vault2.coordinator()` (`validator/settlement_v2.go:44-71`;
-    `validator/release_runtime_v2.go:378-386`).
+    `validator/release_runtime_v2.go:379-387`).
 - **Stop if** any of these appears:
   - "settlement v2 adoption must append exactly one authority history entry",
     "settlement v2 adoption changes signed configuration beyond the added
@@ -980,15 +1001,20 @@ configured (§14 gate 6). Gate 5 completed at step 9.
 
 - **Who.** Owner (O18).
 - **Do.**
-  1. Take E_s as the first epoch that starts at least two days after the last
-     gate passes (§14). Epoch 3 (block 9,348,028) is not reachable (§14).
+  1. E_s is decided: epoch 2 (O18). Section 9 holds its schedule, and the
+     departures from the plan of record that the owner must accept first.
+     The plan's own rule takes E_s as the first epoch that starts at least
+     two days after the last gate passes, and calls epoch 3 (block 9,348,028)
+     not reachable (§14). That rule applies again if E_s moves.
   2. Compute its start. With the weekly policy effective from epoch 1 at
      block 9,247,228 (LAUNCH.md:29-32), `epochStartBlock(e)` is
      9,247,228 + 50,400 × (e − 1) (`evm/src/STCoordinator.sol:302-310`). This
-     holds while the v1 policy schedule is unchanged.
+     holds while the v1 policy schedule is unchanged. Epoch 2 starts at block
+     9,297,628.
   3. Pick the registration date: one to two days before the start of E_s,
      inside the 21,600-block registration immunity (§12.1 step 5). At 12
-     seconds a block that is 7,200 to 14,400 blocks before the start.
+     seconds a block that is 7,200 to 14,400 blocks before the start: blocks
+     9,283,228 to 9,290,428 for epoch 2.
   4. Check the v1 policy for E_s: `epochBlocks >= rootCommitWindowBlocks +
      14,400` (`evm/src/STSettlement2.sol:86-89`). Mainnet's 50,400 and 1,200
      satisfy it (§5).
@@ -1076,7 +1102,7 @@ The windows, in blocks after end(E_s), from VERSION2-FINAL.md §5:
 - **Expect.**
   - The validator audits and sends `approveDistribution` before end(E_s + 1)
     (§9.3).
-  - Its diagnostic is `ledger_audit_approve` (`validator/release_diagnostics.go:128`).
+  - Its diagnostic is `ledger_audit_approve` (`validator/release_diagnostics.go:223`).
     It records the finding and decision under `<state_dir>/settlement-v2-ledger`
     (`validator/settlement_v2_custody.go:3-8`).
   - The watcher reports no fault for every account of the protected root.
@@ -1147,7 +1173,7 @@ exists for them.
 | "sn: selected deployment differs from reviewed earnings schedule" | server log | any | st.yml and sn.yml disagree; every mainnet send is refused | `server/provider_payout_transition.go:161-163` |
 | "unsigned gas/fee/tip/intent envelope exceeds approval" | server log | any | the gas policy is too low for a send | `server/model/st_transaction_gas_model.go:109-110` |
 | `urnetwork_api_reserved_upload_startup_failed` | API metric | 1 | the reserved upload lane is off | `server/api/run.go:33-38,255-272` |
-| `ledger_audit_approve`, `_challenge`, `_demand`, `_refuse`, `_retrying` | validator diagnostics | anything but an approval of an honest root | read the custody record | `validator/release_diagnostics.go:128`; `validator/settlement_v2_custody.go:3-8` |
+| `ledger_audit_approve`, `_challenge`, `_demand`, `_refuse`, `_retrying` | validator diagnostics | anything but an approval of an honest root | read the custody record | `validator/release_diagnostics.go:223`; `validator/settlement_v2_custody.go:3-8` |
 | the byte budget | validator audit | a root's new objects over `--ledger_max_bytes` | raise the flag; it needs no re-sign | VERSION2-FINAL.md §6.6; `validator/settlement_v2_runtime.go:3-5` |
 | the watcher's report | `snclaim v2 check` output | any provable fault or "unverifiable" | challenge or demand inside the window | VERSION2-FINAL.md §10.2 |
 | claim gas | claim receipts | about 1.27M gas a claim instead of about 0.2M | a third party filled vault2's staking-hotkey list; raise daemon thresholds to about 10 α | §3, §10.1, §17 |
@@ -1165,7 +1191,7 @@ exists for them.
 | 5, gas policy | Only forward | A changed policy must be the next revision naming the current digest; the server refuses "operator gas policy rollback or disconnected revision" (`server/model/st_transaction_gas_model.go:389-391`). To lower the caps, sign a further revision with the same approver key. |
 | 6, server build | Yes, while v2 is off | Migrations 821 and 822 add new tables only, which v1 settlement does not read (`server/db_migrations.go:10013-10025`). An older binary requires a lower migration head, so it passes readiness (`server/router/warp_handlers.go:255-260`). |
 | 7, validator build and app releases | Yes | Without the block, the new validator hashes today's config identically (§13). The released app code hides the v2 claim without `Vault2Address`. |
-| 8, contracts | No, but they can be abandoned | vault2 is immutable. Until a pool registers it holds nothing and nothing depends on it (BOOTSTRAP-CONTRACTS.md:856-866). A redeploy needs a new approval, a fresh escrow hotkey and fresh nonces. After step 10 a redeploy also meets the validator's one-way adoption (row 10). |
+| 8, contracts | No, but they can be abandoned | vault2 is immutable. Until a pool registers it holds nothing and nothing depends on it (BOOTSTRAP-CONTRACTS.md, "Two residuals remain"). A redeploy needs a new approval, a fresh escrow hotkey and fresh nonces. After step 10 a redeploy also meets the validator's one-way adoption (row 10). |
 | 9, `Vault2Address` | Yes, by a release | The compiled default is never stored on the device (`sdk/sn_chain.go:352-355`; `sdk/sn_local_state.go:72-80`), so a release that clears or changes it takes effect on update. This is an inference from the code. |
 | 10, adoption | No | The block "can be neither re-pointed nor removed" (`validator/production_authority_history.go:256-259`). Until step 15 the validator still weights through `operatorAt` (§9.1). No repository path re-points it; a redeploy after adoption needs new validator code. |
 | 11, server switch | Before step 15 only | Remove the pair from st.yml and sn.yml together, then restart. v1 is untouched. After step 15, do not remove it. Without the pair the v1 driver again closes and commits every epoch, E_s and later included (`server/controller/st_ledger_v2_driver.go:263-266`), against the v1 cutoff (§8.1). And the mirror misses every v2 event while the pair is absent, with no backfill (`server/controller/st_controller.go:2598-2604,4255-4258`). Coming: a server latch, so that once the server has observed the pool's registration it fails closed without the pair. Its exact refusal text will be cited here. |
@@ -1247,7 +1273,7 @@ Found while writing this runbook:
 | st.yml and sn.yml disagree, which refuses every mainnet send, v1 included | One change for both files, `sn25golive st-check` and the step 11 stop conditions |
 | A failed `vault2.pools` read delays v1 closes and commits | The log line of section 5; RPC health |
 | The mirror has no v2 backfill, and without the pair the v1 driver resumes epochs at or after E_s | Switch the server before step 15, and never remove the pair after it. Coming: a server latch that fails closed without the pair once it has observed the pool's registration; its refusal text will be cited here |
-| The app catalogs lack the v2 strings | The store's `main` gains the keys before any build (section 2.1) |
+| An app is built against a store without its strings | The store's `main` holds the `sn_ledger_*` keys (section 2.1); build each app against it or a later one |
 | No CI anywhere | The owner's pipeline and the hand-run suites of section 2.2 |
 | The rehearsal tooling builds only runtime 475 | Step 2's check, and a reviewed pin change before any rerun on a new runtime |
 
@@ -1288,3 +1314,96 @@ Open owner decisions and work that the repositories leave open:
    - build and run instructions for `sn25golive` (step 5);
    - rehearsal pins for a runtime after 475 (step 2);
    - written adoption commands (step 10).
+
+## 9. Schedule for E_s = 2
+
+Owner decision, 2026-10-13: "we are launching v2 now to be active the next ur
+epoch". The current epoch is 1, so E_s is epoch 2 (O18).
+
+One chain reading anchors the times below: the public RPC's `eth_blockNumber`
+was 9,276,620 at 2026-10-13 20:07 UTC. It is an observation, not a repository
+fact. The blocks are exact (step 14). The times assume 12 seconds a block
+(`server/controller/st_controller.go:89`), so they are approximate.
+
+### 9.1 Blocks and times
+
+| Block | About, UTC | What | Source |
+| --- | --- | --- | --- |
+| 9,276,620 | 2026-10-13 20:07 | the reading, in epoch 1 | |
+| 9,283,228 | 2026-10-14 18:10 | the plan's registration window opens, 14,400 blocks before E_s starts; about 22 hours after the reading | §12.1 step 5 |
+| 9,290,428 | 2026-10-15 18:10 | the plan's registration window closes, 7,200 blocks before E_s starts; about 46 hours after the reading | §12.1 step 5 |
+| 9,297,628 | 2026-10-16 18:10 | epoch 2 starts, about 70 hours after the reading. This is the hard on-chain limit: `registerOperatorPool` must be mined before this block, while the current epoch is 1 | `evm/src/STSettlement2.sol:80-82` |
+| 9,348,028 | 2026-10-23 18:10 | end(E_s): the close and commit window opens | §5 |
+| 9,349,228 | 2026-10-23 22:10 | close and commit by this block | §5 |
+| 9,362,428 to 9,363,628 | 2026-10-25 18:10 to 22:10 | the earliest finalization, 14,400 blocks after the commit | §5 |
+| after the finalization | | the first claims (step 20) | §17 |
+
+### 9.2 A compressed order of steps 1 to 15
+
+Steps 1 to 12 must be complete before step 15 is sent. Their dependencies set
+the order:
+
+| Order | Steps | Runs in parallel | Owner signs |
+| --- | --- | --- | --- |
+| 1 | 1: freeze `main` after the second merge round, and build | with step 2 | |
+| 2 | 2, 3, 4: the runtime check, R-1 to R-7 and the release gates | with each other | O26, the gate 1 confirmation |
+| 3 | 5, 6, 7: the gas policy, the server build with migrations, the validator binary and the tools | with each other, and with step 8 | step 5, with the gas approver key |
+| 4 | 8: deploy the contracts, after steps 2 to 4 pass | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
+| 5 | 10: adopt the validator config, after step 8 and step 7's validator binary | with step 13 | the treasury approval, with its approval key |
+| 6 | 11, then 12: the server switch, after steps 6, 8 and 10 | with step 13 | |
+| 7 | 15: register the pool, inside blocks 9,283,228 to 9,290,428 | | the Safe |
+
+- Step 9, the pinned app releases, moves after step 15 (section 9.3, item 4).
+- Step 13 is off the critical path. The watcher must run by the first commit,
+  at block 9,348,028 or later.
+- Step 14 is decided.
+- Known durations:
+  - the rehearsal node builds in about 37 minutes from scratch, and the R
+    battery runs in about 15 (`scripts/runtime-rehearsal/README.md`:46-50,225-227);
+  - the release gate's `mainnet` package alone exceeded 90 minutes on the
+    build machine (STATE.md:133);
+  - v1's eight contract actions landed within 84 blocks, about 17 minutes
+    (LAUNCH.md:36-45).
+
+### 9.3 Departures from the plan of record
+
+Each item needs the owner's explicit acceptance. This runbook does not accept
+any of them.
+
+1. **The two-day rule.** "E_s is the first epoch that starts at least two days
+   after the last gate passes" (§14). For epoch 2 the last gate, gate 6 at
+   step 12, would have to pass by block 9,283,228, about 22 hours after the
+   reading. §14 also calls epoch 3 "not reachable", and epoch 2 is earlier.
+2. **Gate 2 on another runtime.** If step 2 finds a runtime other than 475,
+   gate 2 repeats on it (§14), and "gate 2 cannot be waived" (§17). The
+   rehearsal tooling builds only 475 (step 2), so a rerun does not fit this
+   schedule. Activating in epoch 2 on such a runtime waives gate 2.
+3. **O26.** Gate 1 needs the independent review of vault2, `LedgerTree.sol`
+   and `STSettlement2` resolved (§14). The owner's confirmation is not given
+   yet, and step 8 waits for it.
+4. **The apps.** Activation needs v2 claims in the apps (§2.1 decision 8; §11;
+   §14 gate 5). The releases with the pinned `Vault2Address` (step 9) cannot
+   precede step 15 here. Claims are impossible before the first finalization,
+   at block 9,362,428 or later, so the apps have until then.
+5. **Consent.** A consent takes effect from the epoch after its signing
+   (§11.1), so only one signed before block 9,297,628 covers epoch 2. Consent
+   signing is in the second merge round, in no released app (Pins), and ur.io
+   is not yet deployed with the bridge page the apps sign it through
+   (STATE.md:268,297). So no
+   app-signed network consent can be in effect for epoch 2, and app-only
+   providers stay unpaid in it, as in v1.
+6. **Other validators.** A validator weights the v2 pool UID only through its
+   `settlement_v2` block; without it, it resolves every epoch through
+   `operatorAt` (§9.1). Any third-party validator must adopt before E_s.
+
+### 9.4 Decision point
+
+If any stop condition fires, or the registration window of section 9.1 is
+missed, E_s moves to epoch 3, which starts at block 9,348,028. Its
+registration window is blocks 9,333,628 to 9,340,828. The chain itself takes
+a registration for epoch 2 until block 9,297,627; the plan's window is the
+earlier one.
+
+Nothing is lost before step 15: "If it fails, nothing has changed, and E_s
+moves" (§12.1 step 5). What steps 5 to 12 put in place stays as section 6.1
+describes it.
