@@ -272,7 +272,7 @@ func decodeOperatorListReleaseConfig(path string) (*ReleaseConfig, error) {
 // The release gets exactly the context and arguments runReleaseConfig gives
 // it; the list shares only the process and its signals, and is joined after
 // the release returns.
-func runReleaseWithOperatorList(configPath, progressPath string, reference durablevolume.Reference, ledger SettlementV2RuntimeOptions, settings productionOperatorListSettings) {
+func runReleaseWithOperatorList(configPath, progressPath string, reference durablevolume.Reference, ledger SettlementV2RuntimeOptions, settings productionOperatorListSettings, bridge *ReleaseNativeGapBridge) {
 	cfg, err := decodeOperatorListReleaseConfig(configPath)
 	exitOnError("validator run", err)
 	ctx := WithSettlementV2RuntimeOptions(context.Background(), ledger)
@@ -287,7 +287,7 @@ func runReleaseWithOperatorList(configPath, progressPath string, reference durab
 		cancelList()
 		exitOnError("validator run", err)
 	}
-	releaseErr := RunReleaseWithProgress(event.Ctx(), configPath, progressPath)
+	releaseErr := RunReleaseWithNativeGapBridge(event.Ctx(), configPath, progressPath, bridge)
 	cancelList()
 	list.Close()
 	if releaseErr != nil {

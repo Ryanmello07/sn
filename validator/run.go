@@ -112,6 +112,7 @@ Usage:
     validator run --config=<path> [--progress-file=<path>]
         [--ledger_auditor_key_file=<path>] [--ledger_max_bytes=<n>]
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
+        [(--native-gap-bridge=<path> --native-gap-bridge-sha256=<hash>)]
         [(--operators-refresh=<duration> [--operators-url=<url>] [--observe-unpinned-operators])]
         [-v...]
     validator run --all-operators [--operators-url=<url>] [--operators-refresh=<duration>]
@@ -144,6 +145,12 @@ Options:
                                  per root, in bytes; raised operationally [default: 2147483648].
     --durable-volumes=<path>      Exact external durable-volume declaration; required for mainnet state.
     --durable-volumes-sha256=<hash>  SHA-256 of the complete declaration bytes; does not change signed config.
+    --native-gap-bridge=<path>   One-shot native gap bridge: canonical JSON naming the retained applied
+                                 intent (last_native_epoch, last_artifact_hash) and first_native_epoch.
+                                 It admits that one missed-native-epoch edge and idles release before
+                                 first_native_epoch; the signed config is unchanged. Keep it supplied
+                                 while the bridged edge is in the retained intent history.
+    --native-gap-bridge-sha256=<hash>  sha256:<64 lowercase hex> of the bridge file's exact bytes.
     --directory=<path>           Existing service directory for read-only physical inspection; repeatable.
     --coldkey_seed_file=<path>   sr25519 coldkey seed (64 hex chars or 32 raw bytes) that signs
                                  register_limit / add_stake. The release config carries no coldkey and
@@ -483,15 +490,18 @@ func run(opts docopt.Opts) {
 		}
 		ledger, err := settlementV2RuntimeOptionsFromOpts(opts)
 		exitOnError("validator run", err)
+		// A malformed or unpinned bridge refuses before any release state opens.
+		bridge, err := nativeGapBridgeFromOpts(opts)
+		exitOnError("validator run", err)
 		// The operator list runs beside the release only when asked for; the
 		// release itself is started the same way either way.
 		if optString(opts, "--operators-refresh", "") != "" {
 			settings, err := productionOperatorListSettingsFromOpts(opts)
 			exitOnError("validator run", err)
-			runReleaseWithOperatorList(configPath, progressPath, reference, ledger, settings)
+			runReleaseWithOperatorList(configPath, progressPath, reference, ledger, settings, bridge)
 			return
 		}
-		runReleaseConfig(configPath, progressPath, reference, ledger)
+		runReleaseConfig(configPath, progressPath, reference, ledger, bridge)
 		return
 	}
 	if optBool(opts, "--all-operators") {
@@ -510,6 +520,18 @@ func run(opts docopt.Opts) {
 	if err := settings.run(ctx, os.Stdout); err != nil {
 		panic(err)
 	}
+}
+
+// Both bridge flags or neither. Without them release startup is unchanged.
+func nativeGapBridgeFromOpts(opts docopt.Opts) (*ReleaseNativeGapBridge, error) {
+	path, pin := optString(opts, "--native-gap-bridge", ""), optString(opts, "--native-gap-bridge-sha256", "")
+	if path == "" && pin == "" {
+		return nil, nil
+	}
+	if path == "" || pin == "" {
+		return nil, errors.New("--native-gap-bridge and --native-gap-bridge-sha256 must be given together")
+	}
+	return ReadReleaseNativeGapBridge(path, pin)
 }
 
 func rejectLegacySteeringOptions(opts docopt.Opts) error {

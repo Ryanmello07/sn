@@ -1835,7 +1835,7 @@ PATH=/home/by/.foundry/bin:$PATH \
 
 cd ../server
 WARP_ENV=main \
-BRINGYOUR_MINIO_HOSTNAME=172.28.208.177 \
+BRINGYOUR_MINIO_HOSTNAME=172.28.208.176 \
 SIM_TESTNET_LIVE_BLOB=1 \
 go test . -run '^TestLiveBlobStoreContentAddressedCanary$' -count=1
 ```

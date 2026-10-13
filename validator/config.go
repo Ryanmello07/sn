@@ -90,6 +90,7 @@ type ReleaseConfig struct {
 	ProvisionalRuntimeCompatibility   string `yaml:"provisional_runtime_compatibility,omitempty" json:"provisional_runtime_compatibility,omitempty"`
 	RuntimeSuccessorProfile           string `yaml:"runtime_successor_profile,omitempty" json:"runtime_successor_profile,omitempty"`
 	historyAdoptionV2                 *ReleaseHistoryAdoptionV2
+	nativeGapBridge                   *ReleaseNativeGapBridge // only a pinned run --native-gap-bridge; no schema or config hash sees it
 	mainnetRuntimeHistory             *releaseMainnetRuntimeHistory
 	ownerRecycleProduction            *ownerRecycleProductionAuthority
 	productionRuntimeHistory          *releaseProductionRuntimeHistory

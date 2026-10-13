@@ -108,7 +108,7 @@ func ObserveOwnerRecycleMeasurementAuthority(ctx context.Context, cfg *ReleaseCo
 	remaining := uint64(maximumOwnerRecycleConfigBytes)
 	wireConfig := *cfg
 	wireConfig.ownerRecycleProduction, wireConfig.productionRuntimeHistory, wireConfig.productionAuthorityHistory = nil, nil, nil
-	wireConfig.mainnetRuntimeHistory, wireConfig.historyAdoptionV2 = nil, nil
+	wireConfig.mainnetRuntimeHistory, wireConfig.historyAdoptionV2, wireConfig.nativeGapBridge = nil, nil, nil
 	if err := releaseMeasurementV2ControlStorage(ctx, reflect.ValueOf(&wireConfig), &remaining); err != nil {
 		return nil, fmt.Errorf("owner-recycle measurement configuration bound: %w", err)
 	}
