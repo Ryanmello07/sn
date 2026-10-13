@@ -31,7 +31,9 @@ const poolRegistrationReadbackSchema = "urnetwork-mainnet-settlement-v2-pool-reg
 const poolRegistrationFunction = "registerOperatorPool(uint256,bytes32,uint64,uint64)"
 
 // A refusal means the Safe must not send the call; a difference means the
-// chain does not hold the registration that was reviewed. Both exit 3.
+// chain does not hold the registration that was reviewed. Both exit 3, and so
+// does every call the chain ran and failed: no rerun changes those. Exit 1 is
+// only a read that got no such answer, which decides nothing.
 var errPoolRefused = errors.New("registerOperatorPool refused")
 var errPoolDiffers = errors.New("registerOperatorPool readback differs")
 
@@ -48,27 +50,30 @@ var (
 	errPoolEpochStarted = poolRefusal("the first epoch has already started")
 )
 
-// The preflight's named reverts. vault2's InvalidConfiguration and
-// NativeRefundFailed share STSettlement2's selectors, and the v1
-// coordinator's UnknownOperator passes through STSettlement2 unchanged.
-var (
-	errPoolInactiveOperator     = poolRefusal("InactiveOperator: the v1 operator is not active in the current epoch")
-	errPoolInvalidEpoch         = poolRefusal("InvalidEpoch: the first epoch is not after the current epoch")
-	errPoolCadenceTooShort      = poolRefusal("CadenceTooShort: the first epoch's v1 policy is shorter than its commit window plus vault2's challenge window")
-	errPoolNativeRefundFailed   = poolRefusal("NativeRefundFailed: the burn surplus could not be refunded to the Safe")
-	errPoolInvalidConfiguration = poolRefusal("InvalidConfiguration: vault2 refuses the pool: an unregistered escrow, a no_id outside 1 to 2^64 - 1, a zero, escrow or used hotkey, a zero burn cap or first epoch, or a registered pool")
-	errPoolUnauthorized         = poolRefusal("OwnableUnauthorizedAccount: the Safe does not own STSettlement2")
-	errPoolUnknownOperator      = poolRefusal("UnknownOperator: no_id is not a v1 operator")
+// The named failures of a call the chain ran: the reverts registerOperatorPool
+// raises, and a sender that cannot fund the call's value.
+const (
+	poolInactiveOperator     = "InactiveOperator: the v1 operator is not active in the current epoch"
+	poolInvalidEpoch         = "InvalidEpoch: the first epoch is not after the current epoch"
+	poolCadenceTooShort      = "CadenceTooShort: the first epoch's v1 policy is shorter than its commit window plus vault2's challenge window"
+	poolNativeRefundFailed   = "NativeRefundFailed: the burn surplus could not be refunded to the Safe"
+	poolInvalidConfiguration = "InvalidConfiguration: vault2 refuses the pool: an unregistered escrow, a no_id outside 1 to 2^64 - 1, a zero, escrow or used hotkey, a zero burn cap or first epoch, or a registered pool"
+	poolUnauthorized         = "OwnableUnauthorizedAccount: the Safe does not own STSettlement2"
+	poolUnknownOperator      = "UnknownOperator: no_id is not a v1 operator"
+	poolOutOfFund            = "OutOfFund: the Safe holds less than the value"
 )
 
-var poolPreflightRefusals = map[[4]byte]error{
-	[4]byte(stabi.STSettlement2InactiveOperatorErrorID().Bytes()):           errPoolInactiveOperator,
-	[4]byte(stabi.STSettlement2InvalidEpochErrorID().Bytes()):               errPoolInvalidEpoch,
-	[4]byte(stabi.STSettlement2CadenceTooShortErrorID().Bytes()):            errPoolCadenceTooShort,
-	[4]byte(stabi.STSettlement2NativeRefundFailedErrorID().Bytes()):         errPoolNativeRefundFailed,
-	[4]byte(stabi.STSettlementVault2InvalidConfigurationErrorID().Bytes()):  errPoolInvalidConfiguration,
-	[4]byte(stabi.STSettlement2OwnableUnauthorizedAccountErrorID().Bytes()): errPoolUnauthorized,
-	[4]byte(stabi.STCoordinatorUnknownOperatorErrorID().Bytes()):            errPoolUnknownOperator,
+// Reverts are named by selector. vault2's InvalidConfiguration and
+// NativeRefundFailed share STSettlement2's selectors, and the v1
+// coordinator's UnknownOperator passes through STSettlement2 unchanged.
+var poolReverts = map[[4]byte]string{
+	[4]byte(stabi.STSettlement2InactiveOperatorErrorID().Bytes()):           poolInactiveOperator,
+	[4]byte(stabi.STSettlement2InvalidEpochErrorID().Bytes()):               poolInvalidEpoch,
+	[4]byte(stabi.STSettlement2CadenceTooShortErrorID().Bytes()):            poolCadenceTooShort,
+	[4]byte(stabi.STSettlement2NativeRefundFailedErrorID().Bytes()):         poolNativeRefundFailed,
+	[4]byte(stabi.STSettlementVault2InvalidConfigurationErrorID().Bytes()):  poolInvalidConfiguration,
+	[4]byte(stabi.STSettlement2OwnableUnauthorizedAccountErrorID().Bytes()): poolUnauthorized,
+	[4]byte(stabi.STCoordinatorUnknownOperatorErrorID().Bytes()):            poolUnknownOperator,
 }
 
 // Readback's named differences.
@@ -225,7 +230,7 @@ func reviewPoolRegistration(ctx context.Context, client *rpcClient, pool poolReg
 	if err := poolRegistrationChainId(ctx, client); err != nil {
 		return result, err
 	}
-	chain, err := poolRegistrationHead(ctx, client)
+	chain, err := poolRegistrationHead(ctx, client, poolRefusal)
 	if err != nil {
 		return result, err
 	}
@@ -257,31 +262,42 @@ func reviewPoolRegistration(ctx context.Context, client *rpcClient, pool poolReg
 	data := settlement.PackRegisterOperatorPool(noId, pool.hotkey, pool.maximumBurnRao, pool.firstEpoch)
 	output, err := chain.call(ctx, &pool.safe, pool.valueWei, pool.settlement, data)
 	if err != nil {
-		return result, poolPreflightRefusal(err)
+		return result, err
 	}
 	uid, err := settlement.UnpackRegisterOperatorPool(output)
 	if err != nil {
-		return result, fmt.Errorf("registerOperatorPool preflight output: %w", err)
+		return result, poolRefusal(fmt.Sprintf("the preflight answered 0x%x, not the UID registerOperatorPool returns: %v", output, err))
 	}
 	args := poolRegistrationArgs{NoId: noId.String(), Hotkey: pool.hotkey.Hex(), MaximumBurnRao: strconv.FormatUint(pool.maximumBurnRao, 10), FirstEpoch: strconv.FormatUint(pool.firstEpoch, 10)}
 	return poolRegistrationReview{Schema: poolRegistrationReviewSchema, ChainId: mainnetEvmChainId, Safe: pool.safe.Hex(), To: pool.settlement.Hex(), ValueWei: pool.valueWei.String(), Data: hexutil.Encode(data), Function: poolRegistrationFunction, Args: args,
 		Vault2: vault2.Hex(), EscrowHotkey: common.Hash(escrow).Hex(), V1Coordinator: v1.Hex(), HeadBlock: chain.head, FirstEpochStartBlock: start, BlocksRemaining: new(big.Int).Sub(start, head), PreflightUid: uid}, ctx.Err()
 }
 
-// A reverted preflight is a refusal, named when it is one of
-// registerOperatorPool's; any other failure is the read's own error.
-func poolPreflightRefusal(err error) error {
+// What the node answers when the chain ran a call and the call failed. A
+// revert carries its bytes as hex data, under code -32603 from subtensor's
+// node and code 3 from others, and an EVM error such as OutOfFund carries
+// empty data. A revert is named by its selector and a sender short of the
+// value by the node's own name for it; any other failure keeps the node's
+// message and data. An error with no hex data, no code 3 and no word of a
+// revert or an EVM error is a failed read, which this does not describe.
+func poolCallFailure(err error) (string, bool) {
 	var failure *rpcCallError
-	if !errors.As(err, &failure) || failure.code != 3 {
-		return err
-	}
 	var encoded string
-	_ = json.Unmarshal(failure.data, &encoded)
-	revert, _ := hexutil.Decode(encoded)
-	if len(revert) >= 4 && poolPreflightRefusals[[4]byte(revert)] != nil {
-		return poolPreflightRefusals[[4]byte(revert)]
+	if !errors.As(err, &failure) {
+		return "", false
 	}
-	return poolRefusal(fmt.Sprintf("the preflight reverted with %q and data 0x%x", failure.message, revert))
+	_ = json.Unmarshal(failure.data, &encoded)
+	revert, decodeErr := hexutil.Decode(encoded)
+	if failure.code != 3 && decodeErr != nil && !strings.Contains(failure.message, "revert") && !strings.Contains(failure.message, "evm error") {
+		return "", false
+	}
+	if len(revert) >= 4 && poolReverts[[4]byte(revert)] != "" {
+		return poolReverts[[4]byte(revert)], true
+	}
+	if strings.Contains(failure.message, "OutOfFund") {
+		return poolOutOfFund, true
+	}
+	return fmt.Sprintf("the call failed with %q and data 0x%x", failure.message, revert), true
 }
 
 // Reads the Safe's receipt, then vault2.pools(noId) and settlementAt(noId,
@@ -295,7 +311,7 @@ func readbackPoolRegistration(ctx context.Context, client *rpcClient, pool poolR
 	if err := client.callPoolRegistrationRead(ctx, "eth_getTransactionReceipt", []any{pool.transaction.Hex()}, &receipt); err != nil {
 		return result, err
 	}
-	chain, err := poolRegistrationHead(ctx, client)
+	chain, err := poolRegistrationHead(ctx, client, poolDifference)
 	if err != nil {
 		return result, err
 	}
@@ -350,10 +366,13 @@ func readbackPoolRegistration(ctx context.Context, client *rpcClient, pool poolR
 		Uid: event.Uid, TransactionHash: pool.transaction.Hex(), BlockNumber: receipt.BlockNumber, HeadBlock: chain.head}, ctx.Err()
 }
 
-// The registration's reads, every eth_call at one head block.
+// The registration's reads, every eth_call at one head block. refuse makes a
+// call the chain ran and failed the mode's own outcome: review's refusal or
+// readback's difference.
 type poolRegistrationChain struct {
 	client *rpcClient
 	head   uint64
+	refuse func(string) error
 }
 
 // The registration reads only these methods; the profile cannot send.
@@ -380,16 +399,17 @@ func poolRegistrationChainId(ctx context.Context, client *rpcClient) error {
 }
 
 // Pins every later read to the route's current head.
-func poolRegistrationHead(ctx context.Context, client *rpcClient) (*poolRegistrationChain, error) {
+func poolRegistrationHead(ctx context.Context, client *rpcClient, refuse func(string) error) (*poolRegistrationChain, error) {
 	var head hexutil.Uint64
 	if err := client.callPoolRegistrationRead(ctx, "eth_blockNumber", []any{}, &head); err != nil {
 		return nil, err
 	}
-	return &poolRegistrationChain{client: client, head: uint64(head)}, nil
+	return &poolRegistrationChain{client: client, head: uint64(head), refuse: refuse}, nil
 }
 
 // One eth_call at the head: a view from no sender, or the Safe's call with
-// its value.
+// its value. A call the chain ran and failed is the mode's outcome, never a
+// failed read.
 func (self *poolRegistrationChain) call(ctx context.Context, from *common.Address, value *big.Int, to common.Address, data []byte) ([]byte, error) {
 	message := map[string]any{"to": to.Hex(), "data": hexutil.Encode(data)}
 	if from != nil {
@@ -397,15 +417,22 @@ func (self *poolRegistrationChain) call(ctx context.Context, from *common.Addres
 	}
 	var output hexutil.Bytes
 	err := self.client.callPoolRegistrationRead(ctx, "eth_call", []any{message, hexutil.EncodeUint64(self.head)}, &output)
+	if failure, failed := poolCallFailure(err); failed {
+		return nil, self.refuse(failure)
+	}
 	return output, err
 }
 
-// A view's answer at the head, decoded by its binding.
+// A view's answer at the head, decoded by its binding. An answer its contract
+// would not give, as an address without the contract gives, is the mode's
+// outcome too.
 func poolView[T any](ctx context.Context, chain *poolRegistrationChain, to common.Address, data []byte, unpack func([]byte) (T, error)) (T, error) {
 	output, err := chain.call(ctx, nil, nil, to, data)
 	var value T
 	if err == nil {
-		value, err = unpack(output)
+		if value, err = unpack(output); err != nil {
+			err = chain.refuse(fmt.Sprintf("the call answered 0x%x, not as its contract does: %v", output, err))
+		}
 	}
 	if err != nil {
 		return value, fmt.Errorf("view 0x%x of %s: %w", data[:4], to.Hex(), err)

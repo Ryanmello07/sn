@@ -29,6 +29,22 @@ import (
 // given the chain's own answer.
 type poolTestOverride func(index int, method string, params []json.RawMessage, result any, failure *e2eRPCError) (any, *e2eRPCError)
 
+// A raw HTTP reply in place of a JSON-RPC answer.
+type poolTestReply struct {
+	status int
+	body   string
+}
+
+// Replaces the at-th answer since the last takeMethods.
+func poolTestAnswerAt(at int, result any, failure *e2eRPCError) poolTestOverride {
+	return func(index int, _ string, _ []json.RawMessage, original any, originalFailure *e2eRPCError) (any, *e2eRPCError) {
+		if index == at {
+			return result, failure
+		}
+		return original, originalFailure
+	}
+}
+
 // The deployed stack behind its own JSON-RPC route.
 type poolTestChain struct {
 	*e2eFixture
@@ -62,6 +78,11 @@ func (self *poolTestChain) serve(writer http.ResponseWriter, request *http.Reque
 	self.lock.Unlock()
 	if override != nil {
 		result, failure = override(index, call.Method, call.Params, result, failure)
+	}
+	if raw, ok := result.(poolTestReply); ok {
+		writer.WriteHeader(raw.status)
+		_, _ = writer.Write([]byte(raw.body))
+		return
 	}
 	response := map[string]any{"jsonrpc": "2.0", "id": call.ID, "result": result}
 	if failure != nil {
@@ -147,14 +168,33 @@ func poolTestCall(method string, params []json.RawMessage) (*common.Address, []b
 	return call.From, data
 }
 
-// A refusal that must exit 3 with exactly the wanted messages and print nothing.
-func requirePoolRefusal(t *testing.T, name, stdout string, code int, diagnostic string, want []error, all []error) {
+// The messages of named refusals or differences, as the command prints them.
+func poolTestTexts(errs ...error) []string {
+	texts := []string{}
+	for _, err := range errs {
+		texts = append(texts, err.Error())
+	}
+	return texts
+}
+
+// Named call failures as review refuses them.
+func poolTestRefused(names ...string) []string {
+	texts := []string{}
+	for _, name := range names {
+		texts = append(texts, poolRefusal(name).Error())
+	}
+	return texts
+}
+
+// A refusal or difference that must exit 3 with exactly the wanted messages
+// among all and print nothing.
+func requirePoolRefusal(t *testing.T, name, stdout string, code int, diagnostic string, want, all []string) {
 	t.Helper()
 	if code != 3 || stdout != "" {
 		t.Fatalf("%s: %d %s %s", name, code, stdout, diagnostic)
 	}
 	for _, candidate := range all {
-		if strings.Contains(diagnostic, candidate.Error()) != slices.Contains(want, candidate) {
+		if strings.Contains(diagnostic, candidate) != slices.Contains(want, candidate) {
 			t.Fatalf("%s: %s, want exactly %v", name, diagnostic, want)
 		}
 	}
@@ -206,7 +246,7 @@ func TestPoolRegistrationReviewSendReadback(t *testing.T) {
 		t.Fatalf("readback read %v", methods)
 	}
 	stdout, code, diagnostic = f.run("review")
-	requirePoolRefusal(t, "second review", stdout, code, diagnostic, []error{errPoolInvalidConfiguration}, []error{errPoolInvalidConfiguration})
+	requirePoolRefusal(t, "second review", stdout, code, diagnostic, poolTestRefused(poolInvalidConfiguration), poolTestRefused(poolInvalidConfiguration))
 }
 
 // PR-2: review refuses, before any read, a zero pool hotkey and a value other
@@ -217,7 +257,7 @@ func TestPoolRegistrationReviewSendReadback(t *testing.T) {
 // passes with one block remaining; at its start it is refused.
 func TestPoolRegistrationReviewRefusesLocally(t *testing.T) {
 	f := newPoolTestChain(t)
-	local := []error{errPoolZeroHotkey, errPoolValue, errPoolChain, errPoolEscrowHotkey, errPoolEpochStarted}
+	local := poolTestTexts(errPoolZeroHotkey, errPoolValue, errPoolChain, errPoolEscrowHotkey, errPoolEpochStarted)
 	for _, refusal := range []struct {
 		name    string
 		changes []string
@@ -240,7 +280,7 @@ func TestPoolRegistrationReviewRefusesLocally(t *testing.T) {
 			return result, failure
 		})
 		stdout, code, diagnostic := f.run("review", refusal.changes...)
-		requirePoolRefusal(t, refusal.name, stdout, code, diagnostic, []error{refusal.want}, local)
+		requirePoolRefusal(t, refusal.name, stdout, code, diagnostic, poolTestTexts(refusal.want), local)
 		if reads := f.takeMethods(); len(reads) != refusal.reads {
 			t.Fatalf("%s read %v before refusing", refusal.name, reads)
 		}
@@ -253,7 +293,7 @@ func TestPoolRegistrationReviewRefusesLocally(t *testing.T) {
 	}
 	f.chain.rollTo(start + 1)
 	stdout, code, diagnostic := f.run("review", "first-epoch", "1")
-	requirePoolRefusal(t, "E_s's start", stdout, code, diagnostic, []error{errPoolEpochStarted}, local)
+	requirePoolRefusal(t, "E_s's start", stdout, code, diagnostic, poolTestTexts(errPoolEpochStarted), local)
 }
 
 // PR-2: a mode other than review and readback, a missing, unknown or extra
@@ -299,56 +339,134 @@ func TestPoolRegistrationUsage(t *testing.T) {
 // deactivated v1 operator, a first epoch whose v1 policy is too short, a Safe
 // that refuses the burn surplus, a zero burn cap, a Safe that does not own
 // STSettlement2 and a no_id that is not a v1 operator. InvalidEpoch, which
-// the local check pre-empts, is injected, as are an unnamed revert and one
-// without data. Each exits 3 and prints nothing.
+// the local check pre-empts, is injected. Each exits 3 and prints nothing.
 func TestPoolRegistrationPreflightNamesReverts(t *testing.T) {
-	named := []error{errPoolInactiveOperator, errPoolInvalidEpoch, errPoolCadenceTooShort, errPoolNativeRefundFailed, errPoolInvalidConfiguration, errPoolUnauthorized, errPoolUnknownOperator}
 	for _, revert := range []struct {
 		name    string
 		prepare func(*poolTestChain) []string
 		inject  *e2eRPCError
-		want    []error
-		message string
+		want    string
 	}{
 		{"inactive-operator", func(f *poolTestChain) []string {
 			f.must(f.owner, f.coordinator, nil, e2eCoordinatorBinding.PackScheduleOperator(e2eRao(e2eNoID), f.deposit, f.depositSigner.address, f.operator.address, false, 1))
 			f.chain.rollTo(f.end(0) + 1)
 			return nil
-		}, nil, []error{errPoolInactiveOperator}, ""},
-		{"invalid-epoch", nil, &e2eRPCError{Code: 3, Message: "execution reverted", Data: hexutil.Encode(stabi.STSettlement2InvalidEpochErrorID().Bytes()[:4])}, []error{errPoolInvalidEpoch}, ""},
+		}, nil, poolInactiveOperator},
+		{"invalid-epoch", nil, &e2eRPCError{Code: 3, Message: "execution reverted", Data: hexutil.Encode(stabi.STSettlement2InvalidEpochErrorID().Bytes()[:4])}, poolInvalidEpoch},
 		{"cadence", func(f *poolTestChain) []string {
 			short := f.policy(15_000, 2_400)
 			short.EffectiveEpoch = 2
 			f.must(f.owner, f.coordinator, nil, e2eCoordinatorBinding.PackSchedulePolicy(short))
 			return nil
-		}, nil, []error{errPoolCadenceTooShort}, ""},
+		}, nil, poolCadenceTooShort},
 		{"refund", func(f *poolTestChain) []string {
 			f.chain.native(func(runtime *e2eRuntime) {
 				runtime.db.SetCode(f.owner.address, []byte{0x60, 0x00, 0x60, 0x00, 0xfd}, tracing.CodeChangeUnspecified)
 			})
 			return nil
-		}, nil, []error{errPoolNativeRefundFailed}, ""},
-		{"configuration", func(*poolTestChain) []string { return []string{"maximum-burn-rao", "0", "value-wei", "0"} }, nil, []error{errPoolInvalidConfiguration}, ""},
-		{"unauthorized", func(f *poolTestChain) []string { return []string{"safe", f.anyone.address.Hex()} }, nil, []error{errPoolUnauthorized}, ""},
-		{"unknown-operator", func(*poolTestChain) []string { return []string{"no-id", "2"} }, nil, []error{errPoolUnknownOperator}, ""},
-		{"unnamed", nil, &e2eRPCError{Code: 3, Message: "execution reverted", Data: "0xdeadbeef"}, nil, `the preflight reverted with "execution reverted" and data 0xdeadbeef`},
-		{"no-data", nil, &e2eRPCError{Code: 3, Message: "execution reverted"}, nil, `the preflight reverted with "execution reverted" and data 0x`},
+		}, nil, poolNativeRefundFailed},
+		{"configuration", func(*poolTestChain) []string { return []string{"maximum-burn-rao", "0", "value-wei", "0"} }, nil, poolInvalidConfiguration},
+		{"unauthorized", func(f *poolTestChain) []string { return []string{"safe", f.anyone.address.Hex()} }, nil, poolUnauthorized},
+		{"unknown-operator", func(*poolTestChain) []string { return []string{"no-id", "2"} }, nil, poolUnknownOperator},
 	} {
 		f := newPoolTestChain(t)
 		var changes []string
 		if revert.prepare != nil {
 			changes = revert.prepare(f)
 		}
-		f.setOverride(func(_ int, method string, params []json.RawMessage, result any, failure *e2eRPCError) (any, *e2eRPCError) {
-			if from, _ := poolTestCall(method, params); from != nil && revert.inject != nil {
-				return nil, revert.inject
-			}
-			return result, failure
-		})
+		f.setOverride(poolTestPreflightAnswer(revert.inject))
 		stdout, code, diagnostic := f.run("review", changes...)
-		requirePoolRefusal(t, revert.name, stdout, code, diagnostic, revert.want, named)
-		if !strings.Contains(diagnostic, revert.message) {
-			t.Fatalf("%s: %s, want %s", revert.name, diagnostic, revert.message)
+		requirePoolRefusal(t, revert.name, stdout, code, diagnostic, poolTestRefused(revert.want), poolTestNamedFailures)
+	}
+}
+
+// Every named call failure, as review refuses it.
+var poolTestNamedFailures = poolTestRefused(poolInactiveOperator, poolInvalidEpoch, poolCadenceTooShort, poolNativeRefundFailed, poolInvalidConfiguration, poolUnauthorized, poolUnknownOperator, poolOutOfFund)
+
+// Replaces the node's answer to the preflight, the one eth_call with a sender.
+func poolTestPreflightAnswer(failure *e2eRPCError) poolTestOverride {
+	return func(_ int, method string, params []json.RawMessage, result any, original *e2eRPCError) (any, *e2eRPCError) {
+		if from, _ := poolTestCall(method, params); from != nil && failure != nil {
+			return nil, failure
+		}
+		return result, original
+	}
+}
+
+// PR-6: a call the chain ran and failed is review's refusal or readback's
+// difference, exit 3, whatever shape the node gives its answer; no rerun
+// changes it. The shapes are subtensor's node's, as the rehearsal node gives
+// them: a revert as code -32603 with the revert's bytes as hex data, none for
+// a revert without a reason, and an EVM error such as OutOfFund with empty
+// data; the same without the data; and other nodes' code 3. A revert is named
+// by its selector and a Safe short of the value as OutOfFund; any other
+// failure keeps the node's message and data. Only an error without that
+// evidence is a failed read, exit 1.
+func TestPoolRegistrationCallFailureShapes(t *testing.T) {
+	f := newPoolTestChain(t)
+	const reverted = "VM Exception while processing transaction: revert"
+	unauthorized := hexutil.Encode(slices.Concat(stabi.STSettlement2OwnableUnauthorizedAccountErrorID().Bytes()[:4], common.LeftPadBytes(f.anyone.address[:], 32)))
+	for _, shape := range []struct {
+		name   string
+		answer e2eRPCError
+		code   int
+		named  string
+		text   string
+	}{
+		{"subtensor revert", e2eRPCError{Code: -32603, Message: reverted, Data: "0xc52a9bd3"}, 3, poolInvalidConfiguration, ""},
+		{"subtensor revert with an argument", e2eRPCError{Code: -32603, Message: reverted, Data: unauthorized}, 3, poolUnauthorized, ""},
+		{"subtensor unnamed revert", e2eRPCError{Code: -32603, Message: reverted, Data: "0xdeadbeef"}, 3, "", `the call failed with "VM Exception while processing transaction: revert" and data 0xdeadbeef`},
+		{"subtensor revert below a selector", e2eRPCError{Code: -32603, Message: reverted, Data: "0xc52a9b"}, 3, "", `the call failed with "VM Exception while processing transaction: revert" and data 0xc52a9b`},
+		{"subtensor revert without a reason", e2eRPCError{Code: -32603, Message: reverted, Data: "0x"}, 3, "", `the call failed with "VM Exception while processing transaction: revert" and data 0x`},
+		{"subtensor revert without data", e2eRPCError{Code: -32603, Message: reverted}, 3, "", `the call failed with "VM Exception while processing transaction: revert" and data 0x`},
+		{"subtensor OutOfFund", e2eRPCError{Code: -32603, Message: "evm error: OutOfFund", Data: "0x"}, 3, poolOutOfFund, ""},
+		{"subtensor OutOfFund without data", e2eRPCError{Code: -32603, Message: "evm error: OutOfFund"}, 3, poolOutOfFund, ""},
+		{"subtensor EVM error", e2eRPCError{Code: -32603, Message: "evm error: InvalidCode(Opcode(254))", Data: "0x"}, 3, "", `the call failed with "evm error: InvalidCode(Opcode(254))" and data 0x`},
+		{"code 3 revert", e2eRPCError{Code: 3, Message: "execution reverted", Data: hexutil.Encode(stabi.STSettlement2CadenceTooShortErrorID().Bytes()[:4])}, 3, poolCadenceTooShort, ""},
+		{"code 3 unnamed revert", e2eRPCError{Code: 3, Message: "execution reverted", Data: "0xdeadbeef"}, 3, "", `the call failed with "execution reverted" and data 0xdeadbeef`},
+		{"code 3 without data", e2eRPCError{Code: 3, Message: "anything"}, 3, "", `the call failed with "anything" and data 0x`},
+		{"read: header not found", e2eRPCError{Code: -32000, Message: "header not found"}, 1, "", "eth_call: RPC error -32000: header not found"},
+		{"read: method not found", e2eRPCError{Code: -32601, Message: "Method not found"}, 1, "", "eth_call: RPC error -32601: Method not found"},
+		{"read: internal error", e2eRPCError{Code: -32603, Message: "Failed to retrieve Runtime Api version"}, 1, "", "eth_call: RPC error -32603: Failed to retrieve Runtime Api version"},
+		{"read: data that is no hex", e2eRPCError{Code: -32603, Message: "Failed to retrieve Runtime Api version", Data: "unavailable"}, 1, "", "eth_call: RPC error -32603: Failed to retrieve Runtime Api version"},
+	} {
+		f.setOverride(poolTestPreflightAnswer(&shape.answer))
+		stdout, code, diagnostic := f.run("review")
+		if shape.code == 3 {
+			want := []string{}
+			if shape.named != "" {
+				want = poolTestRefused(shape.named)
+			}
+			requirePoolRefusal(t, shape.name, stdout, code, diagnostic, want, poolTestNamedFailures)
+		}
+		if code != shape.code || stdout != "" || !strings.Contains(diagnostic, shape.text) || strings.Contains(diagnostic, errPoolRefused.Error()) != (shape.code == 3) {
+			t.Fatalf("%s: %d %s %s", shape.name, code, stdout, diagnostic)
+		}
+	}
+
+	// A view the chain ran and failed, or answered as its contract would
+	// not, is the mode's outcome too: review's refusal and readback's
+	// difference.
+	f.setOverride(nil)
+	f.transaction = f.send(f.review()).TxHash
+	for _, view := range []struct {
+		name, mode string
+		override   poolTestOverride
+		changes    []string
+		want       string
+	}{
+		{"review's reverted view", "review", poolTestAnswerAt(2, nil, &e2eRPCError{Code: -32603, Message: reverted, Data: "0x"}), nil, `registerOperatorPool refused: the call failed with "VM Exception while processing transaction: revert" and data 0x`},
+		{"review's view of no contract", "review", poolTestAnswerAt(2, "0x", nil), nil, "registerOperatorPool refused: the call answered 0x, not as its contract does"},
+		{"review's preflight of no contract", "review", poolTestAnswerAt(6, "0x", nil), nil, "registerOperatorPool refused: the preflight answered 0x, not the UID registerOperatorPool returns"},
+		{"readback's reverted view", "readback", poolTestAnswerAt(5, nil, &e2eRPCError{Code: -32603, Message: reverted, Data: "0xdeadbeef"}), nil, `registerOperatorPool readback differs: the call failed with "VM Exception while processing transaction: revert" and data 0xdeadbeef`},
+		{"readback's view of no contract", "readback", poolTestAnswerAt(4, "0x01", nil), nil, "registerOperatorPool readback differs: the call answered 0x01, not as its contract does"},
+		{"readback of no v1 operator", "readback", nil, []string{"no-id", "2"}, "registerOperatorPool readback differs: " + poolUnknownOperator},
+	} {
+		f.takeMethods()
+		f.setOverride(view.override)
+		stdout, code, diagnostic := f.run(view.mode, view.changes...)
+		if code != 3 || stdout != "" || !strings.Contains(diagnostic, view.want) {
+			t.Fatalf("%s: %d %s %s", view.name, code, stdout, diagnostic)
 		}
 	}
 }
@@ -367,7 +485,7 @@ func TestPoolRegistrationReadbackNamesDifferences(t *testing.T) {
 	data, _ := hexutil.Decode(review.Data)
 	reverted := f.refused(f.anyone, f.settlement, e2eWei(1), data, "OwnableUnauthorizedAccount").TxHash
 	unrelated := f.must(f.anyone, f.vault2, nil, e2eVault2Binding.PackConservationHolds()).TxHash
-	all := []error{errPoolNoReceipt, errPoolReverted, errPoolNoEvent, errPoolEventHotkey, errPoolEventFirstEpoch, errPoolUnregistered, errPoolFirstEpoch, errPoolHotkey, errPoolSettlementVault, errPoolSettlementHotkey, errPoolSettlementVersion}
+	all := poolTestTexts(errPoolNoReceipt, errPoolReverted, errPoolNoEvent, errPoolEventHotkey, errPoolEventFirstEpoch, errPoolUnregistered, errPoolFirstEpoch, errPoolHotkey, errPoolSettlementVault, errPoolSettlementHotkey, errPoolSettlementVersion)
 	other := e2eKey("another-hotkey")
 	word := func(value uint64) []byte { return common.LeftPadBytes(new(big.Int).SetUint64(value).Bytes(), 32) }
 	pools := func(hotkey [32]byte, firstEpoch uint64, registered bool) string {
@@ -431,7 +549,7 @@ func TestPoolRegistrationReadbackNamesDifferences(t *testing.T) {
 		f.transaction = difference.transaction
 		f.setOverride(difference.override)
 		stdout, code, diagnostic := f.run("readback", difference.changes...)
-		requirePoolRefusal(t, difference.name, stdout, code, diagnostic, difference.want, all)
+		requirePoolRefusal(t, difference.name, stdout, code, diagnostic, poolTestTexts(difference.want...), all)
 	}
 }
 
@@ -442,49 +560,36 @@ func (poolTestBrokenWriter) Write([]byte) (int, error) {
 	return 0, errors.New("synthetic broken output")
 }
 
-// PR-5: a failed read stops review and readback with exit 1 and no output:
-// an RPC error at each read in turn, a view or preflight answer its binding
-// cannot decode, and an output that cannot be written. The read profile
-// refuses every other method, so neither command can send.
+// PR-5: only a failed read stops review and readback with exit 1 and no
+// output: at each read in turn, an RPC error without evidence of a failed
+// call, an HTTP refusal and a reply that is no JSON-RPC; and an output that
+// cannot be written. The read profile refuses every other method, so neither
+// command can send.
 func TestPoolRegistrationReadFailuresStop(t *testing.T) {
 	f := newPoolTestChain(t)
-	failAt := func(at int) poolTestOverride {
-		return func(index int, _ string, _ []json.RawMessage, result any, failure *e2eRPCError) (any, *e2eRPCError) {
-			if index == at {
-				return nil, &e2eRPCError{Code: -32601, Message: "synthetic unavailable method"}
-			}
-			return result, failure
-		}
-	}
-	answerAt := func(at int, answer string) poolTestOverride {
-		return func(index int, _ string, _ []json.RawMessage, result any, failure *e2eRPCError) (any, *e2eRPCError) {
-			if index == at {
-				return answer, nil
-			}
-			return result, failure
-		}
-	}
-	type failure struct {
-		override poolTestOverride
-		message  string
-	}
-	cases := map[string][]failure{"review": {{answerAt(2, "0x"), "view 0x"}, {answerAt(6, "0x"), "registerOperatorPool preflight output"}}, "readback": {{answerAt(4, "0x01"), "view 0x"}}}
-	for at := range 7 {
-		cases["review"] = append(cases["review"], failure{failAt(at), "RPC error -32601: synthetic unavailable method"})
-	}
-	for at := range 6 {
-		cases["readback"] = append(cases["readback"], failure{failAt(at), "RPC error -32601: synthetic unavailable method"})
-	}
 	// Readback reads a real registration; each failure stops review before
 	// the preflight's own answer matters.
 	f.transaction = f.send(f.review()).TxHash
-	for _, mode := range []string{"review", "readback"} {
-		for index, failure := range cases[mode] {
-			f.takeMethods()
-			f.setOverride(failure.override)
-			stdout, code, diagnostic := f.run(mode)
-			if code != 1 || stdout != "" || !strings.Contains(diagnostic, failure.message) {
-				t.Fatalf("%s failure %d: %d %s %s", mode, index, code, stdout, diagnostic)
+	for _, mode := range []struct {
+		name  string
+		reads int
+	}{{"review", 7}, {"readback", 6}} {
+		for at := range mode.reads {
+			for _, failure := range []struct {
+				result  any
+				failure *e2eRPCError
+				message string
+			}{
+				{nil, &e2eRPCError{Code: -32601, Message: "synthetic unavailable method"}, "RPC error -32601: synthetic unavailable method"},
+				{poolTestReply{http.StatusBadRequest, "synthetic refusal"}, nil, "HTTP 400"},
+				{poolTestReply{http.StatusOK, "synthetic text"}, nil, errRpcIntegrity.Error()},
+			} {
+				f.takeMethods()
+				f.setOverride(poolTestAnswerAt(at, failure.result, failure.failure))
+				stdout, code, diagnostic := f.run(mode.name)
+				if code != 1 || stdout != "" || !strings.Contains(diagnostic, failure.message) {
+					t.Fatalf("%s read %d: %d %s %s", mode.name, at, code, stdout, diagnostic)
+				}
 			}
 		}
 	}
