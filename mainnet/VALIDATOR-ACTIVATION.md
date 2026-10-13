@@ -203,6 +203,11 @@ profile is the existing qualified repair profile: `Type=exec`, numeric user/grou
 absolute `validator run --config=... --progress-file=...`, `Restart=no`,
 `KillMode=control-group`, no delegation, shell, environment files or hooks.
 
+Settlement v2 adoption later gives the validator a successor config and an
+auditor key on its command line, which this profile does not render.
+[SETTLEMENT-V2-ADOPTION.md](SETTLEMENT-V2-ADOPTION.md) gives that sequence and
+its commands.
+
 `install` performs a pinned, bounded `systemctl daemon-reload`, then verifies
 both loaded units and their dependencies. It does not enable, start, stop or
 restart them. Daemon reload is a real host effect and can run systemd's host
