@@ -344,19 +344,32 @@ func e2eSeed(t testing.TB, ctx context.Context, transport *validator.TunnelTrans
 	}
 }
 
+// e2eWithEachLatencySetting runs body in a fresh server environment twice:
+// with the server's hop_latency_from_attributed_attempt off, its default,
+// and on (VALIDATOR.md §7.5).
+func e2eWithEachLatencySetting(t *testing.T, body func(t testing.TB, ctx context.Context, settings *model.VerifySettings)) {
+	for _, fromAttributedAttempt := range []bool{false, true} {
+		t.Run(fmt.Sprintf("hop_latency_from_attributed_attempt=%t", fromAttributedAttempt), func(t *testing.T) {
+			server.DefaultTestEnv().Run(t, func(t testing.TB) {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				seed := bytes.Repeat([]byte{0x42}, ed25519.SeedSize)
+				controller.SetVerifyServerKeys([]*controller.VerifyServerKey{{ServerKeyId: 7, PrivateKey: ed25519.NewKeyFromSeed(seed)}})
+				settings := model.DefaultVerifySettings()
+				settings.HopLatencyFromAttributedAttempt = fromAttributedAttempt
+				controller.SetVerifySettings(settings)
+				body(t, ctx, settings)
+			})
+		})
+	}
+}
+
 // IPV6.md C7, VALIDATOR.md §8.2. The SEEDs of consecutive trails alternate
 // their first family: through a dual-stack provider both families resolve at
 // the server, and an IPv4-only provider's IPv6-first hops fail over to IPv4 at
 // once, on its dial-failure signal, and resolve.
 func TestDualStackHopsEndToEnd(t *testing.T) {
-	server.DefaultTestEnv().Run(t, func(t testing.TB) {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		seed := bytes.Repeat([]byte{0x42}, ed25519.SeedSize)
-		controller.SetVerifyServerKeys([]*controller.VerifyServerKey{{ServerKeyId: 7, PrivateKey: ed25519.NewKeyFromSeed(seed)}})
-		settings := model.DefaultVerifySettings()
-		controller.SetVerifySettings(settings)
-
+	e2eWithEachLatencySetting(t, func(t testing.TB, ctx context.Context, settings *model.VerifySettings) {
 		api := newE2EApi(t)
 		doh := newE2EDoh(t)
 		dualStackV4, dualStackV6 := netip.MustParseAddr("127.0.0.2"), netip.MustParseAddr("::1")
@@ -488,13 +501,7 @@ func testIndexedFamilyHops(
 	beforeDial func(indexedFamily int) func(family int) error,
 	sources func(trail uint64, indexedFirst bool, indexed, unindexed netip.Addr) []netip.Addr,
 ) {
-	server.DefaultTestEnv().Run(t, func(t testing.TB) {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		controller.SetVerifyServerKeys([]*controller.VerifyServerKey{{ServerKeyId: 7, PrivateKey: ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))}})
-		settings := model.DefaultVerifySettings()
-		controller.SetVerifySettings(settings)
-
+	e2eWithEachLatencySetting(t, func(t testing.TB, ctx context.Context, settings *model.VerifySettings) {
 		api := newE2EApi(t)
 		doh := newE2EDoh(t)
 		// next hops a SEED may assign; nothing ever dials their egress
@@ -554,6 +561,107 @@ func testIndexedFamilyHops(
 			t.Logf("%s (indexed %s): four SEEDs resolved, %d after a resend on the indexed family", legacy.name, legacy.indexed, resent)
 		}
 	})
+}
+
+// IPV6.md C7, VALIDATOR.md §7.5, §8.2. An EXTEND through a provider with one
+// indexed family, the case that failed a whole trail before the 421: the
+// trail's second hop tries the provider's other family first, the server
+// answers 421 and changes nothing, and the step's resend, pinned to the
+// indexed family, confirms the hop. The mirror case, and a co-located pair
+// whose other family resolves to the seed provider instead of to no one, do
+// the same. With hop_latency_from_attributed_attempt on, the server counts
+// the hop's latency from that 421; off, from the ASSIGN a second earlier.
+func TestDualStackHopsExtendResolvesThroughOneIndexedFamily(t *testing.T) {
+	seedV4, v6 := netip.MustParseAddr("127.0.0.2"), netip.MustParseAddr("::1")
+	for _, legacy := range []struct {
+		name string
+		// the seed provider's indexed egress
+		seed map[int]netip.Addr
+		// the second hop's egress, and the one address of it the server indexed
+		egress  map[int]netip.Addr
+		indexed netip.Addr
+		// the trail whose second hop tries the unindexed family first
+		trail uint64
+	}{
+		{name: "transport on IPv4", seed: map[int]netip.Addr{4: seedV4}, egress: map[int]netip.Addr{4: netip.MustParseAddr("127.0.0.4"), 6: v6}, indexed: netip.MustParseAddr("127.0.0.4"), trail: 0},
+		{name: "transport on IPv6", seed: map[int]netip.Addr{4: seedV4}, egress: map[int]netip.Addr{4: netip.MustParseAddr("127.0.0.5"), 6: v6}, indexed: v6, trail: 1},
+		{name: "co-located with the seed provider", seed: map[int]netip.Addr{4: seedV4, 6: v6}, egress: map[int]netip.Addr{4: netip.MustParseAddr("127.0.0.6"), 6: v6}, indexed: netip.MustParseAddr("127.0.0.6"), trail: 0},
+	} {
+		t.Run(legacy.name, func(t *testing.T) {
+			e2eWithEachLatencySetting(t, func(t testing.TB, ctx context.Context, settings *model.VerifySettings) {
+				api := newE2EApi(t)
+				doh := newE2EDoh(t)
+				seedProvider := startE2EProvider(t, ctx, api, legacy.seed)
+				hop := startE2EProvider(t, ctx, api, legacy.egress)
+				seedAddrs := []netip.Addr{}
+				for _, addr := range legacy.seed {
+					seedAddrs = append(seedAddrs, addr)
+				}
+				registerE2EProvider(ctx, seedProvider.id, seedAddrs, settings)
+				registerE2EProvider(ctx, hop.id, []netip.Addr{legacy.indexed}, settings)
+				_, vsk, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					t.Fatal(err)
+				}
+				vpk := vsk.Public().(ed25519.PublicKey)
+				validatorId := connect.NewId()
+				model.SetClientPublicKey(ctx, server.Id(validatorId), vpk)
+
+				// the SEED's only assignable next hop is the provider under test
+				seedResponse, err := validator.E2EPostHop(ctx, newE2ETransport(t, ctx, api, doh, seedProvider, validatorId), seedProvider.id, e2eSeedBody(t, validatorId, vsk), legacy.trail, 0)
+				if err != nil {
+					t.Fatalf("seed: %v", err)
+				}
+				var assign connect.VerifyAssignResult
+				if err := json.Unmarshal(seedResponse, &assign); err != nil || len(assign.Trail) != 1 || assign.Trail[0] != seedProvider.id || assign.NextHop != hop.id {
+					t.Fatalf("seed response %s (%v), want the seed provider confirmed and the provider under test assigned", seedResponse, err)
+				}
+				// next hops the EXTEND may assign; nothing ever dials their egress
+				for i := 0; i < 2; i++ {
+					registerE2EProvider(ctx, connect.NewId(), []netip.Addr{netip.AddrFrom4([4]byte{203, 0, 113, byte(30 + i)})}, settings)
+				}
+				// the hop is slow to be tried: a latency from the ASSIGN holds this
+				time.Sleep(time.Second)
+
+				trail := []connect.Id{seedProvider.id, hop.id}
+				message, err := connect.BuildVerifyExtendMessage(assign.TrailId, assign.ServerNonce, vpk, byte(assign.M), trail)
+				if err != nil {
+					t.Fatal(err)
+				}
+				extendBody, err := json.Marshal(&connect.VerifyExtendArgs{ClientId: validatorId, TrailId: assign.TrailId, Trail: trail, ExtendSig: connect.SignVerifyMessage(vsk, message)})
+				if err != nil {
+					t.Fatal(err)
+				}
+				before := len(api.verifySources())
+				extendResponse, err := validator.E2EPostHop(ctx, newE2ETransport(t, ctx, api, doh, hop, validatorId), hop.id, extendBody, legacy.trail, 1)
+				if err != nil {
+					t.Fatalf("extend through the provider: %v", err)
+				}
+				var next connect.VerifyAssignResult
+				if err := json.Unmarshal(extendResponse, &next); err != nil || len(next.Trail) != 2 || next.Trail[1] != hop.id || next.TrailId != assign.TrailId {
+					t.Fatalf("extend response %s (%v), want the provider confirmed on the trail", extendResponse, err)
+				}
+				unindexed := legacy.egress[4]
+				if legacy.indexed == unindexed {
+					unindexed = legacy.egress[6]
+				}
+				if landed, want := api.verifySources()[before:], []netip.Addr{unindexed, legacy.indexed}; fmt.Sprint(landed) != fmt.Sprint(want) {
+					t.Fatalf("the EXTEND arrived from %v, want %v", landed, want)
+				}
+
+				record := model.GetVerifyTrail(ctx, server.Id(assign.TrailId))
+				if record == nil || len(record.Hops) != 2 || record.Status != model.VerifyTrailStatusActive {
+					t.Fatalf("server trail %+v, want it active with two confirmed hops", record)
+				}
+				confirmed := record.Hops[1]
+				latency := time.Duration(confirmed.ConfirmedMs-confirmed.AssignedMs) * time.Millisecond
+				if confirmed.ConfirmedMs < confirmed.AssignedMs || settings.HopLatencyFromAttributedAttempt != (latency < time.Second) {
+					t.Fatalf("the server recorded a latency of %s for the hop with hop_latency_from_attributed_attempt=%t", latency, settings.HopLatencyFromAttributedAttempt)
+				}
+				t.Logf("%s: the EXTEND arrived from %v and resolved; server latency %s", legacy.name, api.verifySources()[before:], latency)
+			})
+		})
+	}
 }
 
 // VALIDATOR.md §8.2. A validator step holds the server's unattributed
