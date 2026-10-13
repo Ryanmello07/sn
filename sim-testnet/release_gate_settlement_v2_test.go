@@ -389,7 +389,7 @@ func releaseGateLedgerV2ServerGroup(t *testing.T) releaseEvidenceV2GateGroup {
 }
 
 // The monitor's contracts of the published migration suffix, to which
-// migrations 814 and 815, settlement v2's, add their schema, on the gate's
+// migrations 821 and 822, settlement v2's, add their schema, on the gate's
 // private services in both modes.
 func releaseGateMigrationSuffixGroup(t *testing.T) releaseEvidenceV2GateGroup {
 	t.Helper()
@@ -405,7 +405,7 @@ func releaseGateMigrationSuffixGroup(t *testing.T) releaseEvidenceV2GateGroup {
 	}
 }
 
-// Migration 815 and SV-6's database contracts: bulk wallet selection, batched
+// Migration 822 and SV-6's database contracts: bulk wallet selection, batched
 // resolutions, the FleetBound scan and head exclusion, in the database
 // phase's controller and model selectors, normal and race.
 func releaseGateServerScaleDatabaseGroups(t *testing.T) []releaseEvidenceV2GateGroup {
@@ -1015,7 +1015,7 @@ func TestReleaseGateSettlementV2InvariantCampaignRejectsDrift(t *testing.T) {
 	}
 }
 
-// SV-1 to SV-8 and migrations 814 and 815: the database phase runs every group.
+// SV-1 to SV-8 and migrations 821 and 822: the database phase runs every group.
 func TestReleaseGateSettlementV2RunsTheOperatorSuites(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
@@ -1026,7 +1026,7 @@ func TestReleaseGateSettlementV2RunsTheOperatorSuites(t *testing.T) {
 	}
 }
 
-// SV-1 to SV-8 and migrations 814 and 815: removing a family, a mode or the
+// SV-1 to SV-8 and migrations 821 and 822: removing a family, a mode or the
 // admitted phase fails, as does a root of a v2, suffix contract or scale
 // database test file that escapes its selector.
 func TestReleaseGateSettlementV2OperatorSuitesRejectOmissions(t *testing.T) {

@@ -169,7 +169,10 @@ That is worth doing once the balance is large relative to the claim's gas.
   the apps today are login proofs, which release settlement never pays
   (`server/controller/sn_earnings_controller.go:43-45`). Those providers stay
   unpaid, with a zero coldkey in their row, until the apps ship consent
-  signing (§11).
+  signing (§11). The v1 stopgap of server 9719333c, which pays a provider
+  without signed wallet evidence its account-history wallet when no roster
+  is configured, does not apply to v2: v2 stays consent-only (owner
+  decision, 2026-10-13).
 
 **Account states** shown to users:
 

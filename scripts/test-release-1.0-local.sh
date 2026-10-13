@@ -466,7 +466,7 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race ./connect -run '^TestConnectionVerifyEgressUsesControllerHashNamespace$' -count=1
     go test . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
     go test -race . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
-    # Settlement v2 (VERSION2-FINAL.md §8, §15.7): config, migration 814, the
+    # Settlement v2 (VERSION2-FINAL.md §8, §15.7): config, migration 821, the
     # mirror, records, objects, the ledger builder and its epoch commands, the
     # epoch driver, the ledger endpoints, the v2 earnings readers and the SN25
     # prune alert, most of them on this gate's private services.
@@ -474,7 +474,7 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
     go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
     # The monitor's schema contracts of the published migration suffix, from
-    # 794 on, where settlement v2's migrations 814 and 815 are appended, read a
+    # 794 on, where settlement v2's migrations 821 and 822 are appended, read a
     # real database's catalog.
     migration_suffix_tests='^Test(MigrationsCurrentSuffix)'
     go test ./monitor -run "$migration_suffix_tests" -count=1
