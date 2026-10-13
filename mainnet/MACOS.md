@@ -15,7 +15,9 @@ does not replace the independent approvals, pins and readbacks in LAUNCH.md.
 
 ## Toolchain and build
 
-The pinned toolchain is Go 1.27.1 for both platforms; `go.mod` requires it.
+The pinned toolchain is Go 1.27.2 for both platforms; `go.mod` requires it
+(`go 1.27.2`), and under `GOTOOLCHAIN=local` an older local toolchain is
+refused.
 Build the operator binary from the reviewed checkout with the sibling
 repositories that `go.mod` replaces:
 

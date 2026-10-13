@@ -7,7 +7,11 @@ an image or deploys. The output directory must be new and outside the source
 workspace. Keep scratch, compiler caches and output on a capacity-checked build
 volume, such as `/mnt/data`; do not consume the small system volume implicitly.
 
-The pinned toolchain is Go 1.27.1; `go.mod` in SN and server requires it. Use
+The pinned toolchain is Go 1.27.2: `go.mod` in SN and server requires it
+(`go 1.27.2`). The build names no Go version of its own. It pins the config's
+`go` executable by SHA-256 and runs it with `GOTOOLCHAIN=local`
+(`scripts/mainnet-release-build/main.go:168,297`), so a local toolchain older
+than `go.mod` requires is refused. Use
 physical clones with regular `.git` directories. The earlier Go 1.26.6
 toolchain omitted VCS stamps for linked worktrees whose `.git` is a file, even
 with `-buildvcs=true`, and the release verifier correctly refused those

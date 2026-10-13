@@ -348,8 +348,11 @@ first exist.
 - **Who.** Owner and operator.
 - **Do.**
   1. Fix O1. Confirm section 2.1, including the localization store's `main`.
-  2. Build `sn-mainnet` with the pinned Go 1.27.1 toolchain
-     (LAUNCH.md:332-340):
+  2. Build `sn-mainnet` with Go 1.27.2. The pin is the `go` line of `go.mod`
+     (`go.mod:3`, `go 1.27.2`; the server's `go.mod:3` is the same). Under
+     `GOTOOLCHAIN=local` an older local toolchain is refused: "go: go.mod
+     requires go >= 1.27.2 (running go …; GOTOOLCHAIN=local)". The command is
+     [mainnet/MACOS.md](mainnet/MACOS.md):24-29's:
 
      ```bash
      GOTOOLCHAIN=local CGO_ENABLED=0 go build -mod=readonly -trimpath -buildvcs=true \
@@ -358,7 +361,7 @@ first exist.
 
   3. Build the production composition, which holds `cli/validator`,
      `cli/snclaim`, `cli/miner` and the server services
-     ([mainnet/RELEASE-BUILD.md](mainnet/RELEASE-BUILD.md):3-8,33-38):
+     ([mainnet/RELEASE-BUILD.md](mainnet/RELEASE-BUILD.md):3-8,37-42):
 
      ```bash
      go run -mod=readonly ./scripts/mainnet-release-build --config /absolute/config.json
@@ -562,7 +565,7 @@ This completes the "gate 5 software is released" part of §12.1 step 1.
 - **Do.**
   1. Run the new validator binary on its unchanged config.
   2. Publish `snclaim` and the `provider` binary (`cli/snclaim`, `cli/miner`;
-     RELEASE-BUILD.md:35).
+     RELEASE-BUILD.md:39).
   3. Release the SDK and the apps with the v2 display and claims, and without
      `Vault2Address`. Build the apps against SDK `b9b2bf78` or later, which
      carries the claim API in `sdk/sn_ledger_claim.go`.
