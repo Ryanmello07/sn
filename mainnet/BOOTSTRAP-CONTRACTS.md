@@ -667,9 +667,10 @@ The config schema is `urnetwork-mainnet-settlement-v2-contract-phase-config-v1`
 and the plan schema `urnetwork-mainnet-settlement-v2-contract-phase-v1`. The
 plan has the original fields without `reserve_hotkey` and exactly the first
 five of these actions, or all six. Its `runtime_source_commit` must be the
-source reviewed for its runtime version: a reviewed commit (v470, v473, v475
-and v477, `crv4.ReviewedNativeOwnerSourceSpec`) names only the spec version it
-declares. v475's commit with version 477 is refused, in `preview` too, with
+source reviewed for its runtime version: a reviewed commit (v470, v473, v475,
+v477 and v478, `crv4.ReviewedNativeOwnerSourceSpec`) names only the spec version
+it declares. v475's commit with version 477, or v477's with 478, is refused, in
+`preview` too, with
 "contract phase runtime version differs from the one its source commit was
 reviewed for". The frontier mapping source
 (`67dcf7f791dc495064c293f080a0702cb433e51e`) declares no version and is still
@@ -912,7 +913,7 @@ with its emission started. It deploys the reviewed v1 coordinator
 implementation as the initializer's v1 coordinator, which needs only code
 there, and funds a fresh deployer. Its config carries the node's identity:
 `system_chain`, the genesis hash, EVM chain 964, the reviewed source of the
-node's runtime version (`5c6e83e2f4936f257234f246957f75684c35227c` on a 477
+node's runtime version (`850f2755bb05a3851f948489f0ab27b0645cebce` on a 478
 node) with that version and
 the BLAKE2b-256 of its `:code` and metadata, a finalized start block, and the
 route `http://127.0.0.1:<port>` with no TLS pin. The approval covers the
