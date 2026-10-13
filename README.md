@@ -309,11 +309,13 @@ repository is no longer discovered, tested or locked. The existing testnet
 release lock and harness configs keep its inert fields so their published hashes
 stay valid; a fresh release-lock rendering drops them.
 
-SN pins the client-authentication SDK, Connect, and Connect's SCTP fork with
-versioned replacements in `go.mod`; these dependencies do not follow sibling
-checkout HEADs. Use `GOWORK=off` for this module graph. The remaining local
-replacements still require the release workspace. See the
-[source-graph correction and qualification handoff](mainnet/evidence/clientauth-source-graph-correction-20260929.md)
-for exact revisions and the independent module-resolution regression tests.
+SN's `go.mod` takes the client-authentication SDK, Connect, Connect's SCTP fork
+and the gVisor fork from the sibling checkouts, as a local release build does.
+A build version pins them to checksum-bound modules in a copy of the source
+first ([RELEASE-BUILD.md](mainnet/RELEASE-BUILD.md)), and `scripts/source-graph`
+accepts either form and nothing else. Use `GOWORK=off` for this module graph.
+The [source-graph correction and qualification handoff](mainnet/evidence/clientauth-source-graph-correction-20260929.md)
+records the earlier pinned revisions and the original module-resolution
+regression tests.
 The [incremental composition record](mainnet/evidence/incremental-source-composition-20260929.md)
 retains the completed SDK/MG06 checks and explicitly pending broad SDK race run.
