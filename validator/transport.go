@@ -176,6 +176,43 @@ func (self *tunnelAttempt) closeAndWait(ctx context.Context) error {
 	return errors.Join(closeErrors...)
 }
 
+// Decides when a retained identity's joined attempts close their contracts.
+// Every joined attempt closes them, as a hop that has ended does, except one
+// answered source-egress-unresolved: the step resends through the same hop at
+// once, pinned to the other family (VALIDATOR.md §8.2), and the resend rides
+// the identity's open transfer sequence to the provider. Closing it would make
+// the resend open a new one, and the provider replaces the receive sequence it
+// holds for this identity only once the old one has exited: on a carrier it
+// does not know to be reliable it drops the new sequence's first packet
+// meanwhile (connect ReceiveBuffer.Pack), so the resend would wait out a
+// transfer resend, a second or more, inside the latency the server attributes
+// to the hop. The identity's next attempt through another hop closes what the
+// answered attempt kept.
+type tunnelHopContracts struct {
+	// the client's Flush: cancels the identity's transfer sequences, which
+	// close their contracts
+	flush func()
+	// the hop an answered attempt kept the contracts open for, or zero
+	kept connect.Id
+}
+
+// Runs before each attempt through hop.
+func (self *tunnelHopContracts) begin(hop connect.Id) {
+	if self.kept != (connect.Id{}) && self.kept != hop {
+		self.flush()
+	}
+	self.kept = connect.Id{}
+}
+
+// Returns what the attempt through hop, which ended with err, runs once its
+// packet path has joined.
+func (self *tunnelHopContracts) joined(hop connect.Id, err error) func() {
+	if errors.Is(err, errSourceEgressUnresolved) {
+		return func() { self.kept = hop }
+	}
+	return self.flush
+}
+
 func NewTunnelTransport(ctx context.Context, clientStrategy *connect.ClientStrategy, cfg TunnelTransportConfig) *TunnelTransport {
 	ownerCtx, cancel := context.WithCancel(ctx)
 	self := &TunnelTransport{
@@ -258,13 +295,16 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 	tunnelCtx, tunnelCancel := context.WithCancel(ctx)
 	attempt := &tunnelAttempt{cancel: tunnelCancel}
 	// The exclusive lease runs one hop at a time on this identity. Once this
-	// hop's packet path has joined, the only data sequences left on the client
-	// belong to finished hops, so flushing the client closes their contracts.
-	// The flush also restarts the client's control sequence; contract close
-	// reports retry until the platform acknowledges them.
-	attempt.closeContracts = self.client.Flush
+	// attempt's packet path has joined, the only data sequences left on the
+	// client belong to finished attempts, so flushing the client closes their
+	// contracts, except for the resend through this hop that a 421 leads to
+	// (tunnelHopContracts). The flush also restarts the client's control
+	// sequence; contract close reports retry until the platform acknowledges
+	// them.
+	self.contracts.begin(hop)
 	self.packetCleanup = attempt
 	defer func() {
+		attempt.closeContracts = self.contracts.joined(hop, returnErr)
 		closeErr := attempt.close()
 		if closeErr != nil {
 			// An unjoined packet path cannot share this identity with another hop.

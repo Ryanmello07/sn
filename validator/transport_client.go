@@ -43,6 +43,9 @@ type registeredTunnelClient struct {
 	// Kept until the request's real packet workers join, including a failed
 	// bounded close. The exclusive lease bounds this to one packet path.
 	packetCleanup *tunnelAttempt
+	// When the identity's attempts close their contracts; the lease
+	// serializes it.
+	contracts tunnelHopContracts
 }
 
 // Safe for concurrent callers: waiting for the single lease consumes each
@@ -260,6 +263,7 @@ func (self *TunnelTransport) newRegisteredClient(ctx context.Context, firstHop c
 		return registered, fmt.Errorf("tunnel client setup: %w", err)
 	}
 	registered.client = client
+	registered.contracts.flush = client.Flush
 	var retireOnce sync.Once
 	registered.cleanup.retireClient = func(joinCtx context.Context) error {
 		retireOnce.Do(func() { registered.generator.RemoveClientWithArgs(client, args) })

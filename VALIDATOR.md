@@ -793,6 +793,13 @@ indexed different families):
   the last `421` on, which the server attributed to the hop. It spaces every SEED
   attempt, these resends included, across all its workers at three quarters of the
   per-`vpk` hard limit, so the resends fit inside its seed pace rather than adding to it.
+  The resend rides the identity's open transfer sequences to the hop: the validator
+  closes an identity's contracts once each attempt's packet path has joined, except
+  after a `421`, and closes what that attempt kept before the identity's next attempt
+  through another hop. New sequences would cost the resend, inside the attributed
+  latency, the provider's replacement of the sequences it holds for the identity: on a
+  carrier it does not know to be reliable, connect drops the new sequence's first
+  packet until the sender resends it.
 
 **A second family does not double a provider's budgets.** Seeds under a registered
 `vpk` and EXTENDs from a resolved source also count against per-provider meters held
