@@ -156,6 +156,12 @@ func releaseDiagnosticCauseEnvelope(err error) ([]error, diagnostics.Cause, bool
 		}
 	case *releaseObservedNativeRead, *releaseObservedNetworkRead:
 		return nil, diagnostics.CauseTransport, true
+	case *productionSteeringReadDeadline:
+		// A steering read whose every failure was a deadline or timeout,
+		// collapsed into one retryable cause.
+		if value != nil {
+			return nil, diagnostics.CauseTimeout, true
+		}
 	case *artifactUnavailable:
 		if value != nil {
 			return []error{value.cause}, diagnostics.CauseUnknown, true

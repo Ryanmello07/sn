@@ -127,6 +127,11 @@ func TestValidatorDiagnosticsKnownFieldsAndOpaqueWrappers(t *testing.T) {
 		{cause: fmt.Errorf("read attempt: %w", &url.Error{Op: "Get", URL: "https://synthetic.example", Err: context.DeadlineExceeded}), want: releaseDiagnosticTimeout},
 		{cause: errors.Join(context.DeadlineExceeded, errors.New("synthetic opaque")), want: releaseDiagnosticUnknown},
 		{cause: errors.Join(&crv4.ReceiptEvidenceUnavailableError{}, errors.New("synthetic hard custody failure")), want: releaseDiagnosticUnknown},
+		// A steering read collapsed to its deadline verdict reads as a timeout,
+		// bare or as its frozen observation.
+		{cause: &productionSteeringReadDeadline{leaves: 3, sample: "Get https://synthetic.example"}, want: releaseDiagnosticTimeout},
+		{cause: observeReleaseError(&productionSteeringReadDeadline{leaves: 3}), want: releaseDiagnosticTimeout},
+		{cause: (*productionSteeringReadDeadline)(nil), want: releaseDiagnosticUnknown},
 	} {
 		if got := releaseDiagnosticReadCause(candidate.cause); got != candidate.want {
 			t.Fatalf("closed validator read fact changed: got %d want %d", got, candidate.want)
