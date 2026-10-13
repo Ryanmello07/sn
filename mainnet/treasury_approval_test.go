@@ -63,10 +63,15 @@ func treasuryApprovalTestRun(t *testing.T, args ...string) (int, []byte, string)
 	return code, output.Bytes(), diagnostic.String()
 }
 
+// The complete approval-envelope command line.
+func treasuryApprovalTestEnvelopeArgs(approvalPath, signature, key, out string) []string {
+	return []string{"approval-envelope", "--approval", approvalPath, "--signature", signature, "--approval-key", key, "--out", out}
+}
+
 // Assembles through the public command and decodes only a successful result.
 func treasuryApprovalTestEnvelope(t *testing.T, approvalPath, signature, key, out string) (int, treasuryApprovalEnvelopeResult, string) {
 	t.Helper()
-	code, output, diagnostic := treasuryApprovalTestRun(t, "approval-envelope", "--approval", approvalPath, "--signature", signature, "--approval-key", key, "--out", out)
+	code, output, diagnostic := treasuryApprovalTestRun(t, treasuryApprovalTestEnvelopeArgs(approvalPath, signature, key, out)...)
 	var result treasuryApprovalEnvelopeResult
 	if code == 0 {
 		if err := decodePlanJson(output, &result); err != nil {
@@ -223,6 +228,69 @@ func (self *treasuryApprovalTestFixture) sign(t *testing.T, approvalPath string)
 	}
 	digest := sha256.Sum256(append([]byte("urnetwork-native-treasury-approval-signature-v1\n"), raw[:len(raw)-1]...))
 	return digest, hex.EncodeToString(ed25519.Sign(self.private, digest[:]))
+}
+
+// One approval round as the operator runs it: approval-plan drafts the approval
+// of the fixture's current config, the external signer signs its digest,
+// approval-envelope assembles the envelope at the path the config names, the
+// printed selection replaces the config's and the producer loader admits the
+// result. documented, when set, replaces each treasury command line before it
+// runs, so a written procedure runs through these same steps.
+func (self *treasuryApprovalTestFixture) approve(t *testing.T, name string, documented func([]string) []string) (*validator.TreasuryApprovalDraft, *validator.ReleaseConfig) {
+	t.Helper()
+	command := func(args []string) (int, []byte, string) {
+		if documented != nil {
+			args = documented(args)
+		}
+		return treasuryApprovalTestRun(t, args...)
+	}
+	approvalPath := filepath.Join(self.directory, name+"-approval.json")
+	code, output, diagnostic := command(self.planArgs(t, approvalPath))
+	var plan treasuryApprovalPlan
+	if code != 0 || decodePlanJson(output, &plan) != nil {
+		t.Fatal("approval plan refused", name, code, diagnostic)
+	}
+	_, signature := self.sign(t, approvalPath)
+	code, output, diagnostic = command(treasuryApprovalTestEnvelopeArgs(approvalPath, signature, self.key, self.config.TreasuryApproval.Approval.Path))
+	var result treasuryApprovalEnvelopeResult
+	if code != 0 || decodePlanJson(output, &result) != nil {
+		t.Fatal("approval envelope refused", name, code, diagnostic)
+	}
+	self.config.TreasuryApproval = &result.TreasuryApproval
+	self.writeConfig(t)
+	loaded, err := validator.LoadReleaseConfig(self.configPath)
+	if err != nil {
+		t.Fatal("producer loader refused", name, err)
+	}
+	raw, err := os.ReadFile(approvalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, err := validator.DecodeTreasuryApprovalDraft(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return draft, loaded
+}
+
+// The adoption edit of a loaded predecessor's config: exactly the
+// settlement_v2 block, the predecessor's authority bundle appended to the
+// history, and a treasury_approval naming a new envelope under the same signer.
+func (self *treasuryApprovalTestFixture) adopt(t *testing.T, predecessor *validator.ReleaseConfig) validator.ReleaseSettlementV2Config {
+	t.Helper()
+	bundle, err := validator.BuildOwnerRecycleProductionAuthority(t.Context(), predecessor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference, err := validator.WriteReleaseEvidenceV2File(t.Context(), filepath.Join(self.directory, "predecessor-authority.json"), bundle, uint64(len(bundle)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := validator.ReleaseSettlementV2Config{Settlement: "0x5e77000000000000000000000000000000000001", Vault: "0x5e77000000000000000000000000000000000002"}
+	self.config.SettlementV2 = &block
+	self.config.ProductionAuthorityHistory = []validator.ReleaseEvidenceV2File{reference}
+	self.config.TreasuryApproval = &validator.ReleaseTreasuryApprovalConfig{Approval: validator.ReleaseEvidenceV2File{Path: filepath.Join(self.directory, "adopted-envelope.json")}, Signer: self.key}
+	return block
 }
 
 // The fixed vector matches its stated meaning, the plain derivation, the
@@ -469,47 +537,9 @@ func TestTreasuryApprovalPlanEnvelopeLoaderRoundTrip(t *testing.T) {
 // changes. approval-envelope assembles it and the producer loader admits it.
 func TestTreasuryApprovalPlanResignsSettlementV2Adoption(t *testing.T) {
 	f := newTreasuryApprovalTestFixture(t)
-	approve := func(name string) (*validator.TreasuryApprovalDraft, *validator.ReleaseConfig) {
-		t.Helper()
-		approvalPath := filepath.Join(f.directory, name+"-approval.json")
-		if code, _, diagnostic := f.plan(t, approvalPath); code != 0 {
-			t.Fatal("approval plan refused", name, code, diagnostic)
-		}
-		_, signature := f.sign(t, approvalPath)
-		code, result, diagnostic := treasuryApprovalTestEnvelope(t, approvalPath, signature, f.key, f.config.TreasuryApproval.Approval.Path)
-		if code != 0 {
-			t.Fatal("approval envelope refused", name, code, diagnostic)
-		}
-		f.config.TreasuryApproval = &result.TreasuryApproval
-		f.writeConfig(t)
-		loaded, err := validator.LoadReleaseConfig(f.configPath)
-		if err != nil {
-			t.Fatal("producer loader refused", name, err)
-		}
-		raw, err := os.ReadFile(approvalPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		draft, err := validator.DecodeTreasuryApprovalDraft(raw)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return draft, loaded
-	}
-	before, predecessor := approve("predecessor")
-	bundle, err := validator.BuildOwnerRecycleProductionAuthority(t.Context(), predecessor)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reference, err := validator.WriteReleaseEvidenceV2File(t.Context(), filepath.Join(f.directory, "predecessor-authority.json"), bundle, uint64(len(bundle)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	block := validator.ReleaseSettlementV2Config{Settlement: "0x5e77000000000000000000000000000000000001", Vault: "0x5e77000000000000000000000000000000000002"}
-	f.config.SettlementV2 = &block
-	f.config.ProductionAuthorityHistory = []validator.ReleaseEvidenceV2File{reference}
-	f.config.TreasuryApproval = &validator.ReleaseTreasuryApprovalConfig{Approval: validator.ReleaseEvidenceV2File{Path: filepath.Join(f.directory, "adopted-envelope.json")}, Signer: f.key}
-	after, adopted := approve("adopted")
+	before, predecessor := f.approve(t, "predecessor", nil)
+	block := f.adopt(t, predecessor)
+	after, adopted := f.approve(t, "adopted", nil)
 	hash, err := validator.OwnerRecycleConfigHash(adopted)
 	if err != nil || after.Approval.ConfigHash != hash || after.Approval.ConfigHash == before.Approval.ConfigHash {
 		t.Fatal("adopted approval does not name the adopted config", err)

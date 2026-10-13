@@ -85,7 +85,8 @@ apply` under the declaration it returns.
 
 ## Validator auditor drop-in (step 10)
 
-Install it as
+[SETTLEMENT-V2-ADOPTION.md](SETTLEMENT-V2-ADOPTION.md) gives step 10's command
+sequence, which ends with this drop-in. Install it as
 `/etc/systemd/system/sn-mainnet-validator-<role>.service.d/ledger-auditor.conf`,
 run `systemctl daemon-reload` and restart the validator (step 10.5). The
 second `ExecStart` is the command line the repository renders for the unit,
