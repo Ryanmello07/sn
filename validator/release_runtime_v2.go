@@ -146,7 +146,8 @@ func (self *releaseRuntimeV2) attach(runtimes []*releaseOperatorRuntime) error {
 }
 
 // Fresh child names use the existing independently configured root, with no
-// cleanup, implicit storage increase or reuse of completed replay scratch.
+// implicit storage increase or reuse of completed replay scratch. A release
+// run's replay retires each replay-root child once closed; seal scratch stays.
 func (self *releaseRuntimeV2) scratch(ctx context.Context, noId uint64, seal bool, purpose string) (string, error) {
 	var root string
 	for _, operator := range self.cfg.EvidenceV2.Operators {

@@ -856,7 +856,14 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		if err := bridge.configure(cfg); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "validator: native gap bridge from native epoch %d (%s) to the first intent at native epoch %d or later; release idles before it\n", bridge.LastNativeEpoch, bridge.LastArtifactHash, bridge.FirstNativeEpoch)
+		// A v1 bridge prints exactly its one line; a v2 bridge prints each
+		// earlier edge, then the last one, which alone can still be pending.
+		edges := bridge.Edges()
+		for _, edge := range edges[:len(edges)-1] {
+			fmt.Fprintf(os.Stderr, "validator: native gap bridge edge from native epoch %d (%s) to the first intent at native epoch %d or later\n", edge.LastNativeEpoch, edge.LastArtifactHash, edge.FirstNativeEpoch)
+		}
+		last := edges[len(edges)-1]
+		fmt.Fprintf(os.Stderr, "validator: native gap bridge from native epoch %d (%s) to the first intent at native epoch %d or later; release idles before it\n", last.LastNativeEpoch, last.LastArtifactHash, last.FirstNativeEpoch)
 	}
 	if retainedSetup != nil {
 		if err := retainedSetup.validate(cfg, configPath); err != nil {
@@ -871,6 +878,10 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	defer func() { returnErr = errors.Join(returnErr, closeStorage()) }()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	// Replays under the configured replay roots, startup's included, remove
+	// their fresh scratch child once it is closed.
+	replayScratch := newReplayScratchRetirement(cfg, os.Stderr)
+	ctx = withReplayScratchRetirement(ctx, replayScratch)
 	ctx, diagnosticOwner, diagnosticErr := newReleaseDiagnostics(ctx, os.Stderr, time.Now)
 	if diagnosticErr != nil {
 		return diagnosticErr
@@ -1122,6 +1133,14 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		}
 	}
 	workersOwnResources = true
+	// Children earlier processes left go to a slow background sweep that
+	// starts after startup and never blocks steering. It ends with this run.
+	sweepCtx, stopSweep := context.WithCancel(ctx)
+	sweepDone := replayScratch.start(sweepCtx)
+	defer func() {
+		stopSweep()
+		<-sweepDone
+	}()
 	var trailReady <-chan struct{}
 	if production {
 		trailReady = runtimeV2.preparation.ready

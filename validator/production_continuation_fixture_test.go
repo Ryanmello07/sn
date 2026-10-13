@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"github.com/urfoundation/sn/protocol"
@@ -33,6 +34,8 @@ type productionContinuationTestFixture struct {
 	contextKVs map[uint64]AttemptCutV2Context
 	intent     *SteeringIntent
 	envelope   []byte
+	// Public attempt-object requests the replay owner has made.
+	artifactReads atomic.Int64
 }
 
 // No current binding claims a local key; each real historical provider remains
@@ -151,6 +154,7 @@ func newProductionContinuationTestFixtureWithWork(t *testing.T, through uint64, 
 		history.participants = append(history.participants, AttemptSettlementRuntimeV2Participant{NoID: noId, StateDir: physical.dir, Stats: physical.stats, Ledger: physical.ledger})
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		self.artifactReads.Add(1)
 		kind, hash := request.URL.Query().Get("kind"), request.URL.Query().Get("hash")
 		if request.Method != http.MethodGet || request.URL.Path != "/sn/attempt-artifact" || len(request.URL.Query()) != 2 || request.Header.Get("Authorization") != "" {
 			t.Error("continuation replay changed the public object route")

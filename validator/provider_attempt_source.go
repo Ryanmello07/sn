@@ -179,11 +179,18 @@ func (self *providerAttemptObjectStore) read(ctx context.Context, reader *HTTPAt
 // one original 300-second owner. The only POSTs are exact original lookups or
 // idempotent signed request-local close receipts; settlement sends are absent.
 func providerAttemptHttp(ctx context.Context, endpoint, method string, request []byte, limit uint64) ([]byte, error) {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
+	transport := newProviderAttemptHttpTransport()
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return providerAttemptHttpWithClient(ctx, endpoint, method, request, limit, client)
+}
+
+// Each invocation owns a proxy-free default transport clone; it also
+// health-checks HTTP/2 like the shared API transport.
+func newProviderAttemptHttpTransport() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	return withReleaseAPIHTTP2Health(transport)
 }
 
 // The client belongs to this invocation. Real request deadlines and body closes
