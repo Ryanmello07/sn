@@ -246,6 +246,47 @@ func (self *node) estimate(from, to common.Address, value *big.Int, data []byte)
 	return self.eth.EstimateGas(self.ctx, ethereum.CallMsg{From: from, To: &to, Value: value, Data: data})
 }
 
+// least returns the least gas limit, to the gas, at which an eth_call of msg
+// at the latest block satisfies ok. It must do so at high.
+func (self *node) least(t *testing.T, msg ethereum.CallMsg, high uint64, ok func([]byte, error) bool) uint64 {
+	t.Helper()
+	call := func(gas uint64) bool {
+		msg.Gas = gas
+		return ok(self.eth.CallContract(self.ctx, msg, nil))
+	}
+	if !call(high) {
+		t.Fatalf("the call fails with %d gas", high)
+	}
+	low := uint64(21_000)
+	for high-low > 1 {
+		if middle := (low + high) / 2; call(middle) {
+			high = middle
+		} else {
+			low = middle
+		}
+	}
+	return high
+}
+
+// sendLeast is send with the least gas limit at which an eth_call of the
+// call succeeds, searched below the limit eth_estimateGas gives, which it
+// returns with that least limit.
+func (self *node) sendLeast(t *testing.T, from evmKey, to common.Address, contract artifact, value *big.Int, method string, args ...any) (receipt *gethtypes.Receipt, estimate, least uint64) {
+	t.Helper()
+	data := contract.pack(t, method, args...)
+	estimate, err := self.estimate(from.address, to, value, data)
+	if err != nil {
+		t.Fatalf("%s: %s", method, reason(err))
+	}
+	least = self.least(t, ethereum.CallMsg{From: from.address, To: &to, Value: value, Data: data}, estimate,
+		func(_ []byte, err error) bool { return err == nil })
+	receipt = self.transact(t, from, &to, value, data, least)
+	if receipt.Status != gethtypes.ReceiptStatusSuccessful {
+		t.Fatalf("%s sent with its least limit %d failed in block %s", method, least, receipt.BlockNumber)
+	}
+	return receipt, estimate, least
+}
+
 // send calls method of contract at `to` in its own block and fails the test,
 // naming the revert, unless it succeeded. value may be nil.
 func (self *node) send(t *testing.T, from evmKey, to common.Address, contract artifact, value *big.Int, method string, args ...any) *gethtypes.Receipt {

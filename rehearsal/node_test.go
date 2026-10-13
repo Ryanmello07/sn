@@ -24,7 +24,7 @@ import (
 const (
 	// The rehearsal runs only on the runtime mainnet runs (§14 gate 2).
 	specName    = "node-subtensor"
-	specVersion = 475
+	specVersion = 478
 	// run-node.sh writes mainnet's EVM chain ID into genesis.
 	evmChainID = 964
 )

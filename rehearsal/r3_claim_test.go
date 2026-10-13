@@ -146,10 +146,12 @@ func TestR3Claim(t *testing.T) {
 	n.send(t, operator.rootSigner, s.settlement, s.settlementArtifact, nil, "finalizeDistribution", id(1))
 	relayer := newEVMKey(t)
 	n.fundEVM(t, relayer.address, 1_000*tao)
-	claim := func(t *testing.T, index uint64) uint64 {
+	// claim pays account index with the least gas limit that succeeds and
+	// returns the gas used and that limit.
+	claim := func(t *testing.T, index uint64) (used, least uint64) {
 		a := root.account(index)
 		before, escrow := n.stake(t, s.escrow, a.Coldkey, s.netuid), position(t)
-		receipt := n.send(t, relayer, s.vault, s.vaultArtifact, nil, "claim", id(1), id(0), a, root.proof(index))
+		receipt, _, least := n.sendLeast(t, relayer, s.vault, s.vaultArtifact, nil, "claim", id(1), id(0), a, root.proof(index))
 		amount := a.Cumulative.Uint64()
 		gained := n.stake(t, s.escrow, a.Coldkey, s.netuid) - before
 		if escrow-position(t) != amount || gained != amount && gained != amount-1 {
@@ -160,8 +162,8 @@ func TestR3Claim(t *testing.T) {
 			"cumulative": a.Cumulative, "amount": id(amount), "caller": relayer.address,
 		})
 		s.requireConservation(t)
-		t.Logf("claim %d: %d rao, account +%d, gas %d", index, amount, gained, receipt.GasUsed)
-		return receipt.GasUsed
+		t.Logf("claim %d: %d rao, account +%d, gas %d, least limit %d", index, amount, gained, receipt.GasUsed, least)
+		return receipt.GasUsed, least
 	}
 	// refusedClaim requires the claim to revert with the runtime's reason
 	// for the transfer, and the account to stay claimable.
@@ -174,9 +176,9 @@ func TestR3Claim(t *testing.T) {
 		}
 	}
 
-	var short uint64
+	var short, shortLeast uint64
 	t.Run("claim", func(t *testing.T) {
-		short = claim(t, 3)
+		short, shortLeast = claim(t, 3)
 	})
 
 	// R-3: third parties can add hotkeys to vault2's own StakingHotkeys only
@@ -204,14 +206,14 @@ func TestR3Claim(t *testing.T) {
 		// vault2 moves its stake off a third-party hotkey into escrow.
 		held := n.stake(t, foreign, s.vaultColdkey, s.netuid)
 		live := s.vaultUint(t, "liveEscrowStake").Uint64()
-		receipt := n.send(t, operator.rootSigner, s.vault, s.vaultArtifact, nil, "absorbStake", foreign)
+		receipt, _, absorbLeast := n.sendLeast(t, operator.rootSigner, s.vault, s.vaultArtifact, nil, "absorbStake", foreign)
 		if gained := s.vaultUint(t, "liveEscrowStake").Uint64() - live; gained != held && gained != held-1 {
 			t.Fatalf("absorbStake with a full list moved %d of %d", gained, held)
 		}
 		// A claim, a transfer out of vault2's coldkey, still pays.
-		full := claim(t, 0)
-		t.Logf("vault2's StakingHotkeys reached %d through third parties and the next transfer was refused; absorbStake still moved %d rao (gas %d); a claim used %d gas against %d before the list filled",
-			count, held, receipt.GasUsed, full, short)
+		full, fullLeast := claim(t, 0)
+		t.Logf("vault2's StakingHotkeys reached %d through third parties and the next transfer was refused; absorbStake still moved %d rao (gas %d, least limit %d); a claim used %d gas (least limit %d) against %d (least limit %d) before the list filled",
+			count, held, receipt.GasUsed, absorbLeast, full, fullLeast, short, shortLeast)
 	})
 
 	t.Run("floor refusal", func(t *testing.T) {

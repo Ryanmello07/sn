@@ -1,5 +1,5 @@
 // Package rehearsal is the runtime rehearsal (VERSION2-FINAL.md §14 gate 2,
-// §15.8): tests that run against a node built from runtime 475's source by
+// §15.8): tests that run against a node built from runtime 478's source by
 // scripts/runtime-rehearsal/build.sh and started by run-node.sh. The harness
 // and its tests are test files behind the runtime_rehearsal build tag:
 //

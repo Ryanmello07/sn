@@ -138,8 +138,8 @@ func startR1Node(t *testing.T) *r1Node {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Cleanup(n.sub.API.Client.Close)
-	if n.sub.Runtime.SpecName != "node-subtensor" || n.sub.Runtime.SpecVersion != 475 {
-		t.Fatalf("node runs %s/%d, want node-subtensor/475", n.sub.Runtime.SpecName, n.sub.Runtime.SpecVersion)
+	if n.sub.Runtime.SpecName != "node-subtensor" || n.sub.Runtime.SpecVersion != 478 {
+		t.Fatalf("node runs %s/%d, want node-subtensor/478", n.sub.Runtime.SpecName, n.sub.Runtime.SpecVersion)
 	}
 	if n.eth, err = evmrpc.DialContext(n.ctx, n.http); err != nil {
 		t.Fatal(err)
