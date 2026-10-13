@@ -557,12 +557,12 @@ func TestEvmV2PhaseBindsReviewedSourceToItsSpecVersion(t *testing.T) {
 		changed.Plan.Runtime.RuntimeSourceCommit, changed.Plan.Runtime.RuntimeVersion.SpecVersion = source, spec
 		return changed
 	}
-	reviewed := map[string]uint32{crv4.NativeOwnerSource470: 470, crv4.NativeOwnerSource473: 473, crv4.NativeOwnerSource475: 475, crv4.NativeOwnerSource477: 477}
+	reviewed := map[string]uint32{crv4.NativeOwnerSource470: 470, crv4.NativeOwnerSource473: 473, crv4.NativeOwnerSource475: 475, crv4.NativeOwnerSource477: 477, crv4.NativeOwnerSource478: 478}
 	for source, spec := range reviewed {
 		if err := pair(f.config, source, spec).validateStructure(); err != nil {
 			t.Fatalf("reviewed source %s refused at its own version %d: %v", source, spec, err)
 		}
-		for _, other := range []uint32{spec - 1, spec + 1, 470, 473, 475, 477} {
+		for _, other := range []uint32{spec - 1, spec + 1, 470, 473, 475, 477, 478} {
 			if other == spec {
 				continue
 			}
@@ -571,20 +571,23 @@ func TestEvmV2PhaseBindsReviewedSourceToItsSpecVersion(t *testing.T) {
 			}
 		}
 	}
-	for _, spec := range []uint32{1, 475, 477, 478} {
+	for _, spec := range []uint32{1, 475, 477, 478, 479} {
 		if err := pair(f.config, frontierMappingSourceCommit, spec).validateStructure(); err != nil {
 			t.Fatalf("frontier mapping source refused at version %d: %v", spec, err)
 		}
 	}
-	// 475's review on the 477 runtime, as an unsigned draft.
-	draft := pair(f.config, crv4.NativeOwnerSource475, 477)
-	draft.Signature = ""
-	raw, err := json.Marshal(draft)
-	if err != nil || os.WriteFile(f.configPath, raw, 0600) != nil {
-		t.Fatal(err)
-	}
-	if _, err := loadEvmV2PhasePreview(t.Context(), f.configPath, "vault2-create"); err == nil || err.Error() != mismatch {
-		t.Fatalf("mislabelled draft previewed: %v", err)
+	// A predecessor's review on the runtime that replaced it, as an unsigned
+	// draft: 475's on 477, and 477's on 478.
+	for source, spec := range map[string]uint32{crv4.NativeOwnerSource475: 477, crv4.NativeOwnerSource477: 478} {
+		draft := pair(f.config, source, spec)
+		draft.Signature = ""
+		raw, err := json.Marshal(draft)
+		if err != nil || os.WriteFile(f.configPath, raw, 0600) != nil {
+			t.Fatal(err)
+		}
+		if _, err := loadEvmV2PhasePreview(t.Context(), f.configPath, "vault2-create"); err == nil || err.Error() != mismatch {
+			t.Fatalf("draft naming source %s for runtime %d previewed: %v", source, spec, err)
+		}
 	}
 	original := newEvmVaultFixture(t)
 	if err := pair(original.config, crv4.NativeOwnerSource475, 477).validateStructure(); err != nil {

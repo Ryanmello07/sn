@@ -8,8 +8,11 @@ import (
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	ethereum "github.com/ethereum/go-ethereum"
+	gethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/urfoundation/sn/merkle"
+	"github.com/urfoundation/sn/miner/onchain"
 )
 
 // mainnetTempo is SN25's tempo, so that the activity cutoff (factor × tempo)
@@ -146,10 +149,12 @@ func TestR3Claim(t *testing.T) {
 	n.send(t, operator.rootSigner, s.settlement, s.settlementArtifact, nil, "finalizeDistribution", id(1))
 	relayer := newEVMKey(t)
 	n.fundEVM(t, relayer.address, 1_000*tao)
-	claim := func(t *testing.T, index uint64) uint64 {
+	// claim pays account index with the least gas limit that succeeds and
+	// returns the gas used and that limit.
+	claim := func(t *testing.T, index uint64) (used, least uint64) {
 		a := root.account(index)
 		before, escrow := n.stake(t, s.escrow, a.Coldkey, s.netuid), position(t)
-		receipt := n.send(t, relayer, s.vault, s.vaultArtifact, nil, "claim", id(1), id(0), a, root.proof(index))
+		receipt, _, least := n.sendLeast(t, relayer, s.vault, s.vaultArtifact, nil, "claim", id(1), id(0), a, root.proof(index))
 		amount := a.Cumulative.Uint64()
 		gained := n.stake(t, s.escrow, a.Coldkey, s.netuid) - before
 		if escrow-position(t) != amount || gained != amount && gained != amount-1 {
@@ -160,8 +165,8 @@ func TestR3Claim(t *testing.T) {
 			"cumulative": a.Cumulative, "amount": id(amount), "caller": relayer.address,
 		})
 		s.requireConservation(t)
-		t.Logf("claim %d: %d rao, account +%d, gas %d", index, amount, gained, receipt.GasUsed)
-		return receipt.GasUsed
+		t.Logf("claim %d: %d rao, account +%d, gas %d, least limit %d", index, amount, gained, receipt.GasUsed, least)
+		return receipt.GasUsed, least
 	}
 	// refusedClaim requires the claim to revert with the runtime's reason
 	// for the transfer, and the account to stay claimable.
@@ -174,14 +179,35 @@ func TestR3Claim(t *testing.T) {
 		}
 	}
 
-	var short uint64
+	var short, shortLeast uint64
 	t.Run("claim", func(t *testing.T) {
-		short = claim(t, 3)
+		short, shortLeast = claim(t, 3)
 	})
 
 	// R-3: third parties can add hotkeys to vault2's own StakingHotkeys only
-	// until it holds 128; vault2's own moves face the larger cap of 256.
+	// until it holds 128; vault2's own moves face the larger cap of 256. On
+	// runtime 478 the gas a claim needs follows that list (§7.3), so a claim
+	// signed before third parties fill it is outgrown at an estimate with
+	// 20%, while the claim tools' size, at least onchain.ClaimBatchGasPerClaim,
+	// still pays.
 	t.Run("own cap", func(t *testing.T) {
+		a := root.account(0)
+		data := s.vaultArtifact.pack(t, "claim", id(1), id(0), a, root.proof(0))
+		estimate, err := n.estimate(relayer.address, s.vault, nil, data)
+		if err != nil {
+			t.Fatalf("estimate a claim: %s", reason(err))
+		}
+		price, err := n.eth.SuggestGasPrice(n.ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		price.Mul(price, big.NewInt(2))
+		estimated, sized := newEVMKey(t), newEVMKey(t)
+		n.fundEVM(t, estimated.address, 100*tao)
+		n.fundEVM(t, sized.address, 100*tao)
+		outgrown := n.sign(t, estimated, &s.vault, nil, data, estimate+estimate/5, price)
+		covered := n.sign(t, sized, &s.vault, nil, data, max(estimate+estimate/5, onchain.ClaimBatchGasPerClaim), price)
+
 		var foreign [32]byte
 		donor := newColdkey(t)
 		n.fund(t, donor.PublicKey(), 1_000*tao)
@@ -204,14 +230,31 @@ func TestR3Claim(t *testing.T) {
 		// vault2 moves its stake off a third-party hotkey into escrow.
 		held := n.stake(t, foreign, s.vaultColdkey, s.netuid)
 		live := s.vaultUint(t, "liveEscrowStake").Uint64()
-		receipt := n.send(t, operator.rootSigner, s.vault, s.vaultArtifact, nil, "absorbStake", foreign)
+		receipt, _, absorbLeast := n.sendLeast(t, operator.rootSigner, s.vault, s.vaultArtifact, nil, "absorbStake", foreign)
 		if gained := s.vaultUint(t, "liveEscrowStake").Uint64() - live; gained != held && gained != held-1 {
 			t.Fatalf("absorbStake with a full list moved %d of %d", gained, held)
 		}
-		// A claim, a transfer out of vault2's coldkey, still pays.
-		full := claim(t, 0)
-		t.Logf("vault2's StakingHotkeys reached %d through third parties and the next transfer was refused; absorbStake still moved %d rao (gas %d); a claim used %d gas against %d before the list filled",
-			count, held, receipt.GasUsed, full, short)
+		// A claim, a transfer out of vault2's coldkey, still pays, but only
+		// with the gas the longer list needs.
+		fullLeast := n.least(t, ethereum.CallMsg{From: relayer.address, To: &s.vault, Data: data}, refusedGas, func(_ []byte, err error) bool { return err == nil })
+		if failed := n.sendSigned(t, outgrown); failed.Status != gethtypes.ReceiptStatusFailed || s.vaultUint(t, "claimed", id(1), id(0)).Sign() != 0 {
+			t.Fatalf("a claim signed at %d gas before the list filled: status %d, claimed %s", outgrown.Gas(), failed.Status, s.vaultUint(t, "claimed", id(1), id(0)))
+		}
+		before, escrow := n.stake(t, s.escrow, a.Coldkey, s.netuid), position(t)
+		paid := n.sendSigned(t, covered)
+		amount := a.Cumulative.Uint64()
+		gained := n.stake(t, s.escrow, a.Coldkey, s.netuid) - before
+		if paid.Status != gethtypes.ReceiptStatusSuccessful || escrow-position(t) != amount || gained != amount && gained != amount-1 {
+			t.Fatalf("a claim signed at %d gas before the list filled: status %d, escrow -%d, account +%d", covered.Gas(), paid.Status, escrow-position(t), gained)
+		}
+		requireEvent(t, paid, s.vaultArtifact, s.vault, "Claimed", map[string]any{
+			"noId": id(1), "rootIndex": id(0), "index": id(0), "coldkey": a.Coldkey,
+			"cumulative": a.Cumulative, "amount": id(amount), "caller": sized.address,
+		})
+		s.requireConservation(t)
+		t.Logf("vault2's StakingHotkeys reached %d through third parties and the next transfer was refused; absorbStake still moved %d rao (gas %d, least limit %d); a claim then used %d gas (least limit %d) against %d (least limit %d) before the list filled",
+			count, held, receipt.GasUsed, absorbLeast, paid.GasUsed, fullLeast, short, shortLeast)
+		t.Logf("a claim estimated at %d gas before the list filled failed signed at %d and paid signed at %d", estimate, outgrown.Gas(), covered.Gas())
 	})
 
 	t.Run("floor refusal", func(t *testing.T) {

@@ -147,8 +147,9 @@ type v2Sender struct {
 	dryRun   bool
 }
 
-// send runs one transaction; describe prints its intent lines.
-func (s *v2Sender) send(ctx context.Context, what string, calldata []byte, value *big.Int, describe func()) (*types.Receipt, error) {
+// send runs one transaction, its estimated gas limit at least gasFloor;
+// describe prints its intent lines.
+func (s *v2Sender) send(ctx context.Context, what string, calldata []byte, value *big.Int, gasFloor uint64, describe func()) (*types.Receipt, error) {
 	return runTx(ctx, s.client, s.chainID, txRequest{
 		contract: s.vault,
 		from:     s.from,
@@ -156,6 +157,7 @@ func (s *v2Sender) send(ctx context.Context, what string, calldata []byte, value
 		calldata: calldata,
 		value:    value,
 		gasLimit: s.gasLimit,
+		gasFloor: gasFloor,
 		dryRun:   s.dryRun,
 	}, func(gasEst uint64, gasErr error) {
 		fmt.Printf("settlement v2 %s intent\n", what)

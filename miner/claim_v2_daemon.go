@@ -39,9 +39,9 @@ import (
 const (
 	// §3 planning figures: a claim that uses 250k gas at a 5 gwei base fee and
 	// 0.006587 TAO/α costs about 0.19 α, so a 1.9 α threshold keeps gas at most
-	// 10% of a claim. The cost is gas used; the much higher limit the staking
-	// precompile needs comes from eth_estimateGas after the preflight and
-	// never sets the threshold. R-6's measured gas replaces the 250k figure.
+	// 10% of a claim. The cost is gas used; the much higher limit a claim is
+	// signed with, onchain.ClaimBatchGasPerClaim or its estimate, never sets
+	// the threshold. R-6's measured gas replaces the 250k figure.
 	ClaimV2DefaultThresholdRao uint64 = 1_900_000_000
 	// The runtime refuses a transfer below 100,000 rao of TAO, about 0.0152 α
 	// at the planning price (§3). A lower threshold only sends doomed claims.
@@ -268,8 +268,10 @@ func (self *claimDaemonV2) idle(unit *ClaimUnitV2) error {
 
 // Signs one transaction, a claim to vault2 or a batch to the claim batcher,
 // for its units through the shared submitter; a zero gas limit takes the
-// estimate. Its exact bytes are durable in every unit and raise the shared
-// nonce floor before any broadcast.
+// estimate, and never less than onchain.ClaimBatchGasPerClaim, which covers
+// the claim whatever vault2's staking-hotkey list has grown to by its
+// inclusion or a later rebroadcast. Its exact bytes are durable in every unit
+// and raise the shared nonce floor before any broadcast.
 func (self *claimDaemonV2) submit(ctx context.Context, units []*ClaimUnitV2, to common.Address, calldata []byte, gasLimit uint64) error {
 	key, err := onchain.LoadKeyFile(self.cfg.KeyFile)
 	if err != nil {
@@ -281,7 +283,8 @@ func (self *claimDaemonV2) submit(ctx context.Context, units []*ClaimUnitV2, to 
 	}
 	owner := self.store.owner
 	_, err = onchain.SubmitWithHooks(ctx, onchain.SubmitParams{
-		Contract: to, Rpcs: self.cfg.RPC, Key: key, Calldata: calldata, GasLimit: gasLimit,
+		Contract: to, Rpcs: self.cfg.RPC, Key: key, Calldata: calldata,
+		GasLimit: gasLimit, GasFloor: onchain.ClaimBatchGasPerClaim,
 		NonceFloor: self.admission.nonceMinimum(), ChainID: chainID,
 		RuntimeAdmission: func(request context.Context, _ *ethclient.Client, number *big.Int) error {
 			if number != nil {

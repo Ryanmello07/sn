@@ -304,7 +304,8 @@ runbook, at steps 9 and 12.
   VERSION2-FINAL.md §8.1, §13).
 - **On runtime 478, as measured.** The table's sizes are from the rehearsal on
   475. The whole R battery passed on a node built from v478 (section 9.3,
-  item 2). These figures are provisional until the 478 audit is committed:
+  item 2). `docs/spec/runtime-478-audit.md` and the README's "Runtime 478"
+  record them:
   - the deploy gas is unchanged from 475. R-1's six actions used 2,821,678,
     1,463,833, 1,935,622, 310,474, 31,329 and 285,209 gas, under the table's
     limits;
@@ -324,8 +325,12 @@ runbook, at steps 9 and 12.
   vault2 transaction below its pre-478 size.
   - A close is signed at max(estimate + 20%, 3,200,000) gas.
   - A claim is signed at max(estimate + margin, 2,600,000) gas.
-  - Those two sizes cover every length of the list. `maximum_gas` stays at
-    about 3.5M; step 5 sizes the per-intent liability for the close floor.
+  - Those two sizes cover every length of the list, for a capturing close
+    that defers at most 94 epochs. A close that defers more is signed at no
+    less than 1,400,000 + 19,100 gas per deferred epoch
+    (`docs/spec/runtime-478-audit.md`, "Gas limits on 478"). `maximum_gas`
+    stays at about 3.5M; step 5 sizes the per-intent liability for the close
+    floor.
   - **The server** applies it on its `main` (`54ae2aacf`): every v2 close is
     signed at max(estimate + 20%, 3,200,000), on a first attempt and on a
     fee replacement (`server/controller/st_controller.go:1079-1091`;
@@ -339,11 +344,14 @@ runbook, at steps 9 and 12.
     given 2,600,000 (`sdk/sn_ledger_claim.go:54-58,318-339,421`). ur.io sends
     each claim with that limit and refuses claims without it (mmm
     `ur.io/react/src/app/sn/ledgerV2.js:168-175`).
-  - **sn's claim tools** still sign a single claim at the estimate plus their
-    margin, 20% for `snclaim` (`miner/onchain/eth.go:202-205`). A batch
+  - **sn's claim tools** sign a single claim, from `snclaim` or the claim
+    daemon, at max(estimate + 20%, 2,600,000) (`miner/onchain/eth.go`,
+    `runTx`; `miner/claim_v2_daemon.go`, `submit`), so a signed claim also
+    passes the daemon's rebroadcast preflight after the list grows. A batch
     already forwards each claim the larger of 2,600,000 and the batch's
-    largest estimate (`miner/onchain/v2_batch.go:28-35,176-200`). Their floor
-    for a single claim is still to merge.
+    largest estimate (`miner/onchain/v2_batch.go:28-42,181-208`). R-3 shows
+    the floor on 478 (`docs/spec/runtime-478-audit.md`, "vault2's own
+    staking-hotkey list").
   - **The v1 close** shares the root key and keeps its estimate plus 20%, with
     no floor (`server/controller/st_ledger_v2_gas_test.go:134-138`). Its
     floor is being built (section 7).
@@ -522,9 +530,8 @@ first exist.
   | the claim daemon config's `rpc` list (step 13) | `http(s)://` or `ws(s)://` | `miner/claim_v2_chain.go:158-161`; `evmrpc/client.go:34-38` |
 
 - **Expect.** The identity of a runtime that gate 2 holds on. The contracts
-  are then deployed on that runtime, which is now 478 (below). Gate 2's rerun
-  on 478 passed (section 9.3, item 2), and its record is not on `main` yet.
-  On `main` the record of gate 2 covers two runtimes:
+  are then deployed on that runtime, which is now 478 (below). The record of
+  gate 2 covers three runtimes:
   - 475: `specVersion` 475, code hash
     `0x557634c8c31bc639ea6552e297dcfb781cd7d9bdd491a5352c151305db33d3a0` and
     metadata hash
@@ -535,7 +542,13 @@ first exist.
     metadata hash
     `0x5a268863a7f24c626e362103afa4f2856a589ee157ab915d91c289b1b5a6f11e`
     (`docs/spec/runtime-477-audit.md`:81,94-96). "Gate 2 therefore holds for
-    runtime 477, and only for it" (:405-408).
+    runtime 477, and only for it" (:405-408);
+  - 478: `specVersion` 478, code hash
+    `0x7e722b3aa5c9192c98665a5d65fa91364bf9055e21fc90efce6d59bf4ef414e1` and
+    metadata hash
+    `0x4f96a9cb954ebe3ae0e364fe7e34ec8a0e902239832f68dfe90aaa1e4511c747`
+    (`docs/spec/runtime-478-audit.md`, "Exact provenance"). "Gate 2 therefore
+    holds for runtime 478" ("Limits and assessment").
 
   The output is an unapproved observation, never an approval
   ([mainnet/MAINNET.md](mainnet/MAINNET.md):1653).
@@ -545,7 +558,7 @@ first exist.
   - **478 is live.** Mainnet installed runtime 478 in block 9,276,925, at
     2026-10-13 21:08:36 UTC, with code hash
     `0x7e722b3aa5c9192c98665a5d65fa91364bf9055e21fc90efce6d59bf4ef414e1`
-    (`docs/spec/runtime-477-audit.md`:39-46). Two public nodes reported
+    (`docs/spec/runtime-478-audit.md`, "Exact provenance"). Two public nodes reported
     `node-subtensor/478` at finalized block 9,276,937. The snapshot's
     `runtime_code_hash` is the BLAKE2b-256 hash of the same `:code` key
     (`mainnet/runtime_snapshot.go:29,107-124`), so on 478 it should print
@@ -567,12 +580,10 @@ first exist.
   a runtime gate 2 holds on. Gate 2 then repeats on that runtime before
   step 8. For 478 the rerun passed (section 9.3, item 2). A runtime after 478
   needs its own.
-  - **Gap, being closed.** On `main`, `scripts/runtime-rehearsal/build.sh`
-    builds only tag `v477`, commit `5c6e83e2…`, against
-    `docs/spec/runtime-v477-source.sha256` (build.sh:13-14,21,45). Another
-    runtime first needs a reviewed change of those pins and a source review
-    like `docs/spec/runtime-477-audit.md`. Both land for 478 through sn
-    branch `v2/runtime-478`.
+  - **Pins.** `scripts/runtime-rehearsal/build.sh` builds only tag `v478`,
+    commit `850f2755…`, against `docs/spec/runtime-v478-source.sha256`
+    (build.sh:13-14,21,45). Another runtime first needs a reviewed change of
+    those pins and a source review like `docs/spec/runtime-478-audit.md`.
 
 **Step 3. Rerun the runtime rehearsal, R-1 to R-7.**
 
@@ -605,11 +616,11 @@ first exist.
     R-6).
 - **Stop if** any test fails, or the logged gas exceeds the limits of
   section 2.6.
-- On `main`, `build.sh` builds the 477 node, and the README records the 477
-  rerun: "Every test passed" (README:425-441). Step 2 now shows 478, so the
-  battery that counts is the one on a node built from v478. That battery
-  passed, R-1 to R-7, with `main`'s bytecode. Its pins land through sn branch
-  `v2/runtime-478` (section 9.3, item 2).
+- `build.sh` builds the 478 node, and the battery that counts is the one on
+  it. It passed, R-1 to R-7, with `main`'s bytecode, and the README records
+  it (README, "Runtime 478"; section 9.3, item 2). On 478, R-3 and R-6 log
+  each stake-moving transaction's least gas limit beside `eth_estimateGas`'s;
+  both are far below section 2.6's 475 limits while vault2's list is short.
 - "A test refuses a node whose runtime version has no reviewed source"
   (README:112-116).
 
@@ -2075,7 +2086,7 @@ Found while writing this runbook:
 | The binary lists no reviewed source for runtime 478, so it refuses the phase config | 478's entry on sn `v2/runtime-478`; freeze and rebuild after its merge (steps 1 and 8.3). Never name another runtime's commit: the v2 phase now refuses a reviewed source beside another version |
 | A shell umask of 002, or a group-writable directory above the run directory, makes the custody tools refuse | `umask 077` and the ancestry check at the start of step 8 |
 | One `resume --online` does not complete an action, and a late start checkpoint multiplies the calls | Take the start checkpoint just before the approval; repeat `resume --online` until the completed status (steps 8.3 and 8.4) |
-| On 478 a stake exit's admission grows by 8,750 gas for each entry of vault2's own staking-hotkey list, which third parties can lengthen. A limit sized from an estimate can then fall short | The owner-approved sizing rule of section 2.6: a close at max(estimate + 20%, 3,200,000) gas and a claim at max(estimate + margin, 2,600,000). The server's v2 close floor and the SDK's claim floor are on `main`, and ur.io sends the SDK's limit; sn's floor for a single claim is still to merge. Deploy a server build at or after `54ae2aacf` before the first close, at block 9,348,028 |
+| On 478 a stake exit's admission grows by 8,750 gas for each entry of vault2's own staking-hotkey list, which third parties can lengthen. A limit sized from an estimate can then fall short | The owner-approved sizing rule of section 2.6: a close at max(estimate + 20%, 3,200,000) gas and a claim at max(estimate + margin, 2,600,000). The server's v2 close floor and the SDK's claim floor are on `main`, and ur.io sends the SDK's limit; sn's claim tools apply the claim floor. Deploy a server build at or after `54ae2aacf` before the first close, at block 9,348,028 |
 | Three reverted closes of one epoch strand the operator root key. The policy allows each operation three signatures, so the fourth try reserves a nonce the policy will not sign, and every later v1 and v2 send of the root key stops at it. Re-signing the policy, even with more signatures, does not lift the cap the operation's first signature recorded. Only a transaction from outside the engine that consumes the nonce frees the key. This defect predates v2 | A root-cause fix, which decides before reserving a nonce, is being built. Meanwhile: watch for reverted closes (section 5), and find the cause before a third (`server/controller/st_ledger_v2_gas_test.go:349-426,462-467`) |
 | A per-intent liability that covers one floored close strands the root key after a single revert, because the policy sums an operation's liability over every nonce it takes | `maximum_intent_liability_wei` of at least 3 × `maximum_gas` × the fee cap (step 5; `server/controller/st_ledger_v2_gas_test.go:428-460`) |
 | The v1 close shares the root key and is signed at its estimate plus 20%, with no floor, so on 478 it can be griefed into reverting the same way | A v1 close floor is being built. Meanwhile, watch v1 closes too (section 5; `server/controller/st_ledger_v2_gas_test.go:134-138`) |
@@ -2221,20 +2232,21 @@ passed, and step 8 waits for 478's reviewed source and a rebuild.
    - The verdict on 478: R-1 to R-7 all pass on a node built from v478, with
      `main`'s bytecode. R-1 took 140 seconds and the battery 1,091 seconds.
      The deploy gas is unchanged from 475. The changes are in section 2.6.
-   - A caveat: until 478's reviewed-source row lands, R-1's plan on the 478
-     node names 475's source. `main` refuses both choices on 478: 478's own
-     commit `850f2755…` with "contract phase runtime/source approval is
-     incomplete", and 475's commit with version 478 with "contract phase
-     runtime version differs from the one its source commit was reviewed
-     for" (`mainnet/evm_phase.go:183-191`).
+   - 478's reviewed-source row, `crv4.NativeOwnerSource478`, admits commit
+     `850f2755…` at version 478, and R-1 on the 478 node names it and passes.
+     Without the row the phase refuses both choices on 478: 478's own commit
+     with "contract phase runtime/source approval is incomplete", and 475's
+     or 477's commit with version 478 with "contract phase runtime version
+     differs from the one its source commit was reviewed for"
+     (`mainnet/evm_phase.go:183-191`).
    - The 477 run passed in full, with gas equal to 475's. It is recorded on
      `main` (`docs/spec/runtime-477-audit.md`:405-408;
      `scripts/runtime-rehearsal/README.md`:425-441).
-   - Step 8 still waits for 478's reviewed-source entry and a rebuild of
-     `sn-mainnet`. The 477 entry is on `main` (`3b5628aa`), with the binding
-     of each reviewed source to its spec version for the v2 phase. The 478
-     entry follows on sn branch `v2/runtime-478`, with the 478 pins and the
-     record of this rerun. It is not on `main` yet.
+   - Step 8 waits for `sn-mainnet` rebuilt from a `main` that has 478's
+     reviewed source. The 477 entry (`3b5628aa`) binds each reviewed source
+     to its spec version for the v2 phase, and the 478 entry, the 478 pins
+     and the record of this rerun come with sn branch `v2/runtime-478`
+     (`docs/spec/runtime-478-audit.md`).
    - Step 2 is repeated immediately before step 8 and before step 15.
 3. **O26.** Gate 1 needs the independent review of vault2, `LedgerTree.sol`
    and `STSettlement2` resolved (§14). The owner's confirmation is not given

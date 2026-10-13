@@ -154,7 +154,8 @@ type txRequest struct {
 	calldata        []byte
 	value           *big.Int // wei sent with the call; nil sends none
 	nonceFloor      uint64
-	gasLimit        uint64 // 0 = estimate + 20% headroom
+	gasLimit        uint64 // 0 = estimate + 20% headroom, and at least gasFloor
+	gasFloor        uint64 // the least gas limit of an estimated transaction
 	dryRun          bool
 	prepared        func(common.Hash, []byte) error
 	beforeBroadcast func(common.Hash) error
@@ -201,7 +202,7 @@ func runTx(
 
 	gasLimit := req.gasLimit
 	if gasLimit == 0 {
-		gasLimit = gasEst + gasEst/5 // +20% headroom
+		gasLimit = max(gasEst+gasEst/5, req.gasFloor) // +20% headroom
 	}
 	nonce, err := retryOnchainRead(ctx, func(ctx context.Context) (uint64, error) {
 		cctx, cancel := context.WithTimeout(ctx, callTimeout)

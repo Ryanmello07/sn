@@ -7,6 +7,7 @@ const NativeOwnerSource470 = "923fd1fa7d6eadad3ec16f3941826b86c9c3aa1d"
 const NativeOwnerSource473 = "f87cada631f81d11683e715a9f059f693992e64a"
 const NativeOwnerSource475 = "d1718c99c34cf96abbf2bf09c0e9e48b945c76f5"
 const NativeOwnerSource477 = "5c6e83e2f4936f257234f246957f75684c35227c"
+const NativeOwnerSource478 = "850f2755bb05a3851f948489f0ab27b0645cebce"
 
 // Each reviewed source with the spec version its runtime/src/lib.rs declares.
 // A newly reviewed source is one more row. The number grants nothing by
@@ -19,6 +20,7 @@ var reviewedNativeOwnerSources = []struct {
 	{NativeOwnerSource473, 473},
 	{NativeOwnerSource475, 475},
 	{NativeOwnerSource477, 477},
+	{NativeOwnerSource478, 478},
 }
 
 // The ordinary credit, owner call and passive root interfaces share reviewed
@@ -54,7 +56,7 @@ func ReviewedNativeOwnerSpecSource(spec uint32) (string, bool) {
 // completion proof: each approval still proves the marker at its own activation.
 func ReviewedPostAlphaMigrationSource(source string) bool {
 	switch source {
-	case NativeOwnerSource473, NativeOwnerSource475, NativeOwnerSource477:
+	case NativeOwnerSource473, NativeOwnerSource475, NativeOwnerSource477, NativeOwnerSource478:
 		return true
 	default:
 		return false

@@ -3,11 +3,13 @@
 Activation gate 2 (`VERSION2-FINAL.md` §14) runs the exact release bytecode of
 the settlement contracts against the real Subtensor precompiles. Anvil cannot
 run them, the testnet campaign closed and there is no localnet, so this
-directory builds a node from the upstream source of runtime 477, the runtime
+directory builds a node from the upstream source of runtime 478, the runtime
 mainnet (EVM chain 964) runs, and starts a one-node dev chain on it. The Go
 harness and its tests are in `rehearsal/`. The gate first ran on runtime 475;
-its measurements below are of that run, and [Runtime 477](#runtime-477)
-records the rerun.
+its measurements below are of that run, and [Runtime 477](#runtime-477) and
+[Runtime 478](#runtime-478) record the reruns. Runtime 478 changes the gas
+limit a stake move needs, so its section supersedes the limits measured
+before it.
 
 ## Build
 
@@ -17,10 +19,10 @@ PROTOC=/path/to/protoc CARGO_TARGET_DIR=/path/to/target \
 ```
 
 `build.sh` clones `https://github.com/opentensor/subtensor.git` into the
-checkout directory if it does not exist, and checks that the tag `v477` names
-`5c6e83e2f4936f257234f246957f75684c35227c`. It checks out that commit, requires
-a clean tree, `spec_version: 477` in `runtime/src/lib.rs` and every digest of
-`docs/spec/runtime-v477-source.sha256`, then builds:
+checkout directory if it does not exist, and checks that the tag `v478` names
+`850f2755bb05a3851f948489f0ab27b0645cebce`. It checks out that commit, requires
+a clean tree, `spec_version: 478` in `runtime/src/lib.rs` and every digest of
+`docs/spec/runtime-v478-source.sha256`, then builds:
 
 ```sh
 cargo build --locked --profile release -p node-subtensor \
@@ -49,22 +51,25 @@ Measured on a 24-thread host shared with other jobs. On 2026-10-11, for
 runtime 475 at `-j 10`, the build from scratch took about 37 minutes (2,243 s
 wall clock, including one restart that kept every compiled crate, after the
 missing workspace hint above), and a rebuild of the node crate alone 266 s. On
-2026-10-13 the 477 build took 648 s at `-j 22`, started on a copy of the 475
-build's target directory: every workspace crate and the vendored Frontier
-rebuild, because a new checkout has new file times, and the registry and git
-dependencies are reused. The toolchain is 475's. The runtime Wasm of each
-build is:
+2026-10-13 the 477 build took 648 s at `-j 22`, and the 478 build 746 s at
+`-j 10`, each started on a copy of the 475 build's target directory: every
+workspace crate and the vendored Frontier rebuild, because a new checkout has
+new file times, and the registry and git dependencies are reused. The
+toolchain is 475's. The runtime Wasm of each build is:
 
 | Runtime | Artifact | Bytes | SHA-256 | BLAKE2b-256 |
 | --- | --- | ---: | --- | --- |
+| 478 | `node_subtensor_runtime.compact.compressed.wasm` | 2,848,341 | `3d754c8b872a1728098fc980ba8bbd1bcaa7a1ec802565010f4ce173d628c308` | `1978bf7751e93d8b2d6c3ecaf44c5e4db54f41dca9a7ea750c2ed4f59ad03ae6` |
 | 477 | `node_subtensor_runtime.compact.compressed.wasm` | 2,846,031 | `3cfabd8d93c1e0060d8395a6295445cecea957caf7e6da3991d0dc72ab20fe48` | `71b7103db2a61d9393cab5298471e4ddc627a44d3c75b77a3aa55267dfb79f2f` |
 | 475 | `node_subtensor_runtime.compact.compressed.wasm` | 2,862,456 | `4bdb6b5dada78e742db06c94523dea8734d737832b5f6a118ecf8d26f6813ce4` | `a486ccc60a0ff5c2a3362e19470186fda365edcda1dfc688ba3d88e36e60fca6` |
 
-The BLAKE2b-256 is the chain's `state_getStorageHash(":code")`. The 477 build
-differs from mainnet's 477 Wasm (2,630,752 bytes, SHA-256 `e226dd03…`), as
+The BLAKE2b-256 is the chain's `state_getStorageHash(":code")`. The 478 build
+differs from mainnet's 478 Wasm (2,634,898 bytes, SHA-256 `1d64a44f…`), and the
+477 build from mainnet's 477 Wasm (2,630,752 bytes, SHA-256 `e226dd03…`), as
 expected: `fast-runtime` changes constants, and `docs/spec/runtime-475-audit.md`
 explains why even a production-feature rebuild is not expected to match byte
-for byte. `docs/spec/runtime-477-audit.md` reviews the 477 source.
+for byte. `docs/spec/runtime-477-audit.md` and
+`docs/spec/runtime-478-audit.md` review the 477 and 478 sources.
 
 ## Run
 
@@ -479,3 +484,71 @@ runs.
 
 A batch of 32 costs 147,735 gas a claim (147,740 on 475), and the largest
 146,428 (146,435).
+
+## Runtime 478
+
+Mainnet moved from runtime 477 to 478 at block 9,276,925 on 2026-10-13. 478
+changes how the staking precompile admits `moveStake` and `transferStake`, the
+calls vault2 depends on (`docs/spec/runtime-478-audit.md`). On 475 and 477 the
+gas forwarded to such a call had to cover a walk of a full 256-entry
+`StakingHotkeys` list, so every stake move needed a limit of about 2.4M. On 478
+it has to cover a walk of the caller's own list plus one entry, and the call
+also reads the list's length, 625 gas. `TestRehearsalStakeExitAdmission`
+(`rehearsal/admission_test.go`) measured the least gas forwarded, by
+`eth_call` from a contract whose list third parties lengthened, and found the
+rule exact to the gas:
+
+| Caller's list | `moveStake` | `transferStake` |
+| ---: | ---: | ---: |
+| any, on 477 | 2,296,767 | 2,294,335 |
+| 2 | 83,017 | 80,585 |
+| 16 | 205,517 | 203,085 |
+| 64 | 625,517 | 623,085 |
+| 128 | 1,185,517 | 1,183,085 |
+
+That is 65,517 and 63,085 gas plus 8,750 an entry. One gas less is refused and
+consumes all the gas forwarded. On 2026-10-13 the whole battery ran on the
+478 node, and the same harness pinned to 477 on the 477 node, each test
+sending every measured transaction with the least gas limit at which an
+`eth_call` of it succeeds:
+
+```sh
+go test -tags runtime_rehearsal ./rehearsal/ -v -timeout 60m
+go test -tags runtime_rehearsal ./mainnet/ -run TestR1SettlementV2Phase -v
+```
+
+Every test passed on both, and R-1's approval named the reviewed 478 source
+`850f2755…` with the node's version. Every behaviour of the runs above was
+reproduced. The `rehearsal` package took about 560 seconds (R-5 555 s, R-7
+486 s, R-3 376 s, R-4 246 s, R-2 199 s), and R-1 124 seconds. At depth 29, with
+vault2's list at one or two entries, as at launch:
+
+| Transaction | 477 used | 477 least limit | 478 used | 478 least limit |
+| --- | ---: | ---: | ---: | ---: |
+| close, capturing | 225,430 | 2,513,577 | 226,055 | 236,399 |
+| close deferring 1 epoch | 131,633 | 141,343 | 131,633 | 141,343 |
+| close deferring 144 epochs | 2,409,622 | 2,862,246 | 2,409,622 | 2,862,246 |
+| commit | 205,288 | 214,491 | 205,288 | 214,491 |
+| finalize | 94,389 | 100,822 | 94,389 | 100,822 |
+| answer | 149,050 | 153,987 | 149,026 | 153,963 |
+| approve | 132,524 | 134,165 | 132,524 | 134,165 |
+| demand | 98,268 | 103,264 | 98,256 | 103,252 |
+| claim, an account's first | 186,707 | 2,443,534 | 187,332 | 192,318 |
+| claim, a repeat | 169,618 | 2,426,445 | 170,243 | 175,229 |
+| batch of 32 claims | 4,728,002 | 7,339,364 | 4,748,110 | 7,358,847 |
+| the most one transaction holds | 418 claims | 64,898,177 | 416 claims | 64,861,477 |
+
+`eth_estimateGas` gave a capturing close 246,899 and an account's first claim
+206,967 (2,688,632 and 2,572,776 on 477). Every stake move uses 625 gas more;
+everything else is unchanged, and batches are still sized by the per-item cap
+of 2,600,000. R-1's six actions used the 475 gas of their approved limits.
+
+The limit a stake move needs now follows vault2's own list, which third
+parties can lengthen to 128 entries at any time. R-3 filled it: a claim then
+used 1,257,365 gas and needed a limit of 1,273,292 (154,831 and 159,817 before),
+and `absorbStake` 1,221,499 and 1,245,279. A claim estimated at 173,484 gas
+before the list filled, signed at that with 20% and sent after, ran out of gas
+and left the account claimable; signed at 2,600,000 it paid. The claim tools
+therefore sign a claim at its estimate with 20% and never below
+`onchain.ClaimBatchGasPerClaim`, the limit every claim needed on 475 and 477;
+the review gives the matching rule for closes and its bound.

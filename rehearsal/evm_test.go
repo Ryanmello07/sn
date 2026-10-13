@@ -148,11 +148,18 @@ func (self artifact) unpack(t *testing.T, method string, data []byte) []any {
 // eth_estimateGas.
 func (self *node) transact(t *testing.T, from evmKey, to *common.Address, value *big.Int, data []byte, gas uint64) *gethtypes.Receipt {
 	t.Helper()
-	nonce, err := self.eth.NonceAt(self.ctx, from.address, nil)
+	price, err := self.eth.SuggestGasPrice(self.ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	price, err := self.eth.SuggestGasPrice(self.ctx)
+	return self.sendSigned(t, self.sign(t, from, to, value, data, gas, price))
+}
+
+// sign signs a transaction at from's next nonce without sending it; gas zero
+// takes eth_estimateGas.
+func (self *node) sign(t *testing.T, from evmKey, to *common.Address, value *big.Int, data []byte, gas uint64, price *big.Int) *gethtypes.Transaction {
+	t.Helper()
+	nonce, err := self.eth.NonceAt(self.ctx, from.address, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +173,13 @@ func (self *node) transact(t *testing.T, from evmKey, to *common.Address, value 
 	if err != nil {
 		t.Fatal(err)
 	}
+	return tx
+}
+
+// sendSigned sends a signed transaction, seals it into its own block and
+// returns its receipt, which may report a failure.
+func (self *node) sendSigned(t *testing.T, tx *gethtypes.Transaction) *gethtypes.Receipt {
+	t.Helper()
 	if err := self.eth.SendTransaction(self.ctx, tx); err != nil {
 		t.Fatalf("send transaction: %v", err)
 	}
@@ -244,6 +258,47 @@ func (self *node) stake(t *testing.T, hotkey, coldkey [32]byte, netuid uint16) u
 // estimate runs eth_estimateGas: the gas limit a call needs.
 func (self *node) estimate(from, to common.Address, value *big.Int, data []byte) (uint64, error) {
 	return self.eth.EstimateGas(self.ctx, ethereum.CallMsg{From: from, To: &to, Value: value, Data: data})
+}
+
+// least returns the least gas limit, to the gas, at which an eth_call of msg
+// at the latest block satisfies ok. It must do so at high.
+func (self *node) least(t *testing.T, msg ethereum.CallMsg, high uint64, ok func([]byte, error) bool) uint64 {
+	t.Helper()
+	call := func(gas uint64) bool {
+		msg.Gas = gas
+		return ok(self.eth.CallContract(self.ctx, msg, nil))
+	}
+	if !call(high) {
+		t.Fatalf("the call fails with %d gas", high)
+	}
+	low := uint64(21_000)
+	for high-low > 1 {
+		if middle := (low + high) / 2; call(middle) {
+			high = middle
+		} else {
+			low = middle
+		}
+	}
+	return high
+}
+
+// sendLeast is send with the least gas limit at which an eth_call of the
+// call succeeds, searched below the limit eth_estimateGas gives, which it
+// returns with that least limit.
+func (self *node) sendLeast(t *testing.T, from evmKey, to common.Address, contract artifact, value *big.Int, method string, args ...any) (receipt *gethtypes.Receipt, estimate, least uint64) {
+	t.Helper()
+	data := contract.pack(t, method, args...)
+	estimate, err := self.estimate(from.address, to, value, data)
+	if err != nil {
+		t.Fatalf("%s: %s", method, reason(err))
+	}
+	least = self.least(t, ethereum.CallMsg{From: from.address, To: &to, Value: value, Data: data}, estimate,
+		func(_ []byte, err error) bool { return err == nil })
+	receipt = self.transact(t, from, &to, value, data, least)
+	if receipt.Status != gethtypes.ReceiptStatusSuccessful {
+		t.Fatalf("%s sent with its least limit %d failed in block %s", method, least, receipt.BlockNumber)
+	}
+	return receipt, estimate, least
 }
 
 // send calls method of contract at `to` in its own block and fails the test,

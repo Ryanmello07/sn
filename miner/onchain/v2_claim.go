@@ -316,7 +316,7 @@ func (c *v2Claim) paid(receipt *types.Receipt, vault, caller common.Address) boo
 // sendV2Claim sends one claim to vault2 and reports its Claimed event.
 func sendV2Claim(ctx context.Context, sender *v2Sender, reader *v2Reader, claim *v2Claim) error {
 	item := claim.item()
-	receipt, err := sender.send(ctx, "claim", vault2.PackClaim(item.NoId, item.RootIndex, item.Account, item.Proof), nil, claim.describe)
+	receipt, err := sender.send(ctx, "claim", vault2.PackClaim(item.NoId, item.RootIndex, item.Account, item.Proof), nil, ClaimBatchGasPerClaim, claim.describe)
 	if err != nil {
 		if !v2Reverted(err) {
 			return err

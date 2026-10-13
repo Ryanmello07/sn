@@ -18,14 +18,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/holiman/uint256"
 	"gopkg.in/yaml.v3"
 
 	"github.com/urfoundation/sn/internal/durablehead"
 	"github.com/urfoundation/sn/merkle"
+	"github.com/urfoundation/sn/miner/onchain"
 	"github.com/urfoundation/sn/ss58"
 )
 
@@ -594,31 +597,76 @@ func TestClaimV2CheckpointRefusals(t *testing.T) {
 // E-5, the orchestrator's runtime-475 measurement: the staking precompile needs a
 // far higher gas limit than a claim uses. The limit comes from eth_estimateGas
 // after a successful eth_call preflight, with v1's 20% headroom; a refused
-// preflight is neither estimated nor sent.
+// preflight is neither estimated nor sent. Runtime 478's estimate follows
+// vault2's own staking-hotkey list and is far smaller, and a claim is never
+// signed below onchain.ClaimBatchGasPerClaim.
 func TestClaimV2GasLimitFollowsTheEstimate(t *testing.T) {
+	for _, test := range []struct{ estimate, want uint64 }{
+		{2_400_000, 2_400_000 + 2_400_000/5},
+		{206_967, onchain.ClaimBatchGasPerClaim},
+	} {
+		chain := newClaimV2TestChain(t)
+		chain.finalize(claimV2TestAccount(claimV2TestOther, 1), claimV2TestAccount(claimV2TestColdkey, 5))
+		daemon := newClaimV2TestDaemon(t, chain, ClaimV2DefaultThresholdRao)
+		chain.with(func() { chain.refuseClaims, chain.estimate = true, test.estimate })
+		daemon.step(false)
+		chain.with(func() {
+			if len(chain.calls) != 1 || chain.calls[0] != "preflight" {
+				t.Errorf("a refused preflight went further: %v", chain.calls)
+			}
+			chain.refuseClaims, chain.calls = false, nil
+		})
+		daemon.advance(claimRetry(1))
+		daemon.step(false)
+		sends := chain.sent()
+		var tx types.Transaction
+		if len(sends) != 1 || tx.UnmarshalBinary(common.FromHex(sends[0])) != nil || tx.Gas() != test.want {
+			t.Fatalf("claim gas limit at an estimate of %d: sends=%d gas=%d", test.estimate, len(sends), tx.Gas())
+		}
+		chain.with(func() {
+			if len(chain.calls) != 3 || chain.calls[0] != "preflight" || chain.calls[1] != "estimate" || chain.calls[2] != "send" {
+				t.Errorf("claim submission order: %v", chain.calls)
+			}
+		})
+	}
+}
+
+// E-5, §10.1: a signed claim whose broadcast was lost still pays after third
+// parties fill vault2's staking-hotkey list. Runtime 478 then needs 1,273,292
+// gas of a claim it estimated at 206,967 (R-3, R-6). The rebroadcast preflights
+// the exact bytes at their own gas limit: at the estimate with 20% that call
+// runs out of gas, and such bytes would never be sent again; signed with
+// onchain.ClaimBatchGasPerClaim, they pass, are sent and pay.
+func TestClaimV2SignedClaimOutlastsAGrownStakingHotkeyList(t *testing.T) {
 	chain := newClaimV2TestChain(t)
 	chain.finalize(claimV2TestAccount(claimV2TestOther, 1), claimV2TestAccount(claimV2TestColdkey, 5))
 	daemon := newClaimV2TestDaemon(t, chain, ClaimV2DefaultThresholdRao)
-	chain.with(func() { chain.refuseClaims, chain.estimate = true, 2_400_000 })
+	chain.with(func() { chain.estimate, chain.sendFailures = 206_967, 1 })
 	daemon.step(false)
-	chain.with(func() {
-		if len(chain.calls) != 1 || chain.calls[0] != "preflight" {
-			t.Errorf("a refused preflight went further: %v", chain.calls)
-		}
-		chain.refuseClaims, chain.calls = false, nil
-	})
-	daemon.advance(claimRetry(1))
-	daemon.step(false)
-	sends := chain.sent()
+	lost := daemon.durable(1)
 	var tx types.Transaction
-	if len(sends) != 1 || tx.UnmarshalBinary(common.FromHex(sends[0])) != nil || tx.Gas() != 2_400_000+2_400_000/5 {
-		t.Fatalf("claim gas limit: sends=%d gas=%d", len(sends), tx.Gas())
+	if lost.Status != "uncertain" || tx.UnmarshalBinary(common.FromHex(lost.RawTxHex)) != nil || tx.Gas() != onchain.ClaimBatchGasPerClaim {
+		t.Fatalf("lost broadcast: gas %d, unit %+v", tx.Gas(), lost)
 	}
-	chain.with(func() {
-		if len(chain.calls) != 3 || chain.calls[0] != "preflight" || chain.calls[1] != "estimate" || chain.calls[2] != "send" {
-			t.Errorf("claim submission order: %v", chain.calls)
+	chain.with(func() { chain.claimGas = 1_273_292 })
+	client, err := ethclient.Dial(chain.server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	for gas, paid := range map[uint64]bool{206_967 + 206_967/5: false, tx.Gas(): true} {
+		if _, err := client.CallContract(t.Context(), ethereum.CallMsg{To: tx.To(), Gas: gas, Data: tx.Data()}, nil); (err == nil) != paid {
+			t.Fatalf("the claim's preflight with %d gas: %v", gas, err)
 		}
-	})
+	}
+	for range 2 {
+		daemon.advance(time.Minute)
+		daemon.step(false)
+	}
+	unit, claimed, sends := daemon.durable(1), chain.claimedOf(1), chain.sent()
+	if unit.Status != "idle" || unit.Claimed != claimV2TestDec(5) || claimed.Dec() != claimV2TestDec(5) || len(sends) != 2 || sends[1] != lost.RawTxHex {
+		t.Fatalf("the signed claim after the list grew: claimed=%s sends=%d unit=%+v", claimed.Dec(), len(sends), unit)
+	}
 }
 
 // E-5, §10.1 loop: a snapshot is merged and claimed, a tick polls, cancellation

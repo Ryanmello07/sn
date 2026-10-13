@@ -141,7 +141,7 @@ func rootRegisterStorageSpecs() []rootStorageSpec {
 	}
 }
 
-// Sources 473, 475 and 477 use a u64 existential deposit of 500 rao. Authenticate the
+// Sources 473, 475, 477 and 478 use a u64 existential deposit of 500 rao. Authenticate the
 // constant before applying a conservative quote; no frozen/reserved reduction is guessed.
 func rootRegisterExistentialDeposit(metadata *types.Metadata) (uint64, error) {
 	if metadata == nil || metadata.Version != 14 {
@@ -410,7 +410,7 @@ func (self rootRegisterObservation) eligibility(policy rootRegisterPolicy, metad
 	if len(used) != len(rowKVs) {
 		return result, errors.New("root registration observation contains unrelated storage rows")
 	}
-	// Sources 473, 475 and 477 saturate the u16 interval multiplier. Counters are current-block
+	// Sources 473, 475, 477 and 478 saturate the u16 interval multiplier. Counters are current-block
 	// observations and can reset or change before the mortal call is included.
 	intervalLimit := min(uint32(result.TargetInInterval)*3, uint32(^uint16(0)))
 	switch {
@@ -440,7 +440,7 @@ func (self rootRegisterObservation) eligibility(policy rootRegisterPolicy, metad
 	return result, nil
 }
 
-// Sources 473, 475 and 477 use PalletId("subtensr").try_from_sub_account::<NetUid>.
+// Sources 473, 475, 477 and 478 use PalletId("subtensr").try_from_sub_account::<NetUid>.
 // Their pinned SDK decodes "modl", the eight-byte pallet ID and a u16, then
 // requires every remaining AccountId32 byte to be zero, even for absent subnets.
 func rootRegisterReservedHotkey(account string) bool {
