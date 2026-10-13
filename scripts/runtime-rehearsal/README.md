@@ -3,9 +3,11 @@
 Activation gate 2 (`VERSION2-FINAL.md` §14) runs the exact release bytecode of
 the settlement contracts against the real Subtensor precompiles. Anvil cannot
 run them, the testnet campaign closed and there is no localnet, so this
-directory builds a node from the upstream source of runtime 475, the runtime
+directory builds a node from the upstream source of runtime 477, the runtime
 mainnet (EVM chain 964) runs, and starts a one-node dev chain on it. The Go
-harness and its tests are in `rehearsal/`.
+harness and its tests are in `rehearsal/`. The gate first ran on runtime 475;
+its measurements below are of that run, and [Runtime 477](#runtime-477)
+records the rerun.
 
 ## Build
 
@@ -15,10 +17,10 @@ PROTOC=/path/to/protoc CARGO_TARGET_DIR=/path/to/target \
 ```
 
 `build.sh` clones `https://github.com/opentensor/subtensor.git` into the
-checkout directory if it does not exist, and checks that the tag `v475` names
-`d1718c99c34cf96abbf2bf09c0e9e48b945c76f5`. It checks out that commit, requires
-a clean tree, `spec_version: 475` in `runtime/src/lib.rs` and every digest of
-`docs/spec/runtime-v475-source.sha256`, then builds:
+checkout directory if it does not exist, and checks that the tag `v477` names
+`5c6e83e2f4936f257234f246957f75684c35227c`. It checks out that commit, requires
+a clean tree, `spec_version: 477` in `runtime/src/lib.rs` and every digest of
+`docs/spec/runtime-v477-source.sha256`, then builds:
 
 ```sh
 cargo build --locked --profile release -p node-subtensor \
@@ -43,20 +45,26 @@ build, which then resolves unlocked dependencies and fails
 genesis `:code` is the built Wasm byte for byte and writes the record
 `release/runtime-rehearsal-build.txt` in the target directory.
 
-Measured on 2026-10-11 on a 24-thread host shared with other jobs, at `-j 10`:
-the build from scratch took about 37 minutes (2,243 s wall clock, including one
-restart that kept every compiled crate, after the missing workspace hint
-above), and a rebuild of the node crate alone 266 s. The runtime Wasm of that
+Measured on a 24-thread host shared with other jobs. On 2026-10-11, for
+runtime 475 at `-j 10`, the build from scratch took about 37 minutes (2,243 s
+wall clock, including one restart that kept every compiled crate, after the
+missing workspace hint above), and a rebuild of the node crate alone 266 s. On
+2026-10-13 the 477 build took 648 s at `-j 22`, started on a copy of the 475
+build's target directory: every workspace crate and the vendored Frontier
+rebuild, because a new checkout has new file times, and the registry and git
+dependencies are reused. The toolchain is 475's. The runtime Wasm of each
 build is:
 
-| Artifact | Bytes | SHA-256 | BLAKE2b-256 |
-| --- | ---: | --- | --- |
-| `node_subtensor_runtime.compact.compressed.wasm` | 2,862,456 | `4bdb6b5dada78e742db06c94523dea8734d737832b5f6a118ecf8d26f6813ce4` | `a486ccc60a0ff5c2a3362e19470186fda365edcda1dfc688ba3d88e36e60fca6` |
+| Runtime | Artifact | Bytes | SHA-256 | BLAKE2b-256 |
+| --- | --- | ---: | --- | --- |
+| 477 | `node_subtensor_runtime.compact.compressed.wasm` | 2,846,031 | `3cfabd8d93c1e0060d8395a6295445cecea957caf7e6da3991d0dc72ab20fe48` | `71b7103db2a61d9393cab5298471e4ddc627a44d3c75b77a3aa55267dfb79f2f` |
+| 475 | `node_subtensor_runtime.compact.compressed.wasm` | 2,862,456 | `4bdb6b5dada78e742db06c94523dea8734d737832b5f6a118ecf8d26f6813ce4` | `a486ccc60a0ff5c2a3362e19470186fda365edcda1dfc688ba3d88e36e60fca6` |
 
-The BLAKE2b-256 is the chain's `state_getStorageHash(":code")`. It differs from
-mainnet's 475 Wasm (2,632,482 bytes, SHA-256 `00ef6bf4…`), as expected:
-`fast-runtime` changes constants, and `docs/spec/runtime-475-audit.md` explains
-why even a production-feature rebuild is not expected to match byte for byte.
+The BLAKE2b-256 is the chain's `state_getStorageHash(":code")`. The 477 build
+differs from mainnet's 477 Wasm (2,630,752 bytes, SHA-256 `e226dd03…`), as
+expected: `fast-runtime` changes constants, and `docs/spec/runtime-475-audit.md`
+explains why even a production-feature rebuild is not expected to match byte
+for byte. `docs/spec/runtime-477-audit.md` reviews the 477 source.
 
 ## Run
 
@@ -104,7 +112,9 @@ RUNTIME_REHEARSAL_NODE=/path/to/target/release/node-subtensor \
 Run it from the repository root with `forge` on `PATH`. The test files of
 `rehearsal/` carry the `runtime_rehearsal` build tag. Each test starts its own
 node through `run-node.sh` on free ports in a temporary directory and stops it
-at the end; the node is ready in about 10 s. The
+at the end; the node is ready in about 10 s. A test refuses a node whose
+runtime version has no reviewed source (`crv4.ReviewedNativeOwnerSpecSource`)
+and logs the version and the source it ran on. The
 helpers sign extrinsics with the repository's signer (`chain.EncodeSignedCall`
 over a `crv4.DialChainContext` connection), seal each transaction into its own
 block, check dispatch success with `crv4.VerifyFinalizedExtrinsicContext`, and
@@ -403,3 +413,61 @@ tempo of 360. Measured:
   the tools preflight each claim to keep refusals out of a batch. vault2's
   reentrancy flag, persistent storage, was clear again for the claim after
   each refusal.
+
+## Runtime 477
+
+Mainnet moved from runtime 475 to 477 on 2026-10-12, and the gate repeats on
+any runtime change (`VERSION2-FINAL.md` §14). On 2026-10-13 the whole battery
+ran again on the 477 node, from sn `188c1547` with the changes of branch
+`v2/runtime-477`:
+
+```sh
+go test -tags runtime_rehearsal ./rehearsal/ -v -timeout 60m
+go test -tags runtime_rehearsal ./mainnet/ -run TestR1SettlementV2Phase -v
+```
+
+Every test passed: the smoke test, the transient-storage probe, R-2, R-3,
+R-4, R-5 with R-6, both R-7 tests, and R-1, whose approval named the 477
+source `5c6e83e2…` with the node's version. The `rehearsal` package took 776
+seconds on a host at a load of 20 to 100 (R-5 755 s, R-7 653 s, R-3 545 s,
+R-4 323 s, R-2 321 s), and R-1 120 seconds.
+
+Every fact recorded above was reproduced: the exact deltas, the one-rao-short
+destinations (1 of 8 onto an earning hotkey, 0 of 8 at share price 1), the
+floor at 11,093 alpha rao and price 9.014779842, the whole-position amounts,
+the burns (1,417,205,419 and 1,782,243,972 rao; 3.80 TAO for the pool), the
+collateral (115,828,883 and 1,481,130,231 alpha rao locked; 38,742,541,778 of
+40,223,672,009 rao captured), the dust refusal, the escrow hotkey's
+3,595,812,938 rao without weights and 0 with, the call-value truncation, the
+transient write that survives a reverted frame, the 64,998,500-gas ceiling,
+and 418 claims in one transaction.
+
+Every gas figure is the 475 figure, except these, which differ by multiples
+of 12 gas. That is one calldata byte being nonzero instead of zero: each run
+draws new keys, so its addresses and proofs differ in zero bytes. R-1 and the
+smoke test ran twice on 477 and show the same variation between their own
+runs.
+
+| Figure | 475 | 477 |
+| --- | ---: | ---: |
+| `moveStake` transaction; `eth_estimateGas` limit | 107,665; 2,427,799 | 107,653; 2,427,763 and 107,665; 2,427,799 |
+| `registerLimit` transaction; `eth_estimateGas` limit | 1,434,798; 1,493,416 | 1,434,786; 1,493,404 and 1,434,798; 1,493,416 |
+| `burnedRegister` transaction; `eth_estimateGas` limit | 1,421,266; 1,479,461 | 1,421,266; 1,479,461 and 1,421,254; 1,479,448 |
+| R-1 `proxy2-create` | 310,486 | 310,486 and 310,462 |
+| R-1 `vault2-link` | 31,329 | 31,317 and 31,329 |
+| R-3 claim with vault2's list at 128 | 1,256,716 | 1,256,740 |
+| R-6 demand: used; limit needed | 98,268; 104,424 | 98,256; 104,413 |
+| R-6 claim, an account's first after its neighbour's | 169,595; 2,521,578 | 169,583; 2,521,542 |
+| R-7 single claims, first of a slot | 187,115 to 187,126 | 187,091 to 187,102 |
+| R-7 single claims, after the neighbour's | 169,992 to 170,015 | 169,968 to 169,991 |
+| R-7 single claim: `eth_estimateGas` limit; least limit, up to | 2,574,029; 2,443,953 | 2,573,957; 2,443,929 |
+| R-7 batch of 1: used; least limit | 180,926; 2,704,281 | 180,902; 2,704,257 |
+| R-7 batch of 5 | 783,491; 3,319,253 | 783,383; 3,319,145 |
+| R-7 batch of 10 | 1,509,076; 4,058,837 | 1,508,836; 4,058,597 |
+| R-7 batch of 20 | 2,972,226; 5,549,988 | 2,971,890; 5,549,652 |
+| R-7 batch of 32 | 4,727,690; 7,339,052 | 4,727,534; 7,338,896 |
+| R-7 batch of 418 | 61,210,029; 64,902,281 | 61,207,233; 64,899,485 |
+| R-7 batch of 4 with two refusals | 2,974,627 | 2,974,699 |
+
+A batch of 32 costs 147,735 gas a claim (147,740 on 475), and the largest
+146,428 (146,435).

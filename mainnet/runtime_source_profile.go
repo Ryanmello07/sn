@@ -11,6 +11,14 @@ func mainnetRuntimeCodecSource(source string) bool {
 	return source == frontierMappingSourceCommit || crv4.ReviewedNativeOwnerSource(source)
 }
 
+// A reviewed source names only the runtime version it declares, so an approval
+// cannot label one runtime with another runtime's review. The frontier mapping
+// source declares none and keeps the versions historical plans recorded.
+func mainnetRuntimeCodecSourceVersion(profile rootReceiptProfile) bool {
+	spec, reviewed := crv4.ReviewedNativeOwnerSourceSpec(profile.RuntimeSourceCommit)
+	return !reviewed || profile.RuntimeVersion.SpecVersion == spec
+}
+
 // A version identifies signed bytes; only the reviewed source and authenticated
 // metadata can establish the consumed codec. No future version is auto-approved.
 func nativeOwnerRuntimeVersion(version crv4.RuntimeVersionIdentity) bool {

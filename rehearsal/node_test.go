@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	// The rehearsal runs only on the runtime mainnet runs (§14 gate 2).
-	specName    = "node-subtensor"
-	specVersion = 478
+	// The rehearsal runs only on a runtime whose source was reviewed (§14 gate
+	// 2): crv4.ReviewedNativeOwnerSpecSource names it for the node's version.
+	specName = "node-subtensor"
 	// run-node.sh writes mainnet's EVM chain ID into genesis.
 	evmChainID = 964
 )
@@ -118,9 +118,11 @@ func startNode(t *testing.T) *node {
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Cleanup(n.sub.API.Client.Close)
-	if n.sub.Runtime.SpecName != specName || n.sub.Runtime.SpecVersion != specVersion {
-		t.Fatalf("node runs %s/%d, want %s/%d", n.sub.Runtime.SpecName, n.sub.Runtime.SpecVersion, specName, specVersion)
+	source, reviewed := crv4.ReviewedNativeOwnerSpecSource(uint32(n.sub.Runtime.SpecVersion))
+	if n.sub.Runtime.SpecName != specName || !reviewed {
+		t.Fatalf("node runs %s/%d, which has no reviewed source", n.sub.Runtime.SpecName, n.sub.Runtime.SpecVersion)
 	}
+	t.Logf("node runs %s/%d, reviewed source %s", specName, n.sub.Runtime.SpecVersion, source)
 	n.http = "http://" + endpoint
 	if n.eth, err = evmrpc.DialContext(n.ctx, n.http); err != nil {
 		t.Fatal(err)

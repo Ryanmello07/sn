@@ -184,6 +184,11 @@ func (self evmPhaseConfig) validateStructure() error {
 	if !mainnetRuntimeCodecSource(profile.RuntimeSourceCommit) || profile.RuntimeVersion.SpecName == "" || profile.RuntimeVersion.SpecVersion == 0 || !rootCanonicalHash(profile.RuntimeCodeHash) || !rootCanonicalHash(profile.RuntimeMetadataHash) {
 		return errors.New("contract phase runtime/source approval is incomplete")
 	}
+	// The settlement v2 graph binds a reviewed source to its own runtime
+	// version. The original phase's recorded approvals keep their pairs.
+	if p.settlementV2() && !mainnetRuntimeCodecSourceVersion(profile) {
+		return errors.New("contract phase runtime version differs from the one its source commit was reviewed for")
+	}
 	if p.Route.ReadRetrySeconds < 60 || p.Route.ReadRetrySeconds > 900 || p.Route.SendTimeoutSeconds == 0 || p.Route.SendTimeoutSeconds > 60 {
 		return errors.New("contract phase transport bounds are invalid")
 	}
