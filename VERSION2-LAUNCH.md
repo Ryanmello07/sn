@@ -475,15 +475,17 @@ first exist.
        clean at its recorded commit. sn's and the server's `go.mod` resolve
        those modules to the sibling checkouts (`go.mod:205-234`; server
        `go.mod:212-235`). `main` keeps these local substitutions.
-     - **Being added:** the config field that selects the local mode, with
-       the mode itself, on sn branch `v2/release-local`. Until it lands, the
-       builder on `main` accepts `github.com/urnetwork/sdk`,
-       `github.com/urnetwork/connect` and `github.com/pion/sctp` only as
-       checksum-bound released versions, and refuses the local checkouts:
-       "… must resolve to its checksum-bound reviewed release API"
-       (`scripts/mainnet-release-build/sources.go:137-152`).
+     - The config selects the mode with `"dependency_mode": "local"` and lists
+       connect, sdk and gvisor among its `repositories`
+       ([mainnet/RELEASE-BUILD.md](mainnet/RELEASE-BUILD.md), `dependency_mode`).
+       Without the field the builder keeps the pinned mode, which accepts
+       `github.com/urnetwork/sdk`, `github.com/urnetwork/connect` and
+       `github.com/pion/sctp` only as checksum-bound released versions and
+       refuses the local checkouts: "… must resolve to its checksum-bound
+       reviewed release API" (`scripts/mainnet-release-build/sources.go:137-152`).
      - A pinned build version, from released module versions, is produced
-       later by the owner's build.
+       later by the owner's build
+       (`scripts/mainnet-release-build/PIN-PROCEDURE.md`).
   4. Retain each binary's SHA-256 and `go version -m` output (LAUNCH.md:334-335).
 - **Expect.** Every binary's build information names its O1 commit.
 - **Stop if** a repository's `main` lacks its pin, `v2/dual-stack-hops` is in
@@ -647,20 +649,21 @@ first exist.
     `../` module substitutions; a pinned build version comes later, from the
     owner's build. The local mode is being added on `v2/release-local`.
   - **The release repositories**, beneath one workspace: sn, server, connect,
-    sdk, glog, goidenticons, proxy, userwireguard, warp, vault, xops and
-    config (`scripts/test-release-1.0-local.sh`:9). Each is a physical
+    sdk, glog, goidenticons, proxy, userwireguard, warp, gvisor, vault, xops
+    and config (`scripts/test-release-1.0-local.sh`:9). Each is a physical
     checkout, not a symlink (`sim-testnet/README.md`:1349-1351). Each is on a
     branch that tracks `origin/main`, or `origin/master` for glog and
-    userwireguard. Each is clean, with no tracked, staged or untracked
-    change, and at exactly its upstream's freshly fetched head
-    (`scripts/check-release-source-freeze.sh`:49-55,115-120,136-149). The
+    userwireguard, or `origin/go` for gvisor, a clone of
+    `github.com/urnetwork/gvisor`. Each is clean, with no tracked, staged or
+    untracked change, and at exactly its upstream's freshly fetched head
+    (`scripts/check-release-source-freeze.sh`:57-64,125-130,146-159). The
     script on `main` demands that exactness only of sn. For the others it
-    admits any commit reachable from the upstream (:150-161). Its Go module
+    admits any commit reachable from the upstream (:160-171). Its Go module
     inventory must equal its reviewed classification, and every live module
-    must be tidy (:170-195).
+    must be tidy (:180-205). gvisor's module is inventoried, not tidied.
   - **The vault and xops checkouts** are among them. The source freeze
     refuses a missing one: "release repository is missing or not a Git
-    checkout" (`scripts/check-release-source-freeze.sh`:103-108). The lock is
+    checkout" (`scripts/check-release-source-freeze.sh`:113-118). The lock is
     observed over both (`sim-testnet/README.md`:1276-1283), and "A fresh
     git-crypt vault clone contains ciphertext until unlocked" (:1351-1352).
     The `xops` job runs that repository's infrastructure tests
