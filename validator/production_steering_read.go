@@ -81,6 +81,9 @@ func retryableProductionSteeringReadBounded(err error, transportOrigin bool, dep
 		}
 		return cause.IsTimeout || cause.IsTemporary
 	case *attemptStreamHttpReadError:
+		if cause.interrupted {
+			return true
+		}
 		return retryableProductionSteeringReadBounded(cause.cause, true, depth+1, remaining)
 	case *chainRpcMissingResponseError:
 		return retryableProductionSteeringReadBounded(cause.cause, true, depth+1, remaining)

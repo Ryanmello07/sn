@@ -38,12 +38,11 @@ type releaseIntentV2Owner struct {
 }
 
 type releaseIntentV2Read struct {
-	file         *steeringIntentFile
-	custody      *releaseEvidenceV2StartupReferences
-	encoded      []byte
-	lastArtifact *ReleaseMeasurementArtifact
-	lastBytes    []byte
-	lastOptions  ReleaseMeasurementV2Options
+	file        *steeringIntentFile
+	custody     *releaseEvidenceV2StartupReferences
+	encoded     []byte
+	lastBytes   []byte
+	lastOptions ReleaseMeasurementV2Options
 }
 
 const releaseIntentV2Marker = ".steering-intents-v2-pending"
@@ -157,8 +156,11 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 // An entry this process already verified completely keeps its native, source,
 // envelope and replay verdict. Its retained files are still read through the
 // same custody and must still match the hashes its unchanged bytes pin, and
-// its local source commitment and hotkey are checked again.
-func (self *IntentStore) readVerifiedMeasurementV2(ctx context.Context, custody *releaseEvidenceV2StartupReferences, intent *SteeringIntent) (*ReleaseMeasurementArtifact, []byte, error) {
+// its local source commitment and hotkey are checked again. The artifact is
+// decoded only when the caller needs its fields: the hash already pins the
+// exact bytes that decoded before, and decoding every retained artifact on
+// every steering poll costs time that grows with the whole history.
+func (self *IntentStore) readVerifiedMeasurementV2(ctx context.Context, custody *releaseEvidenceV2StartupReferences, intent *SteeringIntent, decode bool) (*ReleaseMeasurementArtifact, []byte, error) {
 	runtime, bounds := self.v2.runtime, self.v2.runtime.cfg.EvidenceV2.Bounds
 	measurement, err := runtime.history.readContentReference(ctx, custody, intent.MeasurementArtifactPath, intent.MeasurementArtifactHash, intent.MeasurementArtifactSize, bounds.MaxArtifactBytes, false)
 	if err != nil {
@@ -167,9 +169,11 @@ func (self *IntentStore) readVerifiedMeasurementV2(ctx context.Context, custody 
 	if _, err := runtime.history.readContentReference(ctx, custody, intent.MeasurementEnvelopePath, intent.MeasurementEnvelopeHash, intent.MeasurementEnvelopeSize, bounds.MaxControlBytes, true); err != nil {
 		return nil, nil, err
 	}
-	artifact, err := decodeReleaseMeasurementV2Bytes(ctx, measurement, bounds.MaxArtifactBytes, bounds.MaxOperators)
-	if err != nil {
-		return nil, nil, err
+	var artifact *ReleaseMeasurementArtifact
+	if decode {
+		if artifact, err = decodeReleaseMeasurementV2Bytes(ctx, measurement, bounds.MaxArtifactBytes, bounds.MaxOperators); err != nil {
+			return nil, nil, err
+		}
 	}
 	sourceHash, err := releaseIntentNativeSourceHash(ctx, measurement, intent)
 	if err != nil {
@@ -277,7 +281,9 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 		var options ReleaseMeasurementV2Options
 		optionsKnown := true
 		if index < reusable {
-			artifact, measurement, err = self.readVerifiedMeasurementV2(ctx, result.custody, intent)
+			// Only the first entry's artifact is consulted below, for its
+			// absent predecessor; reused lineage needs just the bytes.
+			artifact, measurement, err = self.readVerifiedMeasurementV2(ctx, result.custody, intent, index == 0)
 			options, optionsKnown = self.v2.verified.optionsAt(index)
 		} else {
 			artifact, _, measurement, options, err = self.readMeasurementV2(ctx, result.custody, intent)
@@ -310,7 +316,7 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 		if optionsKnown && index >= len(all)-releaseIntentV2VerifiedTail {
 			verifiedOptions[index] = options
 		}
-		previous, result.lastArtifact, result.lastBytes, result.lastOptions = intent, artifact, measurement, options
+		previous, result.lastBytes, result.lastOptions = intent, measurement, options
 	}
 	if err := errors.Join(result.custody.check(), ctx.Err()); err != nil {
 		return result, err

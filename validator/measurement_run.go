@@ -235,7 +235,7 @@ func (self measurementRunSettings) run(parent context.Context, output io.Writer)
 	platform := connect.NewPlatformTransportWithDefaults(ctx, strategy, identity.RouteManager(), self.connectUrl, &connect.ClientAuth{ByJwt: token, InstanceId: instanceId, AppVersion: RequireVersion()})
 	var durableCredential atomic.Value
 	durableCredential.Store(token)
-	transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: self.apiUrl, ConnectUrl: self.connectUrl, ByClientJwt: func() string { return durableCredential.Load().(string) }, SourceClientId: id})
+	transport := NewTunnelTransport(ctx, strategy, TunnelTransportConfig{ApiUrl: self.apiUrl, ConnectUrl: self.connectUrl, ByClientJwt: func() string { return durableCredential.Load().(string) }, SourceClientId: id, Clients: self.concurrency})
 	callbacks := &measurementAuthenticationCallbacks{owner: owner, original: token, cancel: cancel, afterPersist: hooks.afterRefreshPersisted, publish: func(refreshed string) {
 		durableCredential.Store(refreshed)
 		outOfBand.SetByJwt(refreshed)
