@@ -45,6 +45,11 @@ type providerAttemptSourceTestFixture struct {
 	reads        int
 }
 
+// providerAttemptSourceTestReceiptTrailEdit, when not nil, edits the trail a
+// test receipt carries before the test server signs it, as a Server with
+// other timestamps would have issued it.
+var providerAttemptSourceTestReceiptTrailEdit func(trail *protocol.ProviderAttemptReceiptTrail)
+
 // The transport returns a raw ASSIGN/FINAL, while the actual Server retains
 // its typed cached-response envelope inside the signed original receipt.
 func providerAttemptSourceTestReceipt(t *testing.T, seal *attemptCutV2SealTestFixture, scope protocol.ProviderAttemptReceiptScope, request ProviderAttemptRequestRecord, response []byte) protocol.ProviderAttemptReceipt {
@@ -93,6 +98,9 @@ func providerAttemptSourceTestReceipt(t *testing.T, seal *attemptCutV2SealTestFi
 		trail.Pending = &protocol.ProviderAttemptReceiptHop{ClientId: state.pending, NetworkId: &network, AssignedMs: trail.ActivityMs, AssignN: len(seal.server.providers) - len(state.confirmed)}
 	}
 	seal.server.mu.Unlock()
+	if edit := providerAttemptSourceTestReceiptTrailEdit; edit != nil {
+		edit(trail)
+	}
 	body := protocol.ProviderAttemptReceiptBody{Schema: protocol.ProviderAttemptReceiptDomain, Scope: &scope, PreviousDepth: len(trail.Hops) - 1, RecoveryMs: trail.ActivityMs, RequestMessage: request.Message, RequestSignature: request.RequestSignature, ResponseJson: string(cachedRaw), Trail: trail}
 	raw, err := json.Marshal(body)
 	if err != nil {
