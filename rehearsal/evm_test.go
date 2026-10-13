@@ -148,11 +148,18 @@ func (self artifact) unpack(t *testing.T, method string, data []byte) []any {
 // eth_estimateGas.
 func (self *node) transact(t *testing.T, from evmKey, to *common.Address, value *big.Int, data []byte, gas uint64) *gethtypes.Receipt {
 	t.Helper()
-	nonce, err := self.eth.NonceAt(self.ctx, from.address, nil)
+	price, err := self.eth.SuggestGasPrice(self.ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	price, err := self.eth.SuggestGasPrice(self.ctx)
+	return self.sendSigned(t, self.sign(t, from, to, value, data, gas, price))
+}
+
+// sign signs a transaction at from's next nonce without sending it; gas zero
+// takes eth_estimateGas.
+func (self *node) sign(t *testing.T, from evmKey, to *common.Address, value *big.Int, data []byte, gas uint64, price *big.Int) *gethtypes.Transaction {
+	t.Helper()
+	nonce, err := self.eth.NonceAt(self.ctx, from.address, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +173,13 @@ func (self *node) transact(t *testing.T, from evmKey, to *common.Address, value 
 	if err != nil {
 		t.Fatal(err)
 	}
+	return tx
+}
+
+// sendSigned sends a signed transaction, seals it into its own block and
+// returns its receipt, which may report a failure.
+func (self *node) sendSigned(t *testing.T, tx *gethtypes.Transaction) *gethtypes.Receipt {
+	t.Helper()
 	if err := self.eth.SendTransaction(self.ctx, tx); err != nil {
 		t.Fatalf("send transaction: %v", err)
 	}
