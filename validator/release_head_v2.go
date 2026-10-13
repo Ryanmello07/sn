@@ -151,7 +151,7 @@ func (self *ReleaseSteerer) gatherHeadV2(ctx context.Context, snapshot *ReleaseS
 	hotkeyUIDs = maps.Clone(hotkeyUIDs)
 	// Keep deployment routing and the genuine transport fixed across every
 	// synchronous client-key callback. The original owner still joins Close.
-	chain := &ChainClient{client: self.chain.client, coordinator: self.chain.coordinator, chainId: new(big.Int).Set(self.chain.chainId), contractAddr: self.chain.contractAddr, release: true}
+	chain := &ChainClient{client: self.chain.client, coordinator: self.chain.coordinator, chainId: new(big.Int).Set(self.chain.chainId), contractAddr: self.chain.contractAddr, release: true, readRetryHooks: self.chain.readRetryHooks}
 	// The actual domain/configuration and file owner cannot change during
 	// a synchronous current-key/HTTP/RPC callback.
 	keyConfig := *self.cfg
