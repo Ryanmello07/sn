@@ -55,7 +55,8 @@ func adoptionDocumentCommand(t *testing.T, text string, variables map[string]str
 // approval-envelope lines are, word for word, the commands of the shared round,
 // which runs them through the real dispatcher in the page's order and has the
 // producer loader admit the result. Its digest check is the derivation
-// approval-plan prints, and its last command is the restart.
+// approval-plan prints, and its last command is the restart. approval-plan
+// refuses the page's line when a digest lacks its sha256: prefix.
 func TestSettlementV2AdoptionDocumentIsTheVA6Sequence(t *testing.T) {
 	blocks := adoptionDocumentBlocks(t)
 	languages := []string{}
@@ -115,6 +116,10 @@ func TestSettlementV2AdoptionDocumentIsTheVA6Sequence(t *testing.T) {
 	unchanged.ConfigHash = after.Approval.ConfigHash
 	if !slices.Equal(ran, []int{1, 3}) || !reflect.DeepEqual(unchanged, after.Approval) || adopted.SettlementV2 == nil || *adopted.SettlementV2 != block || len(adopted.ProductionAuthorityHistory) != 1 {
 		t.Fatalf("page commands ran as blocks %v or adopted another config", ran)
+	}
+	variables["ADOPTED_CONFIG_SHA256"], variables["ADOPTED_APPROVAL"] = strings.TrimPrefix(variables["ADOPTED_CONFIG_SHA256"], "sha256:"), filepath.Join(f.directory, "bare-digest-approval.json")
+	if code, _, diagnostic := treasuryApprovalTestRun(t, adoptionDocumentCommand(t, blocks[1][1], variables)[2:]...); code == 0 || !strings.Contains(diagnostic, "treasury approval-plan requires") {
+		t.Fatalf("approval-plan took a config digest without its sha256: prefix: %d %s", code, diagnostic)
 	}
 	_, check, found := strings.Cut(treasuryApprovalDerivation, "Check: ")
 	if !found || strings.TrimSpace(blocks[2][1]) != strings.Replace(check, "APPROVAL_FILE", `"$ADOPTED_APPROVAL"`, 1) {

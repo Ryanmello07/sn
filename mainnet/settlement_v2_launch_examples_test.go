@@ -184,7 +184,8 @@ func (self *launchPhase) sign(t *testing.T) (string, string) {
 // SV-8, step 8.3: the unsigned v2 phase example, filled, passes preview with
 // exactly the owner inputs as its review values, and once signed passes plan
 // with the same plan hash. Preview refuses the unfilled example and every
-// single placeholder left in it, so none can reach the approval.
+// single placeholder left in it, so none can reach the approval, and it
+// refuses a draft that is not private to its owner (umask 077).
 func TestSettlementV2LaunchPhaseConfigExample(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
@@ -224,6 +225,13 @@ func TestSettlementV2LaunchPhaseConfigExample(t *testing.T) {
 			t.Errorf("preview admitted the example with <%s> unfilled: %d %s", key, code, diagnostic)
 		}
 	}
+	draft := p.write(t, "")
+	if err := os.Chmod(draft, 0640); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, diagnostic := command("preview", "--action", "vault2-create", "--config", draft); code != 2 || !strings.Contains(diagnostic, "bootstrap root input is not a bounded private regular file") {
+		t.Fatalf("preview read a draft that its group can read: %d %s", code, diagnostic)
+	}
 	if err := os.Mkdir(filepath.Join(root, "run-v2"), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +249,9 @@ func TestSettlementV2LaunchPhaseConfigExample(t *testing.T) {
 // a synthetic mount, pass storage-prepare plan, which stages one empty
 // mainnet-evm-action snapshot for each v2 journal in the phase example's run
 // directory. Applied, its declaration lets offline bootstrap-contracts apply
-// open vault2's journal from the signed phase example.
+// open vault2's journal from the signed phase example. Plan refuses a staging
+// directory that is not private, an ancestor its group can write (umask 077
+// gives neither) and a request digest without its sha256: prefix.
 func TestSettlementV2LaunchCustodyRequestExample(t *testing.T) {
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0700); err != nil {
@@ -275,6 +285,25 @@ func TestSettlementV2LaunchCustodyRequestExample(t *testing.T) {
 			t.Fatalf("storage-prepare %s refused the example: %d %s", args[0], code, stderr.String())
 		}
 		return stdout.Bytes()
+	}
+	for _, refusal := range []struct {
+		path, want, digest string
+		mode               os.FileMode
+	}{
+		{path: filepath.Join(parent, "run-v2-staging"), mode: 0750, digest: durablefixture.Digest(request), want: "preparation path must be private and owned by the applying identity"},
+		{path: parent, mode: 0770, digest: durablefixture.Digest(request), want: "is not a protected physical object"},
+		{path: parent, mode: 0700, digest: strings.TrimPrefix(durablefixture.Digest(request), "sha256:"), want: "request path and exact hash are required"},
+	} {
+		if err := os.Chmod(refusal.path, refusal.mode); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr bytes.Buffer
+		if code := runMain(physical.Context, []string{"storage-prepare", "plan", "--request", requestPath, "--request-sha256", refusal.digest}, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), refusal.want) {
+			t.Fatalf("storage-prepare plan with %s at %o: %d %s", refusal.path, refusal.mode, code, stderr.String())
+		}
+		if err := os.Chmod(refusal.path, 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	planned := prepare("plan", "--request", requestPath, "--request-sha256", durablefixture.Digest(request))
 	var plan durablevolume.PreparationPlan

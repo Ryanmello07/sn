@@ -9,6 +9,13 @@ where a number belongs: write numbers bare. Paths follow the runbook's
 `/secure/ur-mainnet` layout. A test fills each file's placeholders with
 synthetic values and runs it through the real parser.
 
+Two rules hold for every file here. Work under `umask 077`:
+`bootstrap-contracts` refuses an input that its group or others can read, and
+`storage-prepare` refuses a directory that is not its owner's alone and an
+ancestor that group or others can write. And a value called `sha256`, in a
+file or on a `--…-sha256` flag, is `sha256:` followed by the 64 lowercase hex
+digits; a bare digest is refused.
+
 | File | Step | Owner inputs | Test |
 | --- | --- | --- | --- |
 | [settlement-v2.unsigned.example.json](settlement-v2.unsigned.example.json) | 8.3 | O2 to O12 | `TestSettlementV2LaunchPhaseConfigExample` (SV-8) |
@@ -42,7 +49,8 @@ and `settlement_v2_adoption_test.go`.
   `<O7-custody-id>`. The gas limits are BOOTSTRAP-CONTRACTS.md's starting
   limits, `maximum_attempts` is 8 and the run directory
   `/secure/ur-mainnet/run-v2`.
-- `<release-file-sha256>`: the `sha256:` of step 8.1's release file.
+- `<release-file-sha256>`: `sha256:` and the SHA-256 of step 8.1's release
+  file.
 - `<approval-public-key-ed25519>`: the approval key's public key, which
   LAUNCH.md:375 names.
 
@@ -72,12 +80,12 @@ the approval is signed.
 - `<mount-path>`, `<filesystem-uuid>` and `<filesystem-type>`: the mount that
   holds `/secure/ur-mainnet` (`findmnt -no TARGET,UUID,FSTYPE --target
   /secure/ur-mainnet`), ext4, xfs or btrfs.
-- Before `plan`, create `run-v2` (empty), `run-v2-custody` and
-  `run-v2-staging` under `/secure/ur-mainnet`, each mode 0700, and write the
-  fence as `run-v2-custody/former-writer.json`. `<root-inode>` is the inode of
-  `run-v2` (`stat -c %i`). `<fence-evidence>` says why no earlier writer
+- Before `plan`, under `umask 077`, create `run-v2` (empty), `run-v2-custody`
+  and `run-v2-staging` under `/secure/ur-mainnet`, each mode 0700, and write
+  the fence as `run-v2-custody/former-writer.json`. `<root-inode>` is the inode
+  of `run-v2` (`stat -c %i`). `<fence-evidence>` says why no earlier writer
   exists; the parser cannot check that text.
-- `<fence-file-sha256>`: the fence file's `sha256:`.
+- `<fence-file-sha256>`: `sha256:` and the fence file's SHA-256.
 
 `root_path` is the phase config's `run_directory`, and the owners are its six
 journals. Keep the request outside `run-v2`, for example as
@@ -94,7 +102,8 @@ run `systemctl daemon-reload` and restart the validator (step 10.5). The
 second `ExecStart` is the command line the repository renders for the unit,
 naming the adopted config (O15): `<validator-binary>`, `<adopted-config>`,
 `<progress-file>`, `<validator-declaration>` and
-`<validator-declaration-sha256>`. `<O10-auditor-key-file>` is the absolute
+`<validator-declaration-sha256>`, which keeps its `sha256:` prefix.
+`<O10-auditor-key-file>` is the absolute
 path of the auditor's hex secp256k1 key, whose address the initializer names.
 Root owns it, its group is the service's GID and its mode 0440, in a directory
 the service cannot write, as VALIDATOR-ACTIVATION.md:183-184 keeps the

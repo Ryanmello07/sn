@@ -5,7 +5,9 @@ deployed v2 contracts under a re-signed treasury approval. It needs no new
 tooling. The sequence is the one
 `TestTreasuryApprovalPlanResignsSettlementV2Adoption` (VA-6) runs, and
 `TestSettlementV2AdoptionDocumentIsTheVA6Sequence` holds this page to it.
-Every path is absolute. Adoption is one-way: once adopted, the block can be
+Every path is absolute, and every file is written under `umask 077`. On a
+command line each `…_SHA256` is `sha256:` followed by the file's SHA-256; a
+bare digest is refused. Adoption is one-way: once adopted, the block can be
 neither re-pointed nor removed.
 
 ## 1. Write the adopted config
@@ -32,7 +34,8 @@ treasury_approval:
 - The history entry is appended after any the config already has. It is the
   running config's authority bundle, which `validator run` retains in its
   `state_dir` as `owner-recycle-production-authority-sha256:<hex>.json`: give
-  its path, its size and `0x<hex>`.
+  its path, its size and `0x<hex>`, the form the config's own `sha256` fields
+  take.
 - `treasury_approval` keeps its signer and names a new envelope path. Step 4
   supplies the envelope's size and hash.
 
@@ -46,8 +49,8 @@ sn-mainnet treasury approval-plan --input "$TREASURY_INPUT" \
 ```
 
 The input and the policy plan are the files the live approval was drafted
-from, unchanged (O14). Each `…_SHA256` is `sha256:` and the file's SHA-256. The
-command writes the approval file and prints its `signing_digest`.
+from, unchanged (O14). The command writes the approval file and prints its
+`signing_digest`.
 
 ## 3. Sign the digest
 
