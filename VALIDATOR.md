@@ -267,8 +267,9 @@ Request body:
 ```
 
 Server:
-1. Resolve source IP → hop `client_id` `A` (§8.1). If unresolved → **poison path**
-   (§9), but proceed indistinguishably.
+1. Resolve source IP → hop `client_id` `A` (§8.1). If unresolved, answer the first two
+   attempts of this signed SEED as **retryable** (`421`, §8.2) with no trail; after
+   that → **poison path** (§9), but proceed indistinguishably.
 2. Verify `seed_sig` is a valid SEED signature under `vpk` (Appendix A.1).
 3. Check `vpk`'s `client_id` is allowed to verify and is **not** `A` (a validator
    may not seed through itself). Apply seed rate limits (§9).
@@ -299,7 +300,9 @@ Server (all checks must pass; any failure → §4.4):
 4. Verify `extend_sig` is a valid EXTEND under the trail's `vpk` over the canonical
    path of those `client_id`s (Appendix A.2).
 5. **Check `C == pending_hop`** — the request truly egressed from the assigned
-   provider. (This is "caller `client_id` matches the tail.")
+   provider. (This is "caller `client_id` matches the tail.") If the source resolved
+   to no provider, answer the first two such attempts of the step as **retryable**
+   (`421`, §8.2), changing nothing; the third fails the step (§4.4).
 6. Confirm the hop: stamp `t_k = server.NowUtc()`, move pending → confirmed,
    **record `latency = t_k − assigned_at` for provider `C` (§7)**.
 7. If `depth == M`: produce FINAL, mark `complete`, persist & publish proof (§3.3),
@@ -316,7 +319,8 @@ response per trail). Do not double-count latency or advance depth.
 ### 4.4 Failure / expiry
 
 - If any EXTEND check fails, or the pending hop is not confirmed within `StepTimeout`
-  `T`, the step **fails**. Record the failure against the **pending next hop**
+  `T`, the step **fails**. The exception is a source that resolves to no provider:
+  its first two attempts are retryable (§8.2). Record the failure against the **pending next hop**
   (the provider that was never reached) — see §7.2 — and move the trail to
   `expired`. Do not publish.
 - Failures and expiries are the raw material for the statistics. They are inferred
@@ -334,7 +338,7 @@ without replacement within the trail**, from the eligible set:
 
 ```
 eligible(trail) = { c : c has an active ProvideMode }
-               ∩ { c : c has a known egress IP, at most one per family (§8.1, §8.2) }
+               ∩ { c : c has a family whose one live egress attributes to c (§8.1, §8.2) }
                ∩ { c : c holds an eligibility token (§5.3) }
                \ { hops already in trail }  \ { validator's own client_id }
 ```
@@ -649,11 +653,12 @@ Only providers satisfying the one-provider-⇄-one-egress-IP-per-family invarian
 are present in this index; everyone else is absent and therefore ineligible. Do the
 lookup in **constant-ish time** regardless of hit/miss (§9).
 
-As built, the forward entry `verify_egress_v2_<hash>` names the one provider egressing
-from an exact address (keyed hash, never the raw IP), and the reverse hash
-`{vce3_<clientId>}` holds one field per live address of that provider:
-`<address hash>_<family>_<prefix hash>`. A source resolves when the forward entry names
-the provider and the source is the only live address of its family in the reverse hash.
+As built, an egress address is an exact IPv4 address or an IPv6 **/64** (§8.2). The
+forward entry `verify_egress_v2_<hash>` names the one provider egressing from it (keyed
+hash, never the raw IP), and the reverse hash `{vce4_<clientId>}` holds one field per
+live address of that provider: `<address hash>_<family>`. A source resolves when the
+forward entry names the provider and the source is the only live address of its family
+in the reverse hash.
 
 **Egress-IP-hash on the trail (head score, D27).** Two granularities, do not conflate:
 the reverse index above resolves a hop to a `client_id` at the **exact egress IP**
@@ -665,10 +670,13 @@ the reverse index above resolves a hop to a `client_id` at the **exact egress IP
 their own trails**. The prefix hash never exposes the raw exit IP, and coarsening to a
 prefix is what makes IPs *shareable*: two distinct exact exit IPs in the same prefix (two
 `client_id`s, possibly two fleets) collapse to one hash — counted **split** across the
-fleets claiming it (§11.1), so co-located supply is not double-counted. A provider with
-an egress in each family records **one** hash: its IPv4 prefix while it has exactly one
-live IPv4 egress, from whichever family the hop landed on, else the hop's own prefix. A
-second family does not double a provider's head score.
+fleets claiming it (§11.1), so co-located supply is not double-counted. A provider
+records **one** hash per scoring window, the settlement epoch (a UTC hour when the
+server's epoch mirror is unknown): every hop it confirms in the window records the hash
+of its first confirmed hop's source, whichever family later hops land on and however its
+IPv4 transport closes, reconnects or overlaps a new lease. A second family does not
+double a provider's head score. The seed hop, which never scores (§7.6), records its own
+source's hash.
 
 ### 8.2 Eligibility invariant: one provider ⇄ one egress IP per family
 
@@ -676,12 +684,18 @@ The hop lookup must be unambiguous, so eligibility enforces a **bijection** betw
 eligible providers and egress IPs within each address family. We do not attempt to
 disambiguate shared egress — we exclude.
 
-- **Exclude any `client_id` that currently has more than one egress IP in one family.**
-  A provider may hold one live IPv4 and one live IPv6 egress (connect `IPV6.md` A runs
-  one transport per family), and a hop resolves when its source is its family's only
-  live egress for that provider. A provider with two live egress IPs of one family is
-  not eligible to be sampled (§5.1) and neither of them resolves, until it is back to
-  one; its egress in the other family still resolves. (CGNAT-style ambiguity is
+- **An IPv6 egress is its /64.** A host's temporary IPv6 addresses rotate inside its
+  /64 (RFC 8981), so its later connections leave from another address than its
+  transport's. The /64 is one egress, as an IPv4 address behind NAT is: two providers in
+  one /64 contend exactly as two behind one IPv4 do.
+- **Refuse a family with more than one egress IP.** A provider may hold one live IPv4
+  and one live IPv6 egress (connect `IPV6.md` A runs one transport per family), and a
+  hop resolves when its source is its family's only live egress for that provider. Of a
+  family with two live egress IPs (two IPv4 addresses, two IPv6 /64s) neither resolves.
+  The provider stays eligible (§5.1) while another family attributes to it: a hop that
+  lands on a shared, ambiguous or refused family is answered as retryable (below) and
+  resent on the other. A provider with a live egress attributed to *another* client is
+  not eligible, as a hop from it is refused as a mismatch. (CGNAT-style ambiguity is
   explicitly a non-goal.)
 - **The reverse index must be unique.** If an egress IP is ever observed backing
   more than one `client_id`, that IP resolves to *no* provider — drop it, never guess.
@@ -697,24 +711,49 @@ disambiguate shared egress — we exclude.
 a trail (its SEED and EXTEND posts) alternate the family their tunnel tries first, and each
 trail starts on the family the trail before it did not, the first trail on IPv4. Over any
 two consecutive trails every depth therefore tries each family first once, whatever `M`.
-A retry of a hop keeps the hop's family. Each request falls back to the other family when
+A retry of a hop keeps the hop's family, except after a `421` (below), which the validator
+resends with the other family first. Each request falls back to the other family when
 the first fails (connect `IPV6.md` C7). The source IP is the provider's egress on the
 family that landed, and it resolves when it is that family's only live egress for the
-provider. A request that lands on a family the provider has no live indexed egress in
-resolves to no provider, so a SEED is poisoned and an EXTEND fails
-(`source-egress-unresolved`).
+provider. A request whose source resolves to no provider (a family the provider has no
+live indexed egress in, or one that is shared or ambiguous) is answered as retryable:
+
+- **Wire.** `421 Misdirected Request`, `Content-Type: text/plain; charset=utf-8`, body
+  `source-egress-unresolved` and a newline. No other `/verify` answer uses `421`.
+- **Nothing changed.** A SEED creates no trail and takes no active-trail slot; an
+  EXTEND leaves the trail active with the same pending hop; nothing is charged to or
+  credited to the provider, or recorded as its hop. The caller resends the identical
+  body through the same hop, its tunnel trying the other family first, within the step.
+- **When.** An EXTEND is answered so only once it is otherwise valid (trail active,
+  step not expired, path matching, `extend_sig` valid), a SEED after `seed_sig` is
+  verified. A source that resolves to *another* provider still fails the step.
+- **Cap.** Each step answers so at most twice: per trail and depth for an EXTEND, per
+  signed SEED (its `seed_sig`) for a SEED. The third unattributed attempt gets the old
+  answer: a SEED is poisoned (§9), an EXTEND fails the trail (`400 trail failed`, reason
+  `source-egress-unresolved`). A validator sends a step at most three times.
+- **Metering.** Every attempt counts against the seed and EXTEND meters (§9). The
+  validator spaces every SEED attempt, these retries included, across all its workers at
+  three quarters of the per-`vpk` hard limit, so the retries fit inside its seed pace
+  rather than adding to it.
 
 **A second family does not double a provider's budgets.** Seeds and EXTENDs from a
 resolved source also count against per-provider meters held to the same hard limits
 (`hard_seed_per_minute_per_source`, `hard_extend_per_minute_per_source`), so the two
 families' source IPs share one budget; the concurrent-trail cap
 (`hard_active_trails_per_source`) counts per `vpk`, whatever the source; and the head
-score's egress-IP-hash is one per provider (§8.1).
+score's egress-IP-hash is one per provider per window (§8.1).
 
-**Rolling deploy.** The server's reverse index moved from v2 (bare address hashes) to v3
-(fields carry the family). Writers feed only v3; readers also read v2, whose entries
-lapse one egress TTL after the last v2 writer stops. A v2 entry's family is unknown, so
-it counts against both families until it lapses.
+**Rolling deploy.** The server's reverse index moved from v2 (bare exact-address
+hashes) to v4 (`<address hash>_<family>`, an IPv6 address hashed as its /64; the v3
+layout never shipped). Writers feed only v4. Readers also read v2 under its own rule,
+the client's one live v2 address, looking an IPv6 source up under its v2 exact-address
+hash too; the two versions are judged apart. v2 entries lapse one egress TTL after the
+last v2 writer stops, and withdrawals (proxy release, reaping) clear them before that.
+**Deploy order:** the API and the taskworker first (readers of both versions), then
+connect (the writers), then the validators (which handle the retryable answer).
+**Rollback order:** connect first, so the writers return to v2 while the readers still
+read it, then the API and the taskworker; v4 entries left behind lapse within one egress
+TTL.
 
 > **Bijection (attribution) vs. splitting (head score) — no contradiction.** The
 > exact-IP bijection here keeps **hop attribution** unambiguous: one exact egress IP ⇄
@@ -746,7 +785,14 @@ it counts against both families until it lapses.
 - **DoS bound.** Carrying poison trails to depth `M` costs server state, so rate-
   limit SEEDs per source IP and per `vpk` (Redis `INCR`+`EXPIRE`,
   `transport_rate_limit.go:124`), and optionally require a small proof-of-work on
-  SEED. Cap concurrent active trails per `vpk`.
+  SEED. Cap concurrent active trails per `vpk`. A resolved source also counts against
+  its provider (§8.2); an unknown trail's EXTEND does the same metering whether or not
+  its source resolves.
+- **The retryable answer reveals resolution.** An unresolved source's first two
+  attempts of a step are answered `421` instead of being poisoned or failed (§8.2), so
+  a caller learns whether its source resolves. This is the cost of retrying on the
+  other family (owner decision, 2026-10-13); the cap bounds it to two answers per step,
+  and an EXTEND gets it only with a valid signature for that step.
 
 ---
 
