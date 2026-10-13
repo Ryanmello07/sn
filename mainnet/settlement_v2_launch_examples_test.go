@@ -1,5 +1,5 @@
-// The settlement v2 launch examples (VERSION2-LAUNCH.md steps 8.2 and 8.3),
-// their placeholders filled with synthetic values, through the real
+// The settlement v2 launch examples (VERSION2-LAUNCH.md steps 8.2, 8.3 and
+// 10), their placeholders filled with synthetic values, through the real
 // commands. Nothing here signs a transaction or opens a route.
 package main
 
@@ -310,5 +310,39 @@ func TestSettlementV2LaunchCustodyRequestExample(t *testing.T) {
 	var opened evmCreateResult
 	if code != 0 || json.Unmarshal(stdout.Bytes(), &opened) != nil || opened.Status != "signature-awaiting-import" || opened.Vault2Address != crypto.CreateAddress(p.deployer, p.nonce).Hex() {
 		t.Fatalf("prepared custody did not open vault2's journal: %d %+v %s", code, opened, stderr.String())
+	}
+}
+
+// VA-3, step 10: the auditor drop-in clears the unit's ExecStart and sets the
+// command line the repository renders for the validator unit, naming the
+// adopted config, plus exactly --ledger_auditor_key_file.
+func TestSettlementV2LaunchAuditorDropInExample(t *testing.T) {
+	raw, err := os.ReadFile("validator-ledger-auditor.example.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sections, starts []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		key, value, _ := strings.Cut(line, "=")
+		switch {
+		case line == "" || strings.HasPrefix(line, "#"):
+		case strings.HasPrefix(line, "["):
+			sections = append(sections, line)
+		case key == "ExecStart":
+			starts = append(starts, value)
+		default:
+			t.Fatalf("drop-in sets %s", line)
+		}
+	}
+	unit := repairValidatorUnit{Binary: planFileReference{Path: "<validator-binary>"}, Config: planFileReference{Path: "<adopted-config>"}, ProgressFile: "<progress-file>",
+		DurableVolumes: &durablevolume.Reference{Path: "<validator-declaration>", Sha256: "<validator-declaration-sha256>"}}
+	rendered := ""
+	for _, line := range strings.Split(string(unit.render()), "\n") {
+		if value, found := strings.CutPrefix(line, "ExecStart="); found {
+			rendered = value
+		}
+	}
+	if !slices.Equal(sections, []string{"[Service]"}) || !slices.Equal(starts, []string{"", rendered + " --ledger_auditor_key_file=<O10-auditor-key-file>"}) {
+		t.Fatalf("drop-in %q %q differs from the rendered %q plus the auditor flag", sections, starts, rendered)
 	}
 }
