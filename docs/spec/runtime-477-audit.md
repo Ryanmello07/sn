@@ -1,15 +1,15 @@
 # Runtime477 mainnet compatibility review
 
 This is a source/artifact and consumed-interface review of runtime 477, which
-Bittensor mainnet installed on 2026-10-12, and the record of settlement v2's
-runtime rehearsal on it (`VERSION2-FINAL.md` §14 gate 2). The SHA-256 of this
-file's exact committed bytes is the `runtime_review_hash` that a validator,
-treasury or fleet approval may bind. The record is evidence for that approver.
-It approves no genesis, finality checkpoint, signing, deployment or
-activation, and grants no permission to submit a transaction. No transaction
-was signed or submitted to mainnet while preparing it. The
-[runtime475 review](runtime-475-audit.md) and its approvals remain unchanged;
-they do not cover 477.
+Bittensor mainnet installed on 2026-10-12 and replaced with 478 on 2026-10-13,
+and the record of settlement v2's runtime rehearsal on it (`VERSION2-FINAL.md`
+§14 gate 2). The SHA-256 of this file's exact committed bytes is the
+`runtime_review_hash` that a validator, treasury or fleet approval may bind.
+The record is evidence for that approver. It approves no genesis, finality
+checkpoint, signing, deployment or activation, and grants no permission to
+submit a transaction. No transaction was signed or submitted to mainnet while
+preparing it. The [runtime475 review](runtime-475-audit.md) and its approvals
+remain unchanged; they do not cover 477.
 
 ## Exact provenance
 
@@ -36,7 +36,14 @@ pins, and 477 from 9,267,632,
 `0x1e7c6c363fa43170964314e240cc28ecfa7385e894472bec383089896bd44629`
 (14:10:12Z), is the first block executed by 477. No 476 artifact reached
 mainnet; spec 476 is the tag `v476` (`d6dd557a`, PR #3217), an ancestor of
-v477.
+v477. The version changed again 140 blocks after the capture above: the
+archive holds 477 through 9,276,924,
+`0x9470851129339e7b48605f91c0f0fcc665f08aae857d1add5b563e357ef580b8`, and 478
+from 9,276,925,
+`0xaf5cf4018b7d91b94a48f9904b5c1d453e94be0dcf686d4d42a7e508376cabb1`
+(2026-10-13T21:08:36Z), with code hash
+`0x7e722b3aa5c9192c98665a5d65fa91364bf9055e21fc90efce6d59bf4ef414e1`. This
+record therefore covers the runtime of blocks 9,267,632 through 9,276,924.
 
 The official [v477 release][release] (not a prerelease, created
 2026-10-08T21:13:47Z and published 2026-10-08T21:55:19Z by
@@ -321,7 +328,10 @@ transient write still survived a reverted call frame.
 ## SN consumers
 
 No interface that SN consumes changed its encoding. The 475 review's consumer
-table holds for 477 row by row, with these sources byte-identical to
+table holds for 477 row by row, with two differences in the sources it names:
+`staking/claim_root.rs` changed in the testnet weight above, and
+`pallets/admin-utils/src/lib.rs` in the two difficulty calls, which leaves the
+owner recycle call (19, 80) as it was. These sources are byte-identical to
 d1718c99: `subnets/weights.rs`, `coinbase/reveal_commits.rs`, `epoch/`,
 `staking/set_children.rs`, `staking/auto_parent.rs`,
 `staking/decrease_take.rs`, `staking/increase_take.rs`,
@@ -369,34 +379,36 @@ This record does not establish:
   manifest names a mainnet proposal at block 9,276,607 with call hash
   `0x601d98fe0087a99cc12422e38a36f858bad06e7676dc3ec31e3022a05d209f5e`. At
   finalized block 9,276,829 (2026-10-13T20:49:24Z) the public RPC still
-  reported 477 and held that proposal pending with one approval. 478 sends the
-  staking precompile's `moveStake` and `transferStake` through a new dispatch
-  path that changes the gas limit they need, so gate 2 repeats on it.
+  reported 477 and held that proposal pending with one approval; mainnet
+  installed 478 in block 9,276,925. 478 sends the staking precompile's
+  `moveStake` and `transferStake` through a new dispatch path that changes the
+  gas limit they need, so gate 2 repeats on it.
 
 Raw captures were made locally and are not retained by this record, except
 the 477 metadata that the test fixture carries. Every input is public, and the
 listed sizes and digests identify each one.
 
-**Assessment.** The runtime that the public nodes report on mainnet since
-block 9,267,632 is byte-identical to the official v477 release asset, which
-the release's srtool digest attributes to exact source commit 5c6e83e2. The
-upgrade call that installed it carries the same bytes, and executing that Wasm
-reproduces the pinned metadata hash. From 475 to 477 the metadata changes in
-two items: the version, and two variants appended to the `Hyperparameter` enum
-inside one storage key. The encodings of every call, event, storage item,
-constant, runtime API version and signed extension that the validator, the
-contracts, the operator server and the launch tooling consume are unchanged.
-The staking and neuron precompiles, the staking, registration, collateral,
-emission and epoch sources, the EVM configuration, the gas schedule and the
-block limits are byte-identical to 475's. The behaviour changes are two
-difficulty setters that subnet owners may now call, their proxy filter group,
-and a root-claim weight that only testnet used. Settlement v2's exact bytecode
-passed R-1 to R-7 on a node built from this source, with the gas of 475.
-Gate 2 therefore holds for runtime 477, and only for it: a mainnet runtime of
-any other version repeats the gate. An approver who binds this record's
-SHA-256 accepts this artifact-identity basis without a source-to-Wasm rebuild,
-or must first obtain one. Independent finality, signing custody and activation
-remain separate gates.
+**Assessment.** The runtime that the public nodes report on mainnet from block
+9,267,632 through 9,276,924 is byte-identical to the official v477 release
+asset, which the release's srtool digest attributes to exact source commit
+5c6e83e2. The upgrade call that installed it carries the same bytes, and
+executing that Wasm reproduces the pinned metadata hash. From 475 to 477 the
+metadata changes in two items: the version, and two variants appended to the
+`Hyperparameter` enum inside one storage key. The encodings of every call,
+event, storage item, constant, runtime API version and signed extension that
+the validator, the contracts, the operator server and the launch tooling
+consume are unchanged. The staking and neuron precompiles, the stake-moving,
+registration, collateral, emission and epoch sources, the EVM configuration,
+the gas schedule and the block limits are byte-identical to 475's. The
+behaviour changes are two difficulty setters that subnet owners may now call,
+their proxy filter group, and a root-claim weight that only testnet used.
+Settlement v2's exact bytecode passed R-1 to R-7 on a node built from this
+source, with the gas of 475. Gate 2 therefore holds for runtime 477, and only
+for it: a mainnet runtime of any other version repeats the gate, as 478 now
+does. An approver who binds this record's SHA-256 accepts this
+artifact-identity basis without a source-to-Wasm rebuild, or must first obtain
+one. Independent finality, signing custody and activation remain separate
+gates.
 
 [release]: https://github.com/RaoFoundation/subtensor/releases/tag/v477
 [compare]: https://github.com/RaoFoundation/subtensor/compare/d1718c99c34cf96abbf2bf09c0e9e48b945c76f5...5c6e83e2f4936f257234f246957f75684c35227c
