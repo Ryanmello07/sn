@@ -1035,9 +1035,11 @@ and cumulative conviction by **summing finalized `Deposit` and `ConvictionAdded`
 NO's signed payout artifact for the previous epoch (`total_usage_bytes`, `total_users`), and
 reads the two‑component `rate(tier_n)` from the **signed policy's tier→rate schedule**
 (`WHITEPAPER.md` §7.3). The deposit must equal the artifact's usage priced at the NO's own
-tier; the weight prices the same usage at the conviction‑zero tier, so a NO that staked into
-a lower tier posts less α for the same usage and earns the same weight (the stake is a
-discount). Under the zero‑price launch mode (`zero_rate_action: equal_demand`, every rate 0)
+tier; the weight prices the same usage at the conviction‑zero tier, so below the per‑epoch cap a
+NO that staked into a lower tier posts less α for the same usage and earns the same weight (the
+stake is a discount). A capped NO's demand is truncated to `cap × rate(0) / rate(tier_n)` with one
+priced component, so at the cap a lower tier raises its weight. Under the zero‑price launch
+mode (`zero_rate_action: equal_demand`, every rate 0)
 no deposit is required or audited: each active NO's audit is recorded as `zero_price` /
 `zero_price_no_deposit_required` from chain state alone, every pool's implied demand is
 exactly 1, and `Q_n` alone steers the tail; the head, θ and the cede rule are unchanged.

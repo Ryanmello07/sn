@@ -115,7 +115,7 @@ const releaseRuntimeClientSelector = "^Test(DialChainContext|FinalizedHeadContex
 
 const releaseSyntheticEVMIdentitySelector = "^Test(WaitFinalized|EVMBlockIdentity|ClaimReceiptIdentity|FinalizedClaimReceipt|UncertainClaimRetryable|SyntheticEVM|EthEVMBlockReader|EVMFinality|FinalizedEVMHead|BoundFinalizedEVMHead|ReceiptRequiresCanonicalHashAndFinalizedHeight|ProducerGatePinsSyntheticEVMIdentityRegressions)"
 
-const releaseSemanticIntegritySelector = "^Test(FinalNative|FinalPublicNative|FinalSemanticFleetAudit|FinalPublicFleetAudit|FinalSemanticVault|FinalSemanticCycleConviction|FinalSemanticCoordinatorRuntime|FinalSemanticCoordinatorUpgrade|FinalClaimPaymentLedger|FinalSemanticReceiptPayload|PublicFinalSemantic|FinalSemanticPoolOperatorVersion|FinalSemanticEpochDeposit|FinalPublicChainVerificationRejectsV2ReceiptOnlyTranscript|FinalSemanticDishonestDepositReceiptPayload|FinalSemanticEvidenceBuildRenderAndArtifacts|FinalSemanticArtifactVerificationCache|FinalSemantic(CampaignArtifactReferences|ReplicatedEnvelope)|FinalSemanticFixture|FinalSemanticOriginalClosure|FinalSemanticArtifactDeploymentAdmission|FinalAttemptFixtureLedgerMatchesDurableProductionWire|FinalFleetLifecycle|FinalSemanticFleetByUIDAt|FinalPayoutAssignmentsAt|FinalPayoutArtifact|FinalSemanticDeployment|FinalSemanticBuilder|FinalSemanticPoolRegistration|FinalSemantic(Pool|Head|Validator)UIDZero|FinalFleetGeneration|FinalSemanticHistorical|FinalSemanticEvidenceFailsClosed|FinalSemanticPathProofArtifact|FinalSemanticPoolAuditDistinguishesUnderpaymentFromRecovery|FinalSemanticDishonestDepositDecisionsAndPublicReplay|FinalSemanticSettlementAccountingBindsBothHeadsAndEventDeltas|FinalSemanticCarryModelFailsClosedOnAdjacentAccountingErrors|FinalPublicChainVerificationRequiresTwoCanonicalOperatorOrigins|PublicScenarioBundle|SemanticMismatchBranches|StateMismatchError|FinalEVMLogQueryRanges|FinalCollectedCoordinatorBaselines|FinalCollectorIncludesCompletedSettlementTail|FinalSettlementClosure|ReleaseHistoryRuntimeArtifacts|ProducerGatePinsCompleteAdversarialRegressions|ProducerGatePinsSyntheticEVMIdentityRegressions|ProducerGatePinsSemanticIntegrityRegressions|ProducerGatePinsExactBlockRuntimeClientRegressions|ReleaseSemanticCensus|FinalFleetRenewal|FinalValidatorAuthorityV2|FinalPublicValidatorSourcesV2)"
+const releaseSemanticIntegritySelector = "^Test(FinalNative|FinalPublicNative|FinalSemanticFleetAudit|FinalPublicFleetAudit|FinalSemanticVault|FinalSemanticCycleConviction|FinalSemanticCoordinatorRuntime|FinalSemanticCoordinatorUpgrade|FinalClaimPaymentLedger|FinalSemanticReceiptPayload|PublicFinalSemantic|FinalSemanticPoolOperatorVersion|FinalSemanticEpochDeposit|FinalPublicChainVerificationRejectsV2ReceiptOnlyTranscript|FinalSemanticDishonestDepositReceiptPayload|FinalSemanticEvidenceBuildRenderAndArtifacts|FinalSemanticArtifactVerificationCache|FinalSemantic(CampaignArtifactReferences|ReplicatedEnvelope)|FinalSemanticFixture|FinalSemanticOriginalClosure|FinalSemanticArtifactDeploymentAdmission|FinalAttemptFixtureLedgerMatchesDurableProductionWire|FinalFleetLifecycle|FinalSemanticFleetByUIDAt|FinalPayoutAssignmentsAt|FinalPayoutArtifact|FinalSemanticDeployment|FinalSemanticBuilder|FinalSemanticPoolRegistration|FinalSemantic(Pool|Head|Validator)UIDZero|FinalFleetGeneration|FinalSemanticHistorical|FinalSemanticEvidenceFailsClosed|FinalSemanticPathProofArtifact|FinalSemanticPoolAuditDistinguishesUnderpaymentFromRecovery|FinalSemanticPoolWeight|FinalSemanticDishonestDepositDecisionsAndPublicReplay|FinalSemanticSettlementAccountingBindsBothHeadsAndEventDeltas|FinalSemanticCarryModelFailsClosedOnAdjacentAccountingErrors|FinalPublicChainVerificationRequiresTwoCanonicalOperatorOrigins|PublicScenarioBundle|SemanticMismatchBranches|StateMismatchError|FinalEVMLogQueryRanges|FinalCollectedCoordinatorBaselines|FinalCollectorIncludesCompletedSettlementTail|FinalSettlementClosure|ReleaseHistoryRuntimeArtifacts|ProducerGatePinsCompleteAdversarialRegressions|ProducerGatePinsSyntheticEVMIdentityRegressions|ProducerGatePinsSemanticIntegrityRegressions|ProducerGatePinsExactBlockRuntimeClientRegressions|ReleaseSemanticCensus|FinalFleetRenewal|FinalValidatorAuthorityV2|FinalPublicValidatorSourcesV2)"
 
 // Extracts the exact sorted top-level test declarations selected from source.
 func releaseSelectedTestDeclarations(selector string, sources []string) ([]string, error) {
@@ -679,6 +679,8 @@ func TestProducerGatePinsSemanticIntegrityRegressions(t *testing.T) {
 		"TestFinalSemanticPathProofArtifactCount",
 		"TestFinalSemanticPathProofArtifactRejectsMalformedTrailingJSON",
 		"TestFinalSemanticPoolAuditDistinguishesUnderpaymentFromRecovery",
+		"TestFinalSemanticPoolWeightPricesAuditedUsageAtTheConvictionZeroTier",
+		"TestFinalSemanticPoolWeightBuilderRowsAgreeWithTheValidatorAndTheVerifier",
 		"TestFinalSemanticDishonestDepositDecisionsAndPublicReplay",
 		"TestFinalSemanticSettlementAccountingBindsBothHeadsAndEventDeltas",
 		"TestFinalSemanticCarryModelFailsClosedOnAdjacentAccountingErrors",
@@ -1215,6 +1217,7 @@ func TestReleaseSemanticCensusPinsCompleteRegressionSourceGroups(t *testing.T) {
 		{pattern: "final_semantic_artifact_authority_test.go", required: "^Test"},
 		{pattern: "final_semantic_source_builder_test.go", required: "^TestFinalSemanticBuilder"},
 		{pattern: "final_semantic_evidence_test.go", required: "^TestFinal(SemanticArtifactVerificationCache|AttemptFixtureLedger)"},
+		{pattern: "final_semantic_pool_weight_test.go", required: "^Test"},
 		{pattern: "final_semantic_chain_fixture_test.go", required: "^Test"},
 		{pattern: "final_semantic_path_proof_test.go", required: "^Test"},
 		{pattern: "final_semantic_settlement_tail_test.go", required: "^Test"},
@@ -1423,7 +1426,8 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"StTransactionAttemptCandidatesConvergeOnOneWinner",
 		"StatsAlphaPriceURLIsMainnetOnly",
 		"StatsGaugeVecReplaceDeletesStaleSeries",
-		"go test -race ./monitor",
+		"go test -timeout 90m ./monitor -count=1",
+		"go test -race -timeout 180m ./monitor -count=1",
 		"ParallelEvalCancellationJoinsAttemptWorker",
 		"PlatformTransportCloseAndWaitJoinsPendingDial",
 		"StreamReplacementReceiveDoesNotJoinAndPublishesAfterOldExit",
@@ -1506,6 +1510,8 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"TestIncrementRateLimitWindowResetsAtExactBoundary",
 		"StTransactionIntentReservationUsesChainAccountNonceScope",
 		"StTransactionAttemptCandidatesConvergeOnOneWinner",
+		"go test -timeout 90m ./monitor -count=1",
+		"go test -race -timeout 180m ./monitor -count=1",
 	} {
 		if testIndex := strings.Index(script, databaseTest); databaseIndex < 0 || testIndex <= databaseIndex {
 			t.Errorf("database-backed operator regression %s is outside the isolated database gate", databaseTest)
@@ -1649,6 +1655,9 @@ func verifyReleaseGateSimulatorRaceCensus(script string, sources map[string]stri
 	if err := verifyReleaseGateFullValidatorRace(script); err != nil {
 		return err
 	}
+	if strings.Count(script, releaseGateSimulatorRaceSkipAssignment) != 1 || strings.Count(script, "release_gate_simulator_race_skip=") != 2 {
+		return errors.New("the ordinary simulator owner's complement is not each mode's exact reviewed skip")
+	}
 	population := regexp.MustCompile(releaseGateSimulatorPopulationSelector)
 	supplement := regexp.MustCompile(releaseGateSimulatorSupplementSelector)
 	separate := regexp.MustCompile(releaseGateSimulatorSeparateSelector)
@@ -1761,7 +1770,7 @@ func TestReleaseGatesExerciseContractSenderRoleDiagnostic(t *testing.T) {
 var releaseSourceFreezeLiveModules = []string{
 	"connect", "connect/sctp", "glog", "goidenticons", "proxy", "sdk", "sdk/build",
 	"sdk/cgo", "sdk/js", "server", "sn", "sn/third_party/go-substrate-rpc-client",
-	"sn/third_party/npipe", "userwireguard", "warp", "xops/echo", "xops/router",
+	"sn/third_party/npipe", "userwireguard", "warp", "xops/echo",
 }
 
 var releaseSourceFreezeNonReleaseModules = []string{
@@ -3145,6 +3154,8 @@ func assertReleaseGateAssignmentFilterProfile(t *testing.T, scriptPath, gate str
 		"VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)",
 		"StSyncChainEventsBatchesCanonicalEventBlocks",
 		"StTransactionIntentReservationUsesChainAccountNonceScope",
+		"StDepositCustody(ReconcilesPreparedFundingBeforeNewSizing|StagesRoundingOnceAndCreditsExactPrincipal|LostFundingReplyDoesNotRepeatTransfer|RetainsUnderfundedSuccessWithoutAnotherTransfer)",
+		"StReplacementWaitReadErrorCannotAuthorizeReplacement",
 	} {
 		if strings.Contains(beforeProfile, name) || !strings.Contains(databaseProfile, name) {
 			t.Errorf("database-backed %s test %s is not confined to the isolated profile", gate, name)

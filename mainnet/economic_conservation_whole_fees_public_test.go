@@ -15,6 +15,19 @@ import (
 	"testing"
 )
 
+// The exported original Wasm returns this exact metadata and its callsite
+// profile pins it. Capture admission refuses a pin that differs from the
+// parent's runtime metadata, so the public fixture serves the same bytes.
+func TestEconomicWholeFeePublicExportMetadataIsTheParentRuntimeMetadata(t *testing.T) {
+	raw, err := os.ReadFile("../tools/runtime-metadata-probe/testdata/whole-fee-chain-metadata.scale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, served, _ := nativeProducerTestMetadata(t); served != nativeExecutionTestHex(raw) {
+		t.Fatal("whole-fee export metadata differs from the public parent runtime metadata")
+	}
+}
+
 // Every original entry is covered: one participant fee, one unrelated native
 // fee and one explicit Pays::No call. Unrelated payment cannot inflate costs.
 func TestEconomicWholeFeePublicOriginalBodyIncludesAllPayersAndExemptions(t *testing.T) {

@@ -36,7 +36,7 @@ version 2 changes only the pool tier's payout settlement, on mainnet from the sw
 > (`WHITEPAPER_DISCUSS.md` D25–D28): the **contract stops weighting/validating deposits** — deposits are
 > **conviction stake** (locked in the reserve, D23), their cumulative amount sets a NO's **tier → deposit
 > rate** (zero conviction = baseline; staking lowers it — the onboarding lever), and **validators weight
-> the pools themselves** by `implied_usage × quality` (`implied_usage = deposit / rate(tier)`) from
+> the pools themselves** by `implied_usage × quality` (`implied_usage` = audited usage at the baseline rate) from
 > published data. The **head tier ranks fleets by split-adjusted distinct routable egress-IP count** (not
 > traffic; shared IPs split among claimants), head weight ∝ that score. Validators run measurement with
 > **guardrails off** (own rate). See §7, §8, §10, §12; prior layers: v0.3 buybacks (D23), v0.2 two tiers
@@ -51,8 +51,8 @@ The **UR Subnet** (Bittensor **SN25**, netuid 25) runs a **decentralized privacy
 independent **validators** run the `VALIDATOR.md` cryptographic routing‑verification protocol — walking
 server‑assigned chains of providers to prove real‑time transit and measure **which providers are the
 weakest links**. That measurement is the core: each tempo, **validators weight every NO's pool
-themselves** — `implied_usage × quality`, where implied usage is the NO's α deposit divided by its
-conviction‑tier rate (§8.1) — and Bittensor's **Yuma Consensus** turns those scores into the miners'
+themselves** — `implied_usage × quality`, where implied usage is the NO's audited usage priced at
+the conviction‑zero rate (§8.1) — and Bittensor's **Yuma Consensus** turns those scores into the miners'
 emission. As in canonical Bittensor, **validators' evaluation drives the payout** — the deposit
 (α a NO locks, a costly, revenue‑backed signal of real demand) anchors the split, and the measured
 `quality` (`Q_n`, from the trails) is the earned modulator. The **contract computes no weight** (D25); it
@@ -166,7 +166,7 @@ alternatives):
 3. **Miner pools, scored by real Yuma consensus.** Each NO is **one miner‑pool UID**; its 100k+
    providers are paid *inside* the pool by Merkle claim. **Many independent validators** (no NO owns
    them) score the pools `implied_usage × measured‑quality`, where implied usage is
-   `deposit / rate(conviction tier)` — so **validators' evaluation drives the miner
+   the audited usage priced at the conviction‑zero rate — so **validators' evaluation drives the miner
    emission, the Bittensor way** — and Yuma's median/clipping/vtrust/bonds do real work. (Validators earn
    **native dividends only**; a fee‑funded **effort bounty** for third‑party trail volume is **out of scope**
    — the owner is the majority validator at launch and runs the trails itself, §9.2; the bounty is a parked
@@ -202,7 +202,7 @@ Money flows in three coupled channels, all in α:
 2. **Emission (Yuma consensus over NO pools).** Every NO has **one contract‑custodied miner‑pool UID**
    (all its providers). **Independent validators** — anyone who stakes α and runs `VALIDATOR.md` trails —
    compute **every** NO's pool score **themselves** as `implied_usage × measured‑quality` (implied usage
-   = the NO's deposits ÷ its tier rate, §8.1) and submit those weights, so the **validators' evaluation
+   = the NO's audited usage priced at the conviction‑zero rate, §8.1) and submit those weights, so the **validators' evaluation
    drives the miner emission — the Bittensor way**. With many independent validators, **Yuma Consensus
    does real work**: stake‑weighted median + **clipping**, so no NO can inflate its own pool or knife a
    rival. Miner emission (41%) lands on miner‑pool UIDs **owned by the immutable vault coldkey** — no
@@ -242,7 +242,8 @@ Because the weights carry a *subjective* signal — measured provider quality �
 anti‑gaming stack applies and is **switched on**: **commit‑reveal** (a lazy validator can't copy fresh
 consensus), consensus **clipping + vtrust** + the **self‑weight mask** (a validator can't inflate a pool
 or score its own NO), and **bonds / Liquid Alpha** (rewarding validators who back good pools early). The
-**deposit** (as implied usage) is the *objective* anchor that ties the across‑NO split to revenue‑backed
+**deposit**, which must pay for the audited usage that implied usage prices, is the *objective*
+anchor that ties the across‑NO split to revenue‑backed
 demand (§7–§8.1); **quality** is the Yuma‑measured factor that makes validators' evaluation the thing that
 moves the money (§10). At bootstrap, when `Q_n` is still noisy, governance **caps the quality swing** and
 widens it as the validator set and data mature (§12.3).
@@ -250,7 +251,7 @@ widens it as the validator set and data mature (§12.3).
 ```
                      INDEPENDENT VALIDATORS  (stake α, run /verify trails)
          each tempo → score BOTH tiers → commit-reveal → Yuma (stake-median + clip + vtrust)
-             pools (tail):  weight = implied_usage_n × quality Q_n   (deposit / tier-rate)
+             pools (tail):  weight = implied_usage_n × quality Q_n   (usage at baseline rate)
              top miners:    weight = routable-IP score (split-adjusted)   combined into ONE vector,
                                        │                split by governance share θ
                                        ▼  drives 41% miner emission
@@ -530,7 +531,7 @@ as `vpk` also works but couples key rotation to the wallet; binding is preferred
 | `D_n` | α deposited by NO `n` during epoch `e` (summed from finalized `Deposit` events; coordinator counters enforce caps but do not weight, §7.5) |
 | `conviction_n` | NO `n`'s cumulative locked α (all‑time deposits + voluntary stake) → its tier (§7.2) |
 | `rate(tier_n)` | published α‑per‑usage rate for `n`'s conviction tier; zero tier = baseline (§7.3) |
-| `implied_usage_n` | `D_n / rate(tier_n)` — the demand signal validators weight (§8.1) |
+| `implied_usage_n` | NO `n`'s audited usage priced at the zero tier's rate, truncated as its capped deposit is; 1 at zero price — the demand signal validators weight (§8.1) |
 | `w_n` / `ŵ_n` | NO `n`'s pool weight ∝ `implied_usage_n × Q_n` (validator‑computed, §8.1/§10) |
 | `E_mine, E_val, E_own` | α emission to the miner / validator / owner pools over the epoch (41/41/18% of subnet α emission) |
 | `Q_n` | NO `n`'s consensus‑measured pool quality (from validators' `VALIDATOR.md` trails) |
@@ -570,7 +571,7 @@ scores **every NO pool** from its own `VALIDATOR.md` trails and submits it under
 
 ```
 each tempo, every independent validator v:
-    for each NO pool p:  score[p] = (deposit_p / rate(tier_p)) × quality_v(p)
+    for each NO pool p:  score[p] = implied_usage_p × quality_v(p)    // audited usage at the baseline rate (§8.1)
     normalize to u16; submit native CRv4 commit extrinsic            // reveal auto-fires later (§10)
 ```
 
@@ -948,8 +949,9 @@ audit stays dormant at zero price, and a priced policy needs its own v2 deposit 
 
 ### 7.2 A deposit is conviction stake (D25)
 
-The deposit anchors the claim: `D_n` (α) is the NO's costly, on‑chain input, and validators turn it into
-the weightable demand signal `implied_usage_n = D_n / rate(tier_n)`. The protocol
+The deposit anchors the claim: `D_n` (α) is the NO's costly, on‑chain input, and validators audit it
+against the usage the NO's signed payout artifact reports and weight that usage, priced at the
+conviction‑zero rate (§8.1). The protocol
 never verifies GB — infeasible and a non‑goal. The deposit is a **costly signal** funded by the NO's
 **real customer revenue**, and it is **conviction stake**: staked into the locked reserve (§7.4) and
 **sunk** — never returned through any path, in particular not by routing it back through self‑owned
@@ -1058,13 +1060,18 @@ implied_demand_n = 1                                                        # wh
 ```
 
 **Implied demand, not raw deposit** (decision A, D25): the audited usage is priced at the **baseline
-(conviction‑zero) rate** for every NO, so a NO on a lower tier rate posts less α for the same real usage
-and gets the **same** weight — the conviction stake that bought the lower rate is a *discount, not a
-penalty*, and the weight still tracks **real revenue‑backed usage** (the headline thesis) rather than raw
-α. With `users_n = 0` this is exactly the earlier `epoch_deposit_n / rate(tier_n)` ranking. When the
-per‑epoch cap truncates the deposit a NO owes at its own tier (`owed_n`), its demand is truncated by the
-same factor, so usage the NO did not pay for buys no weight. Under the zero‑price launch mode every
-pool's implied demand is exactly 1 and `Q_n` alone steers (§7.1). NO `n`'s miner‑pool UID then accrues
+(conviction‑zero) rate** for every NO. Below the per‑epoch cap a NO on a lower tier rate posts less α for
+the same real usage and gets the **same** weight — the conviction stake that bought the lower rate is a
+*discount, not a penalty*, and the weight still tracks **real revenue‑backed usage** (the headline
+thesis) rather than raw α. With `users_n = 0` this is the earlier `epoch_deposit_n / rate(tier_n)`
+ranking, up to the deposit's floor. When the cap truncates the deposit a NO owes at its own tier
+(`owed_n`), its demand is truncated by the same factor, so usage the NO did not pay for buys no weight.
+A capped NO's demand is `cap × baseline / owed_n`, with one priced component `cap × rate(0) / rate(tier_n)`:
+it no longer grows with usage, and a lower tier rate raises it, so at the cap the tier does change the
+weight. Under policy v2 (a 10 α cap; 40, 32 and 24 α per GiB at conviction 0, 1 α and 10 α) a pool is
+capped above 0.25, 0.3125 or about 0.42 GiB by tier, and 1 GiB carries an implied demand of 1·10^10,
+1.25·10^10 or about 1.67·10^10 rao. Under the zero‑price launch mode every pool's implied demand is
+exactly 1 and `Q_n` alone steers (§7.1). NO `n`'s miner‑pool UID then accrues
 over the epoch
 
 ```
@@ -1272,7 +1279,7 @@ Universe (SN13) reserves a fixed share to one UID by rewriting weights before `s
 
 ```
 head[]  =  { score(u) }               normalized so Σ head = θ      # split-adjusted routable-IP breadth (§8.4)
-pool[]  =  { implied_usage_n × Q_n }  normalized so Σ pool = 1 − θ  # implied_usage = deposit / rate(tier) (§8.1)
+pool[]  =  { implied_usage_n × Q_n }  normalized so Σ pool = 1 − θ  # implied_usage = audited usage at the baseline rate (§8.1)
 w       =  head ⊕ pool                # one vector; apply signed max_weight_limit_u16; commit-reveal
 ```
 
@@ -1451,7 +1458,7 @@ mechanism). The contract computes nothing (D25):
 for validator v:
     # TAIL — NO pools: implied-usage × quality (D25)
     for each NO pool p (miner-pool UID of NO n):
-        implied_usage_n = epoch_deposit_n / rate(tier_n)   // deposits from the event log (§7.5); rate from the published schedule (§7.3)
+        implied_usage_n = usage_n × rate(0) × min(1, cap / owed_n)   // usage from the signed payout artifact; the deposit must pay owed_n = usage_n × rate(tier_n) (§7.5, §8.1)
         pool[p] = implied_usage_n · quality_v(p)           // §9.4 aggregate; = 0 if v operates NO n (self-mask)
     # HEAD — top-level miners: split-adjusted routable-IP breadth (§8.4, D27)
     for each top-level-miner UID u (fleet — client_ids C_u bound to u, §11.4):
@@ -1732,21 +1739,24 @@ NO-trust, and is not required.)
 
 Let a NO with real customer revenue `R_n` (α‑equivalent) choose its conviction tier and its per‑epoch
 deposit `D_n`. Over an epoch the **contract pays that NO's providers** `0.41·E·ŵ_n·(1−θ)` (the NO's pool
-emission, `ŵ_n ∝ implied_usage_n × Q_n`, `implied_usage_n = D_n / rate(tier_n)`, §8.1); the deposit and
+emission, `ŵ_n ∝ implied_usage_n × Q_n`, `implied_usage_n` the audited usage priced at the baseline rate, §8.1); the deposit and
 any conviction stake are both locked in the reserve (§7.4), and the NO keeps `R_n − D_n` off‑chain.
 Providers attach where expected pay is highest. Two forces balance:
 
-- **Raising `D_n`** (or raising the tier to lower `rate(tier_n)`) lifts the NO's implied usage → its
+- **Serving more real usage**, and depositing `D_n` for it at `rate(tier_n)` (a higher tier lowers `D_n`
+  and, below the cap, leaves the weight unchanged), lifts the NO's implied usage → its
   emission share `ŵ_n` → the α its providers earn → attracts capacity → more real usage → more `R_n`
-  **and** higher measured `Q_n` (which feeds back into `ŵ_n`).
+  **and** higher measured `Q_n` (which feeds back into `ŵ_n`). At the per‑epoch cap more usage stops
+  lifting implied usage, and a higher tier raises it to `cap × rate(0) / rate(tier_n)` (§8.1).
 - **`D_n ≤ R_n`** in the long run: both the deposit and the conviction stake are **fully sunk** — locked
   in the reserve, recoverable by no one — so α not backed by customer revenue is pure loss.
 
 The emission `E` is a subsidy auctioned ∝ implied usage: in equilibrium NOs commit α (deposits + tier
 conviction) up to where the marginal emission steered to their providers equals the marginal cost of the
 sunk α. Staking for a lower rate is a **capital‑for‑cashflow trade** (lock more up front → post less per
-epoch) that nets to the same weight per unit of real usage, so it lowers the onboarding barrier without
-distorting the usage signal. This ties total commitment to total real demand and makes `w_n` track
+epoch) that nets to the same weight per unit of real usage below the cap, so it lowers the onboarding
+barrier without distorting the usage signal there; a capped NO, whose weight no longer tracks its usage,
+gains weight from a lower rate (§8.1). This ties total commitment to total real demand and makes `w_n` track
 genuine usage share — the intended outcome. (It is the deposit‑for‑weight pattern Bittensor already
 trusts in burned registration, with the burn replaced by a transparent, compounding lock.)
 
@@ -1774,7 +1784,7 @@ designs, §9.3/§13.6) is an open post‑launch question, not a committed roadma
 ### 12.3 What this does and does not secure
 
 - **Secured:** cross‑operator emission tracks `implied_usage × consensus‑quality`, with implied usage
-  equal to `deposit / rate(conviction tier)` (costly, revenue‑backed demand × independently‑measured
+  the audited usage priced at the baseline rate, paid for by the deposit (costly, revenue‑backed demand × independently‑measured
   liveness) — **validators' evaluation drives the miner payout**, the
   Bittensor mechanism — via median + clipping + vtrust over many **independent** validators, plus the
   self‑weight mask and the fully‑sunk deposit (§10, §12.1); provider quality also bites **within the
@@ -1934,7 +1944,7 @@ it takes validators off the miner payout path and reduces them to a side‑chann
 
 ### 13.4 Quality in the cross‑operator weight: **adopted** (ramped at bootstrap)
 
-`weight_n ∝ implied_usage_n × Q_n`, with `implied_usage_n = deposit_n / rate(tier_n)` the demand anchor
+`weight_n ∝ implied_usage_n × Q_n`, with `implied_usage_n`, the audited usage priced at the baseline rate, the demand anchor
 (§8.1, D25) and `Q_n` the consensus‑measured pool quality (§8.1, §10): demand is the objective anchor,
 quality is the earned modulator, and together they make validators' evaluation the thing that moves the
 money. The one nuance is **magnitude at bootstrap**: `Q_n` is noisy until the
@@ -1952,8 +1962,9 @@ operator's fault (owner decisions, October 11).
 ### 13.5 No on‑chain oracle (simplified out)
 
 Because per‑GB / per‑user usage is self‑reported and unverifiable on‑chain, an on‑chain rate has no
-enforcement power. The objective on-chain input is *α deposited*; validators combine it with the
-governance-published conviction-tier rate to derive implied usage (§7.1, §8.1). v1 therefore has **no
+enforcement power. The objective on-chain input is *α deposited*; validators check it against the
+signed usage priced at the governance-published conviction-tier rate, and weight that usage at the
+baseline rate (§7.1, §8.1). v1 therefore has **no
 oracle**: the rate schedule is a signed, content-addressed off-chain policy that NOs use to size deposits
 and validators independently use to reproduce weights.
 (If a future version ever needs an on‑chain α/USD value — e.g. to denominate the deposit fee in USD —
@@ -2124,7 +2135,7 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
    October 7). The release remains one mechanism. **Top-level miners self-`register_limit`** their own
    (provider-owned, not contract-owned) UIDs with a locally approved ceiling and publish the §11.4 binding.
 3. **Validator software (independent).** Stake α; run `VALIDATOR.md` trails; each tempo score **both tiers** (pools `implied_usage × quality` —
-   implied usage = deposit ÷ conviction‑tier rate, computed off the published deposit events; head on its **routable‑IP breadth score**), read the `client_id ⇄ hotkey` binding (§11.4), split by θ, and submit
+   implied usage = audited usage at the baseline rate, the deposit audited off the published deposit events; head on its **routable‑IP breadth score**), read the `client_id ⇄ hotkey` binding (§11.4), split by θ, and submit
    commit-reveal weights (standard Bittensor validator loop → native dividends) — **no central
    keeper sets weights**. A separate **permissionless settlement poke** triggers per-NO finalization after
    the +48h window. (No trail‑proof submission — the effort bounty is out of scope, §9.3/D29.)
@@ -2353,7 +2364,7 @@ starts at least two days after the last one passes.
 |---|---|
 | **How is oracle data stored/charged on Subtensor? Can the NO payout table be a Merkle tree so each miner validates its payout without storing it on chain?** | **Yes.** Release 1.0 commits a 32-byte Merkle root plus artifact hash per NO/epoch in the coordinator; immutable entitlement state gates claims; canonical bulk bytes live in `server/blob` MinIO and are served by the public server API. Each provider verifies an `O(log N)` proof (§11). From E_s, version 2 instead commits the root of a Merkle **sum tree** over the pool's cumulative accounts, with its total, leaf count and ledger-header hash, into vault2 through `STSettlement2`; the ledger objects are served at `/sn/ledger/object`, and each account verifies an `O(log n)` proof of `(hash, sum)` siblings. The commitments pallet anchors fleet manifests, not payout bulk data. |
 | **Are smart contracts standard EVM?** | **Yes** — Frontier EVM, Cancun, Solidity 0.8.24: chain 945 testnet and 964 mainnet. Subtensor precompiles let the contracts stake/transfer α and verify binding identities; validators submit CRv4 through native Substrate extrinsics (§2.5). |
-| **How to adapt to standard BT payout formulas?** | Independent validators set standard Yuma weights `= implied_usage × quality` (implied usage = deposit ÷ conviction-tier rate, computed from finalized events + signed policy — contracts weigh nothing, D25) on per-NO miner-pool UIDs; the chain delivers emission to vault-owned pools (re-split by Merkle claim) and native dividends to validators. A second head tier holds provider-owned UIDs and receives native emission by split-adjusted routable-prefix breadth under θ (§8.4–8.5). |
+| **How to adapt to standard BT payout formulas?** | Independent validators set standard Yuma weights `= implied_usage × quality` (implied usage = audited usage priced at the baseline rate, the deposit audited from finalized events + signed policy — contracts weigh nothing, D25) on per-NO miner-pool UIDs; the chain delivers emission to vault-owned pools (re-split by Merkle claim) and native dividends to validators. A second head tier holds provider-owned UIDs and receives native emission by split-adjusted routable-prefix breadth under θ (§8.4–8.5). |
 
 ---
 
@@ -2387,8 +2398,10 @@ starts at least two days after the last one passes.
   **reserve hotkey** (never distributed, dividend‑compounding, §7.4); its cumulative locked α = its
   **conviction**, which sets its **tier → deposit rate** (§7.3). Coordinator counters enforce caps but do
   not weight; finalized `Deposit`, `ConvictionAdded`, and sink-principal events are the portable record (§7.5, D25).
-- **implied usage** — `deposit_n / rate(tier_n)`: the demand signal validators weight for the pool tier
-  (§8.1); staking for a lower rate keeps weight tracking real usage rather than raw α.
+- **implied usage** — NO `n`'s audited usage priced at the conviction‑zero rate, truncated as its capped
+  deposit is (§8.1): the demand signal validators weight for the pool tier; staking for a lower rate
+  lowers the deposit and, below the cap, leaves the weight tracking real usage rather than raw α; at the
+  cap the demand is `cap × rate(0) / rate(tier_n)`, so a lower rate raises it.
 - **Effort bounty** — a fee‑funded reward that *would* pay ∝ verified, coverage‑weighted, server‑assigned
   completed trails; **out of v1 scope** and **not a committed phase** — a parked future‑iteration candidate
   (§9.3, §13.6, D29).

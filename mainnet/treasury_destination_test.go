@@ -88,7 +88,7 @@ func treasuryDestinationTestFixture(t *testing.T) (treasuryDestinationInput, *tr
 // A public command captures the exact finalized original before any replay.
 func treasuryDestinationTestObserve(t *testing.T, input treasuryDestinationInput) treasuryDestinationInput {
 	t.Helper()
-	path, _ := treasuryTestJson(t, t.TempDir(), "receive-observe.json", input)
+	path, _ := treasuryTestJson(t, mainnetPrivateTestDir(t), "receive-observe.json", input)
 	var output, diagnostic bytes.Buffer
 	if code := runMain(t.Context(), []string{"treasury", "observe", "--input", path}, &output, &diagnostic); code != 0 {
 		t.Fatal("receive observation refused without sending custody", code, diagnostic.String())
@@ -107,7 +107,7 @@ func TestTreasuryDestinationDescribeAcceptsReceivingAccountOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, pin := ownerRecycleTestFile(t, t.TempDir(), "destination.yml", raw)
+	path, pin := ownerRecycleTestFile(t, mainnetPrivateTestDir(t), "destination.yml", raw)
 	var output, diagnostic bytes.Buffer
 	if code := runMain(t.Context(), []string{"treasury", "describe", "--destination", path, "--destination-sha256", pin}, &output, &diagnostic); code != 0 {
 		t.Fatal(code, diagnostic.String())
@@ -130,7 +130,7 @@ func TestTreasuryDestinationDescribeAcceptsReceivingAccountOnly(t *testing.T) {
 func TestTreasuryDestinationCommandObservesAndPlansWithoutSendCustody(t *testing.T) {
 	input, _, chain := treasuryDestinationTestFixture(t)
 	input = treasuryDestinationTestObserve(t, input)
-	path, _ := treasuryTestJson(t, t.TempDir(), "receive-policy.json", input)
+	path, _ := treasuryTestJson(t, mainnetPrivateTestDir(t), "receive-policy.json", input)
 	var output, diagnostic bytes.Buffer
 	if code := runMain(t.Context(), []string{"treasury", "policy-plan", "--input", path}, &output, &diagnostic); code != 0 {
 		t.Fatal(code, diagnostic.String())
@@ -216,7 +216,7 @@ func TestTreasuryDestinationPolicyReplayRejectsScopeOrNativeDrift(t *testing.T) 
 func TestTreasuryDestinationNeverAuthorizesNativeExecution(t *testing.T) {
 	input, _, _ := treasuryDestinationTestFixture(t)
 	input = treasuryDestinationTestObserve(t, input)
-	path, _ := treasuryTestJson(t, t.TempDir(), "receive-only.json", input)
+	path, _ := treasuryTestJson(t, mainnetPrivateTestDir(t), "receive-only.json", input)
 	for _, mode := range []string{"plan", "reserve", "export", "sign", "submit"} {
 		var output, diagnostic bytes.Buffer
 		if code := runMain(context.Background(), []string{"treasury", mode, "--input", path}, &output, &diagnostic); code == 0 || output.Len() != 0 {

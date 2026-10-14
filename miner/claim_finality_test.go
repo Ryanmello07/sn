@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -267,8 +268,10 @@ func TestClaimClockRestartRetainsUnfinalizedSignedReceipt(t *testing.T) {
 	if err := store.save(queue); err != nil {
 		t.Fatal(err)
 	}
+	// Recovery records the receipt's public observation behind a pointer, so
+	// a reloaded entry is compared by value, observation included.
 	retained, err := store.load()
-	if err != nil || *retained.Entries["70"] != *entry {
+	if err != nil || !reflect.DeepEqual(retained.Entries["70"], entry) {
 		t.Fatalf("recovered receipt lost durable identity: %v", err)
 	}
 	if native, _, _, sends := fixture.evidence(); native != 0 || len(sends) != 0 {

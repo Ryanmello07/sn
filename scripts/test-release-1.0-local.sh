@@ -1,8 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# RELEASE_GATE_DEPENDENCY_MODE selects what the gate qualifies, as the release
+# builder's dependency_mode does. pinned, the default, seals the run: clean,
+# fetched, at-origin checkouts before and after the tests, the release lock,
+# and the runtime source and metadata attestations. local tests the working
+# checkouts as they are and skips exactly those checks and the tests that need
+# a sealed run or the vault, and prints each skip with its reason first; it
+# never reads a vault checkout. A local pass qualifies those checkouts, not a
+# sealed release.
+release_gate_requested_dependency_mode="${RELEASE_GATE_DEPENDENCY_MODE:-pinned}"
+if [[ "$release_gate_requested_dependency_mode" == pinned ]]; then
+  echo "[release-1.0] dependency mode pinned: sealed, clean, fetched, at-origin checkouts and the release lock"
+elif [[ "$release_gate_requested_dependency_mode" == local ]]; then
+  echo "[release-1.0] dependency mode local: the working checkouts as they are, not sealed"
+  # Everything local mode skips, each with its reason. Each test skips by
+  # name in every job that would run it.
+  echo "[release-1.0] source freeze provenance skipped (local mode): it checks the working checkouts' module inventory and tidiness, not that they are clean, fetched and at origin"
+  echo "[release-1.0] runtime source and metadata artifact attestations skipped (local mode): they read the published runtime source and the testnet archive node, not the working checkouts"
+  echo "[release-1.0] final release-lock and source-freeze checkouts skipped (local mode): only a sealed run's checkouts pass them"
+  echo "[release-1.0] vault checkout skipped (local mode): local mode never reads it"
+  echo "[release-1.0] TestReleaseLockMatchesCheckout skipped (local mode): only a sealed run's checkouts match the release lock"
+  echo "[release-1.0] TestRepositoryDiscoveryUsesModuleIdentity skipped (local mode): it stats the workspace vault's main/st.yml"
+else
+  echo 'RELEASE_GATE_DEPENDENCY_MODE must be pinned or local' >&2
+  exit 1
+fi
+# Nested gates and their fixtures keep the pinned default.
+unset RELEASE_GATE_DEPENDENCY_MODE
+
 # Release qualification cannot hide an assertion or panic behind a retry.
 export WARP_TEST_ENV_FAIL_FAST=1
+# server/stmonitor/testfixture's admin URL comes only from this gate's private
+# PostgreSQL, in sn-e2e, never from the caller's environment or local stack.
+unset STMONITOR_TEST_ADMIN_URL
+# So do ./mainnet's qualification exports, from sn-mainnet-exports, in the
+# ./mainnet shards.
+unset URNETWORK_NATIVE_CAPTURE_ENGINE URNETWORK_NATIVE_EXECUTION_ENGINE URNETWORK_NATIVE_EXECUTION_FIXTURE \
+  URNETWORK_NATIVE_PRODUCER_FIXTURE URNETWORK_NATIVE_CONSERVATION_FIXTURE URNETWORK_NATIVE_PRINCIPAL_FIXTURE_DIR \
+  URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_DIR URNETWORK_NATIVE_VAULT_CAPTURE_FIXTURE_DIR \
+  URNETWORK_NATIVE_VAULT_CAPTURE_SEQUENCE_FIXTURE_DIR URNETWORK_NATIVE_RUNTIME_RENEWAL_FIXTURE \
+  URNETWORK_NATIVE_WHOLE_FEE_FIXTURE_DIR URNETWORK_NATIVE_YUMA_FIXTURE_DIR URNETWORK_NATIVE_YUMA_CAPACITY_FIXTURE_DIR \
+  URNETWORK_NATIVE_YUMA_POPULATED_FIXTURE_DIR URNETWORK_NATIVE_TREASURY_FIXTURE \
+  URNETWORK_PROVIDER_ATTEMPT_COMPLETED_FIXTURE_DIR URNETWORK_PROVIDER_WORK_FIXTURE_DIR URNETWORK_ECONOMIC_FEE_FIXTURE_DIR
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="$(dirname "$sn_repo")"
@@ -11,6 +51,9 @@ source "$sn_repo/scripts/test-storage.sh"
 sn_test_storage_init
 source "$sn_repo/scripts/release-gate-jobs.sh"
 release_gate_jobs_init
+# The jobs owner starts every gate pinned; only this entry selects local mode.
+release_gate_dependency_mode="$release_gate_requested_dependency_mode"
+export release_gate_dependency_mode
 
 # The ordinary entry stays strict. Diagnostics run every original preflight
 # under one joined owner while independent unchanged test phases can begin.
@@ -23,10 +66,10 @@ release_gate_source_integrity_preflight() {
 }
 release_gate_initial_preflights() {
   if [[ "$release_gate_diagnostic" == 1 ]]; then
-    release_gate_record_preflight repository-inventory release_gate_diagnostic_inventory || release_gate_preflight_refusal "$?"
+    release_gate_record_preflight repository-inventory release_gate_diagnostic_inventory "$release_gate_dependency_mode" || release_gate_preflight_refusal "$?"
   fi
   echo "[release-1.0] source-freeze preflight"
-  release_source_snapshot="$(release_gate_record_preflight source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")" || release_gate_preflight_refusal "$?"
+  release_source_snapshot="$(release_gate_record_preflight source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" --dependency-mode "$release_gate_dependency_mode" "$workspace")" || release_gate_preflight_refusal "$?"
   printf '%s\n' "$release_source_snapshot"
 
   echo "[release-1.0] simulator source-integrity preflight"
@@ -35,11 +78,17 @@ release_gate_initial_preflights() {
   echo "[release-1.0] generated binding toolchain preflight"
   release_gate_record_preflight binding-toolchain "$sn_repo/stabi/generate.sh" --preflight || release_gate_preflight_refusal "$?"
 
-  echo "[release-1.0] runtime 454 source attestation"
-  release_gate_record_preflight runtime-source "$sn_repo/scripts/check-runtime-v454-source.sh" || release_gate_preflight_refusal "$?"
+  # Both attestations read the published runtime source and the testnet
+  # archive node, not the working checkouts, so local mode skips them.
+  if [[ "$release_gate_dependency_mode" == local ]]; then
+    echo "[release-1.0] runtime source and metadata artifact attestations skipped (local mode)"
+  else
+    echo "[release-1.0] runtime 454 source attestation"
+    release_gate_record_preflight runtime-source "$sn_repo/scripts/check-runtime-v454-source.sh" || release_gate_preflight_refusal "$?"
 
-  echo "[release-1.0] exact runtime metadata artifact attestation"
-  release_gate_record_preflight runtime-metadata "$sn_repo/scripts/check-runtime-metadata-artifacts.sh" || release_gate_preflight_refusal "$?"
+    echo "[release-1.0] exact runtime metadata artifact attestation"
+    release_gate_record_preflight runtime-metadata "$sn_repo/scripts/check-runtime-metadata-artifacts.sh" || release_gate_preflight_refusal "$?"
+  fi
   release_gate_preflight_status
 }
 export -f release_gate_source_integrity_preflight release_gate_initial_preflights
@@ -53,6 +102,15 @@ fi
 if ! command -v forge >/dev/null 2>&1 && [[ -x "$HOME/.foundry/bin/forge" ]]; then
   export PATH="$HOME/.foundry/bin:$PATH"
 fi
+
+# The qualification exports that ./mainnet's tests consume, built offline from
+# these checkouts into the gate's private storage; the ./mainnet shards wait
+# for this job, below. On 2026-10-14, at load 18 with four CPUs, it took seven
+# minutes and peaked at 3.3 GiB.
+release_phase_sn_mainnet_exports() {
+  "$sn_repo/scripts/build-mainnet-exports.sh" "$release_gate_mainnet_exports"
+}
+release_gate_start sn-mainnet-exports release_phase_sn_mainnet_exports
 
 release_phase_isolation_regressions() {
   cd "$sn_repo"
@@ -111,15 +169,31 @@ release_phase_sn_go() {
 }
 release_gate_start sn-go release_phase_sn_go
 
-# The E suite needs the server's database, so the aggregate skips it; sn-e2e
-# runs every TestSettlementV2E2E test on the gate's private services.
+# The E suite needs the server's database, so the aggregate jobs skip it;
+# sn-e2e runs every TestSettlementV2E2E test on the gate's private services.
+# So do the four mainnet roots of server/stmonitor/testfixture, skipped by
+# name. Local mode also skips its two named sim-testnet tests, here and in
+# sn-simulator-race. sn-all-normal runs every package but ./mainnet, and each
+# ./mainnet shard below runs this same skip.
+release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$)'
+if [[ "$release_gate_dependency_mode" == local ]]; then
+  release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$|TestRepositoryDiscoveryUsesModuleIdentity$)'
+fi
+export release_gate_aggregate_skip
 release_phase_sn_all_normal() {
   cd "$sn_repo"
-  go test -parallel=4 -timeout 90m ./... -count=1 -skip '^TestSettlementV2E2E'
+  sn_package_list="$(go list ./... | grep -Evx 'github[.]com/urfoundation/sn/mainnet')"
+  [[ -n "$sn_package_list" ]]
+  mapfile -t sn_packages <<<"$sn_package_list"
+  go test -parallel=4 -timeout 90m "${sn_packages[@]}" -count=1 -skip "$release_gate_aggregate_skip"
 }
+# Measured with one job's four CPUs at load 33-85, the serial miner package
+# alone ran 41 minutes under race before settlement v2 and 55 on main, mostly
+# in real fsyncs of its durable claim and fleet custody; crv4 ran 8 of the
+# inherited ten minutes. Allow about twice the slowest measurement.
 release_phase_sn_core_race() {
   cd "$sn_repo"
-  go test -race ./crv4 ./miner/... ./protocol -count=1
+  go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1
 }
 # Measured serial validator work exceeded the inherited ten-minute package
 # allowance. Keep focused deadlines unchanged and
@@ -128,9 +202,16 @@ release_phase_sn_validator_race() {
   cd "$sn_repo"
   go test -race -parallel=4 -timeout 90m ./validator -count=1
 }
+# The complement of the separately owned simulator roots below; local mode
+# also skips its two named sim-testnet tests.
+release_gate_simulator_race_skip='^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*)$'
+if [[ "$release_gate_dependency_mode" == local ]]; then
+  release_gate_simulator_race_skip='^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*|TestReleaseLockMatchesCheckout|TestRepositoryDiscoveryUsesModuleIdentity)$'
+fi
+export release_gate_simulator_race_skip
 release_phase_sn_simulator_race() {
   cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -skip '^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*)$'
+  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -skip "$release_gate_simulator_race_skip"
 }
 # The retained 90-minute aggregate alarm left four newly active roots and 195
 # parallel roots queued after the serial prefix. Keep the complete 1,191,936
@@ -159,7 +240,101 @@ release_phase_sn_simulator_history_race() {
   cd "$sn_repo"
   go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -run '^Test(Fleet|Historical|Runtime|Scenario).*$'
 }
+# ./mainnet runs in its own jobs. Its tests run one at a time, bound by fsync
+# and latency at about 0.46 core per second, and separate processes scale it,
+# about 3.5 times at four and 5 to 6 at eight. Each shard runs the tests of
+# the package's own list whose name's CRC-32 mod the shard count is its own,
+# so a new test joins a shard without an edit, with the aggregate skip, in its
+# job's own private TMPDIR and GOTMPDIR on the storage root: durable-volume
+# custody admits only ext4, xfs and btrfs. On 2026-10-14, at load 30 to 58,
+# the package's serial test time was about 27 hours (each test's median over
+# that day's runs; 2,599 of 2,759 tests measured, the rest counted at the
+# mean); the heaviest shard, 6, has 255 minutes of it, and each shard's
+# deadline is about twice that.
+release_gate_mainnet_shards=8
+# Tests that no shard runs, by exact name, separated by spaces; each must be
+# a test of the package's list. None yet.
+release_gate_mainnet_skip_names=''
+export release_gate_mainnet_shards release_gate_mainnet_skip_names
+# The -run selector of shard $1 of $2 for the `go test -list` output on stdin.
+release_gate_mainnet_selector() {
+  python3 -c '
+import os, re, sys, zlib
+shard, shards = int(sys.argv[1]), int(sys.argv[2])
+names = []
+for line in sys.stdin.read().splitlines():
+    if re.fullmatch("(Test|Fuzz|Example)[A-Za-z0-9_]*", line):
+        names.append(line)
+    elif re.match("(Test|Fuzz|Example)", line):
+        sys.exit("release gate: unexpected ./mainnet test name " + repr(line))
+skips = os.environ.get("release_gate_mainnet_skip_names", "").split()
+for skip in skips:
+    if skip not in names:
+        sys.exit("release gate: the ./mainnet skip names no test: " + skip)
+own = [name for name in names if name not in skips and zlib.crc32(name.encode()) % shards == shard - 1]
+if not own:
+    sys.exit("release gate: ./mainnet shard %d of %d selects no test" % (shard, shards))
+print("^(" + "|".join(own) + ")$", end="")
+' "$1" "$2"
+}
+# Run shard $1 of ./mainnet, with the exports of sn-mainnet-exports, whose
+# exit the gate gives every shard.
+release_gate_mainnet_shard() {
+  local shard="$1" selector
+  if ! [[ "$release_gate_mainnet_shards" =~ ^[1-9][0-9]?$ && "$shard" =~ ^[1-9][0-9]?$ ]] || (( shard > release_gate_mainnet_shards )); then
+    printf 'release gate: unknown ./mainnet shard %s of %s\n' "$shard" "$release_gate_mainnet_shards" >&2
+    return 1
+  fi
+  if [[ "${release_gate_mainnet_exports_exit:-}" != 0 ]]; then
+    printf 'release gate: ./mainnet shard %s has no qualification exports: sn-mainnet-exports exit %s\n' "$shard" "${release_gate_mainnet_exports_exit:-unknown}" >&2
+    return 1
+  fi
+  source "$release_gate_mainnet_exports/environment.sh"
+  if [[ -n "$release_gate_mainnet_skip_names" ]]; then
+    printf '[release-1.0] ./mainnet shards skip by name: %s\n' "$release_gate_mainnet_skip_names"
+  fi
+  cd "$sn_repo"
+  selector="$(go test -list . ./mainnet | release_gate_mainnet_selector "$shard" "$release_gate_mainnet_shards")"
+  go test ./mainnet -run "$selector" -count=1 -timeout 510m -skip "$release_gate_aggregate_skip"
+}
+export -f release_gate_mainnet_selector release_gate_mainnet_shard
+release_phase_sn_mainnet_1() {
+  release_gate_mainnet_shard 1
+}
+release_phase_sn_mainnet_2() {
+  release_gate_mainnet_shard 2
+}
+release_phase_sn_mainnet_3() {
+  release_gate_mainnet_shard 3
+}
+release_phase_sn_mainnet_4() {
+  release_gate_mainnet_shard 4
+}
+release_phase_sn_mainnet_5() {
+  release_gate_mainnet_shard 5
+}
+release_phase_sn_mainnet_6() {
+  release_gate_mainnet_shard 6
+}
+release_phase_sn_mainnet_7() {
+  release_gate_mainnet_shard 7
+}
+release_phase_sn_mainnet_8() {
+  release_gate_mainnet_shard 8
+}
 release_gate_start sn-all-normal release_phase_sn_all_normal
+# The shards wait for the exports: a failed build fails every shard.
+release_gate_await sn-mainnet-exports
+release_gate_mainnet_exports_exit="$RELEASE_GATE_AWAITED_EXIT"
+export release_gate_mainnet_exports_exit
+release_gate_start sn-mainnet-1 release_phase_sn_mainnet_1
+release_gate_start sn-mainnet-2 release_phase_sn_mainnet_2
+release_gate_start sn-mainnet-3 release_phase_sn_mainnet_3
+release_gate_start sn-mainnet-4 release_phase_sn_mainnet_4
+release_gate_start sn-mainnet-5 release_phase_sn_mainnet_5
+release_gate_start sn-mainnet-6 release_phase_sn_mainnet_6
+release_gate_start sn-mainnet-7 release_phase_sn_mainnet_7
+release_gate_start sn-mainnet-8 release_phase_sn_mainnet_8
 release_gate_start sn-core-race release_phase_sn_core_race
 release_gate_start sn-validator-race release_phase_sn_validator_race
 release_gate_start sn-simulator-race release_phase_sn_simulator_race
@@ -178,9 +353,13 @@ release_phase_sn_v2() {
   cd "$sn_repo"
   go test ./ledger ./scripts/solidity-coverage -count=1
   go test -race ./ledger ./scripts/solidity-coverage -count=1
+  # At load 27 to 46 the selection's ./miner, its claim v2 tests, took 592
+  # seconds under race and 566 without, and a later race run timed out at
+  # Go's implicit ten minutes, so both modes have an explicit deadline; the
+  # whole ledger and checker packages above take seconds.
   settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2|ReleaseRuntimeRunsLedgerAudit)'
-  go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
-  go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
+  go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1 -timeout 30m
+  go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1 -timeout 30m
 }
 release_gate_start sn-v2 release_phase_sn_v2
 
@@ -263,7 +442,7 @@ release_phase_server_unit() {
   go test ./st ./startifact -count=1
   # The SN25 go-live tooling: its gas params, verify.yml and st.yml checks.
   go test ./local/sn25golive -count=1
-  go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1
+  go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit(ArtifactUsagePinsSignerIdentityAndFinalizedBoundaries|AttemptRejectsChangedAuthorityWithoutRewritingIntent|Custody(BindsTwoOperatorSecretsAtCanonicalBoundary|RejectsDustAndKeepsPrincipalCeilings|RejectsSharedRoleKeysBeforeRpc|RejectsWrongOperatorGraphAndAuthority)|DeadlinePinsIntendedEpoch|Funding(KeepsExactPrincipalAndBoundedRounding|RejectsInvalidAndOverflowAmounts)|RetainedCalldataRejectsChangedRetryAmount|SizeRao|SizingZeroPriceSendsNothing|TierForConvictionUsesPreEpochTierExactly)$|StEstimate|StReplacementFee$|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1
   provider_input_tests='^Test(StCanonicalProviderUsages|StBuildReleaseProviderInputs)'
   go test ./controller -run "$provider_input_tests" -count=1
   go test -race ./controller -run "$provider_input_tests" -count=1
@@ -283,8 +462,6 @@ release_phase_server_unit() {
   go test ./router -run 'TestTrie' -count=1
   go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents|ParseHeadEventCkey)$' -count=1
   go test ./taskworker/work -run '^TestStSettlementTasksRejectStaleCoordinatorPayloads$' -count=1
-  go test ./monitor -count=1
-  go test -race ./monitor -count=1
   # The separate calibration harness and its archived inputs are outside SN
   # finalization. Keep a nonempty executable server package census.
   server_package_list="$(go list ./... | grep -Ev '^github[.]com/urnetwork/server/connect/sim-latency(/|$)')"
@@ -446,7 +623,7 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race ./model -run "$evidence_source_tests" -count=1
     go test . -run "$evidence_source_tests" -count=1
     go test -race . -run "$evidence_source_tests" -count=1
-    controller_db_tests='^Test(CreateContractRejectsInactiveClient|VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|AuthNetworkClientFeedsConfiguredProxyEgressNamespace|PaymentReconcile(SkipsStripeWithSKUOnlyVault|MalformedCredentialResourcesSkipAllStores)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation|StHeadExcludedClients(EqualV1|Refusals|Configured)|CoreStClientFleetBoundEvents|StFleetBoundTopicIsTheCoordinatorEvent)'
+    controller_db_tests='^Test(CreateContractRejectsInactiveClient|VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|AuthNetworkClientFeedsConfiguredProxyEgressNamespace|PaymentReconcile(SkipsStripeWithSKUOnlyVault|MalformedCredentialResourcesSkipAllStores)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation|StHeadExcludedClients(EqualV1|Refusals|Configured)|CoreStClientFleetBoundEvents|StFleetBoundTopicIsTheCoordinatorEvent|StDepositCustody(ReconcilesPreparedFundingBeforeNewSizing|StagesRoundingOnceAndCreditsExactPrincipal|LostFundingReplyDoesNotRepeatTransfer|RetainsUnderfundedSuccessWithoutAnotherTransfer)|StReplacementWaitReadErrorCannotAuthorizeReplacement)'
     model_db_tests='Test(FindActiveClientNetwork|StreamHopListenerPrunesInactiveAdjacentClients|ActiveStreamHopsBoundsConcurrentStaleReAdd|ForceCloseRequiresPositiveParallelism|ForceCloseDisputedContract|ForceCloseDirectSettlementRemovesStream|ForceCloseMalformedContractRemovesStreamAndReturnsError|SweepOrphanClearsProxyConfigRedis|SweepOrphanReapsProxyClients|VerifyEgressIndexStoresNoRawIp|VerifyTrailLockMutualExclusion|VerifyTrailLockStaleReleasePreservesSuccessor|SweepExpiredVerifyTrails|VerifyTrailMutationLockTtlCoversLoadedTrail|StDeploymentStateIsIsolatedAcrossCoordinatorReplacements|StTransactionIntentReservationUsesChainAccountNonceScope|StTransactionRevertRetryCreatesOneImmutableSuccessor|StTransactionAttemptCandidatesConvergeOnOneWinner|StTransactionCancellationCannotRegress|StTransactionFinalizedAttemptCannotRegress|St(Retained|Roster)WalletResolutions(EqualV1|Refusals)|StWalletResolutionsVerifyEachHeadOnce|StPayoutWalletResolutionsBatched(EqualV1|KeepV1PrefixOnMismatch|Duplicates|Refusals)|StFleetBound(NextBlock|ClientIds|ClientIdsRefuseMalformedRows)|StRosterProviderPinRefusals)'
     go test ./controller -run "$controller_db_tests" -count=1
     go test ./model -run "$model_db_tests" -count=1
@@ -473,10 +650,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # epoch driver, the ledger endpoints, the v2 earnings readers, the SN25
     # prune alert and the gas floors of the v1 closes and of the deposit key's
     # stake moves, with the liability that caps them (SV-4), most of them on
-    # this gate's private services.
+    # this gate's private services. Under load the race run's ./controller
+    # reached Go's implicit ten-minute deadline, at 600.6 and 601.6 seconds,
+    # and normal mode took 509 to 521, so both modes have an explicit one.
     ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet|StV1Close|StV1GasFloor|StV1Deposit|StV1PendingReservation|StOperatorGasRemainingLiability)'
-    go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
-    go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1 -timeout 30m
+    go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1 -timeout 30m
     # The monitor's schema contracts of the published migration suffix, from
     # 794 on, where settlement v2's migrations 821 and 822 are appended, read a
     # real database's catalog.
@@ -489,6 +668,15 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # selection. Every hosted-device and client netstack is synchronously joined
     # before the following root is admitted.
     go test -timeout 20m ./proxy -count=1
+    # The monitor's whole package, in both modes, one after the other. Its SQL
+    # fixtures fail closed without the test environment this phase sources
+    # (server monitor/RUN-MAIN.md), so it cannot run among the unit suites.
+    # On 2026-10-14, on a build host at load 40 to 58, the normal package took
+    # 43 minutes. Most of it is PostgreSQL time, which the race detector does
+    # not slow. Each catalog fixture's budget ends 30 seconds before the
+    # package deadline, so these deadlines bound the fixtures too.
+    go test -timeout 90m ./monitor -count=1
+    go test -race -timeout 180m ./monitor -count=1
   }
   # Each full history population has its own process and ten-minute modes.
   # TestEnv owns a unique Pg database and an exclusive renewable Redis lease;
@@ -563,6 +751,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     settlement_v2_e2e_tests='^Test(SettlementV2E2E)'
     go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1 -timeout 30m
     go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1 -timeout 30m
+    # server/stmonitor/testfixture creates and drops its own database and role
+    # for each of these roots, on this gate's private PostgreSQL only.
+    stmonitor_fixture_tests='^(TestMonitorOperatorCredentialFenceAndPublicationAmbiguity|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops|TestMonitorStorageOperatorLostAckRetainsIncident)$'
+    export STMONITOR_TEST_ADMIN_URL="postgres://postgres:urnetwork-local-test@$WARP_TEST_ENV_PORTABLE_POSTGRES_AUTHORITY/postgres?sslmode=disable"
+    go test ./mainnet -run "$stmonitor_fixture_tests" -count=1
+    go test -race ./mainnet -run "$stmonitor_fixture_tests" -count=1
   }
   if [[ "$release_gate_services_ready" == 1 ]]; then
     release_gate_start server-db release_phase_server_db
@@ -608,7 +802,7 @@ if (( release_gate_active != 0 )); then
   exit 1
 fi
 release_gate_fence_status=0
-if [[ "$release_gate_diagnostic" == 1 ]]; then
+if [[ "$release_gate_diagnostic" == 1 && "$release_gate_dependency_mode" == pinned ]]; then
   if [[ -f "$release_gate_root/preflights/source-freeze/stdout" ]]; then
     release_source_snapshot="$(< "$release_gate_root/preflights/source-freeze/stdout")"
   else
@@ -619,28 +813,36 @@ fi
 
 echo "[release-1.0] patch hygiene"
 for repo in "${release_repos[@]}"; do
+  # Local mode never touches a vault checkout, not even its Git metadata.
+  if [[ "$release_gate_dependency_mode" == local && "$repo" == vault ]]; then
+    continue
+  fi
   git -C "$workspace/$repo" diff --check || release_gate_fence_status=1
   git -C "$workspace/$repo" diff --cached --check || release_gate_fence_status=1
 done
 
-echo "[release-1.0] final release-lock checkout"
-(
-  cd "$sn_repo"
-  # The full Go suite checks this near the start. Repeat it after every long
-  # gate so an independently updated sibling checkout cannot escape the run.
-  go test ./sim-testnet -run '^TestReleaseLockMatchesCheckout$' -count=1
-) || release_gate_fence_status=1
+if [[ "$release_gate_dependency_mode" == local ]]; then
+  echo "[release-1.0] final release-lock and source-freeze checkouts skipped (local mode)"
+else
+  echo "[release-1.0] final release-lock checkout"
+  (
+    cd "$sn_repo"
+    # The full Go suite checks this near the start. Repeat it after every long
+    # gate so an independently updated sibling checkout cannot escape the run.
+    go test ./sim-testnet -run '^TestReleaseLockMatchesCheckout$' -count=1
+  ) || release_gate_fence_status=1
 
-echo "[release-1.0] final source-freeze checkout"
-if ! final_release_source_snapshot="$(release_gate_record_preflight final-source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")"; then
-  release_gate_fence_status=1
+  echo "[release-1.0] final source-freeze checkout"
+  if ! final_release_source_snapshot="$(release_gate_record_preflight final-source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")"; then
+    release_gate_fence_status=1
+  fi
+  if [[ "$final_release_source_snapshot" != "$release_source_snapshot" ]]; then
+    echo "release source revisions changed while the gate was running" >&2
+    diff -u <(printf '%s\n' "$release_source_snapshot") <(printf '%s\n' "$final_release_source_snapshot") >&2 || true
+    release_gate_fence_status=1
+  fi
+  printf '%s\n' "$final_release_source_snapshot"
 fi
-if [[ "$final_release_source_snapshot" != "$release_source_snapshot" ]]; then
-  echo "release source revisions changed while the gate was running" >&2
-  diff -u <(printf '%s\n' "$release_source_snapshot") <(printf '%s\n' "$final_release_source_snapshot") >&2 || true
-  release_gate_fence_status=1
-fi
-printf '%s\n' "$final_release_source_snapshot"
 
 if [[ "$release_gate_diagnostic" == 1 ]]; then
   diagnostic_status=0
@@ -654,4 +856,8 @@ if (( release_gate_status != 0 || release_gate_fence_status != 0 )); then
   exit "$release_gate_fence_status"
 fi
 
-echo "[release-1.0] local release gate passed"
+if [[ "$release_gate_dependency_mode" == local ]]; then
+  echo "[release-1.0] local release gate passed (local mode: working checkouts, not sealed)"
+else
+  echo "[release-1.0] local release gate passed"
+fi

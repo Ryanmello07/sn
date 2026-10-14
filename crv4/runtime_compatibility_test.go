@@ -286,7 +286,11 @@ func TestProvisionalRuntimeCompatibilityExactArtifactAndFailureRecovery(t *testi
 	}
 }
 
-func TestProvisionalRuntimeCompatibilityActualSchedulePreservesEligibility(t *testing.T) {
+// Serves the schedule fixture under an unreviewed successor whose metadata
+// keeps the consumed interface; only 461 is reviewed. Compatibility is not
+// yet installed.
+func newProvisionalValidatorScheduleTestFixture(t *testing.T) (*validatorStakeTestFixture, ValidatorScheduleQuery) {
+	t.Helper()
 	fixture, query := newValidatorScheduleTestFixture(t)
 	identity := fixture.identity
 	metadata, _, encoded := provisionalRuntimeMetadataTest(t)
@@ -322,6 +326,12 @@ func TestProvisionalRuntimeCompatibilityActualSchedulePreservesEligibility(t *te
 		}
 		return priorHook(ctx, target, method, args...)
 	}
+	return fixture, query
+}
+
+func TestProvisionalRuntimeCompatibilityActualSchedulePreservesEligibility(t *testing.T) {
+	fixture, query := newProvisionalValidatorScheduleTestFixture(t)
+	identity := fixture.identity
 	if err := identity.chain.EnableProvisionalRuntimeCompatibility(query.GenesisHash, func(AuthenticatedRuntimeArtifact) error { return nil }); err != nil {
 		t.Fatal(err)
 	}

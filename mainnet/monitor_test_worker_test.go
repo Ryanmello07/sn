@@ -10,9 +10,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -58,6 +60,33 @@ func resumeMonitorTestWorker(t *testing.T, done <-chan int, resume chan<- struct
 	case <-time.After(30 * time.Second):
 		t.Fatal("monitor worker did not accept resume")
 	}
+}
+
+// A worker's stderr is retained for its test's failure report only, so a
+// passing run stays quiet even in verbose output.
+type monitorTestStderr struct {
+	mutex  sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (self *monitorTestStderr) Write(raw []byte) (int, error) {
+	self.mutex.Lock()
+	defer self.mutex.Unlock()
+	return self.buffer.Write(raw)
+}
+
+// Register before the worker's join cleanup, which therefore runs first.
+func monitorTestWorkerStderr(t *testing.T) io.Writer {
+	t.Helper()
+	stderr := &monitorTestStderr{}
+	t.Cleanup(func() {
+		if t.Failed() {
+			stderr.mutex.Lock()
+			defer stderr.mutex.Unlock()
+			t.Logf("monitor worker stderr (%d bytes):\n%s", stderr.buffer.Len(), stderr.buffer.Bytes())
+		}
+	})
+	return stderr
 }
 
 // Cleanup cancels first and reports a worker that fails to join, even after Fatal.
@@ -112,6 +141,49 @@ func TestMonitorOperatorFixtureFailureStaysOnTestGoroutine(t *testing.T) {
 	monitorTestStarterRefusesMalformedFixture(t, func(fixture *monitorServicesFixture) {
 		startMonitorOperatorTest(t, fixture, "http://rpc.example", monitorServiceHooks{})
 	})
+}
+
+// A worker that exits before its barrier fails the waiting test at once with
+// its exit code and captured stderr; a passing test prints none of that stderr.
+func TestMonitorOperatorWorkerExitReportsCapturedStderr(t *testing.T) {
+	const childKey = "URNETWORK_MONITOR_WORKER_STDERR_CHILD"
+	refusal := []byte("monitor service policy: service policy schema is unknown")
+	if mode := os.Getenv(childKey); mode != "" {
+		fixture := newMonitorServicesFixture(t, "alpha")
+		fixture.policy.Schema = "synthetic-unknown-schema"
+		fixture.writePolicy(t)
+		_, done, sink, _ := startMonitorOperatorTest(t, fixture, "http://rpc.example", monitorServiceHooks{})
+		if mode == "fail" {
+			event := monitorTestEvent(t, done, sink.events)
+			t.Fatal("refused policy published an operator event", event)
+		}
+		if code := monitorTestEvent(t, nil, done); code != 2 {
+			t.Fatal("refused policy exit differs", code)
+		}
+		return
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"fail", "pass"} {
+		ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+		command := exec.CommandContext(ctx, executable, "-test.run=^"+t.Name()+"$", "-test.count=1", "-test.v=true", "-test.timeout=50s")
+		command.Env = append(os.Environ(), childKey+"="+mode)
+		output, err := command.CombinedOutput()
+		finished := ctx.Err() == nil && !bytes.Contains(output, []byte("test timed out"))
+		cancel()
+		var exit *exec.ExitError
+		failed := errors.As(err, &exit) && exit.ExitCode() == 1
+		switch {
+		case !finished:
+			t.Fatalf("%s child did not finish: %s", mode, output)
+		case mode == "fail" && !(failed && bytes.Contains(output, []byte("monitor worker stopped before event (result=true, value=2)")) && bytes.Contains(output, refusal)):
+			t.Fatalf("exited worker's failure omitted its exit code or stderr: err=%v output=%s", err, output)
+		case mode == "pass" && (err != nil || bytes.Contains(output, refusal)):
+			t.Fatalf("passing run printed its worker's stderr: err=%v output=%s", err, output)
+		}
+	}
 }
 
 // Every audited fixture entry point is forbidden inside a background call.

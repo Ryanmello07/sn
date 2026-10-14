@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -295,6 +296,8 @@ func TestReleaseGateJobsUsePrivateArtifactsCachesAndSourceReferences(t *testing.
 [[ "$(readlink "$release_gate_root/lib")" == "$sn_repo/evm/lib" ]]
 [[ "${FOUNDRY_OUT%/*}" == "$release_gate_root" && "${SLITHER_FOUNDRY_OUT%/*}" == "$release_gate_root" ]]
 [[ "$release_gate_limit" == 2 && "$GOMAXPROCS" == 4 && "$GOFLAGS" == *-p=4 ]]
+[[ "$RAYON_NUM_THREADS" == 4 && "$CARGO_BUILD_JOBS" == 4 && "$RUST_TEST_THREADS" == 4 ]]
+[[ "$release_gate_mainnet_exports" == "$release_gate_root/mainnet-exports" && ! -e "$release_gate_mainnet_exports" ]]
 release_gate_complete
 `)
 	self.join(t, 0)
@@ -378,10 +381,11 @@ func TestReleaseGateJobsExitPreservesOriginalParentFailure(t *testing.T) {
 }
 
 // Lose the completion endpoint only after admission. The real owner still
-// reaps its worker, but cannot publish proof, so services must remain untouched.
+// reaps its worker, but cannot publish proof, so services must remain
+// untouched, and so must the ./mainnet exports.
 func TestReleaseGateJobsLostOwnerRetainsServices(t *testing.T) {
 	self := newReleaseGateJobsFixture(t, `
-phase_hold() { printf 'held:%s\n' "$RELEASE_GATE_WORKER_PID" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; }
+phase_hold() { mkdir "$release_gate_mainnet_exports"; printf 'held:%s\n' "$RELEASE_GATE_WORKER_PID" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; }
 release_gate_start hold phase_hold
 printf 'root:%s\n' "$release_gate_root" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
 read -r continue < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-b"
@@ -423,6 +427,9 @@ exit 1
 	}
 	if !strings.Contains(self.output.String(), "private services retained") {
 		t.Fatalf("lost owner did not report unproven cleanup:\n%s", self.output.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "mainnet-exports")); err != nil {
+		t.Fatalf("lost owner permitted removing the exports: %v", err)
 	}
 }
 
@@ -727,8 +734,19 @@ const releaseGateSimulatorSeparateSelector = "^(TestCampaignEvidenceCapacityV2Me
 const releaseGateSimulatorFinalSelector = "^TestFinal.*$"
 const releaseGateSimulatorHistorySelector = "^Test(Fleet|Historical|Runtime|Scenario).*$"
 const releaseGateSimulatorPartitionedSelector = "^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*)$"
+
+// Local mode's complement also skips its two named sim-testnet tests.
+const releaseGateSimulatorLocalPartitionedSelector = "^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*|TestReleaseLockMatchesCheckout|TestRepositoryDiscoveryUsesModuleIdentity)$"
+
+// Each mode's ordinary complement, assigned once before the job's definition.
+const releaseGateSimulatorRaceSkipAssignment = "release_gate_simulator_race_skip='" + releaseGateSimulatorPartitionedSelector + "'\n" +
+	"if [[ \"$release_gate_dependency_mode\" == local ]]; then\n" +
+	"  release_gate_simulator_race_skip='" + releaseGateSimulatorLocalPartitionedSelector + "'\n" +
+	"fi\n" +
+	"export release_gate_simulator_race_skip\n" +
+	"release_phase_sn_simulator_race() {\n"
 const releaseGateSimulatorRaceCommand = "go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1"
-const releaseGateSimulatorOrdinaryRaceCommand = releaseGateSimulatorRaceCommand + " -skip '" + releaseGateSimulatorPartitionedSelector + "'"
+const releaseGateSimulatorOrdinaryRaceCommand = releaseGateSimulatorRaceCommand + ` -skip "$release_gate_simulator_race_skip"`
 const releaseGateSimulatorPopulationRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorPopulationSelector + "'"
 const releaseGateSimulatorSupplementRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorSupplementSelector + "'"
 const releaseGateSimulatorFinalRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorFinalSelector + "' -skip '" + releaseGateSimulatorSeparateSelector + "'"
@@ -741,9 +759,10 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 		phase   string
 		job     string
 		command string
+		body    []string
 	}{
-		{phase: "sn_all_normal", job: "sn-all-normal", command: releaseGateAggregateNormalCommand},
-		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race ./crv4 ./miner/... ./protocol -count=1"},
+		{phase: "sn_all_normal", job: "sn-all-normal", command: releaseGateAggregateNormalCommand, body: releaseGateAggregateNormalBody},
+		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"},
 		{phase: "sn_validator_race", job: "sn-validator-race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
 		{phase: "sn_simulator_race", job: "sn-simulator-race", command: releaseGateSimulatorOrdinaryRaceCommand},
 		{phase: "sn_simulator_populations_race", job: "sn-simulator-populations-race", command: releaseGateSimulatorPopulationRaceCommand},
@@ -765,7 +784,11 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 				commands = append(commands, line)
 			}
 		}
-		if len(commands) != 2 || commands[0] != `cd "$sn_repo"` || commands[1] != group.command {
+		body := group.body
+		if body == nil {
+			body = []string{`cd "$sn_repo"`, group.command}
+		}
+		if !slices.Equal(commands, body) {
 			return fmt.Errorf("full gate phase %s changed its complete command or scoped budget", group.phase)
 		}
 		start := "release_gate_start " + group.job + " " + function
@@ -784,8 +807,8 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 }
 
 // The inherited combined core race command allowed less time than the measured
-// passing serial work alone. The dedicated full-validator allowance leaves
-// the other core packages on their original budgets.
+// passing serial work alone. The dedicated full-validator allowance is
+// separate from the other core packages' own measured budget.
 func TestReleaseGateJobsRequireIndependentCompleteValidatorRace(t *testing.T) {
 	t.Parallel()
 	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
@@ -863,6 +886,28 @@ func TestReleaseGateJobsRejectSimulatorPopulationPartitionDrift(t *testing.T) {
 			}
 			if err := verifyReleaseGateSimulatorRaceCensus(strings.Replace(script, command, replacement, 1), sources); err == nil {
 				t.Fatalf("aggregate accepted changed simulator execution: %s", replacement)
+			}
+		}
+	}
+	// The ordinary owner's complement is each mode's reviewed assignment.
+	for _, assignment := range []string{"release_gate_simulator_race_skip='" + releaseGateSimulatorPartitionedSelector + "'", "release_gate_simulator_race_skip='" + releaseGateSimulatorLocalPartitionedSelector + "'"} {
+		for _, replacement := range []string{
+			strings.Replace(assignment, ")$'", ")'", 1),
+			strings.Replace(assignment, "TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|", "", 1),
+			strings.Replace(assignment, "TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|", "", 1),
+			strings.Replace(assignment, "TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper", "TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper.*", 1),
+			strings.Replace(assignment, "|TestRepositoryDiscoveryUsesModuleIdentity", "", 1),
+			strings.Replace(assignment, "|TestReleaseLockMatchesCheckout", "", 1),
+			assignment + "\nrelease_gate_simulator_race_skip='^$'",
+		} {
+			if replacement == assignment {
+				continue
+			}
+			if strings.Count(script, assignment) != 1 {
+				t.Fatal("mutation does not identify one simulator complement assignment")
+			}
+			if err := verifyReleaseGateSimulatorRaceCensus(strings.Replace(script, assignment, replacement, 1), sources); err == nil {
+				t.Fatalf("aggregate accepted a changed simulator complement: %s", replacement)
 			}
 		}
 	}
@@ -995,7 +1040,7 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 		t.Fatal(err)
 	}
 	const command = "go test -race -parallel=4 -timeout 90m ./validator -count=1"
-	const core = "go test -race ./crv4 ./miner/... ./protocol -count=1"
+	const core = "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"
 	const start = "release_gate_start sn-validator-race release_phase_sn_validator_race"
 	const definition = "release_phase_sn_validator_race() {\n  cd \"$sn_repo\"\n  " + command + "\n}"
 	cases := []struct {
@@ -1015,10 +1060,11 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 		{name: "hidden failure", old: command, replacement: command + " || true"},
 		{name: "unreachable command", old: command, replacement: "if false; then\n  " + command + "\n  fi"},
 		{name: "different source", old: definition, replacement: strings.Replace(definition, `cd "$sn_repo"`, `cd "$workspace/server"`, 1)},
-		{name: "lost core runtime", old: core, replacement: "go test -race ./miner/... ./protocol -count=1"},
-		{name: "lost core miner", old: core, replacement: "go test -race ./crv4 ./protocol -count=1"},
-		{name: "lost core protocol", old: core, replacement: "go test -race ./crv4 ./miner/... -count=1"},
-		{name: "core budget leak", old: core, replacement: core + " -timeout 90m"},
+		{name: "lost core runtime", old: core, replacement: "go test -race -timeout 120m ./miner/... ./protocol -count=1"},
+		{name: "lost core miner", old: core, replacement: "go test -race -timeout 120m ./crv4 ./protocol -count=1"},
+		{name: "lost core protocol", old: core, replacement: "go test -race -timeout 120m ./crv4 ./miner/... -count=1"},
+		{name: "implicit core deadline", old: core, replacement: strings.Replace(core, " -timeout 120m", "", 1)},
+		{name: "core budget leak", old: core, replacement: strings.Replace(core, "-timeout 120m", "-timeout 90m", 1)},
 		{name: "combined core owner", old: core, replacement: core + " ./validator"},
 		{name: "commented admission", old: start, replacement: "# " + start},
 		{name: "wrong admitted owner", old: start, replacement: "release_gate_start sn-validator-race release_phase_sn_core_race"},
@@ -1051,7 +1097,7 @@ var releaseGateUncachedCommands = []struct {
 	command string
 }{
 	{phase: "sn_all_normal", command: releaseGateAggregateNormalCommand},
-	{phase: "sn_core_race", command: "go test -race ./crv4 ./miner/... ./protocol -count=1"},
+	{phase: "sn_core_race", command: "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"},
 	{phase: "sn_validator_race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
 	{phase: "sn_simulator_race", command: releaseGateSimulatorOrdinaryRaceCommand},
 	{phase: "sn_simulator_populations_race", command: releaseGateSimulatorPopulationRaceCommand},
@@ -1061,20 +1107,24 @@ var releaseGateUncachedCommands = []struct {
 	{phase: "server_unit", command: "go test . -run '^Test(PgResourcesRedirectMaintenancePoolAndRestore|DatabaseTimeMatchesPostgresPrecision)$' -count=1"},
 	{phase: "server_unit", command: "go test ./st ./startifact -count=1"},
 	{phase: "server_unit", command: "go test ./local/sn25golive -count=1"},
-	{phase: "server_unit", command: "go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1"},
+	{phase: "server_unit", command: "go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit(ArtifactUsagePinsSignerIdentityAndFinalizedBoundaries|AttemptRejectsChangedAuthorityWithoutRewritingIntent|Custody(BindsTwoOperatorSecretsAtCanonicalBoundary|RejectsDustAndKeepsPrincipalCeilings|RejectsSharedRoleKeysBeforeRpc|RejectsWrongOperatorGraphAndAuthority)|DeadlinePinsIntendedEpoch|Funding(KeepsExactPrincipalAndBoundedRounding|RejectsInvalidAndOverflowAmounts)|RetainedCalldataRejectsChangedRetryAmount|SizeRao|SizingZeroPriceSendsNothing|TierForConvictionUsesPreEpochTierExactly)$|StEstimate|StReplacementFee$|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1"},
 	{phase: "server_unit", command: "go test ./session -run 'Test.*(UrForwardedAddress|LegacyForwardedHeaders|RemoteAddress)' -count=1"},
 	{phase: "server_unit", command: "go test ./router -run 'TestTrie' -count=1"},
 	{phase: "server_unit", command: "go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents|ParseHeadEventCkey)$' -count=1"},
 	{phase: "server_unit", command: "go test ./taskworker/work -run '^TestStSettlementTasksRejectStaleCoordinatorPayloads$' -count=1"},
-	{phase: "server_unit", command: "go test ./monitor -count=1"},
-	{phase: "server_unit", command: "go test -race ./monitor -count=1"},
 	{phase: "connect", command: "go test . -run '^Test(Verify|Sn)' -count=1"},
 	{phase: "sdk", command: "go test . -run '^Test(ApiSubnet|ProviderLocalUserNatSettings)' -count=1"},
 	{phase: "server_db", command: "go test ./controller -run \"$controller_db_tests\" -count=1"},
 	{phase: "server_db", command: "go test ./model -run \"$model_db_tests\" -count=1"},
 	{phase: "server_db", command: "go test -race ./controller -run \"$controller_db_tests\" -count=1"},
 	{phase: "server_db", command: "go test -race ./model -run \"$model_db_tests\" -count=1"},
+	{phase: "server_db", command: "go test -timeout 90m ./monitor -count=1"},
+	{phase: "server_db", command: "go test -race -timeout 180m ./monitor -count=1"},
 }
+
+// A here-document can hide a body from the line census; a here-string
+// (<<<), which feeds a command one word, cannot.
+var releaseGateDocumentWrapper = regexp.MustCompile(`(^|[^<])<<($|[^<])`)
 
 // The bounded phase extractor ends at the first closing brace. Refuse nested
 // declarations before an incomplete one can look executable.
@@ -1105,7 +1155,7 @@ func verifyReleaseGateUncachedBodies(script string) error {
 			if line == required.command {
 				break
 			}
-			if !strings.HasPrefix(line, "#") && strings.Contains(line, "<<") {
+			if !strings.HasPrefix(line, "#") && releaseGateDocumentWrapper.MatchString(line) {
 				return fmt.Errorf("uncached gate body has an unsupported document wrapper: %s", required.phase)
 			}
 		}
@@ -1197,6 +1247,7 @@ func TestReleaseGateJobsRejectCachedOrHiddenAggregateBodies(t *testing.T) {
 				"(\n" + required.command + "\n)",
 				"{\n" + required.command + "\n}",
 				"cat <<'capture_body'\n" + required.command + "\ncapture_body",
+				"cat <<-capture_body\n" + required.command + "\ncapture_body",
 				required.command + "\n" + required.command,
 			} {
 				changed := strings.Replace(script, required.command, replacement, 1)
@@ -1212,4 +1263,95 @@ func TestReleaseGateJobsRejectCachedOrHiddenAggregateBodies(t *testing.T) {
 	if err := verifyReleaseGateUncachedBodies(script + "\ngo test ./... -run '^$'\n"); err == nil {
 		t.Fatal("an extra compile-only check changed the non-body census")
 	}
+}
+
+// The runner's await, on its real queue, joins exactly the named job, reaping
+// any other that completes first, and leaves that job's own exit, again once
+// joined; an unknown job is refused.
+func TestReleaseGateJobsAwaitJoinsTheNamedJob(t *testing.T) {
+	self := newReleaseGateJobsFixture(t, `
+phase_named() { printf 'named\n' > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; return 7; }
+phase_other() { printf 'other:%s\n' "$PPID" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-b"; }
+release_gate_start named phase_named
+release_gate_start other phase_other
+release_gate_await named
+printf 'awaited %s %s %s\n' "$RELEASE_GATE_AWAITED_EXIT" "$release_gate_active" "${release_gate_pending[*]}" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+RELEASE_GATE_AWAITED_EXIT=
+release_gate_await named
+[[ "$RELEASE_GATE_AWAITED_EXIT" == 7 ]]
+if release_gate_await missing; then exit 90; fi
+status=0; release_gate_complete || status=$?
+exit "$status"
+`)
+	owner := ""
+	for range 2 {
+		if line := self.line(t, "events"); strings.HasPrefix(line, "other:") {
+			owner = strings.TrimPrefix(line, "other:")
+		} else if line != "named" {
+			t.Fatalf("unexpected admission event=%q", line)
+		}
+	}
+	if pid, err := strconv.Atoi(owner); err != nil || pid <= 0 {
+		t.Fatalf("invalid other owner PID=%q: %v", owner, err)
+	}
+	// The other job completes first: the await reaps its owner, whose process
+	// record then disappears, while the named job still runs.
+	self.write(t, "control-b", "release")
+	for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(filepath.Join("/proc", owner)); os.IsNotExist(err) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the await did not reap the job that completed first")
+		}
+	}
+	self.write(t, "control-a", "release")
+	if got := self.line(t, "events"); got != "awaited 7 0 0 0" {
+		t.Fatalf("the await returned %q", got)
+	}
+	self.join(t, 7)
+	if !strings.Contains(self.output.String(), "release gate: no admitted job missing to await\n") {
+		t.Fatalf("an unknown job was not refused:\n%s", self.output.String())
+	}
+}
+
+// The runner removes the ./mainnet exports, its private directory, once every
+// job has joined, on the gate's own completion and on an EXIT, and a failed
+// removal fails the gate.
+func TestReleaseGateJobsRemoveTheMainnetExportsAfterTheFinalJoin(t *testing.T) {
+	complete := newReleaseGateJobsFixture(t, `
+phase_build() { mkdir "$release_gate_mainnet_exports"; printf 'export\n' > "$release_gate_mainnet_exports/witness"; }
+release_gate_start build phase_build
+release_gate_complete
+[[ ! -e "$release_gate_mainnet_exports" ]]
+`)
+	complete.join(t, 0)
+	exit := newReleaseGateJobsFixture(t, `
+phase_hold() {
+  mkdir "$release_gate_mainnet_exports"
+  printf '%s\n' "$release_gate_mainnet_exports" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+  read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"
+}
+release_gate_start hold phase_hold
+read -r hold < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-b"
+`)
+	exports := exit.line(t, "events")
+	if err := exit.command.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	exit.join(t, 143)
+	if _, err := os.Stat(exports); !os.IsNotExist(err) {
+		t.Fatalf("the EXIT kept the exports: %v", err)
+	}
+	failed := newReleaseGateJobsFixture(t, `
+mkdir -p "$release_gate_mainnet_exports/locked"
+printf 'export\n' > "$release_gate_mainnet_exports/locked/file"
+chmod 500 "$release_gate_mainnet_exports/locked"
+printf '%s\n' "$release_gate_mainnet_exports" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+status=0; release_gate_complete || status=$?
+exit "$status"
+`)
+	locked := filepath.Join(failed.line(t, "events"), "locked")
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	failed.join(t, 1)
 }
