@@ -243,11 +243,22 @@ func TestBootstrapSuccessorSafeCurrentRevisionRejectsLostAndForkedHistory(t *tes
 	second := bootstrapSuccessorSafeCurrentTestNext(t, f, base, owner.runtimeHistory, []bootstrapSuccessorSafeCurrentRevisionApproval{first})
 	stage := owner.local.stageName(bootstrapSuccessorSafeCurrentName(1), bootstrapSuccessorSafeCurrentStageKind(rootObjectHash(first)))
 	owner.close()
-	for _, fault := range []string{"missing", "signature", "noncanonical", "gap", "fork", "completed stage"} {
+	// The census acknowledges the removal, so the replay is what must refuse.
+	ctx, claim := f.storageContext(t.Context()), rootObjectHash(f.approval)
+	bootstrapSuccessorExecutionTestRewrite(t, ctx, root, claim, map[string][]byte{bootstrapSuccessorSafeCurrentName(1): nil})
+	reopened, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
+	if reopened != nil {
+		reopened.close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "counted event lost its current-policy revision authority") {
+		t.Fatal("missing counted current policy reopened execution custody", err)
+	}
+	bootstrapSuccessorExecutionTestRewrite(t, ctx, root, claim, map[string][]byte{bootstrapSuccessorSafeCurrentName(1): raw})
+	// Each fault is undone on the same inode, so the next starts from intact
+	// custody: the census binds the revision's inode as well as its bytes.
+	for _, fault := range []string{"signature", "noncanonical", "gap", "fork", "completed stage"} {
 		var extra string
 		switch fault {
-		case "missing":
-			err = os.Remove(path)
 		case "signature":
 			changed := first
 			changed.Signature = strings.Repeat("00", 64)
