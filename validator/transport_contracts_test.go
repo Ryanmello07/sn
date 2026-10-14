@@ -190,6 +190,26 @@ func TestTunnelHopContractsCloseWhatA421KeptBeforeAnotherHop(t *testing.T) {
 	}
 }
 
+// Each of the transport's retained clients keeps its own: a 421 on one keeps
+// only that client's contracts, another client's attempt through the same hop
+// closes its own, and the first client's resend still finds its contracts kept.
+func TestTunnelHopContractsAreKeptPerRetainedClient(t *testing.T) {
+	flushes := map[string]int{}
+	newClient := func(name string) *registeredTunnelClient {
+		return &registeredTunnelClient{contracts: tunnelHopContracts{flush: func() { flushes[name]++ }}}
+	}
+	answered, other := newClient("answered"), newClient("other")
+	hop := connect.NewId()
+	answered.contracts.begin(hop)
+	answered.contracts.joined(hop, tunnelSourceEgressUnresolved(hop))()
+	other.contracts.begin(hop)
+	other.contracts.joined(hop, nil)()
+	answered.contracts.begin(hop)
+	if flushes["answered"] != 0 || flushes["other"] != 1 {
+		t.Fatalf("closes per client %v, want the answered client's kept and the other's closed once", flushes)
+	}
+}
+
 // Grants every CreateContract it receives with the peer's network provide key
 // and records each request. Close reports need no answer.
 type tunnelContractAuthority struct {
