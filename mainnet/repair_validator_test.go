@@ -528,11 +528,11 @@ func TestRepairValidatorPublicationAmbiguityAndReopen(t *testing.T) {
 			}
 			return err
 		}
-		_, err = resumeRepairValidator(t.Context(), store, fixture.host, func() time.Time { return fixture.now })
+		_, err = resumeRepairValidator(fixture.storage.Context, store, fixture.host, func() time.Time { return fixture.now })
 		if err == nil || failAt == 2 && fixture.starts != 0 || failAt == 4 && fixture.starts != 1 {
 			t.Fatal("ambiguous publication crossed its action boundary", failAt, err, fixture.starts)
 		}
-		if _, err := resumeRepairValidator(t.Context(), store, fixture.host, func() time.Time { return fixture.now }); err == nil {
+		if _, err := resumeRepairValidator(fixture.storage.Context, store, fixture.host, func() time.Time { return fixture.now }); err == nil {
 			t.Fatal("ambiguous repair owner was reused")
 		}
 		if err := store.close(); err != nil {
@@ -559,7 +559,7 @@ func TestRepairValidatorPostSyncAuthorityRecheck(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ctx, cancel := context.WithCancel(t.Context())
+		ctx, cancel := context.WithCancel(fixture.storage.Context)
 		writes := 0
 		store.syncDirectory = func(file *os.File) error {
 			err := file.Sync()
