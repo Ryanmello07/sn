@@ -21,6 +21,9 @@ unset RELEASE_GATE_DEPENDENCY_MODE
 
 # Release qualification cannot hide an assertion or panic behind a retry.
 export WARP_TEST_ENV_FAIL_FAST=1
+# server/stmonitor/testfixture's admin URL comes only from this gate's private
+# PostgreSQL, in sn-e2e, never from the caller's environment or local stack.
+unset STMONITOR_TEST_ADMIN_URL
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="$(dirname "$sn_repo")"
@@ -139,11 +142,12 @@ release_phase_sn_go() {
 release_gate_start sn-go release_phase_sn_go
 
 # The E suite needs the server's database, so the aggregate skips it; sn-e2e
-# runs every TestSettlementV2E2E test on the gate's private services. Local
+# runs every TestSettlementV2E2E test on the gate's private services. So do
+# the four mainnet roots of server/stmonitor/testfixture, skipped by name. Local
 # mode also skips the release-lock comparison, which only a sealed run passes.
-release_gate_aggregate_skip='^TestSettlementV2E2E'
+release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$)'
 if [[ "$release_gate_dependency_mode" == local ]]; then
-  release_gate_aggregate_skip='^(TestSettlementV2E2E|TestReleaseLockMatchesCheckout$)'
+  release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$)'
 fi
 export release_gate_aggregate_skip
 release_phase_sn_all_normal() {
@@ -504,10 +508,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # epoch driver, the ledger endpoints, the v2 earnings readers, the SN25
     # prune alert and the gas floors of the v1 closes and of the deposit key's
     # stake moves, with the liability that caps them (SV-4), most of them on
-    # this gate's private services.
+    # this gate's private services. Under load the race run's ./controller
+    # reached Go's implicit ten-minute deadline, at 600.6 and 601.6 seconds,
+    # and normal mode took 509 to 521, so both modes have an explicit one.
     ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet|StV1Close|StV1GasFloor|StV1Deposit|StV1PendingReservation|StOperatorGasRemainingLiability)'
-    go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
-    go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1 -timeout 30m
+    go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1 -timeout 30m
     # The monitor's schema contracts of the published migration suffix, from
     # 794 on, where settlement v2's migrations 821 and 822 are appended, read a
     # real database's catalog.
@@ -603,6 +609,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     settlement_v2_e2e_tests='^Test(SettlementV2E2E)'
     go test ./mainnet -run "$settlement_v2_e2e_tests" -count=1 -timeout 30m
     go test -race ./mainnet -run "$settlement_v2_e2e_tests" -count=1 -timeout 30m
+    # server/stmonitor/testfixture creates and drops its own database and role
+    # for each of these roots, on this gate's private PostgreSQL only.
+    stmonitor_fixture_tests='^(TestMonitorOperatorCredentialFenceAndPublicationAmbiguity|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops|TestMonitorStorageOperatorLostAckRetainsIncident)$'
+    export STMONITOR_TEST_ADMIN_URL="postgres://postgres:urnetwork-local-test@$WARP_TEST_ENV_PORTABLE_POSTGRES_AUTHORITY/postgres?sslmode=disable"
+    go test ./mainnet -run "$stmonitor_fixture_tests" -count=1
+    go test -race ./mainnet -run "$stmonitor_fixture_tests" -count=1
   }
   if [[ "$release_gate_services_ready" == 1 ]]; then
     release_gate_start server-db release_phase_server_db

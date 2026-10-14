@@ -143,7 +143,7 @@ release_gate_dependency_mode=`+mode+`; export release_gate_dependency_mode
 // The skip that each mode gives the aggregate job, from its own assignment.
 func releaseGateAggregateSkipFor(t *testing.T, mode string) string {
 	t.Helper()
-	block := releaseGateLocalFragment(t, "release_gate_aggregate_skip='"+releaseGateAggregateE2ESkip+"'", "release_phase_sn_all_normal() {")
+	block := releaseGateLocalFragment(t, "release_gate_aggregate_skip='"+releaseGateAggregatePinnedSkip+"'", "release_phase_sn_all_normal() {")
 	output, err := exec.Command("bash", "-c", "set -euo pipefail\nrelease_gate_dependency_mode="+mode+"\n"+block+`printf '%s' "$release_gate_aggregate_skip"`).Output()
 	if err != nil {
 		t.Fatal(err)
@@ -204,7 +204,7 @@ func TestReleaseGateLocalModeSkipsExactlyTheSealingChecks(t *testing.T) {
 }
 
 // Unset, empty and pinned all select pinned, which keeps every preflight, both
-// final fences and the aggregate job's E-suite skip alone, as before.
+// final fences and the aggregate job's pinned skip, as before.
 func TestReleaseGatePinnedModeAndUnsetDefaultAreUnchanged(t *testing.T) {
 	for _, value := range []string{"", "RELEASE_GATE_DEPENDENCY_MODE=", "RELEASE_GATE_DEPENDENCY_MODE=pinned"} {
 		var extra []string
@@ -231,8 +231,8 @@ func TestReleaseGatePinnedModeAndUnsetDefaultAreUnchanged(t *testing.T) {
 	if !slices.Equal(events, want) {
 		t.Errorf("pinned final fences = %q, want %q", events, want)
 	}
-	if got := releaseGateAggregateSkipFor(t, "pinned"); got != releaseGateAggregateE2ESkip {
-		t.Errorf("pinned aggregate skip = %q, want %q", got, releaseGateAggregateE2ESkip)
+	if got := releaseGateAggregateSkipFor(t, "pinned"); got != releaseGateAggregatePinnedSkip {
+		t.Errorf("pinned aggregate skip = %q, want %q", got, releaseGateAggregatePinnedSkip)
 	}
 }
 
