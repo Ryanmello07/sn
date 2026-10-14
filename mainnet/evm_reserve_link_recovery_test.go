@@ -23,7 +23,7 @@ func TestEvmReserveLinkRequiresCompletedProxy(t *testing.T) {
 		if _, code, diagnostic := f.command("apply", "--action", "reserve-link"); code != 3 {
 			t.Fatalf("%s proxy admitted reserve binding: %d %s", stage, code, diagnostic)
 		}
-		if _, err := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, evmReserveLinkStateFile) + ".lock"); !errors.Is(err, os.ErrNotExist) || !maps.Equal(counts, f.counts) {
+		if err := f.unclaimed(evmReserveLinkStateFile); err != nil || !maps.Equal(counts, f.counts) {
 			t.Fatalf("%s proxy opened binding custody: %v", stage, err)
 		}
 	}

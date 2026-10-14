@@ -349,6 +349,17 @@ func (self *evmCreateFixture) storageContext(ctx context.Context) context.Contex
 	return durablepath.WithHost(durablevolume.WithReference(ctx, self.storage.Reference), self.storage.Host)
 }
 
+// An unclaimed action keeps the explicitly prepared absent head this fixture
+// provisioned: no journal and an empty marker. Since retained custody,
+// eb0abe22, the marker always exists, so its absence no longer means fresh.
+func (self *evmCreateFixture) unclaimed(name string) error {
+	owner, err := openBootstrapUnclaimedSnapshot(self.storageContext(context.Background()), filepath.Join(self.config.Plan.RunDirectory, name), "mainnet-evm-action", 512*1024)
+	if err != nil {
+		return err
+	}
+	return owner.close()
+}
+
 // Every test reaches the actual top-level command dispatcher.
 func (self *evmCreateFixture) command(command string, extra ...string) (evmCreateResult, int, string) {
 	self.t.Helper()

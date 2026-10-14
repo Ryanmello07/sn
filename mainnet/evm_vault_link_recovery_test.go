@@ -23,7 +23,7 @@ func TestEvmVaultLinkRequiresCompletedReserveLink(t *testing.T) {
 		if _, code, diagnostic := f.command("apply", "--action", "vault-link"); code != 3 {
 			t.Fatalf("%s reserve binding admitted vault binding: %d %s", stage, code, diagnostic)
 		}
-		if _, err := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, evmVaultLinkStateFile) + ".lock"); !errors.Is(err, os.ErrNotExist) || !maps.Equal(counts, f.counts) {
+		if err := f.unclaimed(evmVaultLinkStateFile); err != nil || !maps.Equal(counts, f.counts) {
 			t.Fatalf("%s reserve binding opened vault custody: %v", stage, err)
 		}
 	}
