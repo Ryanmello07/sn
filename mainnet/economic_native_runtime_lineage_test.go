@@ -79,6 +79,9 @@ func TestNativeRuntimeRenewalPublicMonitorUpgradeAndColdRestart(t *testing.T) {
 	t.Setenv("URNETWORK_NATIVE_PRODUCER_FIXTURE", directory)
 	t.Setenv("URNETWORK_NATIVE_EXECUTION_FIXTURE", filepath.Join(directory, "native-job-101.json"))
 	producer := nativeProducerPublicFixtureWithRuntime(t, true, nil, true)
+	// Native execution accounting starts only at a drained activation boundary
+	// (ad1e5b192); the emission fixture leaves 90 units pending at block 100.
+	producer.source.set(t, 100, "PendingServerEmission", make([]byte, 8))
 	f := &monitorEconomicTestFixture{source: producer.source, services: newMonitorServicesFixture(t), url: producer.source.client.url, policy: monitorEconomicNativePolicy{Role: "native-a", Observation: producer.source.policy, BatchBlocks: 1, HistoryEntries: 32, StallSeconds: 60, HistoricalFinality: "owned-rpc-assertion"}}
 	f.prepare(t)
 	f.ctx = durablefixture.New(t, t.Context(), f.services.directory, producer.source.policy.Execution.Directory).Context
