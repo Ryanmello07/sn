@@ -123,6 +123,36 @@ func TestValidatorReadProvisionalSuccessorUsesItsCompatibilityProof(t *testing.T
 	}
 }
 
+// A provisional successor's view relabelled strict carries no strict proof.
+// Both owner checks and the validator read check refuse it, while the same
+// block still reads through its own compatibility proof.
+func TestValidatorReadRefusesRelabelledProvisionalView(t *testing.T) {
+	t.Parallel()
+	fixture, query := newProvisionalValidatorScheduleTestFixture(t)
+	identity := fixture.identity
+	validatorReadProvisionalTestChain(t, identity, true, func(AuthenticatedRuntimeArtifact) error { return nil })
+	artifact, err := AuthenticateRuntimeArtifactAtContext(identity.ctx, identity.chain, query.BlockHash, identity.allowed...)
+	if err != nil || artifact.CompatibilityProfile != ProvisionalRuntimeCompatibilityProfile || artifact.authenticationProof != nil || artifact.compatibilityProof == nil {
+		t.Fatalf("successor lost its provisional artifact: %+v, %v", artifact, err)
+	}
+	relabelled := artifact
+	relabelled.CompatibilityProfile = ""
+	if err := ValidateRuntimeArtifactOwnerContext(identity.ctx, identity.chain, relabelled); err == nil || err.Error() != runtimeViewOwnerRefusal {
+		t.Errorf("full owner admitted a relabelled provisional view: %v", err)
+	}
+	if err := validateRuntimeArtifactReadOwnerContext(identity.ctx, identity.chain, relabelled); err == nil || err.Error() != runtimeViewOwnerRefusal {
+		t.Errorf("read owner admitted a relabelled provisional view: %v", err)
+	}
+	for _, purpose := range []string{validatorStakeRuntimePurpose, validatorScheduleRuntimePurpose} {
+		if err := validateValidatorReadRuntimeAtContext(identity.ctx, identity.chain, relabelled, purpose); err == nil || err.Error() != runtimeViewOwnerRefusal {
+			t.Errorf("%s read admitted a relabelled provisional view: %v", purpose, err)
+		}
+	}
+	if _, err := ReadValidatorScheduleAtContext(identity.ctx, identity.chain, query, identity.allowed...); err != nil {
+		t.Errorf("successor schedule lost its compatibility proof: %v", err)
+	}
+}
+
 // The receipt and registration owners share this guard: a provisional chain's
 // strict view never acquires their authority, while reads still admit it.
 func TestRuntimeArtifactOwnerContextRefusesProvisionalChain(t *testing.T) {
