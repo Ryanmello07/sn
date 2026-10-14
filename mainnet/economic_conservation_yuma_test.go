@@ -106,6 +106,30 @@ func TestEconomicConservationPublicCompleteYumaSurvivesColdArchive(t *testing.T)
 	}
 }
 
+// A later archive carries the cold summary forward; it cannot drop the retired
+// original allocation witness and then refuse its own executed block.
+func TestEconomicConservationPublicCompleteYumaSurvivesSecondArchive(t *testing.T) {
+	f, _ := newEconomicConservationPrincipalFixture(t, "yuma-legacy", true, nil)
+	first := f.sample(t, monitorServiceHooks{})
+	var retired economicConservationYumaArchive
+	for segments := 1; segments <= 2; segments++ {
+		f.reset(t)
+		_, args := f.plan(t)
+		if code, issue := f.apply(t, args, &bytes.Buffer{}, monitorServiceHooks{}); code != 0 {
+			t.Fatal("original Yuma archive", segments, code, issue)
+		}
+		summary := f.sample(t, monitorServiceHooks{})
+		state := f.source.state(t)
+		if summary.Yuma == nil || !summary.Yuma.Current || summary.Yuma.Archived == nil || summary.Yuma.Archived.Blocks != 1 || len(state.Yuma) != 0 || len(state.Archive.Segments) != segments || *summary.Yuma.MinerDenominator != *first.Yuma.MinerDenominator || *summary.FullQuantizationToleranceAlpha != *first.FullQuantizationToleranceAlpha {
+			t.Fatal("archive lost or recounted the cold allocation witness", segments, summary, state)
+		}
+		if segments == 2 && *state.Archive.Yuma != retired {
+			t.Fatal("second archive changed the retired original Yuma summary", retired, *state.Archive.Yuma)
+		}
+		retired = *state.Archive.Yuma
+	}
+}
+
 func TestEconomicConservationPublicYumaArchiveCannotSelfSealTolerance(t *testing.T) {
 	f, _ := newEconomicConservationPrincipalFixture(t, "yuma-legacy", true, nil)
 	f.sample(t, monitorServiceHooks{})
