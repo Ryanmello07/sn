@@ -243,8 +243,9 @@ func verifyReleaseGateStmonitorAdminURL(script string) error {
 }
 
 // The fixture's roots are exactly four of ./mainnet, and both modes of the
-// aggregate job skip them by name, beside the E suite and nothing else of
-// ./mainnet; dropping any of them from either mode's skip fails.
+// aggregate skip, which every ./mainnet shard runs, skip them by name, beside
+// the E suite and nothing else of ./mainnet; dropping any of them from either
+// mode's skip fails.
 func TestReleaseGateStmonitorFixtureRootsLeaveTheAggregateJob(t *testing.T) {
 	t.Parallel()
 	fixtureRoots := releaseGateStmonitorFixtureCensus(t)
