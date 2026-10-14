@@ -315,10 +315,20 @@ func providerAttemptRequestPreparationDigest(value ProviderAttemptRequestPrepara
 
 // Read the fixed-width attribute, or the canonical v1 JSON that earlier
 // releases wrote. legacy reports v1, which the next save replaces with v2.
-// Callers still validate the decoded checkpoint against its preparation.
+// Either format must name the expected preparation; callers still validate
+// the decoded heads against its bounds.
 func decodeProviderAttemptRequestCheckpoint(raw []byte, expected ProviderAttemptRequestPreparation) (value ProviderAttemptRequestCheckpoint, legacy bool, err error) {
 	if !bytes.HasPrefix(raw, []byte(providerAttemptRequestAttributeSchema)) {
-		return value, true, attemptStoreDecode(raw, &value)
+		if err := attemptStoreDecode(raw, &value); err != nil {
+			return ProviderAttemptRequestCheckpoint{}, true, err
+		}
+		// v1 spells its preparation out where v2 has the digest, and it must
+		// also have the v2 record that its next save writes.
+		_, encodeErr := encodeProviderAttemptRequestCheckpoint(value)
+		if encodeErr != nil || (ProviderAttemptRequestPreparation{Identity: value.Identity, Limits: value.Limits, Birth: value.Birth}) != expected {
+			return ProviderAttemptRequestCheckpoint{}, true, errors.Join(durablevolume.ErrIdentity, encodeErr, errors.New("provider request v1 checkpoint differs from its original preparation or v2 record"))
+		}
+		return value, true, nil
 	}
 	if len(raw) != providerAttemptRequestAttributeBytes {
 		return value, false, errors.Join(durablevolume.ErrIdentity, errors.New("provider request checkpoint has another width"))

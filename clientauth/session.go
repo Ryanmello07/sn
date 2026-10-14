@@ -20,6 +20,8 @@ import (
 
 	"github.com/urnetwork/connect"
 	"github.com/urnetwork/sdk"
+
+	"github.com/urfoundation/sn/internal/durablesync"
 )
 
 type JwtRefreshListenerFunc func(string)
@@ -88,11 +90,7 @@ func WriteToken(path string, token string) (returnErr error) {
 	if err := os.Rename(tmpPath, path); err != nil {
 		return err
 	}
-	parent, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	return errors.Join(parent.Sync(), parent.Close())
+	return durablesync.SyncParent(path)
 }
 
 func RemoveToken(path string) error {
