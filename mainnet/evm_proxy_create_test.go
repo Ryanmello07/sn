@@ -538,7 +538,7 @@ func TestEvmProxyCreateFencesFourPredecessorCheckpoints(t *testing.T) {
 				}
 				return result
 			}
-			if _, code, diagnostic := f.command("resume", "--action", "proxy-create", "--online", "--submit"); code != 1 || !changed || !strings.Contains(diagnostic, "ancestry") || len(f.writes) != 4 {
+			if _, code, diagnostic := f.command("resume", "--action", "proxy-create", "--online", "--submit"); code != 1 || !changed || !strings.Contains(diagnostic, evmTestCheckpointRefusal(f, number, "ancestry")) || len(f.writes) != 4 {
 				t.Fatalf("proxy checkpoint %d refresh=%v accepted: %d %s", number, refresh, code, diagnostic)
 			}
 			f.override = nil

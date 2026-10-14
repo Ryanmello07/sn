@@ -459,7 +459,7 @@ func TestEvmEscrowRegisterFencesThreePredecessorCheckpoints(t *testing.T) {
 				}
 				return result
 			}
-			if _, code, diagnostic := f.command("resume", "--action", "escrow-register", "--online", "--submit"); code != 1 || !changed || !strings.Contains(diagnostic, "ancestry") || len(f.writes) != 3 {
+			if _, code, diagnostic := f.command("resume", "--action", "escrow-register", "--online", "--submit"); code != 1 || !changed || !strings.Contains(diagnostic, evmTestCheckpointRefusal(f, number, "ancestry")) || len(f.writes) != 3 {
 				t.Fatalf("escrow checkpoint %d refresh=%v accepted: %d %s", number, refresh, code, diagnostic)
 			}
 			f.override = nil

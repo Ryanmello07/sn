@@ -340,7 +340,7 @@ func TestEvmCoordinatorCreateFencesBothPredecessorCheckpoints(t *testing.T) {
 			}
 			return result
 		}
-		if _, code, diagnostic := f.command("resume", "--action", "coordinator-create", "--online", "--submit"); code != 1 || !changed || !strings.Contains(diagnostic, "canonical native ancestry changed") || len(f.writes) != 2 {
+		if _, code, diagnostic := f.command("resume", "--action", "coordinator-create", "--online", "--submit"); code != 1 || !changed || !strings.Contains(diagnostic, evmTestCheckpointRefusal(f, number, "canonical native ancestry changed")) || len(f.writes) != 2 {
 			t.Fatalf("checkpoint %d escaped implementation admission: %d %s", number, code, diagnostic)
 		}
 		f.override = nil

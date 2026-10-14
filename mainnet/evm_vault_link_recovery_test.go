@@ -133,7 +133,7 @@ func TestEvmVaultLinkFencesSixPredecessorCheckpoints(t *testing.T) {
 				t.Fatal("pending storage selector released the historical checkpoint barrier")
 			}
 			pendingObserved = false
-			if _, code, diagnostic := f.command("resume", "--action", "vault-link", "--online", "--submit"); code != 1 || !changed || refresh && !pendingObserved || !strings.Contains(diagnostic, "ancestry") || len(f.writes) != 6 {
+			if _, code, diagnostic := f.command("resume", "--action", "vault-link", "--online", "--submit"); code != 1 || !changed || refresh && !pendingObserved || !strings.Contains(diagnostic, evmTestCheckpointRefusal(f, number, "ancestry")) || len(f.writes) != 6 {
 				t.Fatalf("binding checkpoint %d refresh=%v accepted: %d %s", number, refresh, code, diagnostic)
 			}
 			f.override = nil
