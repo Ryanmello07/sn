@@ -3,7 +3,8 @@
 **A Bittensor subnet for a decentralized privacy network.**
 
 Version 2 (launch specification with settlement v2). Target chain: Bittensor / Subtensor — **testnet first, then mainnet**
-(D28). The mainnet subnet is **SN25 (netuid 25)**; the testnet campaign runs on netuid 521. Version 1.0
+(D28). The mainnet subnet is **SN25 (netuid 25)**; the testnet campaign ran on netuid 521 and closed on
+2026‑09‑28. Version 1.0
 promotes the completed v0.5 design to the normative release specification without changing its scope;
 version 2 changes only the pool tier's payout settlement, on mainnet from the switch epoch **E_s** (below).
 
@@ -129,8 +130,8 @@ closing the gap to honest‑relay, payout‑grade verification is the `VALIDATOR
 - **Validator data:** native dividends reward consensus‑accurate scoring; at launch the owner is the
   majority validator (by α holdings + the reserve) and runs the trail volume itself. A coverage‑weighted
   **effort bounty** is **out of v1 scope** (D29) — a possible future iteration, not a committed phase.
-- **Progressive decentralization:** multisig + upgradeable → timelock + pause‑only guardian → broader
-  governance.
+- **Progressive decentralization:** multisig + upgradeable coordinator with a pause‑only guardian →
+  timelock → broader governance.
 
 ---
 
@@ -293,9 +294,9 @@ A condensed, current (dTAO‑era) reference. Identifiers are from `opentensor/su
 ### 2.1 Subnet, neurons, UIDs
 
 - A **subnet** (identified by `netuid`) is registered permissionlessly with `register_network`; the
-  registrant becomes the **owner** (an owner coldkey + an owner hotkey auto‑registered at **UID 0**,
-  immune from deregistration). Creation pays a dynamic α‑denominated lock that **seeds the subnet's
-  liquidity pool**.
+  registrant becomes the **owner** (an owner coldkey + an owner hotkey auto‑registered at **UID 0**;
+  pruning skips every UID whose hotkey the owner coldkey owns, which on SN25 is UID 1). Creation pays a
+  dynamic TAO lock that **seeds the subnet's liquidity pool**.
 - A **neuron** is a `(coldkey, hotkey)` holding a **UID** (slot). Default capacity
   `max_allowed_uids = 256`. A hotkey **registers** by paying a recycled **burn**. Release automation
   uses `register_limit`/`registerLimit` so the runtime rejects a price above the signed per-action
@@ -311,7 +312,8 @@ A condensed, current (dTAO‑era) reference. Identifiers are from `opentensor/su
   two emission streams.
 - **Validators set weights** with `set_weights(netuid, dests, weights, version_key)` (`u16` values,
   rescaled so the max entry is `65535`). Only neurons with a **validator permit** (top‑k by stake,
-  `max_allowed_validators`, default 64) and stake ≥ a small threshold have weight influence; others'
+  `max_allowed_validators`: root‑set, runtime default 128, 64 on testnet and SN25) and stake ≥ a small
+  threshold have weight influence; others'
   rows are masked out.
 - **Consensus** per miner `j` is the κ‑stake‑weighted median of weights (κ ≈ 0.5). Each validator's
   weight on `j` is **clipped** to consensus (`min(W_ij, C_j)`); the surplus is discarded and lowers
@@ -338,8 +340,9 @@ A condensed, current (dTAO‑era) reference. Identifiers are from `opentensor/su
 - **α is not a liquid ERC‑20.** It exists only as **stake** keyed `(coldkey, hotkey, netuid)`. An
   ERC‑20‑like `approve`/`allowance`/`transferStakeFrom` layer exists **over stake**, per netuid
   (§2.5). This shapes the contract design: the ST contract custodies α **as stake** and pays out with
-  `transferStake`. Two mechanics matter for §7.4: stake carries **no time lock** — there is no unbonding
-  period; `removeStake`/`transferStake`/`moveStake` act immediately for the owning coldkey — so any
+  `transferStake`. Two mechanics matter for §7.4: stake carries **no unbonding period** —
+  `removeStake`/`transferStake`/`moveStake` act immediately for the owning coldkey on any part of a
+  position not held by a conviction lock or by registration collateral (§6.3) — so any
   "locked" property must come from *who the coldkey is* (a contract with no exit path), not from staking
   per se; and delegated stake on a validating hotkey earns dividends that **auto‑compound as stake**
   (less the hotkey's delegate `take`).
@@ -368,12 +371,13 @@ A condensed, current (dTAO‑era) reference. Identifiers are from `opentensor/su
 
   | Address | Name | What the contract calls it for |
   |---|---|---|
-  | `0x…0009` | **Blake2f** | derive the exact H160 → AccountId32 mirror used by every contract coldkey |
+  | `0x…080c` | **AddressMapping** | the conformance probe's check of the exact H160 → AccountId32 mirror (runtime 455 routes `0x…0009` to BN128 addition, not Blake2f); each release contract takes its own mapped coldkey as a constructor immutable |
   | `0x…0402` | **Ed25519Verify** | verify client consent for fleet binding and revocation |
   | `0x…0403` | **Sr25519Verify** | verify the registered Bittensor hotkey's fleet-binding signature |
   | `0x…0804` | **Neuron** | limit-register vault-owned pool hotkeys and prove live `(netuid, hotkey) → UID` bindings |
   | `0x…0805` | **Staking V2** | exact `getStake`, `moveStake`, and `transferStake` operations for isolated deposits, immutable reserve custody, emission capture, and claims |
   | `0x…0802` | **Metagraph** | read-only conformance/observation of UID 0 and metagraph identity; production settlement does not trust a point-in-time emission getter |
+  | `0x…0808` | **Alpha** | the release 1.0 vault's spot α price (`getAlphaPrice`), for the TAO‑equivalent transfer floor of captures and claim payments |
 
   Independent validators submit CRv4 through native Substrate extrinsics, not through an EVM
   precompile. The v452 commitments API surface retained by runtime 454 exposes no stable EVM getter for
@@ -504,7 +508,7 @@ driven by the Go harness in `rehearsal/`); it has passed on 475, and with the cl
 
 | Design role (`seed/INCENTIVES.md`) | On‑chain identity | Notes |
 |---|---|---|
-| **Subnet owner** (BringYour, Inc.) | owner coldkey + owner hotkey at **UID 0** (immune); deploys & governs the ST contract; operates the **reserve validator hotkey** (§7.4) | receives the 18% owner cut; the **majority validator** in the early network (§9.2); the governance **referee** (§9.6). |
+| **Subnet owner** (BringYour, Inc.) | owner coldkey (on SN25 `ur‑owner`, a native multisig) + owner hotkey, which pruning skips (**UID 1** on SN25, its sole launch validator); deploys & governs the ST contract; operates the **reserve validator hotkey** (§7.4) | receives the 18% owner cut; the **majority validator** in the early network (§9.2); the governance **referee** (§9.6). |
 | **Network Operator (NO)** | a contract registration (`noId`) with **one miner‑pool UID** (its providers, contract‑owned; from `E_s` a new pool UID owned by vault2). Holds **no emission**; runs no validator. | a per‑NO *pool operator*: deposits; runs the `/verify` server (co‑signs trails); commits the Merkle payout root that splits its miner pool — from `E_s` a sum-tree root over per-coldkey accounts, split by verified usage alone, whose ledger it publishes and whose paths it opens on demand. Directs flow before `E_s` (from `E_s` it attests only the usage and wallet records, §8.2); the contract holds and pays. |
 | **Provider (miner)** | a `client_id` **inside** a NO's miner pool — **not a UID** (100k+ providers can't each be a UID); from `E_s` its earnings accrue to its payout coldkey's one **account** in that pool | carries traffic; **claims its α directly from the contract** with a Merkle proof against its NO's payout root: for epochs before `E_s`, per epoch and before its expiry at the end of epoch `e+9` (TTL 8 + grace 1); from `E_s`, cumulatively and without expiry — one claim, which anyone may send and which always pays the account's coldkey, collects all accrual since the last. The **on-ramp / tail** tier; can **graduate** to a top-level slot (§8.4). |
 | **Top-level miner (head)** | **its own miner UID**; a **fleet** — its `client_id`s **bound to its hotkey** (§11.4) | the **supply apex**: the top ~200 fleets by **split-adjusted distinct routable egress-IP count**, steered **directly** by validators (weight = an EMA of the score); **native** emission to its own coldkey — no contract custody, no Merkle claim; maintained by deregistration churn (§8.4). |
@@ -549,7 +553,7 @@ couples key rotation to the wallet; binding is preferred.)
 |---|---|
 | `netuid` | the UR subnet id — 25 (SN25) on mainnet; 521 on the testnet campaign |
 | `T_tempo` | tempo length in blocks (360) |
-| `T_epoch` | UR settlement epoch in blocks (50 400 ≈ 7 days) |
+| `T_epoch` | UR settlement epoch in blocks (50 400 ≈ 7 days on mainnet from epoch 1, after a 7,200‑block epoch 0) |
 | `e` | epoch index (monotone counter in the contract) |
 | `E_s` | the **switch epoch**: a pool's first version 2 epoch, its `firstEpoch` as set by `registerOperatorPool`; earlier epochs settle on v1 (§5.2) |
 | `D_n` | α deposited by NO `n` during epoch `e` (the coordinator's epoch deposit counter, which finalized `Deposit` events reproduce; audited and capped, not weighted, §7.5) |
@@ -575,12 +579,15 @@ couples key rotation to the wallet; binding is preferred.)
 Two cadences run concurrently.
 
 The values in this section are the **mainnet 1.0 cadence**. Testnet acceptance
-uses a deliberately shortened, future-effective 360-block UR epoch
+was to use a deliberately shortened, future-effective 360-block UR epoch
 (approximately 72 minutes), a 60-block root window, a 180-block finalize
-offset, and a 6-block close grace. It must complete three consecutive fully
-observed epochs. This test-only snapshot exercises the identical state machine
-and must never be promoted as the mainnet policy, whose epoch remains 50,400
-blocks (approximately seven days) with separately reviewed +4h/+48h windows.
+offset, and a 6-block close grace, and to complete three consecutive fully
+observed epochs; the campaign closed on 2026‑09‑28 with known exceptions before
+that acceptance (`FINALIZE.md`). This test-only snapshot exercises the identical
+state machine and must never be promoted as the mainnet policy, whose epoch is
+50,400 blocks (approximately seven days) with separately reviewed +4h/+48h
+windows from epoch 1, after a one-day epoch 0 (7,200 blocks, finalized 2,400
+blocks in).
 Version 2 settlement (§5.2) cannot run at the testnet cadence: vault2 fixes a
 14,400-block challenge window, so `T_epoch` must be at least the root commit
 window plus 14,400 blocks. Mainnet's 50,400 satisfies this. `STSettlement2`
@@ -615,7 +622,8 @@ each validator runs the open UR validator (`validator/`) and submits its own nat
 ### 5.2 Epoch cadence (application‑layer; settlement)
 
 The 7‑day epoch is the unit `seed/INCENTIVES.md` calls a "block." It is tracked by the contract as an
-incrementing counter with a fixed block length `T_epoch`; version 2 reads the same counter, boundaries and
+incrementing counter with the block length its policy snapshot sets (`T_epoch`); version 2 reads the same
+counter, boundaries and
 windows from the v1 coordinator, whose policy is unchanged. Epochs before a pool's switch epoch `E_s` keep
 the v1 lifecycle (timeline from `README.md`):
 
@@ -2184,7 +2192,7 @@ pruned v2 pool hotkey through `registerPoolUid`, paying the burn.
 
 | Parameter | Symbol | Suggested | Notes |
 |---|---|---|---|
-| Epoch length | `T_epoch` | 50 400 blocks (7 d) | settlement period |
+| Epoch length | `T_epoch` | 50 400 blocks (7 d), on mainnet from epoch 1 (epoch 0: 7,200 blocks) | settlement period |
 | Operator data deadline | — | +4 h (1,200 blocks) | `README.md`; the root commit window, unchanged in v2 settlement |
 | Close window | — | v1: 120 blocks after the epoch end; **v2: the 1,200-block commit window** | a v2 close missed beyond it defers the epoch with zero funding, and the next close captures its emission for later earners (§12.3) |
 | Challenge window (v2) | `CHALLENGE_BLOCKS` | **14,400 blocks** (≈ 48 h) from the commit, a constant of vault2 | no v2 root finalizes earlier or with a path demand open; needs `T_epoch` ≥ commit window + 14,400 (mainnet's 50,400 holds; testnet's 360-block cadence does not), checked at pool registration; every later v1 policy must keep it, which no contract checks (§5). v1 instead finalizes 14,400 blocks after the epoch end |
@@ -2223,8 +2231,8 @@ key (which would trigger the post-Spec-421 `miner_burned` penalty).
 ### 16.1 Components
 
 1. **ST contract set (Solidity, Cancun / 0.8.24).** Non-upgradeable `STReserveSink` and
-   `STSettlementVault`, UUPS `STCoordinator`, exact runtime-454 bindings retained from v452 (`0x09`, `0x402`, `0x403`,
-   `0x804`, `0x805`), OZ Merkle verification, scoped roles and scheduled policy (§6). The reviewed
+   `STSettlementVault`, UUPS `STCoordinator`, exact runtime-454 bindings retained from v452 (`0x402`, `0x403`,
+   `0x804`, `0x805`, `0x808`), OZ Merkle verification, scoped roles and scheduled policy (§6). The reviewed
    artifacts and deployed runtime hashes are release-locked. (No effort verifier — §9.3/D29.)
 2. **Subnet convergence.** Validate the supplied, wallet-owned existing testnet netuid; explicitly set
    and verify every launch hyperparameter (§15.1); during installation the immutable vault first
@@ -2258,7 +2266,7 @@ key (which would trigger the post-Spec-421 `miner_burned` penalty).
 6. **Validator client (was "verifier").** Stake α; run `/verify` trails; submit commit‑reveal pool
    scores (native dividends); independently reject stale/invalid bindings. (No `registerValidator(vpk)` /
    `submitTrails` / `claimValidator` — those belong to the parked bounty design, §9.3/D29.)
-7. **Indexer/explorer.** Surfaces `D_n`, pool quality `Q_n`, consensus weights, vtrust, the
+7. **Indexer/explorer** (planned; not built). Surfaces `D_n`, pool quality `Q_n`, consensus weights, vtrust, the
    **independent‑validator stake share**, the **buyback reserve + demand ratio `R_e`** (§12.4), and
    roots — the public audit surface.
 8. **Version 2 payout settlement (`VERSION2-FINAL.md`; epochs from E_s).** Each epoch's pool funding is
@@ -2319,8 +2327,11 @@ subnets) — no Synapse/dendrite required.
 ### 16.3 Milestones
 
 *(D28: v1 is **testnet-first** — the ladder below (M0 → M3) runs on **testnet** (chain 945 /
-test.finney); **mainnet is the later Phase‑E promotion** (M3), gated behind a clean testnet run, after
-which the M4+ production phases run on finney. The SP‑1/SP‑2/SP‑3 harness is endpoint‑parameterized, so
+test.finney); **mainnet is the later Phase‑E promotion** (M3), planned behind a clean testnet run, after
+which the M4+ production phases run on finney. The owner closed the testnet campaign on 2026‑09‑28 with
+known exceptions: its last attempt, R48, completed no acceptance epoch (`sim-testnet/FINAL-4.md`), so M2's
+and M3's testnet criteria were never met, and SN25 launched on 2026‑10‑08 from mainnet qualification
+(`mainnet/MAINNET.md`, `mainnet/LAUNCH.md`). The SP‑1/SP‑2/SP‑3 harness is endpoint‑parameterized, so
 it re‑targets with zero code change. Operational detail: `docs/LAUNCH.md`.)*
 
 For every M0–M3 integration/soak run, the release‑locked adversarial campaign is
@@ -2351,7 +2362,8 @@ faulted.
    through native Substrate CRv4 so consensus/clipping/vtrust behavior is exercised, deposits → reserve, the epoch
    lifecycle, and the failure drills (pause, missed commit, upgrade‑under‑fire, sweep retry).
    (b) **Testnet dust probes** (chain 945, against the supplied existing testnet netuid): the SP-1
-   battery — custody semantics, rao units, `0x402`/`0x403`, blake2f, metagraph/neuron/staking, exact
+   battery — custody semantics, rao units, `0x402`/`0x403`, the `0x80c` address mapping,
+   metagraph/neuron/staking, exact
    move/transfer conservation, commitment replace/restore, and **reserve-hotkey
    dividend auto‑compounding + take** — plus SP‑2 `check-metadata` against the test.finney
    runtime (`docs/LAUNCH.md` Phases A/B).
@@ -2381,8 +2393,9 @@ faulted.
    adversarial load; the deposit cap raised stepwise toward the sized policy;
    settlement‑poke automation; the reference rate + sourcing commitment
    published; the `R_e` demand‑ratio dashboard live (§12.4). Then generate and
-   rehearse the separate 50,400-block/seven-day mainnet policy with reviewed
-   +4h/+48h windows. After the three clean testnet UR blocks and MR closure,
+   rehearse the separate mainnet policy: a one‑day 7,200‑block epoch 0 (+4h/+8h
+   windows), then 50,400‑block/seven‑day epochs with reviewed +4h/+48h windows
+   from epoch 1. After the three clean testnet UR blocks and MR closure,
    **promote to mainnet**: re‑run the M0 probes + M1 genesis against **finney** (chain 964), now under the hard‑gate
    posture (real TAO; genesis is one irreversible window). By owner decision (October 7) the SN25 mainnet genesis has
    one operator and one validator, so it has no separately keyed independent validator position. The M4+ production
@@ -2421,11 +2434,12 @@ the Go harness in `rehearsal/`), not testnet: testnet's 360-block cadence cannot
 ### 16.4 Pre‑launch verification checklist (load‑bearing live values)
 
 *(D28, release 1.0: these checks run against **testnet** (chain 945 dust probes) + the SP‑3 localnet — they are the
-Phase A/B gates of `docs/LAUNCH.md`, and all must be green before the supplied subnet is modified; re-run them
+release 1.0 testnet gates (`docs/LAUNCH.md`, `sim-testnet/README.md`), and all must be green before the supplied
+subnet is modified; re-run them
 against finney at the Phase‑E mainnet promotion.)*
 
-- Precompile addresses/ABIs at the pinned Subtensor release (Blake2f `0x09`, Ed25519 `0x402`, sr25519
-  `0x403`, Metagraph `0x802`, Neuron `0x804`, Staking V2 `0x805`) using good/bad vectors and
+- Precompile addresses/ABIs at the pinned Subtensor release (address mapping `0x80c`, Ed25519 `0x402`, sr25519
+  `0x403`, Metagraph `0x802`, Neuron `0x804`, Staking V2 `0x805`, Alpha `0x808`) using good/bad vectors and
   value-bearing exact-delta tests. CRv4 is checked through native Substrate metadata/calls.
 - `tao_weight` (testnet expects raw `332041393326771929`, i.e. 1.8%; observe mainnet independently),
   `max_allowed_validators`, `min_allowed_weights`,
@@ -2436,7 +2450,8 @@ against finney at the Phase‑E mainnet promotion.)*
   staking precompile's "contract address = coldkey" custody semantics.
 - Confirm a validator earns a permit at expected stake and that its **native dividends** accrue to
   its own hotkey (no contract capture). Use an **independent validator** where one exists; at the
-  SN25 launch the only validator is UR's `ur-mainnet`. Confirm delegated stake on the reserve
+  SN25 launch the only validator is UID 1, the SN25 owner hotkey (coldkey `ur-owner`); `ur-mainnet` holds
+  root seat UID 21. Confirm delegated stake on the reserve
   hotkey **auto‑compounds** to the contract coldkey's stake and that hotkey `take` behaves as expected
   (target take = 0, §7.4).
 - Confirm **`max_allowed_uids` = 256 is a hard ceiling** and `mechanism_count = 1` (a 2nd mechanism halves
@@ -2586,11 +2601,11 @@ starts at least two days after the last one passes.
 
 ---
 
-*End of WHITEPAPER.md v1.0 — validator effort bounty removed from scope (v1 = native dividends only; the
+*End of WHITEPAPER.md version 2 — settlement v2 for epochs from E_s, specified in `VERSION2-FINAL.md` — on
+v1.0: validator effort bounty removed from scope (v1 = native dividends only; the
 `(X)`/`(Y)` bounty designs are parked, not a committed phase; §9, §13.6; decision D29 in
 `WHITEPAPER_DISCUSS.md`) — layered on v0.4 conviction staking + validator-computed weights + IP-breadth head
 (D25–D28), v0.3 deposits-as-buybacks (locked, dividend-compounding reserve; miner pay = emission-only; §7.4,
 §12.4; D23), and the v0.2 two-tier miner side (pool on-ramp + direct top-level miners; §8.4–8.5, §10, §11.4,
-§14; D16–D20). This document fixes the architecture and the formulas; the next artifacts are the contract
-source, the chain‑config script, and the operator/validator reference daemons (§16). Version 2 payout
-settlement, for epochs from E_s, is specified in `VERSION2-FINAL.md`.*
+§14; D16–D20). This document fixes the architecture and the formulas; the contract source, the
+chain‑config tooling and the operator/validator daemons that implement them are built (§16).*
