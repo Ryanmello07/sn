@@ -144,9 +144,10 @@ inputs:
   signed **validated paths** this subnet pays for.
 - **Current Bittensor mechanics** (Yuma Consensus, dTAO, the Subtensor EVM, the commitments pallet,
   the precompiles) as release-pinned at RaoFoundation/subtensor **v454**
-  (`14cde6410fe8ec81a940e290c56f94a632a0988d`); settlement v2 targets runtime **475** (`d1718c99`) on
-  chain 964, checked against `docs/spec/runtime-475-audit.md` and rehearsed on a node built from that
-  source before activation.
+  (`14cde6410fe8ec81a940e290c56f94a632a0988d`); settlement v2 targets the runtime chain 964 runs, **478**
+  (`850f2755`) since 2026‑10‑13, checked against `docs/spec/runtime-475-audit.md`, `runtime-477-audit.md`
+  and `runtime-478-audit.md` and rehearsed on nodes built from each of those sources; any mainnet runtime
+  change repeats the rehearsal before activation.
 - **`VERSION2-FINAL.md`** — the plan of record for **settlement v2**, the pool tier's usage‑proportional,
   cumulative‑account settlement from the switch epoch **E_s**: its contracts, ledger, audit, migration,
   activation gates and tests.
@@ -399,7 +400,7 @@ A condensed, current (dTAO‑era) reference. Identifiers are from `opentensor/su
 
 ### 2.6 Release runtime compatibility pin
 
-Release 1.0 is pinned to the deployed testnet **runtime spec 454**, transaction version 1, source tag
+Release 1.0 started pinned to the deployed testnet **runtime spec 454**, transaction version 1, source tag
 `v454`, source commit `14cde6410fe8ec81a940e290c56f94a632a0988d`, and finalized on-chain Wasm
 storage hash `0x725e3d1eca8d5c29c1f0fa6476d5360661b852f52aebad979d6636e227a431ef`. The
 identity first appeared at finalized testnet block 7,934,387
@@ -419,19 +420,26 @@ Doctor reads the complete runtime version, code hash and metadata at one explici
 Every operational native current-state/signing boundary then re-checks the complete version and code hash at
 its explicit finalized block and selects only metadata whose exact SCALE bytes were already hash-authenticated
 on that independently dialed connection for the same complete reviewed artifact tuple. This content-addressed
-reuse is limited to v451/v452/v453/v454. A mandatory release gate resolves their pinned testnet blocks, authenticates
+reuse is limited to the reviewed testnet identities (v451–v455, v458–v461 and v467, `crv4/reviewed_runtime.go`).
+A mandatory release gate resolves their pinned testnet blocks, authenticates
 the on-chain `System.Code` hashes, obtains the exact chain or official-release Wasm bytes, and executes
 `Core_version` plus `Metadata_metadata` in a pinned Wasm executor exposing only allocator, logging and hashing
 host functions. Any attempted storage/offchain host call is a hard failure. The gate requires the exact
 version tuple, code size/SHA-256/BLAKE2b-256, metadata size/SHA-256/BLAKE2b-256, complete SCALE decode and
 FRAME metadata v14 recorded in `docs/spec/runtime-metadata-artifacts.json`. Pinned upstream metadata tests
 without `TestExternalities` independently corroborate the result. Caches are per provider, singleflighted,
-failure-free and hard-bounded to those four identities; historical identities remain read-only and cannot
-satisfy the v454 signing boundary.
+failure-free and bounded to 24 decoded entries, evicting the least recently used; historical identities remain
+read-only and cannot satisfy the current signing boundary.
 Secretless semantic replay intentionally downloads and records all three raw responses at every evidence
 checkpoint from its signed v454 campaign start onward; carried pre-campaign receipts retain their exact
 v451/v452/v453 identities instead of being relabeled. The continuous sentinel repeats complete version and
 code-hash checks on both endpoints.
+The reviewed testnet artifact later moved through 455, 458–461 and 467 (`docs/spec/runtime-<n>-audit.md`)
+until the campaign closed on 2026‑09‑28. The SN25 mainnet launch on 2026‑10‑08 pinned mainnet runtime 475
+(source `d1718c99`, code `0x557634c8…d3a0`, metadata `0x983cfdab…95ff`), and its validator admits a strictly
+higher successor of that artifact whose consumed interfaces equal the signed
+`urnetwork-validator-producer-interface-v1` profile (`mainnet/VALIDATOR-PRODUCTION-RUNTIME.md`); mainnet has
+since run 477 and, from 2026‑10‑13, 478.
 
 The v452→v453 audit is one upstream release commit and adds five security/economic boundaries. The release
 gate hashes all 12 changed upstream Rust source/test files at the pinned commit; Terra's clean pinned-source
@@ -477,12 +485,15 @@ The exact source, artifact, upstream-test and live-conformance requirements are 
 groups while the runtime sentinel independently pins the deployed version and Wasm. These models do not replace
 the pinned FRAME tests or the disposable live contract/precompile battery.
 
-Version 2 settlement is pinned separately, to mainnet (chain 964) runtime 475, source commit
-`d1718c99c34cf96abbf2bf09c0e9e48b945c76f5`. The runtime facts vault2 and `STSettlement2` (§3) rely on come
-from the local v451–v454 sources and that source, checked against `docs/spec/runtime-475-audit.md`, and were
-measured on a node built from that source (`scripts/runtime-rehearsal/`, measurements in its `README.md`).
-Before deployment their exact bytecode must pass a rehearsal on that node (R-1 to R-6, `VERSION2-FINAL.md`
-§15.8, driven by the Go harness in `rehearsal/`); any mainnet runtime change repeats it.
+Version 2 settlement is pinned separately, to the mainnet (chain 964) runtime it deploys on: runtime 478,
+source commit `850f2755bb05a3851f948489f0ab27b0645cebce`, live since block 9,276,925 (2026‑10‑13). The
+runtime facts vault2 and `STSettlement2` (§3) rely on come from the local v451–v454 sources and the sources of
+mainnet runtimes 475, 477 and 478, checked against `docs/spec/runtime-475-audit.md`, `runtime-477-audit.md`
+and `runtime-478-audit.md`, and were measured on nodes built from them (`scripts/runtime-rehearsal/`,
+measurements in its `README.md`, whose runtime 478 section supersedes the earlier gas limits). Before
+deployment their exact bytecode must pass a rehearsal on such a node (R-1 to R-6, `VERSION2-FINAL.md` §15.8,
+driven by the Go harness in `rehearsal/`); it has passed on 475, and with the claim batcher's R-7 on 477 and
+478, and any mainnet runtime change repeats it.
 
 ---
 
@@ -814,7 +825,8 @@ function sets subnet weights.
   stake, and the rehearsal escrow earned that way. Only `assignSurplus`, a coordinator call capped at the
   escrow's surplus, credits surplus to a pool's funding. The first `STSettlement2` release never calls it;
   a later upgrade adds a wrapper for the release 1.0 carry sweep (`VERSION2-FINAL.md` §16).
-- **Locked stake in vault2.** Runtime 475 can lock part of each registration's price as collateral on the
+- **Locked stake in vault2.** Since runtime 475 (unchanged in 478) the runtime can lock part of each
+  registration's price as collateral on the
   registering coldkey's position (a subnet's collateral lock share, 0 by default). `getStake` includes the
   lock, a move or transfer may not dig into it, and only emission the hotkey earns releases it. vault2
   therefore moves and counts only **movable** stake, `getStake` less the lock it reads with
@@ -1628,14 +1640,18 @@ still treat that endpoint as untrusted and check each proof against vault2's on-
 (§16.1). A runtime refusal (a transfer below the `DefaultMinTransfer` floor of 100,000 rao TAO-equivalent,
 or a destination coldkey whose staking-hotkey list is full) reverts the claim and leaves the balance
 claimable; since balances never expire, a provider, its app or the miner claim daemon simply claims once the
-balance is large relative to gas. A claim uses about 170,000 to 187,000 gas but needs a gas limit of about 2.5M,
-because the runtime admits a stake transfer only if the forwarded gas covers its declared weight
-(`VERSION2-FINAL.md` §7.3, §8.1). An optional, stateless claim batcher (`STClaimBatcher`) claims many
+balance is large relative to gas. A claim uses about 170,000 to 188,000 gas. Runtime 478, on mainnet since
+2026‑10‑13, admits its stake transfer only if the forwarded gas covers a walk of vault2's own staking-hotkey
+list, so a claim's least gas limit is about 192,000 while that list is short and about 1.27M once third
+parties fill it (about 2.44M whatever the list on runtimes 475 and 477). Anyone can lengthen the list between
+an estimate and the claim's inclusion, so the claim tools and the SDK sign a claim at no less than 2.6M gas;
+only the gas used is paid (`docs/spec/runtime-478-audit.md`; `VERSION2-FINAL.md` §11). An optional,
+stateless claim batcher (`STClaimBatcher`) claims many
 accounts in one transaction, each capped at its own gas so that a claim the runtime refuses cannot starve
 the others, and still only to each leaf's coldkey: from ten claims on it saves 15–18% of their gas, and
-a batch's gas limit grows by about 149,000 per claim where a single claim needs about 2.44M. One
-transaction holds up to 418 claims at the deepest tree, and the claim tools send at most 32, under 1% more gas a
-claim (`VERSION2-FINAL.md` §10.2, R-7).
+a batch's gas limit grows by about 149,000 per claim where each claim sent alone is signed at 2.6M. One
+transaction holds up to 416 claims at the deepest tree on runtime 478 (418 on 475 and 477), and the claim
+tools send at most 32, under 1% more gas a claim (`VERSION2-FINAL.md` §10.2, R-7).
 Pausing settlement never stops claims. Claims are pull‑based, so settlement is `O(1)` on‑chain regardless of
 participant count, and each pool has its own root — **there is no global claim root**.
 
@@ -2218,9 +2234,11 @@ key (which would trigger the post-Spec-421 `miner_burned` penalty).
      tree, header), publishes the chunks and then the header, and closes, commits and finalizes through
      `STSettlement2`. It answers every data-availability demand with `checkPath` and serves the public
      `GET /sn/ledger/object` and `GET /sn/ledger/account`. Its signed operator gas policy is re-signed for
-     v2: a capturing close needs a gas limit of about 2.6M while using about 300,000 gas, because the
-     runtime admits a stake move only if the forwarded gas covers its declared weight, and today's
-     `maximum_gas` is 1,000,000 (`VERSION2-FINAL.md` §8.1, §13).
+     v2: a capturing close uses about 226,000 gas on runtime 478, but the limit a stake move needs grows with
+     vault2's staking-hotkey list, which third parties can lengthen before the close is included, so the
+     server signs every close at no less than 3,200,000 gas (what a capturing close needed through runtime
+     477), capped at the policy's `maximum_gas`, and today's `maximum_gas` is 1,000,000 (`VERSION2-FINAL.md`
+     §8.1, §13; `docs/spec/runtime-478-audit.md`).
    - **Validator.** From the pool's `firstEpoch` it weights the pool UID resolved through
      `STSettlement2.settlementAt`. It audits each pending root's ledger and, from its admitted auditor
      address, approves the root only if every check passes, challenges a provable fault with `checkPath`,
@@ -2239,8 +2257,10 @@ key (which would trigger the post-Spec-421 `miner_burned` penalty).
      show the v2 finalized, claimable and paid amounts, a pending root as pending, v1 balances
      separately, and "unavailable" rather than zero when the proof service cannot be reached, and from
      activation they claim v2 accounts: each claim goes only to the pinned vault2 address, after the SDK
-     verifies the account's proof against vault2's on-chain root and sizes the gas limit with
-     `eth_estimateGas`. A v2 claim needs about 0.02 TAO of gas on the device's gas key.
+     verifies the account's proof against vault2's on-chain root, and signs it at the larger of
+     `eth_estimateGas` plus a quarter and 2,600,000 gas, because on runtime 478 a claim's estimate follows
+     vault2's staking-hotkey list, which third parties can lengthen before inclusion. A v2 claim needs about
+     0.02 TAO of gas on the device's gas key.
 
 ### 16.2 The chain is identity + stake + weights only
 
@@ -2331,8 +2351,9 @@ faulted.
    admission, on‑chain governance; advance the `VALIDATOR.md` §10 roadmap.
 
 **Version 2 (`VERSION2-FINAL.md`)** changes payout settlement on mainnet beside the ladder above. Its
-runtime rehearsal (gate 2 of §16.4) runs on a node built from runtime 475's source
-(`scripts/runtime-rehearsal/`, a one-node `fast-runtime` dev chain with mainnet's EVM chain ID, driven by
+runtime rehearsal (gate 2 of §16.4) runs on a node built from the source of mainnet's runtime (475 at
+first; rerun and passed on 477 and on 478, mainnet's runtime since 2026‑10‑13) (`scripts/runtime-rehearsal/`, a
+one-node `fast-runtime` dev chain with mainnet's EVM chain ID, driven by
 the Go harness in `rehearsal/`), not testnet: testnet's 360-block cadence cannot satisfy
 `epochBlocks >= rootCommitWindowBlocks + 14,400`, and the testnet campaign closed on 2026-09-28.
 
@@ -2389,8 +2410,9 @@ starts at least two days after the last one passes.
 1. **Contracts.** The Foundry suite is green at its coverage bars, with `forge fmt --check`,
    `forge build --deny warnings --sizes` and `scripts/test-solidity-static.sh` clean; sizes and margins
    are recorded; an independent review of vault2, `LedgerTree.sol` and `STSettlement2` is resolved.
-2. **Runtime rehearsal (R-1 to R-6).** The exact bytecode runs on a node built from runtime 475's source,
-   which phase A builds (`scripts/runtime-rehearsal/`, harness in `rehearsal/`). Any runtime change on
+2. **Runtime rehearsal (R-1 to R-6).** The exact bytecode runs on a node built from the source of mainnet's
+   runtime (it has run on 475, 477 and 478), which phase A builds (`scripts/runtime-rehearsal/`, harness in
+   `rehearsal/`). Any runtime change on
    mainnet repeats this gate.
 3. **Ledger.** The Go suites are green, including the million-provider fixtures (GL-10, SV-6) inside
    budget.
