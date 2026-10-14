@@ -743,7 +743,7 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 		command string
 	}{
 		{phase: "sn_all_normal", job: "sn-all-normal", command: releaseGateAggregateNormalCommand},
-		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race ./crv4 ./miner/... ./protocol -count=1"},
+		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"},
 		{phase: "sn_validator_race", job: "sn-validator-race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
 		{phase: "sn_simulator_race", job: "sn-simulator-race", command: releaseGateSimulatorOrdinaryRaceCommand},
 		{phase: "sn_simulator_populations_race", job: "sn-simulator-populations-race", command: releaseGateSimulatorPopulationRaceCommand},
@@ -784,8 +784,8 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 }
 
 // The inherited combined core race command allowed less time than the measured
-// passing serial work alone. The dedicated full-validator allowance leaves
-// the other core packages on their original budgets.
+// passing serial work alone. The dedicated full-validator allowance is
+// separate from the other core packages' own measured budget.
 func TestReleaseGateJobsRequireIndependentCompleteValidatorRace(t *testing.T) {
 	t.Parallel()
 	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
@@ -995,7 +995,7 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 		t.Fatal(err)
 	}
 	const command = "go test -race -parallel=4 -timeout 90m ./validator -count=1"
-	const core = "go test -race ./crv4 ./miner/... ./protocol -count=1"
+	const core = "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"
 	const start = "release_gate_start sn-validator-race release_phase_sn_validator_race"
 	const definition = "release_phase_sn_validator_race() {\n  cd \"$sn_repo\"\n  " + command + "\n}"
 	cases := []struct {
@@ -1015,10 +1015,11 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 		{name: "hidden failure", old: command, replacement: command + " || true"},
 		{name: "unreachable command", old: command, replacement: "if false; then\n  " + command + "\n  fi"},
 		{name: "different source", old: definition, replacement: strings.Replace(definition, `cd "$sn_repo"`, `cd "$workspace/server"`, 1)},
-		{name: "lost core runtime", old: core, replacement: "go test -race ./miner/... ./protocol -count=1"},
-		{name: "lost core miner", old: core, replacement: "go test -race ./crv4 ./protocol -count=1"},
-		{name: "lost core protocol", old: core, replacement: "go test -race ./crv4 ./miner/... -count=1"},
-		{name: "core budget leak", old: core, replacement: core + " -timeout 90m"},
+		{name: "lost core runtime", old: core, replacement: "go test -race -timeout 120m ./miner/... ./protocol -count=1"},
+		{name: "lost core miner", old: core, replacement: "go test -race -timeout 120m ./crv4 ./protocol -count=1"},
+		{name: "lost core protocol", old: core, replacement: "go test -race -timeout 120m ./crv4 ./miner/... -count=1"},
+		{name: "implicit core deadline", old: core, replacement: strings.Replace(core, " -timeout 120m", "", 1)},
+		{name: "core budget leak", old: core, replacement: strings.Replace(core, "-timeout 120m", "-timeout 90m", 1)},
 		{name: "combined core owner", old: core, replacement: core + " ./validator"},
 		{name: "commented admission", old: start, replacement: "# " + start},
 		{name: "wrong admitted owner", old: start, replacement: "release_gate_start sn-validator-race release_phase_sn_core_race"},
@@ -1051,7 +1052,7 @@ var releaseGateUncachedCommands = []struct {
 	command string
 }{
 	{phase: "sn_all_normal", command: releaseGateAggregateNormalCommand},
-	{phase: "sn_core_race", command: "go test -race ./crv4 ./miner/... ./protocol -count=1"},
+	{phase: "sn_core_race", command: "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"},
 	{phase: "sn_validator_race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
 	{phase: "sn_simulator_race", command: releaseGateSimulatorOrdinaryRaceCommand},
 	{phase: "sn_simulator_populations_race", command: releaseGateSimulatorPopulationRaceCommand},
