@@ -129,6 +129,51 @@ func TestClaimV2NewerRootDuringInFlightClaim(t *testing.T) {
 	}
 }
 
+// E-5 a newer root ready beside a poll tick: as in v1, the loop observes the
+// waiting snapshot before it polls, so the claim pays the newer root's
+// cumulative at once and no catch-up claim follows.
+func TestClaimV2NewerSnapshotOutranksReadyPoll(t *testing.T) {
+	chain := newClaimV2TestChain(t)
+	chain.finalize(claimV2TestAccount(claimV2TestOther, 1), claimV2TestAccount(claimV2TestColdkey, 5))
+	daemon := newClaimV2TestDaemon(t, chain, ClaimV2DefaultThresholdRao)
+	older, err := readClaimSnapshotV2(daemon.ctx, daemon.strategy, daemon.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := daemon.observe(older, false); err != nil {
+		t.Fatal(err)
+	}
+	chain.finalize(claimV2TestAccount(claimV2TestOther, 2), claimV2TestAccount(claimV2TestColdkey, 8))
+	newer, err := readClaimSnapshotV2(daemon.ctx, daemon.strategy, daemon.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tick := daemon.clock
+	snapshots, polls := make(chan map[string]*claimAccountV2, 1), make(chan time.Time, 1)
+	snapshots <- newer
+	polls <- tick
+	ctx, cancel := context.WithCancel(daemon.ctx)
+	defer cancel()
+	var runErr error
+	done := make(chan struct{})
+	go func() { defer close(done); runErr = daemon.run(ctx, snapshots, polls, false) }()
+	// The loop takes a tick only at its select, so once the second of these is
+	// queued the poll after the claim has finished.
+	for range 2 {
+		select {
+		case polls <- tick:
+		case <-done:
+			t.Fatalf("daemon stopped early: %v", runErr)
+		}
+	}
+	cancel()
+	<-done
+	unit, claimed, sends := daemon.durable(1), chain.claimedOf(1), chain.sent()
+	if runErr != nil || len(sends) != 1 || claimed.Dec() != claimV2TestDec(8) || unit.Status != "idle" || unit.Claimed != claimV2TestDec(8) || unit.RootIndex != 1 {
+		t.Fatalf("claim was not built on the newer root alone: err=%v sends=%d claimed=%s unit=%+v", runErr, len(sends), claimed.Dec(), unit)
+	}
+}
+
 // E-5 a third party claiming first (A6): seen before we sign, refusing our
 // preflight, or reverting our included claim with NothingToClaim. Each is done
 // for that root at once, with the watermark re-read and no second claim, and

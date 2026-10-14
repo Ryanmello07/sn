@@ -579,6 +579,16 @@ func (self *claimDaemonV2) settle(ctx context.Context, unit *ClaimUnitV2) (*clai
 // account with anything claimable once, then the threshold rules again.
 func (self *claimDaemonV2) run(ctx context.Context, snapshots <-chan map[string]*claimAccountV2, polls <-chan time.Time, demand bool) error {
 	for {
+		// A completed read outranks an immediate ready ticket, as in v1, so no
+		// claim is built on a snapshot that a newer one already replaced.
+		select {
+		case snapshot := <-snapshots:
+			if err := self.observe(snapshot, demand); err != nil {
+				return err
+			}
+			demand = false
+		default:
+		}
 		if err := self.poll(ctx); err != nil {
 			return err
 		}
