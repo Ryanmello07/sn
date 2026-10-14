@@ -60,8 +60,10 @@ release_phase_isolation_regressions() {
   go test -race ./scripts/server-fixture -count=1
   go test ./scripts/test-storage -count=1
   go test -race ./scripts/test-storage -count=1
-  go test ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 3m
-  go test -race ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 3m
+  # On 2026-10-14 the race run of the gate's own job pins took 172 seconds of
+  # its former three minutes, so both modes have ten.
+  go test ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 10m
+  go test -race ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 10m
   cd "$workspace/server"
   go test . -run '^Test(ReleaseGateServices|TestEnvironmentPrivatePortable|TestEnvironmentDoesNotStartSharedHTTPProfiler)' -count=1
   go test -race . -run '^Test(ReleaseGateServices|TestEnvironmentPrivatePortable|TestEnvironmentDoesNotStartSharedHTTPProfiler)' -count=1
