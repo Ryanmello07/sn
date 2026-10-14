@@ -32,16 +32,42 @@ const releaseGateServerScaleSelector = "^TestStV2Scale"
 // private services.
 const releaseGateAggregateE2ESkip = "^TestSettlementV2E2E"
 
+// server/stmonitor/testfixture's databases need an admin URL of the gate's
+// private PostgreSQL, so the aggregate job skips these mainnet roots by name
+// and sn-e2e runs them, normal and race, beside the E suite.
+var releaseGateStmonitorFixtureRoots = []string{
+	"TestMonitorOperatorCredentialFenceAndPublicationAmbiguity",
+	"TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage",
+	"TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops",
+	"TestMonitorStorageOperatorLostAckRetainsIncident",
+}
+
+const releaseGateStmonitorFixtureSelector = "^(TestMonitorOperatorCredentialFenceAndPublicationAmbiguity|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops|TestMonitorStorageOperatorLostAckRetainsIncident)$"
+
+// The only admin URL: the private PostgreSQL's endpoint and superuser.
+const releaseGateStmonitorAdminURL = `export STMONITOR_TEST_ADMIN_URL="postgres://postgres:urnetwork-local-test@$WARP_TEST_ENV_PORTABLE_POSTGRES_AUTHORITY/postgres?sslmode=disable"`
+
+// sn-e2e's commands after the E suite's.
+var releaseGateStmonitorFixtureLines = []string{
+	"stmonitor_fixture_tests='" + releaseGateStmonitorFixtureSelector + "'",
+	releaseGateStmonitorAdminURL,
+	`go test ./mainnet -run "$stmonitor_fixture_tests" -count=1`,
+	`go test -race ./mainnet -run "$stmonitor_fixture_tests" -count=1`,
+}
+
+// The aggregate job's skip: the E suite and the stmonitor fixture's roots.
+const releaseGateAggregatePinnedSkip = "^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$)"
+
 // Local dependency mode also skips the release-lock comparison, which only a
 // sealed run's checkouts can pass.
-const releaseGateAggregateLocalSkip = "^(TestSettlementV2E2E|TestReleaseLockMatchesCheckout$)"
+const releaseGateAggregateLocalSkip = "^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$)"
 
 // The aggregate job: every package of sn in normal mode, without the E suite
 // and, in local mode, without the release-lock comparison.
 const releaseGateAggregateNormalCommand = `go test -parallel=4 -timeout 90m ./... -count=1 -skip "$release_gate_aggregate_skip"`
 
 // Each mode's skip, assigned once before the job's definition.
-const releaseGateAggregateSkipAssignment = "release_gate_aggregate_skip='" + releaseGateAggregateE2ESkip + "'\n" +
+const releaseGateAggregateSkipAssignment = "release_gate_aggregate_skip='" + releaseGateAggregatePinnedSkip + "'\n" +
 	"if [[ \"$release_gate_dependency_mode\" == local ]]; then\n" +
 	"  release_gate_aggregate_skip='" + releaseGateAggregateLocalSkip + "'\n" +
 	"fi\n" +
@@ -320,14 +346,16 @@ func releaseGateSnE2EGroup(t *testing.T) releaseEvidenceV2GateGroup {
 }
 
 // The job's whole body is the services preamble, then its selector and its two
-// commands in sn, admitted once beside the database suites (§15: the E suite
-// runs in the server-database shard).
+// commands in sn, then the stmonitor fixture's selector, admin URL and two
+// commands, admitted once beside the database suites (§15: the E suite runs in
+// the server-database shard).
 func verifyReleaseGateSnE2E(script string, group releaseEvidenceV2GateGroup) error {
 	selector, err := releaseConnectPolicySelectorAssignment(script, group.variable)
 	if err != nil {
 		return err
 	}
 	body := append(slices.Clone(releaseGateServicePreamble), `cd "$sn_repo"`, group.variable+"='"+selector+"'", group.commands[0], group.commands[1])
+	body = append(body, releaseGateStmonitorFixtureLines...)
 	if err := verifyReleaseGateServicePhase(script, group.job, group.phase, body); err != nil {
 		return err
 	}
@@ -743,7 +771,7 @@ func releaseGateAggregateSkipCensus(root string) (map[string][]string, error) {
 			return err
 		}
 		source, err := os.ReadFile(path)
-		if err != nil || !strings.Contains(string(source), "TestSettlementV2E2E") && !strings.Contains(string(source), "TestReleaseLockMatchesCheckout") {
+		if err != nil || !strings.Contains(string(source), "TestSettlementV2E2E") && !strings.Contains(string(source), "TestReleaseLockMatchesCheckout") && !strings.Contains(string(source), "TestMonitor") {
 			return err
 		}
 		relative, err := filepath.Rel(root, filepath.Dir(path))
@@ -757,10 +785,10 @@ func releaseGateAggregateSkipCensus(root string) (map[string][]string, error) {
 	return census, err
 }
 
-// The aggregate job skips exactly the E suite: its whole body is the full
-// normal run with that one skip, and every test of sn that the skip names is
-// in ./mainnet and selected by sn-e2e. Local mode's skip adds exactly the
-// release-lock comparison of ./sim-testnet.
+// The aggregate job skips exactly the E suite and the stmonitor fixture's
+// roots: its whole body is the full normal run with that skip, and every test
+// of sn that the skip names is in ./mainnet and selected by sn-e2e. Local
+// mode's skip adds exactly the release-lock comparison of ./sim-testnet.
 func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string) error {
 	commands, _, err := releaseGatePhaseCommands(script, "sn_all_normal")
 	if err != nil {
@@ -780,8 +808,16 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 	if err != nil {
 		return err
 	}
-	skip, localSkip := regexp.MustCompile(releaseGateAggregateE2ESkip), regexp.MustCompile(releaseGateAggregateLocalSkip)
-	skipped, localOnly := 0, 0
+	fixtureSelector, err := releaseConnectPolicySelectorAssignment(script, "stmonitor_fixture_tests")
+	if err != nil {
+		return err
+	}
+	fixtureSelected, err := regexp.Compile(fixtureSelector)
+	if err != nil {
+		return err
+	}
+	suite, skip, localSkip := regexp.MustCompile(releaseGateAggregateE2ESkip), regexp.MustCompile(releaseGateAggregatePinnedSkip), regexp.MustCompile(releaseGateAggregateLocalSkip)
+	skipped, fixtureSkipped, localOnly := 0, 0, 0
 	for _, packagePath := range slices.Sorted(maps.Keys(census)) {
 		for _, source := range census[packagePath] {
 			names, err := releaseSourceTestDeclarations(source)
@@ -798,15 +834,22 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 				if !skip.MatchString(name) {
 					continue
 				}
-				if packagePath != "./mainnet" || !selected.MatchString(name) {
+				if packagePath != "./mainnet" || !selected.MatchString(name) && !fixtureSelected.MatchString(name) {
 					return fmt.Errorf("the aggregate job skips %s of %s, which sn-e2e does not run", name, packagePath)
 				}
-				skipped++
+				if suite.MatchString(name) {
+					skipped++
+				} else {
+					fixtureSkipped++
+				}
 			}
 		}
 	}
 	if skipped == 0 {
 		return errors.New("the aggregate job's skip names no test of the E suite")
+	}
+	if fixtureSkipped != len(releaseGateStmonitorFixtureRoots) {
+		return errors.New("the aggregate job does not skip exactly the stmonitor fixture's roots")
 	}
 	if localOnly != 1 {
 		return errors.New("the aggregate job's local mode does not skip exactly the release-lock comparison")
@@ -840,10 +883,11 @@ func TestReleaseGateSettlementV2AggregateSkipRejectsDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	const assignment = "settlement_v2_e2e_tests='^Test(SettlementV2E2E)'"
-	const pinnedSkip, localSkip = "release_gate_aggregate_skip='" + releaseGateAggregateE2ESkip + "'", "release_gate_aggregate_skip='" + releaseGateAggregateLocalSkip + "'"
+	const pinnedSkip, localSkip = "release_gate_aggregate_skip='" + releaseGateAggregatePinnedSkip + "'", "release_gate_aggregate_skip='" + releaseGateAggregateLocalSkip + "'"
 	for _, change := range []struct{ old, new string }{
 		{releaseGateAggregateNormalCommand, "go test -parallel=4 -timeout 90m ./... -count=1"},
 		{pinnedSkip, "release_gate_aggregate_skip='^TestSettlementV2'"},
+		{pinnedSkip, "release_gate_aggregate_skip='" + releaseGateAggregateE2ESkip + "'"},
 		{releaseGateAggregateNormalCommand, releaseGateAggregateNormalCommand + " -skip '^TestValidator'"},
 		{localSkip, pinnedSkip},
 		{localSkip, "release_gate_aggregate_skip='^(TestSettlementV2E2E|TestReleaseLockMatchesCheckout$|TestValidator)'"},
