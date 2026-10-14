@@ -46,7 +46,6 @@ live_modules=(
   userwireguard
   warp
   xops/echo
-  xops/router
 )
 
 # These modules are outside SN release qualification: no release build links
