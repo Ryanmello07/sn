@@ -30,7 +30,11 @@ preparation, and a digest mismatch refuses the record. Storage preparation
 writes the record at full width, so a later replacement never needs more space.
 `Validate()` refuses a preparation unless one ext4 block holds all four
 attributes at their widest. It counts the block header, the 16-byte entries,
-the names and values padded to four bytes, and the terminator.
+the names and values padded to four bytes, and the terminator. A fresh native
+journal, SDK work outbox or successor-members owner may share the root and
+attach its own attribute there, outside that count. So storage-prepare and the
+runtime refuse a request root that carries any other `user.urnetwork.`
+attribute. Snapshot owners keep theirs on their own lock files and may share.
 
 Earlier releases wrote the whole checkpoint as JSON (v1). Once a window closed,
 it grew to about 2.9-3.4 KB, more than ext4 leaves for it beside the root's

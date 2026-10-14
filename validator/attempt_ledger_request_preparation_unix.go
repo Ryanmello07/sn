@@ -67,6 +67,11 @@ func (self *attemptPreparationView) requestCheckpoint(scope AttemptLedgerPrepara
 	if err := request.validate(scope.Identity, scope.Coordinator); err != nil {
 		return nil, err
 	}
+	// A sharing owner published before this one is visible now; the runtime
+	// refuses one published later.
+	if err := checkProviderAttemptRequestRootAttributes(self.root); err != nil {
+		return nil, err
+	}
 	if _, present := self.members[ProviderAttemptRequestJournalName]; !present {
 		return nil, attemptLedgerCustodyLoss("request preparation lost its complete original journal", nil)
 	}

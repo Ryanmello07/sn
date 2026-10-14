@@ -575,3 +575,62 @@ func TestProviderRequestBudgetMirrorsActualStoragePreparationAnchor(t *testing.T
 		t.Fatal("storage-preparation anchor is wider than the forecast", count, err)
 	}
 }
+
+// durablevolume lets a fresh native journal, SDK work outbox or successor-
+// members owner share the ledger root and attach an attribute to it. A request
+// owner refuses such a root at runtime and in preparation. A snapshot owner's
+// attribute on its own lock file, and a ledger root without requests, are
+// admitted as they are today.
+func TestProviderRequestRootRefusesAnotherOwnerAttribute(t *testing.T) {
+	foreign := []string{"user.urnetwork.native-journal-custody", connect.OriginalWorkOutboxAttribute, "user.urnetwork.snapshot." + strings.Repeat("ab", 32)}
+	engine, journal, preparation, directory := providerRequestTestOwner(t, 32)
+	if err := journal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range foreign {
+		if err := unix.Setxattr(directory, name, []byte{1}, unix.XATTR_CREATE); err != nil {
+			t.Fatal(err)
+		}
+		if owner, err := OpenProviderAttemptRequestJournal(context.Background(), directory, preparation, engine.vsk); owner != nil || !errors.Is(err, protocol.ErrProviderAttemptsCapacity) {
+			t.Fatal("request owner opened beside another owner's root attribute", name, err)
+		}
+		if err := unix.Removexattr(directory, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	owner, err := OpenProviderAttemptRequestJournal(context.Background(), directory, preparation, engine.vsk)
+	if err != nil {
+		t.Fatal("request owner refused its own root attributes", err)
+	}
+	if err := owner.Close(); err != nil {
+		t.Fatal(err)
+	}
+	inspect := func(f *attemptLedgerRestoreFixture, path, name string) error {
+		t.Helper()
+		if err := unix.Setxattr(path, name, []byte{1}, unix.XATTR_CREATE); err != nil {
+			t.Fatal(err)
+		}
+		root, err := os.Open(f.root + ".original-held")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = InspectAttemptLedgerPreparation(t.Context(), root, f.scope)
+		return errors.Join(err, root.Close())
+	}
+	requests, _, _ := newAttemptRequestRestoreFixture(t, false, false)
+	held := requests.root + ".original-held"
+	lock := filepath.Join(held, "head.json.lock")
+	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := inspect(requests, lock, foreign[2]); err != nil {
+		t.Fatal("request preparation refused a snapshot attribute on its own lock file", err)
+	}
+	if err := inspect(requests, held, foreign[0]); !errors.Is(err, protocol.ErrProviderAttemptsCapacity) {
+		t.Fatal("request preparation admitted another owner's root attribute", err)
+	}
+	plain := newAttemptLedgerRestoreFixture(t, newAttemptRecordStoreTestFixture(t, 1), false, "")
+	if err := inspect(plain, plain.root+".original-held", foreign[0]); err != nil {
+		t.Fatal("ledger preparation without requests refused a shared root", err)
+	}
+}
