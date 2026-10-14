@@ -112,7 +112,7 @@ Usage:
     validator run --config=<path> [--progress-file=<path>]
         [--ledger_auditor_key_file=<path>] [--ledger_max_bytes=<n>]
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
-        [(--native-gap-bridge=<path> --native-gap-bridge-sha256=<hash>)]
+        [(--native-gap-bridge=<path> --native-gap-bridge-sha256=<hash>)] [--startup-verified-progress]
         [(--operators-refresh=<duration> [--operators-url=<url>] [--observe-unpinned-operators])]
         [-v...]
     validator run --all-operators [--operators-url=<url>] [--operators-refresh=<duration>]
@@ -151,6 +151,9 @@ Options:
                                  first_native_epoch; the signed config is unchanged. Keep it supplied
                                  while the bridged edge is in the retained intent history.
     --native-gap-bridge-sha256=<hash>  sha256:<64 lowercase hex> of the bridge file's exact bytes.
+    --startup-verified-progress  Keep the digests of completely verified history in the state directory,
+                                 signed by the hotkey, so the next start skips them instead of proving
+                                 the whole retained history again. Without it every start proves it all.
     --directory=<path>           Existing service directory for read-only physical inspection; repeatable.
     --coldkey_seed_file=<path>   sr25519 coldkey seed (64 hex chars or 32 raw bytes) that signs
                                  register_limit / add_stake. The release config carries no coldkey and
@@ -498,10 +501,10 @@ func run(opts docopt.Opts) {
 		if optString(opts, "--operators-refresh", "") != "" {
 			settings, err := productionOperatorListSettingsFromOpts(opts)
 			exitOnError("validator run", err)
-			runReleaseWithOperatorList(configPath, progressPath, reference, ledger, settings, bridge)
+			runReleaseWithOperatorList(configPath, progressPath, reference, ledger, settings, bridge, optBool(opts, "--startup-verified-progress"))
 			return
 		}
-		runReleaseConfig(configPath, progressPath, reference, ledger, bridge)
+		runReleaseConfig(configPath, progressPath, reference, ledger, bridge, optBool(opts, "--startup-verified-progress"))
 		return
 	}
 	if optBool(opts, "--all-operators") {
