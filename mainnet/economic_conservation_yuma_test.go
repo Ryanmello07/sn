@@ -161,6 +161,15 @@ func TestNativeProducerPublicYumaSourceReviewRequiresOriginalSignature(t *testin
 		t.Fatal(err)
 	}
 	reference.Sha256 = monitorReadDigest(raw)
+	// Re-pin the producer policy to the changed bytes, so that only the
+	// original approver's signature is left to refuse them.
+	raw, err = json.Marshal(producer.source.policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(producer.policy, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
 	negative, code, issue := producer.command(t)
 	if code == 0 || negative.Complete || !strings.Contains(issue, "native producer independent authority signature is invalid") {
 		t.Fatal("changed full Yuma source authority borrowed an earlier signature", code, issue)
@@ -219,8 +228,15 @@ func TestEconomicConservationPublicYumaWorkLimitKeepsHealthySiblings(t *testing.
 		if err := json.Unmarshal(output.Bytes(), &summary); err != nil {
 			t.Fatal(code, diagnostic.String(), err)
 		}
-		if code != 3 || summary.NativeCurrent || summary.NativeHeld || !summary.VaultCurrent || summary.FullQuantizationToleranceAlpha != nil || !strings.Contains(summary.NativeIssue, "exceeds admitted finite work") || summary.NativeCursor != f.source.policy.Native.Observation.From || summary.VaultCursor.Number == f.source.policy.Vault.From.Number || f.source.claimReads.Load() == 0 {
-			t.Fatal("exhausted allocation arithmetic blocked siblings or invented tolerance", code, summary)
+		if code != 3 || summary.NativeCurrent || summary.NativeHeld || !summary.VaultCurrent || !strings.Contains(summary.NativeIssue, "exceeds admitted finite work") || summary.NativeCursor != f.source.policy.Native.Observation.From || summary.VaultCursor.Number == f.source.policy.Vault.From.Number || f.source.claimReads.Load() == 0 {
+			t.Fatal("exhausted allocation arithmetic blocked siblings", code, summary)
+		}
+		// Since a58489c26 exhausted work holds the cursor and admits nothing,
+		// so the complete allocation through the held cursor is the empty
+		// interval: zero denominator and tolerance, none of them the epoch's.
+		yuma := summary.Yuma
+		if yuma == nil || yuma.Archived != nil || len(yuma.Active) != 0 || yuma.Through != f.source.policy.Native.Observation.From || yuma.MinerDenominator == nil || *yuma.MinerDenominator != "0" || summary.FullQuantizationToleranceAlpha == nil || *summary.FullQuantizationToleranceAlpha != "0" {
+			t.Fatal("exhausted allocation arithmetic invented tolerance", code, summary)
 		}
 		if attempt != 0 && summary.VaultCursor.Number <= previous.VaultCursor.Number {
 			t.Fatal("same-authority arithmetic capacity retry blocked healthy vault advancement", summary)
