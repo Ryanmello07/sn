@@ -915,7 +915,7 @@ func finalSemanticBuilderReweightCycle(t *testing.T, cycle *FinalCRv4Cycle) {
 	}
 	poolInputs := make([]validatorpkg.ExactWeightInput, 0, len(cycle.Pools))
 	for _, pool := range cycle.Pools {
-		if !pool.AuditCompliant {
+		if !finalPoolWeighted(&pool) {
 			continue
 		}
 		score, err := finalPositiveRational("pool score", pool.RawScore)
@@ -1361,7 +1361,7 @@ func finalSemanticBuilderRewardSource(t *testing.T) (FinalSemanticEvidence, []*S
 		}
 		return encoded
 	}
-	cycle10 := FinalCRv4Cycle{SettlementEpoch: 10, Application: FinalNativeReceipt{Block: ChainHead{Number: 20, Hash: finalTestHex(20)}}, Candidates: []FinalHeadCandidateEvidence{{FleetID: 1, Selected: true}, {FleetID: 2}}, Pools: []FinalPoolWeightEvidence{{NoID: 1, AuditCompliant: true}}}
+	cycle10 := FinalCRv4Cycle{SettlementEpoch: 10, Application: FinalNativeReceipt{Block: ChainHead{Number: 20, Hash: finalTestHex(20)}}, Candidates: []FinalHeadCandidateEvidence{{FleetID: 1, Selected: true}, {FleetID: 2}}, Pools: []FinalPoolWeightEvidence{{NoID: 1, AuditCompliant: true, QualityPPM: 500_000}}}
 	cycle11 := FinalCRv4Cycle{SettlementEpoch: 11, Application: FinalNativeReceipt{Block: ChainHead{Number: 40, Hash: finalTestHex(40)}}, Candidates: []FinalHeadCandidateEvidence{{FleetID: 1}, {FleetID: 2, Selected: true}}, Pools: []FinalPoolWeightEvidence{{NoID: 1}}}
 	reserveSelf := "0x" + strings.Repeat("71", 32)
 	source := FinalSemanticEvidence{

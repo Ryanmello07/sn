@@ -2209,7 +2209,7 @@ func verifyFinalCRv4CycleFrom(evidence *FinalSemanticEvidence, validatorID uint6
 	}
 	for _, pool := range cycle.Pools {
 		value, submitted := valueByUID[pool.UID]
-		if pool.AuditCompliant && (!submitted || value == 0) {
+		if finalPoolWeighted(&pool) && (!submitted || value == 0) {
 			return fmt.Errorf("eligible pool UID %d is absent or zero in submitted vector", pool.UID)
 		}
 		if !pool.AuditCompliant && submitted {
@@ -2387,18 +2387,25 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 	if pool.AuditStatus != validatorpkg.DepositAuditCompliant || pool.AuditDisposition != "pool_weight_eligible" || pool.AuditError != "" || observed.Cmp(required) != 0 {
 		return nil, false, errors.New("deposit audit is not compliant and pool-weight eligible")
 	}
-	if pool.QualityPPM == 0 || pool.QualityPPM > 1_000_000 {
-		return nil, false, errors.New("quality PPM is outside (0,1000000]")
+	if pool.QualityPPM > 1_000_000 {
+		return nil, false, errors.New("quality PPM is outside [0,1000000]")
 	}
-	qualityPPM := pool.QualityPPM
-	if qualityPPM < minimumQualityPPM {
-		qualityPPM = minimumQualityPPM
+	// The clamp applies to measured quality. A pool without any scores zero,
+	// as the validator's impliedUsageQuality does: its weight is
+	// implied_demand * Q_n with Q_n = 0.
+	wantQuality := new(big.Rat)
+	if pool.QualityPPM != 0 {
+		qualityPPM := pool.QualityPPM
+		if qualityPPM < minimumQualityPPM {
+			qualityPPM = minimumQualityPPM
+		}
+		if qualityPPM > maximumQualityPPM {
+			qualityPPM = maximumQualityPPM
+		}
+		wantQuality.SetFrac(new(big.Int).SetUint64(uint64(qualityPPM)), big.NewInt(1_000_000))
 	}
-	if qualityPPM > maximumQualityPPM {
-		qualityPPM = maximumQualityPPM
-	}
-	quality, err := finalPositiveRational("quality factor", pool.QualityFactor)
-	if err != nil || quality.Cmp(new(big.Rat).SetFrac(new(big.Int).SetUint64(uint64(qualityPPM)), big.NewInt(1_000_000))) != 0 {
+	quality, err := finalNonnegativeRational("quality factor", pool.QualityFactor)
+	if err != nil || quality.Cmp(wantQuality) != 0 {
 		return nil, false, errors.New("quality factor does not match quality PPM")
 	}
 	implied, err := finalPositiveRational("implied demand", pool.ImpliedDemand)
@@ -2409,7 +2416,7 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 	if implied.Cmp(finalImpliedDemand(baseline, owed, capRao)) != 0 {
 		return nil, false, errors.New("implied demand does not equal audited usage priced at the conviction-zero tier")
 	}
-	rawScore, err := finalPositiveRational("pool raw score", pool.RawScore)
+	rawScore, err := finalNonnegativeRational("pool raw score", pool.RawScore)
 	if err != nil {
 		return nil, false, err
 	}
@@ -2417,6 +2424,13 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 		return nil, false, errors.New("pool raw score does not equal implied demand times Q")
 	}
 	return rawScore, true, nil
+}
+
+// finalPoolWeighted reports whether a verified pool row carries weight: a
+// compliant audit and measured quality. A compliant pool without measured
+// quality scores zero, so validators submit no weight for it.
+func finalPoolWeighted(pool *FinalPoolWeightEvidence) bool {
+	return pool.AuditCompliant && pool.QualityPPM != 0
 }
 
 func verifyFinalPoolEpochs(evidence *FinalSemanticEvidence, pools map[uint64]FinalPoolUIDEvidence) error {
@@ -5218,7 +5232,10 @@ func verifyFinalPayoutArtifact(evidence *FinalSemanticEvidence, pool *FinalPoolU
 	if !strings.EqualFold("0x"+strings.TrimPrefix(artifact.ContentHash, "sha256:"), expected.ArtifactHash) {
 		return fmt.Errorf("payout artifact content hash %s is not the committed artifact hash %s for epoch %d operator %d", artifact.ContentHash, expected.ArtifactHash, expected.Epoch, expected.NoID)
 	}
-	if (expected.UsageBytes != 0 && artifact.TotalUsageBytes != expected.UsageBytes) || (expected.Users != 0 && artifact.TotalUsers != expected.Users) {
+	// A deposit audit declares the artifact's whole usage: bytes and users bind
+	// together, a zero user count included, since a per-user rate prices them.
+	// Epoch-row and lifecycle expectations declare no usage.
+	if (expected.UsageBytes != 0 || expected.Users != 0) && (artifact.TotalUsageBytes != expected.UsageBytes || artifact.TotalUsers != expected.Users) {
 		return errors.New("payout artifact usage does not match deposit audit")
 	}
 	if expected.PayoutRoot != "" && !strings.EqualFold("0x"+hex.EncodeToString(artifact.PayoutRoot[:]), expected.PayoutRoot) {
@@ -5523,29 +5540,49 @@ func verifyFinalPolicyInputs(evidence *FinalSemanticEvidence, policy *protocol.P
 		return errors.New("vault minimum claim TTL does not match the canonical signed policy")
 	}
 	for _, validator := range evidence.Validators {
-		for _, cycle := range validator.Cycles {
-			if cycle.Theta.Numerator != strconv.FormatUint(policy.Steering.Theta.Numerator, 10) || cycle.Theta.Denominator != strconv.FormatUint(policy.Steering.Theta.Denominator, 10) || cycle.QualityMinimumPPM != policy.Steering.QualityTransform.MinimumPPM || cycle.QualityMaximumPPM != policy.Steering.QualityTransform.MaximumPPM || cycle.MaximumHeadFleets != policy.Steering.MaximumHeadFleets || cycle.MaxWeightLimitU16 != policy.Steering.MaxWeightLimitU16 {
-				return fmt.Errorf("validator %d epoch %d steering parameters do not match canonical policy", validator.ValidatorID, cycle.SettlementEpoch)
+		for index := range validator.Cycles {
+			cycle := &validator.Cycles[index]
+			if err := verifyFinalCyclePolicyInputs(fmt.Sprintf("validator %d epoch %d", validator.ValidatorID, cycle.SettlementEpoch), cycle, policy); err != nil {
+				return err
 			}
-			for _, pool := range cycle.Pools {
-				conviction, err := finalNonnegativeInteger("conviction before", pool.ConvictionBeforeRao)
-				if err != nil {
-					return err
-				}
-				amount, tier, err := protocol.RequiredDepositRao(pool.UsageBytes, pool.Users, conviction, policy.Deposit)
-				if err != nil || amount.String() != pool.RequiredDepositRao || tier.RateNumeratorRaoPerGiB != pool.RateNumeratorRaoPerGiB || tier.RateNumeratorRaoPerUser != pool.RateNumeratorRaoPerUser || tier.RateDenominator != pool.RateDenominator || strconv.FormatUint(policy.Deposit.EpochCapRaoPerOperator, 10) != pool.EpochDepositCapRao {
-					return fmt.Errorf("validator %d epoch %d pool %d deposit inputs do not match canonical policy", validator.ValidatorID, cycle.SettlementEpoch, pool.NoID)
-				}
-				// RequiredDepositRao has validated the schedule, so tier zero exists.
-				if baseline := policy.Deposit.Tiers[0]; baseline.RateNumeratorRaoPerGiB != pool.BaselineRateNumeratorRaoPerGiB || baseline.RateNumeratorRaoPerUser != pool.BaselineRateNumeratorRaoPerUser || baseline.RateDenominator != pool.BaselineRateDenominator {
-					return fmt.Errorf("validator %d epoch %d pool %d baseline deposit rate does not match the canonical policy's conviction-zero tier", validator.ValidatorID, cycle.SettlementEpoch, pool.NoID)
-				}
+		}
+	}
+	// A recovery decision equals an accepted cycle; a penalty decision does
+	// not, so its rows meet the policy here.
+	if evidence.DishonestDeposit != nil {
+		for index := range evidence.DishonestDeposit.Penalties {
+			decision := &evidence.DishonestDeposit.Penalties[index]
+			if err := verifyFinalCyclePolicyInputs(fmt.Sprintf("validator %d dishonest-deposit penalty epoch %d", decision.ValidatorID, decision.Cycle.SettlementEpoch), &decision.Cycle, policy); err != nil {
+				return err
 			}
 		}
 	}
 	for _, proof := range evidence.PathProofs {
 		if proof.TrailDepth != policy.Verify.TrailDepth {
 			return fmt.Errorf("validator %d pool %d trail depth does not match canonical policy", proof.ValidatorID, proof.NoID)
+		}
+	}
+	return nil
+}
+
+// verifyFinalCyclePolicyInputs compares one CRv4 cycle's steering parameters
+// and every pool row's deposit inputs with the canonical signed policy.
+func verifyFinalCyclePolicyInputs(label string, cycle *FinalCRv4Cycle, policy *protocol.Policy) error {
+	if cycle.Theta.Numerator != strconv.FormatUint(policy.Steering.Theta.Numerator, 10) || cycle.Theta.Denominator != strconv.FormatUint(policy.Steering.Theta.Denominator, 10) || cycle.QualityMinimumPPM != policy.Steering.QualityTransform.MinimumPPM || cycle.QualityMaximumPPM != policy.Steering.QualityTransform.MaximumPPM || cycle.MaximumHeadFleets != policy.Steering.MaximumHeadFleets || cycle.MaxWeightLimitU16 != policy.Steering.MaxWeightLimitU16 {
+		return fmt.Errorf("%s steering parameters do not match canonical policy", label)
+	}
+	for _, pool := range cycle.Pools {
+		conviction, err := finalNonnegativeInteger("conviction before", pool.ConvictionBeforeRao)
+		if err != nil {
+			return err
+		}
+		amount, tier, err := protocol.RequiredDepositRao(pool.UsageBytes, pool.Users, conviction, policy.Deposit)
+		if err != nil || amount.String() != pool.RequiredDepositRao || tier.RateNumeratorRaoPerGiB != pool.RateNumeratorRaoPerGiB || tier.RateNumeratorRaoPerUser != pool.RateNumeratorRaoPerUser || tier.RateDenominator != pool.RateDenominator || strconv.FormatUint(policy.Deposit.EpochCapRaoPerOperator, 10) != pool.EpochDepositCapRao {
+			return fmt.Errorf("%s pool %d deposit inputs do not match canonical policy", label, pool.NoID)
+		}
+		// RequiredDepositRao has validated the schedule, so tier zero exists.
+		if baseline := policy.Deposit.Tiers[0]; baseline.RateNumeratorRaoPerGiB != pool.BaselineRateNumeratorRaoPerGiB || baseline.RateNumeratorRaoPerUser != pool.BaselineRateNumeratorRaoPerUser || baseline.RateDenominator != pool.BaselineRateDenominator {
+			return fmt.Errorf("%s pool %d baseline deposit rate does not match the canonical policy's conviction-zero tier", label, pool.NoID)
 		}
 	}
 	return nil
@@ -6059,6 +6096,14 @@ func finalPositiveRational(label string, encoded FinalRational) (*big.Rat, error
 		return nil, fmt.Errorf("%s is not canonically reduced", label)
 	}
 	return value, nil
+}
+
+// finalNonnegativeRational admits zero only as its canonical 0/1.
+func finalNonnegativeRational(label string, encoded FinalRational) (*big.Rat, error) {
+	if encoded == (FinalRational{Numerator: "0", Denominator: "1"}) {
+		return new(big.Rat), nil
+	}
+	return finalPositiveRational(label, encoded)
 }
 
 func finalProtocolRational(encoded FinalRational) (protocol.Rational, error) {
