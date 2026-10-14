@@ -548,6 +548,32 @@ func TestConnIpFamilyReadsTheRemoteAddress(t *testing.T) {
 	}
 }
 
+// A connection reset right after its handshake has no remote address
+// (gvisor's gonet.TCPConn.RemoteAddr returns nil once the endpoint is no longer
+// connected). Its family is unknown, and reading it must not panic.
+func TestConnIpFamilyOfAConnectionWithoutARemoteAddressIsUnknown(t *testing.T) {
+	var typedNil *net.TCPAddr
+	for name, conn := range map[string]net.Conn{
+		"nil":       nilRemoteAddrConn{},
+		"typed nil": typedNilRemoteAddrConn{addr: typedNil},
+	} {
+		if got := connIpFamily(conn); got != 0 {
+			t.Errorf("connIpFamily(%s remote address) = %d, want 0", name, got)
+		}
+	}
+}
+
+type nilRemoteAddrConn struct{ net.Conn }
+
+func (nilRemoteAddrConn) RemoteAddr() net.Addr { return nil }
+
+type typedNilRemoteAddrConn struct {
+	net.Conn
+	addr *net.TCPAddr
+}
+
+func (self typedNilRemoteAddrConn) RemoteAddr() net.Addr { return self.addr }
+
 type remoteAddrConn struct {
 	net.Conn
 	remote string
