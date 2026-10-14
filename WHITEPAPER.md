@@ -38,7 +38,7 @@ version 2 changes only the pool tier's payout settlement, on mainnet from the sw
 > rate** (zero conviction = baseline; staking lowers it — the onboarding lever), and **validators weight
 > the pools themselves** by `implied_usage × quality` (`implied_usage` = audited usage at the baseline rate) from
 > published data. The **head tier ranks fleets by split-adjusted distinct routable egress-IP count** (not
-> traffic; shared IPs split among claimants), head weight ∝ that score. Validators run measurement with
+> traffic; shared IPs split among claimants), head weight ∝ that score's EMA. Validators run measurement with
 > **guardrails off** (own rate). See §7, §8, §10, §12; prior layers: v0.3 buybacks (D23), v0.2 two tiers
 > (D16–D20).
 
@@ -246,8 +246,9 @@ parked in §9.3/§13.6 as a future‑iteration candidate.
 
 Because the weights carry a *subjective* signal — measured provider quality — the standard Bittensor
 anti‑gaming stack applies and is **switched on**: **commit‑reveal** (a lazy validator can't copy fresh
-consensus), consensus **clipping + vtrust** + the **self‑weight mask** (a validator can't inflate a pool
-or score its own NO), and **bonds / Liquid Alpha** (rewarding validators who back good pools early). The
+consensus), consensus **clipping + vtrust** (a validator can't inflate a pool) + the **self‑weight mask**
+(a validator scores neither its own UID nor a NO it declares it controls; the SN25 launch's one validator
+declares none, §10), and **bonds / Liquid Alpha** (rewarding validators who back good pools early). The
 **deposit**, which must pay for the audited usage that implied usage prices, is the *objective*
 anchor that ties the across‑NO split to revenue‑backed
 demand (§7–§8.1); **quality** is the Yuma‑measured factor that makes validators' evaluation the thing that
@@ -504,7 +505,7 @@ driven by the Go harness in `rehearsal/`); it has passed on 475, and with the cl
 | **Subnet owner** (BringYour, Inc.) | owner coldkey + owner hotkey at **UID 0** (immune); deploys & governs the ST contract; operates the **reserve validator hotkey** (§7.4) | receives the 18% owner cut; the **majority validator** in the early network (§9.2); the governance **referee** (§9.6). |
 | **Network Operator (NO)** | a contract registration (`noId`) with **one miner‑pool UID** (its providers, contract‑owned; from `E_s` a new pool UID owned by vault2). Holds **no emission**; runs no validator. | a per‑NO *pool operator*: deposits; runs the `/verify` server (co‑signs trails); commits the Merkle payout root that splits its miner pool — from `E_s` a sum-tree root over per-coldkey accounts, split by verified usage alone, whose ledger it publishes and whose paths it opens on demand. Directs flow; the contract holds and pays. |
 | **Provider (miner)** | a `client_id` **inside** a NO's miner pool — **not a UID** (100k+ providers can't each be a UID); from `E_s` its earnings accrue to its payout coldkey's one **account** in that pool | carries traffic; **claims its α directly from the contract** with a Merkle proof against its NO's payout root: for epochs before `E_s`, per epoch and before a TTL; from `E_s`, cumulatively and without expiry — one claim, which anyone may send and which always pays the account's coldkey, collects all accrual since the last. The **on-ramp / tail** tier; can **graduate** to a top-level slot (§8.4). |
-| **Top-level miner (head)** | **its own miner UID**; a **fleet** — its `client_id`s **bound to its hotkey** (§11.4) | the **supply apex**: the top ~200 fleets by **split-adjusted distinct routable egress-IP count**, steered **directly** by validators (`weight = score`); **native** emission to its own coldkey — no contract custody, no Merkle claim; maintained by deregistration churn (§8.4). |
+| **Top-level miner (head)** | **its own miner UID**; a **fleet** — its `client_id`s **bound to its hotkey** (§11.4) | the **supply apex**: the top ~200 fleets by **split-adjusted distinct routable egress-IP count**, steered **directly** by validators (weight = an EMA of the score); **native** emission to its own coldkey — no contract custody, no Merkle claim; maintained by deregistration churn (§8.4). |
 | **Validator** (was "verifier") | an **independent** Bittensor validator UID; stakes its **own** α | runs `/verify` trails (the failure‑data signal), scores pools `implied_usage × Q_n` under commit‑reveal (§10). Earns **native dividends** (∝ stake × vtrust) — its **only** reward; a validator effort bounty is **out of scope** (D29, parked in §9.3). No NO, no pool. |
 | **Auditor** (version 2) | an owner-admitted EVM address in `STSettlement2`'s auditor set (at most 16, with a quorum), not a hotkey or `vpk` binding; at launch a single address whose key the validator holds, quorum 1 | approves the exact pending v2 root before the next epoch ends. A root finalizes only with a quorum of approvals, and never while vault2 blocks it (inside its challenge window or with a demand open); challenges and path demands are open to anyone (§5.2). |
 | **ST contract set** | three distinct mapped coldkeys: coordinator, immutable settlement vault, immutable reserve sink. Version 2 adds the immutable `STSettlementVault2` ("vault2") and the owner-upgradeable `STSettlement2` beside them, leaving every v1 contract unchanged | the vault owns pool UIDs and claims escrow; the reserve sink owns permanently locked conviction; the coordinator owns neither and only applies policy. vault2 owns each v2 pool UID (from `E_s`) and its own claims escrow; `STSettlement2` owns neither, holds the auditor set and approvals, and reads operators, windows and epoch boundaries from the coordinator. Does **not** custody validator emission (it is native). |
@@ -524,7 +525,8 @@ routable-IP breadth** therefore *also* get the canonical Bittensor treatment —
 directly by validators, paid natively** (§8.4) — so the biggest routable-supply operators compete
 head-to-head on breadth, trust-minimized, while the pool stays the low-barrier on-ramp everyone starts
 in. A provider (`client_id`) is in **exactly one** tier at a time
-(promoted out of its pool's payout list once it holds a UID — no double-pay, §8.4). The two tiers share one
+(promoted out of its pool's payout list while its binding to a live head UID is active at either epoch
+boundary — no double-pay, §8.4). The two tiers share one
 256-UID metagraph (§14).
 
 **Binding the validator identity.** `seed/INCENTIVES.md` says a validator "uses their wallet PK as their
@@ -552,7 +554,7 @@ as `vpk` also works but couples key rotation to the wallet; binding is preferred
 | `w_n` / `ŵ_n` | NO `n`'s pool weight ∝ `implied_usage_n × Q_n` (validator‑computed, §8.1/§10) |
 | `E_mine, E_val, E_own` | α emission to the miner / validator / owner pools over the epoch (41/41/18% of subnet α emission) |
 | `Q_n` | NO `n`'s consensus‑measured pool quality (from validators' `VALIDATOR.md` trails) |
-| `score(u)` | top‑level miner (fleet) `u`'s **split‑adjusted count of distinct routable egress‑IPs** — **is** its head weight (§8.4) |
+| `score(u)` | top‑level miner (fleet) `u`'s **split‑adjusted count of distinct routable egress‑IPs** — its EMA **is** its head weight (§8.4) |
 | `θ` | governance **head share**: fraction of the providers' share `μ` of the 41% miner emission steered to top-level miners; `1−θ` goes to the pools (§8.5) |
 | `μ` | **momentum**: the providers' share (head + pools) of the native miner allocation — 1/10 on SN25 at launch, pinned by the signed treasury policy, which gives the other `1 − μ` to `ur‑reserve`'s recipient UIDs; 1 without a treasury policy (testnet) (§8.5) |
 | `client_id`s ⇄ hotkey | the signed binding mapping a fleet's `client_id`s to a top-level miner's UID (§11.4) |
@@ -598,7 +600,7 @@ consensus, and emits to the miner‑pool UIDs ∝ the clipped result (§10) — 
 validators' evaluation, the Bittensor way. A validator earns a permit by stake
 (top‑`max_allowed_validators`) from its **own** α; honest, consensus‑aligned scoring builds vtrust and
 dividends while divergence is clipped. There is **no off‑chain keeper or trusted weight authority**;
-each validator runs standard Bittensor validator software.
+each validator runs the open UR validator (`validator/`) and submits its own native CRv4 weights.
 
 > **Commit‑reveal is enabled** (`commit_reveal_weights_enabled = true`). Weights carry a *subjective*
 > quality signal, so a lazy validator could copy others' fresh weights; commit‑reveal (drand timelock,
@@ -1074,7 +1076,8 @@ reads, per NO `n`, straight off chain state and its own trails:
 and sets
 
 ```
-weight_n  ∝  implied_demand_n × Q_n
+weight_n  ∝  implied_demand_n × clamp(Q_n)                                  # 0 at Q_n = 0; else Q_n clamped to the policy's
+                                                                            # bounds, [0.75, 1] at launch (§12.3)
 implied_demand_n = (bytes_n × rate_gib(0) / GiB + users_n × rate_user(0))   # audited usage priced at the conviction-zero tier
                    × min(1, cap / owed_n)                                   # truncated exactly as the capped deposit was
 implied_demand_n = 1                                                        # while the published price is zero (§7.1)
@@ -1229,8 +1232,10 @@ miner UID**, is **steered directly by validators**, and is **paid natively**. Th
 **The metric — routable egress breadth, not traffic (D27).** Exact source addresses are used only for
 unambiguous hop attribution: one eligible exact address maps to one `client_id`, and ambiguity excludes
 it (`VALIDATOR.md` §8.2). The public scoring unit is separately
-`HMAC(policy_key, family || masked_prefix || domain)` at the policy granularity (initially /29 IPv4 and
-/48 IPv6). A fleet's score is the count of **distinct routable scoring hashes** its bound clients serve,
+`HMAC‑SHA256(egress_hash_key, "urnetwork/egress-prefix/v1" ‖ masked_prefix)`, where `masked_prefix` is the 4‑ or
+16‑byte address masked to the policy granularity (initially /29 IPv4 and /48 IPv6) and the policy names the
+key by `egress_hash_key_id`. A fleet's score is the count of **distinct routable scoring hashes** its bound
+clients serve,
 **split when shared**: each hash contributes **1.0 total, divided equally among every eligible head fleet
 observed on it**. Thus distinct exact IPs in one co-located prefix deliberately collapse and cannot
 double-count supply. A score unit counts only if it is *routable* — the validator completed a real
@@ -1240,9 +1245,11 @@ quality term.
 ```
 for top-level-miner UID u (a fleet — a hotkey with bound client_ids C_u, §11.4):
     IPs(u)   = { distinct keyed prefix hash h : some c ∈ C_u routed a verified trail hop from h } # VALIDATOR.md §7
-    claim(h) = #{ top miners u' : h ∈ IPs(u') }                                                  # split across sharers
+    claim(h) = #{ bound fleets u' : h ∈ IPs(u') }                                                # split across sharers
     score(u) = Σ over h ∈ IPs(u) of  1 / claim(h)         # split-adjusted unique routable-IP count
-    head_weight[u] = score(u)                             # weight IS the IP score (decision B)
+    head_weight[u] = EMA(score(u))                        # weight IS the smoothed IP score (decision B):
+                                                          #   ¼·score + ¾·prior per tempo (head_score_ema), for the
+                                                          #   top maximum_head_fleets (200) by it; other fleets get 0
 ```
 
 Every validator computes `score(u)` **from its own trails** — the trail/proof wire carries a per-hop
@@ -1251,9 +1258,10 @@ IPv4, /48 IPv6 — never the raw IP), so a validator can count each fleet's rout
 sharing splits without trusting anyone. This is the **verify-the-top-200** requirement: a validator only weights
 a claimed top miner as high as its *own* observed IP score justifies.
 
-**Identity — the fleet `client_id`s ⇄ hotkey binding (§11.4).** A fleet publishes a **dual-signed
-binding** (§11.4) of its `client_id`s (a short list or a Merkle root) to its head hotkey, proving it
-controls both the `client_id`s (their `VALIDATOR.md` Ed25519 keys) and the hotkey (its BT key);
+**Identity — the fleet `client_id`s ⇄ hotkey binding (§11.4).** A fleet commits the SHA‑256 of its
+canonical member manifest from its head hotkey and binds each `client_id` to that hotkey with its own
+**dual-signed binding** (§11.4), proving it controls both the `client_id`s (their `VALIDATOR.md` Ed25519 keys)
+and the hotkey (its BT key);
 validators read it as a free state query and **fail-closed** if the hotkey is not a live UID. The dual
 signature (cf. SN51 Celium's `associate_evm_key`) stops a fleet from claiming `client_id`s — hence IPs —
 it does not operate.
@@ -1280,7 +1288,8 @@ That *is* the tournament, driven by the weights validators set:
 - **Score-dip protection (a real risk).** Pruning reads only *current* emission rank, no history, so once
   a UID's `immunity_period` expires one thin measurement stretch can evict a good fleet. Mitigations, all
   owner-tunable: a **high `immunity_period`** (a full measurement ramp for new top miners), an **EMA on
-  `score`** (so a single noisy epoch doesn't thrash emission), and a **θ large enough that the lowest top
+  `score`** (`head_score_ema` 1/4 per tempo, so a single noisy tempo doesn't thrash emission), and a **θ large
+  enough that the lowest top
   miner clears the tail** (else the head thrashes against the pools, §8.5). Each (re-)registration pays
   the continuous burn auction (≈ ×1.26 / registration), so churn has a real, tunable cost — and a per-UID
   burn makes the head **more** Sybil-resistant than one pool UID per NO.
@@ -1337,7 +1346,7 @@ governance parameter*, not per-validator discretion.
 (`implied_usage × quality`, the headline bet of `COMPARISON.md`) lives entirely in the **`1−θ` tail`; the
 head is pure routable-supply breadth (§8.4), *decoupled* from deposits.
 - **Large θ (head-heavy):** a big, trust-minimized meritocracy — but most emission is demand-*de*coupled,
-  and a NO's best providers then earn from the subnet-funded head, not the NO's deposit-funded pool, so NO
+  and a NO's best providers then earn from the subnet-funded head, not the NO's demand-weighted pool, so NO
   **deposit incentives weaken**.
 - **Small θ (tail-heavy):** demand-coupling stays dominant and deposits stay meaningful — but the apex is a
   small carrot, and graduating can be a *pay cut* (breaking the ladder).
@@ -1365,7 +1374,7 @@ provable fault, or demands openings (§11.3).
 
 ### 9.1 What a "validated path" is
 
-A completed `VALIDATOR.md` trail yields a **published proof** `{header, hops[(client_id, time)],
+A completed `VALIDATOR.md` trail yields a **published proof** `{header, hops[(client_id, time, egress_ip_hash)],
 final_sig (NO server), verifier_sig (vpk)}`, with identity
 
 ```
@@ -1373,7 +1382,9 @@ pathId = keccak256(trail_id ‖ vpk ‖ server_key_id)
 ```
 
 Because it carries **both** the NO server's `FINAL` signature and the validator's `vpk` signature, a
-path that verifies is **self‑proving** — anyone checks it with the `0x402` precompile (§11.3). This is
+path that verifies is **self‑proving** — anyone checks both Ed25519 signatures against the server's
+published key and the `vpk`, off chain (each signs its raw canonical message, which the 32‑byte‑message
+`0x402` precompile cannot take). This is
 what the failure statistics are built from (§9.4) — and what the parked bounty design would count as
 effort, were it ever built (§9.3, D29).
 
@@ -1457,8 +1468,9 @@ independent‑validator coverage too thin, the parked §9.3 bounty is one lever 
 ### 9.5 Anti‑gaming for validators
 
 - **Honest scoring** — on‑chain Yuma: a validator inflating a pool (or knifing a rival) is **clipped** to
-  the κ‑median and **loses vtrust → loses dividends**; the **self‑weight mask** (§10) stops it scoring its
-  own NO at all; **commit‑reveal** stops it copying fresh consensus.
+  the κ‑median and **loses vtrust → loses dividends**; the **self‑weight mask** (§10) stops it scoring a
+  NO it declares it controls (the SN25 launch validator declares none and scores UR's own pool, §10);
+  **commit‑reveal** stops it copying fresh consensus.
 - **Honest effort** — not an on‑chain concern in v1 (no effort reward to game); the parked §9.3 bounty, if
   ever built, would make effort crypto‑verified (sample + dispute), server‑assigned, under‑sampling‑weighted.
 - **Independence** — because most validators run no NO, the κ‑median tracks ground truth (`VALIDATOR.md`
@@ -1502,17 +1514,20 @@ for validator v:
     # TAIL — NO pools: implied-usage × quality (D25)
     for each NO pool p (miner-pool UID of NO n):
         implied_usage_n = usage_n × rate(0) × min(1, cap / owed_n)   // usage from the signed payout artifact; the deposit must pay owed_n = usage_n × rate(tier_n) (§7.5, §8.1)
-        pool[p] = implied_usage_n · quality_v(p)           // §9.4 aggregate; = 0 if v operates NO n (self-mask)
+                                                                     // = 1 while the published price is zero (§7.1)
+        pool[p] = implied_usage_n · clamp(quality_v(p))    // §9.4 aggregate, clamped to the policy's [0.75, 1], 0 at 0;
+                                                           // = 0 if v declares it controls NO n (self-mask)
     # HEAD — top-level miners: split-adjusted routable-IP breadth (§8.4, D27)
     for each top-level-miner UID u (fleet — client_ids C_u bound to u, §11.4):
-        head[u] = score_v(u) = Σ_{h ∈ v's routable IP-hashes for C_u} 1 / (# top miners v sees claiming h)   // = 0 for v's own UID
+        score_v(u) = Σ_{h ∈ v's routable IP-hashes for C_u} 1 / (# bound fleets v sees on h)
+        head[u] = EMA(score_v(u)) for the top maximum_head_fleets (200) by it, else 0   // = 0 for v's own UID
     # split the providers' share μ by governance share θ, into ONE vector (§8.5)
     normalize head so Σ head = θ·μ ;   normalize pool so Σ pool = (1 − θ)·μ   // an empty tier cedes to the other
     SN25: add ur-reserve's k recipient UIDs at (1 − μ)/k each (the whole row when no provider has weight)
     w_v = apply signed policy max_weight_limit_u16 to the row
     w_v = half-up u16(w_v); deterministically repair rounding under the same cap
                           // SN25 treasury row: no clipping or repair; an entry over the cap refuses the row
-    commit / reveal w_v   (Neuron 0x804, drand timelock — §2.4)
+    commit / reveal w_v   (native CRv4 commit_timelocked_weights extrinsic, drand timelock — §2.4, §5.1)
 ```
 
 The self-mask covers the NOs a validator declares it controls. The SN25 launch's one UR validator declares none and
@@ -1843,8 +1858,9 @@ designs, §9.3/§13.6) is an open post‑launch question, not a committed roadma
   pool** under v1 settlement (auditable payout list, §8.2) and via reputation; v2 settlement splits each
   pool by usage alone (below, §13.4).
 - **Bootstrap caveat (not a removal — a ramp):** `Q_n` is noisy until the validator set and data mature,
-  so governance **caps the quality swing** early (closer to deposit‑weighted) and widens it as the
-  independent‑validator stake share grows. Quality is on the payout path from day one; its *magnitude*
+  so governance **caps the quality swing** early (closer to demand‑weighted; the launch policy clamps
+  `Q_n` to [0.75, 1]) and widens it as the independent‑validator stake share grows. Quality is on the payout
+  path from day one; its *magnitude*
   ramps up safely.
 - **Not fully secured in v1 (inherited from `VALIDATOR.md` §10):** per‑hop self‑dealing, adversarial
   abandonment, and "teaching to the test" — *to the degree the validator population is not yet
@@ -2001,7 +2017,7 @@ it takes validators off the miner payout path and reduces them to a side‑chann
 (§8.1, D25) and `Q_n` the consensus‑measured pool quality (§8.1, §10): demand is the objective anchor,
 quality is the earned modulator, and together they make validators' evaluation the thing that moves the
 money. The one nuance is **magnitude at bootstrap**: `Q_n` is noisy until the
-validator set + data mature, so governance **caps the quality swing** early (closer to deposit‑weighted)
+validator set + data mature, so governance **caps the quality swing** early (closer to demand‑weighted)
 and widens it as the independent‑validator stake share grows (§12.3). So quality is on the payout path
 from day one — we ramp its *strength*, we do not defer the mechanism.
 
@@ -2050,7 +2066,7 @@ as **parked reference** (formulas + already‑built machinery preserved), **not 
 *Independently eliminated (and **staying** eliminated — not resurrected by any future effort reward):* the
 per‑NO validator pool, the NO↔V **intersection split**, **VT**, the verifier **bond**, `attestedPathsRoot`,
 and the **take‑0 custody hack**. The intersection split was redundant for fraud detection (a valid path is
-co‑signed = agreed by construction; an invalid one is caught by the `0x402` check, §11.3) and was a weak
+co‑signed = agreed by construction; an invalid one fails the Ed25519 check, §9.1) and was a weak
 effort proxy. v1's validator side is simply: **stake α, run trails, earn native dividends.**
 
 ### 13.7 Two miner tiers: pool on-ramp + direct top-level miners (chosen)
@@ -2450,8 +2466,10 @@ starts at least two days after the last one passes.
   **its own miner UID**, steered **directly** by validators on its **split-adjusted distinct routable
   egress-IP count** (`score`, §8.4) and paid **natively** (no contract custody, no Merkle claim); matched
   to its UID by the §11.4 binding; maintained by deregistration churn.
-- **`score(u)`** — a top-level miner's head weight: the count of distinct routable egress-IP-hashes across
-  its bound `client_id`s, each IP split equally among the top miners claiming it (§8.4, D27).
+- **`score(u)`** — a top-level miner's split-adjusted breadth: the count of distinct routable egress-prefix
+  hashes (/29 IPv4, /48 IPv6) across its bound `client_id`s, each split equally among every bound fleet
+  observed on it; its head weight is the score's EMA (`head_score_ema` 1/4), over the top 200 fleets by that
+  EMA (§8.4, D27).
 - **fleet `client_id`s ⇄ hotkey binding** — the dual-signed (client Ed25519 + hotkey sr25519) association a
   top-level miner publishes (commitments pallet + contract anchor) binding its fleet's `client_id`s to its
   UID, so validators count its routable IPs (§11.4).
@@ -2482,7 +2500,7 @@ starts at least two days after the last one passes.
 - **`D_n` / `Q_n` / `ŵ_n`** — NO's epoch deposit total (from the event log) / its consensus‑measured pool
   quality / its resulting validator‑computed weight (∝ `implied_usage_n × Q_n`, §8.1).
 - **Validated path** — a completed `VALIDATOR.md` trail proof, id `keccak256(trail_id‖vpk‖server_key_id)`;
-  self‑proving (NO `FINAL` + validator `vpk` sigs), verified via `0x402`.
+  self‑proving (NO `FINAL` + validator `vpk` sigs), verified off chain with Ed25519 (§9.1).
 - **Epoch (7 d)** — application settlement period; **tempo (360 blk)** — chain weight/emission cadence.
 - **Version 2 (v2) / `firstEpoch` / E_s** — the second version of payout settlement (`VERSION2-FINAL.md`).
   It settles a pool's epochs from its `firstEpoch`, fixed when the owner Safe registers the pool through
