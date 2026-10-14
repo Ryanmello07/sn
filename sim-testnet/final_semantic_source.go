@@ -2646,14 +2646,18 @@ func (a *finalSemanticArchive) buildPoolWeight(cycle *FinalCRv4Cycle, deposit pr
 	quality, implied, raw := zero, zero, zero
 	qualityPPM := pool.QualityPPM
 	if pool.Eligible {
-		clamped := qualityPPM
-		if clamped < cycle.QualityMinimumPPM {
-			clamped = cycle.QualityMinimumPPM
+		// The clamp applies to measured quality; without any the pool scores
+		// zero, so its quality factor stays zero.
+		if qualityPPM != 0 {
+			clamped := qualityPPM
+			if clamped < cycle.QualityMinimumPPM {
+				clamped = cycle.QualityMinimumPPM
+			}
+			if clamped > cycle.QualityMaximumPPM {
+				clamped = cycle.QualityMaximumPPM
+			}
+			quality = finalRationalFromBig(new(big.Rat).SetFrac(new(big.Int).SetUint64(uint64(clamped)), big.NewInt(1_000_000)))
 		}
-		if clamped > cycle.QualityMaximumPPM {
-			clamped = cycle.QualityMaximumPPM
-		}
-		quality = finalRationalFromBig(new(big.Rat).SetFrac(new(big.Int).SetUint64(uint64(clamped)), big.NewInt(1_000_000)))
 		if audit.RateDenominator == 0 {
 			return FinalPoolWeightEvidence{}, errors.New("signed deposit audit rate is invalid")
 		}
@@ -3457,8 +3461,8 @@ func finalSemanticRewardExpectation(source *FinalSemanticEvidence, epoch uint64)
 				headSelections[candidate.FleetID]++
 			}
 		}
-		for _, pool := range cycle.Pools {
-			poolEligible[pool.NoID] = poolEligible[pool.NoID] || pool.AuditCompliant
+		for index := range cycle.Pools {
+			poolEligible[cycle.Pools[index].NoID] = poolEligible[cycle.Pools[index].NoID] || finalPoolWeighted(&cycle.Pools[index])
 		}
 	}
 	heads := make(map[uint64]string, len(source.HeadFleets))

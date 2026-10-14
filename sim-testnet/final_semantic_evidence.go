@@ -2209,7 +2209,7 @@ func verifyFinalCRv4CycleFrom(evidence *FinalSemanticEvidence, validatorID uint6
 	}
 	for _, pool := range cycle.Pools {
 		value, submitted := valueByUID[pool.UID]
-		if pool.AuditCompliant && (!submitted || value == 0) {
+		if finalPoolWeighted(&pool) && (!submitted || value == 0) {
 			return fmt.Errorf("eligible pool UID %d is absent or zero in submitted vector", pool.UID)
 		}
 		if !pool.AuditCompliant && submitted {
@@ -2387,18 +2387,25 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 	if pool.AuditStatus != validatorpkg.DepositAuditCompliant || pool.AuditDisposition != "pool_weight_eligible" || pool.AuditError != "" || observed.Cmp(required) != 0 {
 		return nil, false, errors.New("deposit audit is not compliant and pool-weight eligible")
 	}
-	if pool.QualityPPM == 0 || pool.QualityPPM > 1_000_000 {
-		return nil, false, errors.New("quality PPM is outside (0,1000000]")
+	if pool.QualityPPM > 1_000_000 {
+		return nil, false, errors.New("quality PPM is outside [0,1000000]")
 	}
-	qualityPPM := pool.QualityPPM
-	if qualityPPM < minimumQualityPPM {
-		qualityPPM = minimumQualityPPM
+	// The clamp applies to measured quality. A pool without any scores zero,
+	// as the validator's impliedUsageQuality does: its weight is
+	// implied_demand * Q_n with Q_n = 0.
+	wantQuality := new(big.Rat)
+	if pool.QualityPPM != 0 {
+		qualityPPM := pool.QualityPPM
+		if qualityPPM < minimumQualityPPM {
+			qualityPPM = minimumQualityPPM
+		}
+		if qualityPPM > maximumQualityPPM {
+			qualityPPM = maximumQualityPPM
+		}
+		wantQuality.SetFrac(new(big.Int).SetUint64(uint64(qualityPPM)), big.NewInt(1_000_000))
 	}
-	if qualityPPM > maximumQualityPPM {
-		qualityPPM = maximumQualityPPM
-	}
-	quality, err := finalPositiveRational("quality factor", pool.QualityFactor)
-	if err != nil || quality.Cmp(new(big.Rat).SetFrac(new(big.Int).SetUint64(uint64(qualityPPM)), big.NewInt(1_000_000))) != 0 {
+	quality, err := finalNonnegativeRational("quality factor", pool.QualityFactor)
+	if err != nil || quality.Cmp(wantQuality) != 0 {
 		return nil, false, errors.New("quality factor does not match quality PPM")
 	}
 	implied, err := finalPositiveRational("implied demand", pool.ImpliedDemand)
@@ -2409,7 +2416,7 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 	if implied.Cmp(finalImpliedDemand(baseline, owed, capRao)) != 0 {
 		return nil, false, errors.New("implied demand does not equal audited usage priced at the conviction-zero tier")
 	}
-	rawScore, err := finalPositiveRational("pool raw score", pool.RawScore)
+	rawScore, err := finalNonnegativeRational("pool raw score", pool.RawScore)
 	if err != nil {
 		return nil, false, err
 	}
@@ -2417,6 +2424,13 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 		return nil, false, errors.New("pool raw score does not equal implied demand times Q")
 	}
 	return rawScore, true, nil
+}
+
+// finalPoolWeighted reports whether a verified pool row carries weight: a
+// compliant audit and measured quality. A compliant pool without measured
+// quality scores zero, so validators submit no weight for it.
+func finalPoolWeighted(pool *FinalPoolWeightEvidence) bool {
+	return pool.AuditCompliant && pool.QualityPPM != 0
 }
 
 func verifyFinalPoolEpochs(evidence *FinalSemanticEvidence, pools map[uint64]FinalPoolUIDEvidence) error {
@@ -6082,6 +6096,14 @@ func finalPositiveRational(label string, encoded FinalRational) (*big.Rat, error
 		return nil, fmt.Errorf("%s is not canonically reduced", label)
 	}
 	return value, nil
+}
+
+// finalNonnegativeRational admits zero only as its canonical 0/1.
+func finalNonnegativeRational(label string, encoded FinalRational) (*big.Rat, error) {
+	if encoded == (FinalRational{Numerator: "0", Denominator: "1"}) {
+		return new(big.Rat), nil
+	}
+	return finalPositiveRational(label, encoded)
 }
 
 func finalProtocolRational(encoded FinalRational) (protocol.Rational, error) {

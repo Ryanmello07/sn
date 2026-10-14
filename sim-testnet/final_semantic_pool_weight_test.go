@@ -13,8 +13,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math/big"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -375,7 +377,6 @@ func TestFinalSemanticPoolWeightRefusesEachMalformedField(t *testing.T) {
 	const (
 		lineage      = "payout artifact boundary, commitment, observation, or deadline lineage is invalid"
 		notCompliant = "deposit audit is not compliant and pool-weight eligible"
-		noQuality    = "quality PPM is outside (0,1000000]"
 		outsideRange = "operator deposit is failed or outside [1,1000]"
 	)
 	for _, test := range []struct {
@@ -411,12 +412,12 @@ func TestFinalSemanticPoolWeightRefusesEachMalformedField(t *testing.T) {
 		{name: "compliant row with a zero-weight disposition", edit: func(row *FinalPoolWeightEvidence) { row.AuditDisposition = "zero_pool_weight" }, want: notCompliant},
 		{name: "compliant row with an audit error", edit: func(row *FinalPoolWeightEvidence) { row.AuditError = "unexpected" }, want: notCompliant},
 		{name: "compliant row that overpaid", edit: func(row *FinalPoolWeightEvidence) { row.ObservedDepositRao = "1000001" }, want: notCompliant},
-		{name: "no quality", edit: func(row *FinalPoolWeightEvidence) { row.QualityPPM = 0 }, want: noQuality},
-		{name: "quality above one", edit: func(row *FinalPoolWeightEvidence) { row.QualityPPM = 1_000_001 }, want: noQuality},
+		{name: "quality above one", edit: func(row *FinalPoolWeightEvidence) { row.QualityPPM = 1_000_001 }, want: "quality PPM is outside [0,1000000]"},
 		{name: "quality factor", edit: func(row *FinalPoolWeightEvidence) { row.QualityFactor = finalPoolWeightTestRational("1", "2") }, want: "quality factor does not match quality PPM"},
 		{name: "zero demand", edit: func(row *FinalPoolWeightEvidence) { row.ImpliedDemand = finalPoolWeightTestRational("0", "1") }, want: "implied demand numerator is zero"},
 		{name: "unreduced demand", edit: func(row *FinalPoolWeightEvidence) { row.ImpliedDemand = finalPoolWeightTestRational("2000000", "2") }, want: "implied demand is not canonically reduced"},
-		{name: "zero score", edit: func(row *FinalPoolWeightEvidence) { row.RawScore = finalPoolWeightTestRational("0", "1") }, want: "pool raw score numerator is zero"},
+		{name: "zero score", edit: func(row *FinalPoolWeightEvidence) { row.RawScore = finalPoolWeightTestRational("0", "1") }, want: "pool raw score does not equal implied demand times Q"},
+		{name: "zero score with another denominator", edit: func(row *FinalPoolWeightEvidence) { row.RawScore = finalPoolWeightTestRational("0", "2") }, want: "pool raw score numerator is zero"},
 	} {
 		_, row := finalPoolWeightTestRow()
 		test.edit(&row)
@@ -452,6 +453,69 @@ func TestFinalSemanticPoolWeightClampsQualityToTheCycleBounds(t *testing.T) {
 	row.QualityPPM, row.QualityFactor, row.RawScore = 950_000, finalPoolWeightTestRational("19", "20"), finalPoolWeightTestRational("950000", "1")
 	if _, _, err := verifyFinalPoolWeight(&evidence, finalPoolWeightTestEpoch, 750_000, 900_000, &row); err == nil || err.Error() != "quality factor does not match quality PPM" {
 		t.Errorf("unclamped quality: %v", err)
+	}
+}
+
+// A compliant pool without measured quality declares q = 0 and scores zero:
+// 8.1 weighs it implied_demand * Q_n with Q_n = 0, before any clamp. Its
+// demand is still the audited usage at the baseline. The clamped factor, a
+// positive score or a zero in another form is refused.
+func TestFinalSemanticPoolWeightRefusesQualityOtherThanTheClampOrZero(t *testing.T) {
+	zero := finalPoolWeightTestRational("0", "1")
+	withoutQuality := func() FinalPoolWeightEvidence {
+		_, row := finalPoolWeightTestRow()
+		row.QualityPPM, row.QualityFactor, row.RawScore = 0, zero, zero
+		return row
+	}
+	evidence, _ := finalPoolWeightTestRow()
+	row := withoutQuality()
+	if score, eligible, err := verifyFinalPoolWeightTestRow(&evidence, &row); err != nil || !eligible || score == nil || score.Sign() != 0 {
+		t.Fatalf("pool without quality: score=%v eligible=%t error=%v", score, eligible, err)
+	}
+	for _, test := range []struct {
+		name string
+		edit func(*FinalPoolWeightEvidence)
+		want string
+	}{
+		{
+			// The 750,000 ppm floor applied to no measurement: 1,000,000 * 3/4.
+			name: "clamped factor", edit: func(row *FinalPoolWeightEvidence) {
+				row.QualityFactor, row.RawScore = finalPoolWeightTestRational("3", "4"), finalPoolWeightTestRational("750000", "1")
+			}, want: "quality factor does not match quality PPM",
+		},
+		{name: "positive score", edit: func(row *FinalPoolWeightEvidence) { row.RawScore = finalPoolWeightTestRational("750000", "1") }, want: "pool raw score does not equal implied demand times Q"},
+		{name: "zero factor over another denominator", edit: func(row *FinalPoolWeightEvidence) { row.QualityFactor = finalPoolWeightTestRational("0", "4") }, want: "quality factor does not match quality PPM"},
+		{name: "zero score over another denominator", edit: func(row *FinalPoolWeightEvidence) { row.RawScore = finalPoolWeightTestRational("0", "4") }, want: "pool raw score numerator is zero"},
+		// The pool's own 800,000 rao tier instead of the 1,000,000 baseline.
+		{name: "demand not priced at the baseline", edit: func(row *FinalPoolWeightEvidence) { row.ImpliedDemand = finalPoolWeightTestRational("800000", "1") }, want: "implied demand does not equal audited usage priced at the conviction-zero tier"},
+	} {
+		row := withoutQuality()
+		test.edit(&row)
+		finalPoolWeightTestRefusal(t, test.name, row, test.want)
+	}
+}
+
+// A pool's native reward is expected positive when some validator's cycle
+// weighs it, with a compliant audit and measured quality. A compliant pool
+// without quality, like an underpaid one, is expected to earn nothing.
+func TestFinalSemanticPoolWeightRewardExpectationFollowsWeightedPools(t *testing.T) {
+	pool := func(noID uint64, compliant bool, qualityPPM uint32) FinalPoolWeightEvidence {
+		return FinalPoolWeightEvidence{NoID: noID, AuditCompliant: compliant, QualityPPM: qualityPPM}
+	}
+	cycles := func(pools ...FinalPoolWeightEvidence) []FinalCRv4Cycle {
+		return []FinalCRv4Cycle{{SettlementEpoch: finalPoolWeightTestEpoch, Pools: pools}}
+	}
+	source := &FinalSemanticEvidence{
+		Pools: []FinalPoolUIDEvidence{{NoID: 1}, {NoID: 2}, {NoID: 3}, {NoID: 4}},
+		Validators: []FinalValidatorIdentityEvidence{
+			{ValidatorID: 1, Cycles: cycles(pool(1, true, 500_000), pool(2, true, 0), pool(3, false, 0), pool(4, true, 0))},
+			{ValidatorID: 2, Cycles: cycles(pool(1, true, 0), pool(2, true, 0), pool(3, false, 0), pool(4, true, 800_000))},
+		},
+	}
+	heads, pools := finalSemanticRewardExpectation(source, finalPoolWeightTestEpoch)
+	want := map[uint64]string{1: "positive", 2: "zero", 3: "zero", 4: "positive"}
+	if heads == nil || len(heads) != 0 || !maps.Equal(pools, want) {
+		t.Fatalf("reward expectations heads=%v pools=%v, want pools %v", heads, pools, want)
 	}
 }
 
@@ -691,24 +755,26 @@ type finalPoolWeightBuilderTestFixture struct {
 //	   2,800,056; implied 3,500,070; 9/10; score 3,150,063.
 //	3: 20,000 GiB at 1 alpha of conviction owe 16e9, capped to 1e10; implied
 //	   2e10 * 1e10/16e9 = 12.5e9; quality 1; score 12.5e9.
-var finalPoolWeightBuilderTestRows = []struct {
+type finalPoolWeightBuilderTestRow struct {
 	bytes, users     uint64
 	conviction       string
 	gib, user        uint64
 	required         uint64
 	qualityPPM       uint32
 	q, demand, score FinalRational
-}{
+}
+
+var finalPoolWeightBuilderTestRows = []finalPoolWeightBuilderTestRow{
 	{bytes: finalPoolWeightTestGiB, conviction: "1000", gib: 1_000_000, user: 10, required: 1_000_000, qualityPPM: 500_000, q: finalPoolWeightTestRational("3", "4"), demand: finalPoolWeightTestRational("1000000", "1"), score: finalPoolWeightTestRational("750000", "1")},
 	{bytes: 3*finalPoolWeightTestGiB + finalPoolWeightTestGiB/2, users: 7, conviction: "1000000000", gib: 800_000, user: 8, required: 2_800_056, qualityPPM: 900_000, q: finalPoolWeightTestRational("9", "10"), demand: finalPoolWeightTestRational("3500070", "1"), score: finalPoolWeightTestRational("3150063", "1")},
 	{bytes: 20_000 * finalPoolWeightTestGiB, conviction: "1000000000", gib: 800_000, user: 8, required: 10_000_000_000, qualityPPM: 1_000_000, q: finalPoolWeightTestRational("1", "1"), demand: finalPoolWeightTestRational("12500000000", "1"), score: finalPoolWeightTestRational("12500000000", "1")},
 }
 
-// newFinalPoolWeightBuilderTestFixture signs one payout artifact per operator,
+// newFinalPoolWeightBuilderTestFixture signs one payout artifact per row,
 // records its exact Deposit event, and has the validator seal a pools-only
 // measurement over the resulting compliant audits. One tail provider per
 // operator carries the pool quality as its prior.
-func newFinalPoolWeightBuilderTestFixture(t *testing.T) *finalPoolWeightBuilderTestFixture {
+func newFinalPoolWeightBuilderTestFixture(t *testing.T, rows []finalPoolWeightBuilderTestRow) *finalPoolWeightBuilderTestFixture {
 	t.Helper()
 	policy, err := protocol.LoadPolicy(filepath.Join("..", "deploy", "testnet", "policy-v1.yml"))
 	if err != nil {
@@ -734,10 +800,14 @@ func newFinalPoolWeightBuilderTestFixture(t *testing.T) *finalPoolWeightBuilderT
 		Pools: []validatorpkg.ReleasePoolMeasurement{}, DepositAudits: []validatorpkg.DepositAudit{}, SelfUID: 3,
 	}
 	archive := &finalSemanticArchive{runRoot: t.TempDir(), collected: &FinalSemanticCollectedInputs{}, files: map[string][]byte{}}
-	logs := make([]finalCanonicalEVMLog, 0, len(finalPoolWeightBuilderTestRows))
-	serverKeys := make([]ed25519.PrivateKey, 0, len(finalPoolWeightBuilderTestRows))
+	logs := make([]finalCanonicalEVMLog, 0, len(rows))
+	serverKeys := make([]ed25519.PrivateKey, 0, len(rows))
+	weighted := 0
 	zero := finalTestHex(0)
-	for index, row := range finalPoolWeightBuilderTestRows {
+	for index, row := range rows {
+		if row.qualityPPM != 0 {
+			weighted++
+		}
 		noID := uint64(index + 1)
 		var clientID connect.Id
 		clientID[0], clientID[15] = 1, byte(noID)
@@ -799,15 +869,17 @@ func newFinalPoolWeightBuilderTestFixture(t *testing.T) *finalPoolWeightBuilderT
 	if err != nil {
 		t.Fatalf("validator refused the pools-only measurement: %v", err)
 	}
-	if len(verified.Pools) != len(finalPoolWeightBuilderTestRows) || len(verified.UIDs) != len(finalPoolWeightBuilderTestRows) {
+	// A pool without measured quality scores zero and gets no weight.
+	if len(verified.Pools) != len(rows) || len(verified.UIDs) != weighted {
 		t.Fatalf("validator decided %d pools over UIDs %v", len(verified.Pools), verified.UIDs)
 	}
 	events, err := indexFinalSemanticEvents(finalSemanticBuilderDepositSnapshot(logs))
 	if err != nil {
 		t.Fatal(err)
 	}
-	intent := &validatorpkg.SteeringIntent{ValidatorID: 1, SubnetEpoch: measurement.SubnetEpoch, SettlementEpoch: finalPoolWeightTestEpoch, UIDs: verified.UIDs, Values: []uint16{100, 200, 300}}
-	for _, score := range verified.Scores {
+	intent := &validatorpkg.SteeringIntent{ValidatorID: 1, SubnetEpoch: measurement.SubnetEpoch, SettlementEpoch: finalPoolWeightTestEpoch, UIDs: verified.UIDs}
+	for index, score := range verified.Scores {
+		intent.Values = append(intent.Values, uint16(100*(index+1)))
 		intent.Scores = append(intent.Scores, validatorpkg.RationalJSON{Numerator: score.Num().String(), Denominator: score.Denom().String()})
 	}
 	return &finalPoolWeightBuilderTestFixture{
@@ -821,7 +893,7 @@ func newFinalPoolWeightBuilderTestFixture(t *testing.T) *finalPoolWeightBuilderT
 // measurement, this package's verifier and the hand-worked values all agree,
 // and the row reproduces the validator's signed audit exactly.
 func TestFinalSemanticPoolWeightBuilderRowsAgreeWithTheValidatorAndTheVerifier(t *testing.T) {
-	fixture := newFinalPoolWeightBuilderTestFixture(t)
+	fixture := newFinalPoolWeightBuilderTestFixture(t, finalPoolWeightBuilderTestRows)
 	evidence, _ := finalPoolWeightTestRow()
 	baseline := protocol.DepositTier{RateNumeratorRaoPerGiB: 1_000_000, RateNumeratorRaoPerUser: 10, RateDenominator: 1}
 	for index, want := range finalPoolWeightBuilderTestRows {
@@ -861,7 +933,7 @@ func TestFinalSemanticPoolWeightBuilderRowsAgreeWithTheValidatorAndTheVerifier(t
 // still scoring deposit/rate would hand it 2,800,056/800,000 * 9/10 =
 // 3,150,063/1,000,000 for operator 2, and the verifier refuses that row.
 func TestFinalSemanticPoolWeightBuilderCannotCarryADepositOverRateScore(t *testing.T) {
-	fixture := newFinalPoolWeightBuilderTestFixture(t)
+	fixture := newFinalPoolWeightBuilderTestFixture(t, finalPoolWeightBuilderTestRows)
 	pool := fixture.pools[1]
 	pool.Score = big.NewRat(3_150_063, 1_000_000)
 	row, err := fixture.archive.buildPoolWeight(fixture.cycle, fixture.policy.Deposit, pool, fixture.intent, fixture.events)
@@ -877,7 +949,7 @@ func TestFinalSemanticPoolWeightBuilderCannotCarryADepositOverRateScore(t *testi
 // A zero-price audit names no payout artifact and requires no deposit, so the
 // builder has nothing to bind and says so before looking for either.
 func TestFinalSemanticPoolWeightBuilderRefusesZeroPriceAudit(t *testing.T) {
-	fixture := newFinalPoolWeightBuilderTestFixture(t)
+	fixture := newFinalPoolWeightBuilderTestFixture(t, finalPoolWeightBuilderTestRows)
 	pool := fixture.pools[0]
 	pool.Audit = validatorpkg.ZeroPriceDepositAudit(finalPoolWeightTestEpoch, finalPoolWeightTestEpoch-1, 1, big.NewInt(0), big.NewInt(1_000))
 	const want = "operator 1 zero-price deposit audit has no payout artifact or deposit receipt to bind"
@@ -889,7 +961,7 @@ func TestFinalSemanticPoolWeightBuilderRefusesZeroPriceAudit(t *testing.T) {
 // Without a cycle, an intent, a cap or a conviction-zero tier there is no
 // demand to price.
 func TestFinalSemanticPoolWeightBuilderRefusesIncompleteContext(t *testing.T) {
-	fixture := newFinalPoolWeightBuilderTestFixture(t)
+	fixture := newFinalPoolWeightBuilderTestFixture(t, finalPoolWeightBuilderTestRows)
 	deposit := fixture.policy.Deposit
 	noCap, noTiers, noDenominator := deposit, deposit, deposit
 	noCap.EpochCapRaoPerOperator = 0
@@ -916,7 +988,7 @@ func TestFinalSemanticPoolWeightBuilderRefusesIncompleteContext(t *testing.T) {
 
 // An eligible decision whose audit has no rate denominator cannot be priced.
 func TestFinalSemanticPoolWeightBuilderRefusesAuditWithoutARateDenominator(t *testing.T) {
-	fixture := newFinalPoolWeightBuilderTestFixture(t)
+	fixture := newFinalPoolWeightBuilderTestFixture(t, finalPoolWeightBuilderTestRows)
 	pool := fixture.pools[0]
 	pool.Audit.RateDenominator = 0
 	if _, err := fixture.archive.buildPoolWeight(fixture.cycle, fixture.policy.Deposit, pool, fixture.intent, fixture.events); err == nil || err.Error() != "signed deposit audit rate is invalid" {
@@ -926,7 +998,7 @@ func TestFinalSemanticPoolWeightBuilderRefusesAuditWithoutARateDenominator(t *te
 
 // The audited bytes and users a row prices are the signed payout artifact's.
 func TestFinalSemanticPoolWeightBuilderBindsThePayoutArtifactUsageAndUsers(t *testing.T) {
-	fixture := newFinalPoolWeightBuilderTestFixture(t)
+	fixture := newFinalPoolWeightBuilderTestFixture(t, finalPoolWeightBuilderTestRows)
 	const differs = "operator 2 source epoch 9 payout differs from signed deposit audit"
 	for _, test := range []struct {
 		name string
@@ -950,7 +1022,7 @@ func TestFinalSemanticPoolWeightBuilderBindsThePayoutArtifactUsageAndUsers(t *te
 // The payout bytes, the intent's vectors and the Deposit event are each read
 // before a row is declared, and each refuses on its own.
 func TestFinalSemanticPoolWeightBuilderRefusesUnreadablePayoutIntentOrDeposit(t *testing.T) {
-	fixture := newFinalPoolWeightBuilderTestFixture(t)
+	fixture := newFinalPoolWeightBuilderTestFixture(t, finalPoolWeightBuilderTestRows)
 	build := func(pool validatorpkg.VerifiedReleasePool, intent *validatorpkg.SteeringIntent) error {
 		_, err := fixture.archive.buildPoolWeight(fixture.cycle, fixture.policy.Deposit, pool, intent, fixture.events)
 		return err
@@ -975,5 +1047,74 @@ func TestFinalSemanticPoolWeightBuilderRefusesUnreadablePayoutIntentOrDeposit(t 
 	delete(fixture.archive.files, uri)
 	if err := build(pool, fixture.intent); err == nil || err.Error() != "closed semantic graph is missing payouts/9-2.json" {
 		t.Errorf("missing payout bytes: %v", err)
+	}
+}
+
+// The validator decides a compliant pool without measured quality eligible at
+// score 0 and gives it no weight. The builder declares that decision with
+// q = 0 and the 8.1 demand, and the verifier accepts it at score 0.
+func TestFinalSemanticPoolWeightCompliantPoolWithoutQualityScoresZero(t *testing.T) {
+	zero := finalPoolWeightTestRational("0", "1")
+	rows := []finalPoolWeightBuilderTestRow{
+		// 1 GiB at the baseline still implies 1,000,000 rao, times Q_n = 0.
+		{bytes: finalPoolWeightTestGiB, conviction: "1000", gib: 1_000_000, user: 10, required: 1_000_000, qualityPPM: 0, q: zero, demand: finalPoolWeightTestRational("1000000", "1"), score: zero},
+		finalPoolWeightBuilderTestRows[1],
+	}
+	fixture := newFinalPoolWeightBuilderTestFixture(t, rows)
+	pool := fixture.pools[0]
+	if !pool.Eligible || pool.QualityPPM != 0 || pool.Score.Sign() != 0 || pool.Audit.Status != validatorpkg.DepositAuditCompliant || slices.Contains(fixture.intent.UIDs, pool.UID) {
+		t.Fatalf("validator decision %+v over UIDs %v, want an eligible zero score without weight", pool, fixture.intent.UIDs)
+	}
+	row, err := fixture.archive.buildPoolWeight(fixture.cycle, fixture.policy.Deposit, pool, fixture.intent, fixture.events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.QualityPPM != 0 || row.QualityFactor != zero || row.ImpliedDemand != rows[0].demand || row.RawScore != zero || row.AppliedWeight != 0 || finalPoolWeighted(&row) {
+		t.Fatalf("row q=%+v demand=%+v score=%+v applied=%d", row.QualityFactor, row.ImpliedDemand, row.RawScore, row.AppliedWeight)
+	}
+	evidence, _ := finalPoolWeightTestRow()
+	score, eligible, err := verifyFinalPoolWeightTestRow(&evidence, &row)
+	if err != nil || !eligible || score == nil || score.Sign() != 0 {
+		t.Fatalf("verifier score=%v eligible=%t error=%v, want 0", score, eligible, err)
+	}
+	if audit := finalDepositAuditFromPool(finalPoolWeightTestEpoch, &row); audit != pool.Audit {
+		t.Errorf("row does not reproduce the validator's audit:\nrow   %+v\naudit %+v", audit, pool.Audit)
+	}
+	if err := verifyFinalPolicyInputs(finalPoolWeightTestPolicyEvidence(fixture.policy, row), fixture.policy); err != nil {
+		t.Errorf("row differs from the canonical policy: %v", err)
+	}
+}
+
+// A cycle whose compliant pool has no measured quality verifies with that pool
+// absent from the vector and the whole pool share on the other pool; the
+// cycle check used to require weight for every compliant pool.
+func TestFinalSemanticPoolWeightCycleOmitsAPoolWithoutQuality(t *testing.T) {
+	t.Parallel()
+	source, _ := finalSemanticFixture(t)
+	draft, err := BuildFinalSemanticEvidence(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pools, err := verifyFinalPools(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator := &draft.Validators[0]
+	cycle := &validator.Cycles[0]
+	zero := finalPoolWeightTestRational("0", "1")
+	pool := &cycle.Pools[0]
+	pool.QualityPPM, pool.QualityFactor, pool.RawScore = 0, zero, zero
+	finalSemanticBuilderReweightCycle(t, cycle)
+	other := cycle.Pools[1]
+	if pool.AppliedWeight != 0 || other.AppliedWeight == 0 || cycle.RealizedPoolValue != uint64(other.AppliedWeight) {
+		t.Fatalf("reweighted pools applied %d and %d of %d", pool.AppliedWeight, other.AppliedWeight, cycle.RealizedPoolValue)
+	}
+	for _, submitted := range cycle.Submitted {
+		if submitted.UID == pool.UID {
+			t.Fatalf("pool UID %d without quality was submitted with %d", pool.UID, submitted.Value)
+		}
+	}
+	if err := verifyFinalCRv4Cycle(draft, validator.ValidatorID, validator.UID, cycle, pools); err != nil {
+		t.Fatalf("cycle with a compliant pool without quality: %v", err)
 	}
 }
