@@ -350,7 +350,7 @@ func TestMonitorNativeArchivePublicRefusesOmittedAndForgedPrefix(t *testing.T) {
 		run := f.native.start(t, monitorServiceHooks{wait: func(context.Context, string, time.Duration) bool { return false }})
 		select {
 		case <-run.done:
-			if run.exit != 3 || !strings.Contains(run.diagnostic.String(), "monitor native economic admission") {
+			if run.exit != 3 || !strings.Contains(run.diagnostic.String(), "monitor "+f.native.policy.Role+" admission:") {
 				t.Fatal("public reopen admitted unproved archive prefix", fault, run.exit, run.diagnostic.String())
 			}
 		case <-time.After(10 * time.Second):

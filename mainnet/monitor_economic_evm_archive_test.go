@@ -359,7 +359,7 @@ func TestMonitorEvmArchivePublicRefusesOmittedAndForgedPrefix(t *testing.T) {
 		run := f.evm.start(t, monitorServiceHooks{wait: func(context.Context, string, time.Duration) bool { return false }})
 		select {
 		case <-run.done:
-			if run.exit != 3 || !strings.Contains(run.diagnostic.String(), "monitor EVM economic admission") {
+			if run.exit != 3 || !strings.Contains(run.diagnostic.String(), "monitor "+f.evm.policy.Role+" admission:") {
 				t.Fatal("public reopen admitted unproved archive prefix", fault, run.exit, run.diagnostic.String())
 			}
 		case <-time.After(10 * time.Second):
