@@ -1767,7 +1767,7 @@ func TestReleaseGatesExerciseContractSenderRoleDiagnostic(t *testing.T) {
 var releaseSourceFreezeLiveModules = []string{
 	"connect", "connect/sctp", "glog", "goidenticons", "proxy", "sdk", "sdk/build",
 	"sdk/cgo", "sdk/js", "server", "sn", "sn/third_party/go-substrate-rpc-client",
-	"sn/third_party/npipe", "userwireguard", "warp", "xops/echo", "xops/router",
+	"sn/third_party/npipe", "userwireguard", "warp", "xops/echo",
 }
 
 var releaseSourceFreezeNonReleaseModules = []string{
