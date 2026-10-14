@@ -69,7 +69,7 @@ release_gate_jobs_init() {
   release_gate_jobs_script="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/release-gate-jobs.sh"
   release_gate_root="$(mktemp -d "${TMPDIR:-/tmp}/urnetwork-release-gate.XXXXXXXX")" || return 1
   release_gate_root="$(cd -- "$release_gate_root" && pwd -P)" || return 1
-  declare -ga release_gate_pids=() release_gate_starts=() release_gate_labels=() release_gate_pending=() release_gate_ack_fds=()
+  declare -ga release_gate_pids=() release_gate_starts=() release_gate_labels=() release_gate_pending=() release_gate_ack_fds=() release_gate_exits=()
   release_gate_active=0 release_gate_result=0 release_gate_body_result=0 release_gate_services_cleaned=0
   trap 'release_gate_jobs_exit "$?"' EXIT
   trap 'exit 130' INT
@@ -102,10 +102,13 @@ release_gate_jobs_init() {
   (( release_gate_job_cpus > 0 )) || release_gate_job_cpus=1
   if (( release_gate_job_cpus > 4 )); then release_gate_job_cpus=4; fi
   export GOMAXPROCS="$release_gate_job_cpus" GOFLAGS="${GOFLAGS:-} -p=$release_gate_job_cpus"
-  export RAYON_NUM_THREADS="$release_gate_job_cpus" CARGO_BUILD_JOBS="$release_gate_job_cpus"
+  export RAYON_NUM_THREADS="$release_gate_job_cpus" CARGO_BUILD_JOBS="$release_gate_job_cpus" RUST_TEST_THREADS="$release_gate_job_cpus"
   export FOUNDRY_OUT="$release_gate_root/full-out" FOUNDRY_CACHE_PATH="$release_gate_root/full-cache"
   export SLITHER_FOUNDRY_OUT="$release_gate_root/slither-out" SLITHER_FOUNDRY_CACHE_PATH="$release_gate_root/slither-cache"
-  export release_gate_root sn_repo workspace release_gate_diagnostic release_gate_dependency_mode
+  # The ./mainnet qualification exports, built by one job for the jobs that
+  # read them, and removed once every job has joined.
+  release_gate_mainnet_exports="$release_gate_root/mainnet-exports"
+  export release_gate_root sn_repo workspace release_gate_diagnostic release_gate_dependency_mode release_gate_mainnet_exports
   export -f release_gate_record_preflight release_gate_preflight_refusal release_gate_preflight_status release_gate_diagnostic_inventory
   source "$workspace/server/local/release-gate-services.sh" || return 1
   if [[ "$release_gate_diagnostic" == 1 ]]; then
@@ -325,6 +328,7 @@ release_gate_wait_one() {
         status="$RELEASE_GATE_JOB_EXIT"
         (( status != 0 )) || status=125
       fi
+      release_gate_exits[index]="$status"
       printf '[release gate] joined %s (exit %s); log %s\n' "${release_gate_labels[index]}" "$status" "$release_gate_root/logs/${release_gate_labels[index]}.log"
       if (( status != 0 && release_gate_result == 0 )); then release_gate_result="$status"; fi
       if [[ "${release_gate_labels[index]}" != diagnostic-preflights ]] && (( status != 0 && release_gate_body_result == 0 )); then release_gate_body_result="$status"; fi
@@ -348,6 +352,22 @@ release_gate_join() {
   return "$release_gate_result"
 }
 
+# Join the admitted job named $1, reaping any other that completes first, and
+# leave its exit in RELEASE_GATE_AWAITED_EXIT. A job that needs its work is
+# admitted after this, knowing whether that work exists.
+release_gate_await() {
+  local index
+  for index in "${!release_gate_labels[@]}"; do
+    if [[ "${release_gate_labels[index]}" == "$1" ]]; then
+      while [[ "${release_gate_pending[index]}" == 1 ]]; do release_gate_wait_one || return 1; done
+      RELEASE_GATE_AWAITED_EXIT="${release_gate_exits[index]}"
+      return 0
+    fi
+  done
+  printf 'release gate: no admitted job %s to await\n' "$1" >&2
+  return 1
+}
+
 release_gate_complete() {
   local status=0
   release_gate_join || status=$?
@@ -357,6 +377,7 @@ release_gate_complete() {
   else
     (( status != 0 )) || status=1
   fi
+  rm -rf -- "${release_gate_mainnet_exports:?}" || { (( status != 0 )) || status=1; }
   return "$status"
 }
 
@@ -396,6 +417,9 @@ release_gate_jobs_exit() {
   if (( joined == 1 )); then
     if [[ "$release_gate_services_cleaned" != 1 ]] && declare -F release_gate_services_cleanup >/dev/null; then
       release_gate_services_cleanup || { (( status != 0 )) || status=1; }
+    fi
+    if [[ -n "${release_gate_mainnet_exports:-}" ]]; then
+      rm -rf -- "$release_gate_mainnet_exports" || { (( status != 0 )) || status=1; }
     fi
   else
     echo "release gate: not all child identities joined; private services retained for inspection" >&2

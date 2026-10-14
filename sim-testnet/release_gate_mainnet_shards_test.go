@@ -103,9 +103,16 @@ func runReleaseGateMainnetShardOwner(t *testing.T, prelude, commands string, arg
 }
 
 // A job environment whose go records each call: -list answers with the list
-// file, and a test run records its arguments and passes.
+// file, and a test run records its arguments and URNETWORK_ environment and
+// passes. The exports job passed, and its environment names a path of the
+// fixture for each export variable.
 type releaseGateMainnetShardFixture struct {
 	root, sn string
+}
+
+// The path the fixture's exports environment gives the variable.
+func (self releaseGateMainnetShardFixture) export(variable string) string {
+	return filepath.Join(self.root, "exports", strings.ToLower(variable))
 }
 
 func newReleaseGateMainnetShardFixture(t *testing.T, names []string) releaseGateMainnetShardFixture {
@@ -120,6 +127,16 @@ func newReleaseGateMainnetShardFixture(t *testing.T, names []string) releaseGate
 	if err := os.WriteFile(filepath.Join(root, "list"), []byte(list), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Mkdir(filepath.Join(root, "exports"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var environment strings.Builder
+	for _, variable := range releaseGateMainnetExportVariables(t) {
+		environment.WriteString("export " + variable + "=" + strconv.Quote(fixture.export(variable)) + "\n")
+	}
+	if err := os.WriteFile(filepath.Join(root, "exports", "environment.sh"), []byte(environment.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	return fixture
 }
 
@@ -127,6 +144,8 @@ func (self releaseGateMainnetShardFixture) prelude(skip string) string {
 	return `fixture=` + strconv.Quote(self.root) + `
 sn_repo=` + strconv.Quote(self.sn) + `
 release_gate_aggregate_skip='` + skip + `'
+release_gate_mainnet_exports="$fixture/exports"
+release_gate_mainnet_exports_exit=0
 go() {
   if [[ "$1 $2" == "test -list" ]]; then
     printf 'list %s\n' "$*" >> "$fixture/calls"
@@ -134,6 +153,7 @@ go() {
     return
   fi
   printf '%s\n' "$@" > "$fixture/arguments"
+  env | grep '^URNETWORK_' | LC_ALL=C sort > "$fixture/environment"
 }
 `
 }

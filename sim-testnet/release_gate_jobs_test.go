@@ -296,6 +296,8 @@ func TestReleaseGateJobsUsePrivateArtifactsCachesAndSourceReferences(t *testing.
 [[ "$(readlink "$release_gate_root/lib")" == "$sn_repo/evm/lib" ]]
 [[ "${FOUNDRY_OUT%/*}" == "$release_gate_root" && "${SLITHER_FOUNDRY_OUT%/*}" == "$release_gate_root" ]]
 [[ "$release_gate_limit" == 2 && "$GOMAXPROCS" == 4 && "$GOFLAGS" == *-p=4 ]]
+[[ "$RAYON_NUM_THREADS" == 4 && "$CARGO_BUILD_JOBS" == 4 && "$RUST_TEST_THREADS" == 4 ]]
+[[ "$release_gate_mainnet_exports" == "$release_gate_root/mainnet-exports" && ! -e "$release_gate_mainnet_exports" ]]
 release_gate_complete
 `)
 	self.join(t, 0)
@@ -379,10 +381,11 @@ func TestReleaseGateJobsExitPreservesOriginalParentFailure(t *testing.T) {
 }
 
 // Lose the completion endpoint only after admission. The real owner still
-// reaps its worker, but cannot publish proof, so services must remain untouched.
+// reaps its worker, but cannot publish proof, so services must remain
+// untouched, and so must the ./mainnet exports.
 func TestReleaseGateJobsLostOwnerRetainsServices(t *testing.T) {
 	self := newReleaseGateJobsFixture(t, `
-phase_hold() { printf 'held:%s\n' "$RELEASE_GATE_WORKER_PID" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; }
+phase_hold() { mkdir "$release_gate_mainnet_exports"; printf 'held:%s\n' "$RELEASE_GATE_WORKER_PID" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; }
 release_gate_start hold phase_hold
 printf 'root:%s\n' "$release_gate_root" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
 read -r continue < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-b"
@@ -424,6 +427,9 @@ exit 1
 	}
 	if !strings.Contains(self.output.String(), "private services retained") {
 		t.Fatalf("lost owner did not report unproven cleanup:\n%s", self.output.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "mainnet-exports")); err != nil {
+		t.Fatalf("lost owner permitted removing the exports: %v", err)
 	}
 }
 
@@ -1257,4 +1263,95 @@ func TestReleaseGateJobsRejectCachedOrHiddenAggregateBodies(t *testing.T) {
 	if err := verifyReleaseGateUncachedBodies(script + "\ngo test ./... -run '^$'\n"); err == nil {
 		t.Fatal("an extra compile-only check changed the non-body census")
 	}
+}
+
+// The runner's await, on its real queue, joins exactly the named job, reaping
+// any other that completes first, and leaves that job's own exit, again once
+// joined; an unknown job is refused.
+func TestReleaseGateJobsAwaitJoinsTheNamedJob(t *testing.T) {
+	self := newReleaseGateJobsFixture(t, `
+phase_named() { printf 'named\n' > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; return 7; }
+phase_other() { printf 'other:%s\n' "$PPID" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-b"; }
+release_gate_start named phase_named
+release_gate_start other phase_other
+release_gate_await named
+printf 'awaited %s %s %s\n' "$RELEASE_GATE_AWAITED_EXIT" "$release_gate_active" "${release_gate_pending[*]}" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+RELEASE_GATE_AWAITED_EXIT=
+release_gate_await named
+[[ "$RELEASE_GATE_AWAITED_EXIT" == 7 ]]
+if release_gate_await missing; then exit 90; fi
+status=0; release_gate_complete || status=$?
+exit "$status"
+`)
+	owner := ""
+	for range 2 {
+		if line := self.line(t, "events"); strings.HasPrefix(line, "other:") {
+			owner = strings.TrimPrefix(line, "other:")
+		} else if line != "named" {
+			t.Fatalf("unexpected admission event=%q", line)
+		}
+	}
+	if pid, err := strconv.Atoi(owner); err != nil || pid <= 0 {
+		t.Fatalf("invalid other owner PID=%q: %v", owner, err)
+	}
+	// The other job completes first: the await reaps its owner, whose process
+	// record then disappears, while the named job still runs.
+	self.write(t, "control-b", "release")
+	for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if _, err := os.Stat(filepath.Join("/proc", owner)); os.IsNotExist(err) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the await did not reap the job that completed first")
+		}
+	}
+	self.write(t, "control-a", "release")
+	if got := self.line(t, "events"); got != "awaited 7 0 0 0" {
+		t.Fatalf("the await returned %q", got)
+	}
+	self.join(t, 7)
+	if !strings.Contains(self.output.String(), "release gate: no admitted job missing to await\n") {
+		t.Fatalf("an unknown job was not refused:\n%s", self.output.String())
+	}
+}
+
+// The runner removes the ./mainnet exports, its private directory, once every
+// job has joined, on the gate's own completion and on an EXIT, and a failed
+// removal fails the gate.
+func TestReleaseGateJobsRemoveTheMainnetExportsAfterTheFinalJoin(t *testing.T) {
+	complete := newReleaseGateJobsFixture(t, `
+phase_build() { mkdir "$release_gate_mainnet_exports"; printf 'export\n' > "$release_gate_mainnet_exports/witness"; }
+release_gate_start build phase_build
+release_gate_complete
+[[ ! -e "$release_gate_mainnet_exports" ]]
+`)
+	complete.join(t, 0)
+	exit := newReleaseGateJobsFixture(t, `
+phase_hold() {
+  mkdir "$release_gate_mainnet_exports"
+  printf '%s\n' "$release_gate_mainnet_exports" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+  read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"
+}
+release_gate_start hold phase_hold
+read -r hold < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-b"
+`)
+	exports := exit.line(t, "events")
+	if err := exit.command.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	exit.join(t, 143)
+	if _, err := os.Stat(exports); !os.IsNotExist(err) {
+		t.Fatalf("the EXIT kept the exports: %v", err)
+	}
+	failed := newReleaseGateJobsFixture(t, `
+mkdir -p "$release_gate_mainnet_exports/locked"
+printf 'export\n' > "$release_gate_mainnet_exports/locked/file"
+chmod 500 "$release_gate_mainnet_exports/locked"
+printf '%s\n' "$release_gate_mainnet_exports" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+status=0; release_gate_complete || status=$?
+exit "$status"
+`)
+	locked := filepath.Join(failed.line(t, "events"), "locked")
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	failed.join(t, 1)
 }
