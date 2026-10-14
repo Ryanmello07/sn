@@ -137,8 +137,8 @@ func copyClosedProviderRequestTestHead(value ProviderAttemptRequestClosedHead) P
 	return value
 }
 
-// Future complete-frame sizing uses the actual escaped original identity,
-// including both retained preparation copies, before any birth is published.
+// Future complete-frame sizing uses the actual escaped original identity in
+// the shared root attribute block before any birth is published.
 func TestProviderRequestPreparationForecastsCompleteClosedPendingFrame(t *testing.T) {
 	_, _, preparation, _ := providerRequestTestOwner(t, 32)
 	if err := preparation.Validate(); err != nil {

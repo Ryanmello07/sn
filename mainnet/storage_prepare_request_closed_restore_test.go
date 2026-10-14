@@ -44,8 +44,8 @@ func TestStoragePreparationRequestClosedWindowKeepsActualContinuation(t *testing
 		if err != nil {
 			t.Fatal("physical request checkpoint is missing", err)
 		}
-		var checkpoint validator.ProviderAttemptRequestCheckpoint
-		if err := json.Unmarshal(raw[:count], &checkpoint); err != nil || checkpoint.Closed == nil {
+		checkpoint, err := validator.DecodeProviderAttemptRequestCheckpoint(raw[:count], scope.Requests.Preparation)
+		if err != nil || checkpoint.Closed == nil {
 			t.Fatal("restored checkpoint lost original signed close", err)
 		}
 		return checkpoint
