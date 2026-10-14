@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+
+	"github.com/urfoundation/sn/internal/durablesync"
 )
 
 type provisionalRuntimeCompatibility struct {
@@ -352,9 +354,5 @@ func WriteProvisionalRuntimeObservation(directory string, artifact Authenticated
 		}
 		return err
 	}
-	dir, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(dir.Sync(), dir.Close())
+	return durablesync.SyncDir(directory)
 }
