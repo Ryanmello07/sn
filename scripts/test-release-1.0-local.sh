@@ -575,6 +575,15 @@ release_phase_server_connect() {
   go test -race ./connect -run "$direct_h3_tests" -count=1
   go test ./connect -run '^TestConnectionVerifyEgressDisabledAvoidsVerifySettings$' -count=1
   go test -race ./connect -run '^TestConnectionVerifyEgressDisabledAvoidsVerifySettings$' -count=1
+  # A QUIC source is charged only after its handshake proves its address, and
+  # unvalidated handshakes are capped; the authorization lease attributes only
+  # its admission check to the handshake. The listener and alt-front cases use
+  # the private services below.
+  h3_admission_tests='^Test(ConnectQuicHandshakeLimitCountsUnvalidatedHandshakes|ConnectHandlerBuildsUnvalidatedHandshakeLimitFromSettings)$'
+  go test ./connect -run "$h3_admission_tests" -count=1
+  go test -race ./connect -run "$h3_admission_tests" -count=1
+  go test ./session -run '^TestAuthorizationLeaseAttributesOnlyItsAdmissionCheck$' -count=1
+  go test -race ./session -run '^TestAuthorizationLeaseAttributesOnlyItsAdmissionCheck$' -count=1
   proxy_lifecycle_tests='^Test(ProxyDeviceManagerSharesOneNetworkSpaceLifetime|ProxyDeviceManagerCloseAndWaitJoinsOwnedNetworkSpace|ProxyDeviceManagerCloseJoinsAdmittedOpenAndRejectsLateOpen|ProxyDeviceManagerPreservesInjectedNetworkSpace|WgClientStackCloseAndWaitJoinsTCPDispatcher)$'
   go test ./proxy -run "$proxy_lifecycle_tests" -count=1
   go test -race ./proxy -run "$proxy_lifecycle_tests" -count=1
@@ -643,6 +652,16 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race ./taskworker -count=1
     go test ./connect -run '^TestConnectionVerifyEgressUsesControllerHashNamespace$' -count=1
     go test -race ./connect -run '^TestConnectionVerifyEgressUsesControllerHashNamespace$' -count=1
+    # Spoofed QUIC sources on the direct H3 listener and the alt front spend no
+    # per-source limit and hold a bounded count of handshakes; a validated
+    # source is admitted as before, and every handshake state query is
+    # attributed.
+    h3_admission_db_tests='^Test(ConnectQuicSpoofedSourceSpendsNoRateLimit|ConnectQuicValidatedSourceIsChargedAsBefore|ConnectH3ListenerBoundsUnvalidatedHandshakeFlood|ConnectStateQueryMetricActualHandshakes)$'
+    go test ./connect -run "$h3_admission_db_tests" -count=1
+    go test -race ./connect -run "$h3_admission_db_tests" -count=1
+    alt_admission_tests='^TestAlt(SpoofedSourceTakesNoConnectionSlot|ServesAnEarlyApiRequestOnlyAfterTheHandshake|BoundsUnvalidatedHandshakeFlood)$'
+    go test ./alt -run "$alt_admission_tests" -count=1
+    go test -race ./alt -run "$alt_admission_tests" -count=1
     go test . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
     go test -race . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
     # Settlement v2 (VERSION2-FINAL.md §8, §15.7): config, migration 821, the
