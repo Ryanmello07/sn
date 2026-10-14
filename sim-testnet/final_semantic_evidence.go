@@ -51,7 +51,7 @@ const (
 	finalProductionEpochBlocks                   = uint64(360)
 	finalProductionFinalizeOffsetBlocks          = uint64(180)
 	finalAdversarialVectorCount                  = uint64(61)
-	finalDepositFormula                          = "floor(usage_bytes*rate_numerator/(2^30*rate_denominator)); implied_usage=deposit/rate; raw_score=implied_usage*q"
+	finalDepositFormula                          = "owed=usage_bytes*rate_gib/(2^30*rate_denominator)+users*rate_user/rate_denominator; deposit=min(floor(owed),cap); implied_demand=(usage_bytes*baseline_gib/(2^30*baseline_denominator)+users*baseline_user/baseline_denominator)*min(1,cap/owed); raw_score=implied_demand*q"
 	finalWeightFormula                           = "(1-theta)*pool/sum(pool)+theta*head/sum(head); mask; max_weight_limit; u16"
 )
 
@@ -311,44 +311,52 @@ type finalValidatorViewTransitionArtifact struct {
 	ReplacementFleetID  uint64 `json:"replacement_fleet_id"`
 }
 
+// FinalPoolWeightEvidence is one pool's deposit audit and score for one CRv4
+// cycle. The Rate fields are the pool's own conviction tier, which sizes its
+// deposit; the BaselineRate fields are the conviction-zero tier, which prices
+// its implied demand, so a conviction discount lowers what a pool pays and not
+// its weight (WHITEPAPER 8.1).
 type FinalPoolWeightEvidence struct {
-	NoID                    uint64               `json:"no_id"`
-	UID                     uint16               `json:"uid"`
-	SourceEpoch             uint64               `json:"source_epoch"`
-	UsageBytes              uint64               `json:"usage_bytes"`
-	Users                   uint64               `json:"users,omitempty"`
-	ConvictionBeforeRao     string               `json:"conviction_before_rao"`
-	RateNumeratorRaoPerGiB  uint64               `json:"rate_numerator_rao_per_gib"`
-	RateNumeratorRaoPerUser uint64               `json:"rate_numerator_rao_per_user,omitempty"`
-	RateDenominator         uint64               `json:"rate_denominator"`
-	EpochDepositCapRao      string               `json:"epoch_deposit_cap_rao"`
-	RequiredDepositRao      string               `json:"required_deposit_rao"`
-	ObservedDepositRao      string               `json:"observed_deposit_rao"`
-	QualityPPM              uint32               `json:"quality_ppm"`
-	QualityFactor           FinalRational        `json:"q"`
-	ImpliedUsageGiB         FinalRational        `json:"implied_usage_gib"`
-	RawScore                FinalRational        `json:"raw_score"`
-	Formula                 string               `json:"formula"`
-	AuditStatus             string               `json:"audit_status"`
-	AuditCompliant          bool                 `json:"audit_compliant"`
-	AuditDisposition        string               `json:"audit_disposition"`
-	AuditError              string               `json:"audit_error,omitempty"`
-	ArtifactContentHash     string               `json:"artifact_content_hash"`
-	ArtifactHash            string               `json:"artifact_hash"`
-	PayoutRoot              string               `json:"payout_root"`
-	ArtifactSigner          string               `json:"artifact_signer"`
-	RootCommitter           string               `json:"root_committer"`
-	RootSigner              string               `json:"root_signer"`
-	SourceStartBlock        uint64               `json:"source_start_block"`
-	SourceStartHash         string               `json:"source_start_hash"`
-	SourceEndBlock          uint64               `json:"source_end_block"`
-	SourceEndHash           string               `json:"source_end_hash"`
-	RootCommitBlock         uint64               `json:"root_commit_block"`
-	ObservedAtBlock         uint64               `json:"observed_at_block"`
-	ArtifactDeadlineBlock   uint64               `json:"artifact_deadline_block"`
-	PayoutArtifact          FinalArtifactLocator `json:"payout_artifact"`
-	DepositReceipt          FinalEVMReceipt      `json:"deposit_receipt"`
-	AppliedWeight           uint16               `json:"applied_weight"`
+	NoID                            uint64               `json:"no_id"`
+	UID                             uint16               `json:"uid"`
+	SourceEpoch                     uint64               `json:"source_epoch"`
+	UsageBytes                      uint64               `json:"usage_bytes"`
+	Users                           uint64               `json:"users,omitempty"`
+	ConvictionBeforeRao             string               `json:"conviction_before_rao"`
+	RateNumeratorRaoPerGiB          uint64               `json:"rate_numerator_rao_per_gib"`
+	RateNumeratorRaoPerUser         uint64               `json:"rate_numerator_rao_per_user,omitempty"`
+	RateDenominator                 uint64               `json:"rate_denominator"`
+	BaselineRateNumeratorRaoPerGiB  uint64               `json:"baseline_rate_numerator_rao_per_gib"`
+	BaselineRateNumeratorRaoPerUser uint64               `json:"baseline_rate_numerator_rao_per_user,omitempty"`
+	BaselineRateDenominator         uint64               `json:"baseline_rate_denominator"`
+	EpochDepositCapRao              string               `json:"epoch_deposit_cap_rao"`
+	RequiredDepositRao              string               `json:"required_deposit_rao"`
+	ObservedDepositRao              string               `json:"observed_deposit_rao"`
+	QualityPPM                      uint32               `json:"quality_ppm"`
+	QualityFactor                   FinalRational        `json:"q"`
+	ImpliedDemand                   FinalRational        `json:"implied_demand"`
+	RawScore                        FinalRational        `json:"raw_score"`
+	Formula                         string               `json:"formula"`
+	AuditStatus                     string               `json:"audit_status"`
+	AuditCompliant                  bool                 `json:"audit_compliant"`
+	AuditDisposition                string               `json:"audit_disposition"`
+	AuditError                      string               `json:"audit_error,omitempty"`
+	ArtifactContentHash             string               `json:"artifact_content_hash"`
+	ArtifactHash                    string               `json:"artifact_hash"`
+	PayoutRoot                      string               `json:"payout_root"`
+	ArtifactSigner                  string               `json:"artifact_signer"`
+	RootCommitter                   string               `json:"root_committer"`
+	RootSigner                      string               `json:"root_signer"`
+	SourceStartBlock                uint64               `json:"source_start_block"`
+	SourceStartHash                 string               `json:"source_start_hash"`
+	SourceEndBlock                  uint64               `json:"source_end_block"`
+	SourceEndHash                   string               `json:"source_end_hash"`
+	RootCommitBlock                 uint64               `json:"root_commit_block"`
+	ObservedAtBlock                 uint64               `json:"observed_at_block"`
+	ArtifactDeadlineBlock           uint64               `json:"artifact_deadline_block"`
+	PayoutArtifact                  FinalArtifactLocator `json:"payout_artifact"`
+	DepositReceipt                  FinalEVMReceipt      `json:"deposit_receipt"`
+	AppliedWeight                   uint16               `json:"applied_weight"`
 }
 
 type FinalSubmittedWeight struct {
@@ -2274,8 +2282,45 @@ func verifyFinalCRv4CycleFrom(evidence *FinalSemanticEvidence, validatorID uint6
 	return nil
 }
 
+// finalPricedUsageRao is the exact price in rao of one pool's audited usage at
+// one deposit tier, usage_bytes*rate_gib/(2^30*d) + users*rate_user/d, as one
+// reduced fraction. The caller has already refused a zero denominator.
+func finalPricedUsageRao(usageBytes, users, rateGiB, rateUser, denominator uint64) *big.Rat {
+	gib := new(big.Int).Lsh(big.NewInt(1), 30)
+	numerator := new(big.Int).Mul(new(big.Int).SetUint64(usageBytes), new(big.Int).SetUint64(rateGiB))
+	userPart := new(big.Int).Mul(new(big.Int).SetUint64(users), new(big.Int).SetUint64(rateUser))
+	numerator.Add(numerator, userPart.Mul(userPart, gib))
+	return new(big.Rat).SetFrac(numerator, new(big.Int).Mul(gib, new(big.Int).SetUint64(denominator)))
+}
+
+// finalImpliedDemand is a priced schedule's demand signal (WHITEPAPER 8.1):
+// the usage priced at the conviction-zero tier, truncated by cap/owed when the
+// epoch cap truncated the deposit owed at the pool's own tier, so usage the
+// operator did not pay for buys no weight.
+func finalImpliedDemand(baseline, owed *big.Rat, capRao *big.Int) *big.Rat {
+	demand := new(big.Rat).Set(baseline)
+	if limit := new(big.Rat).SetInt(capRao); owed.Cmp(limit) > 0 {
+		demand.Mul(demand, limit)
+		demand.Quo(demand, owed)
+	}
+	return demand
+}
+
+// verifyFinalPoolWeight reconstructs one pool's required deposit, implied
+// demand and raw score from the declared row alone. The arithmetic is this
+// package's own; the validator's score for the same inputs is compared with
+// the row when the signed measurement is replayed.
 func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint64, minimumQualityPPM, maximumQualityPPM uint32, pool *FinalPoolWeightEvidence) (*big.Rat, bool, error) {
-	if pool.SourceEpoch+1 != settlementEpoch || pool.UsageBytes == 0 || pool.RateNumeratorRaoPerGiB == 0 || pool.RateDenominator == 0 || pool.Formula != finalDepositFormula {
+	if pool.Formula != finalDepositFormula {
+		return nil, false, errors.New("pool weight formula is not the current implied-demand formula")
+	}
+	// A zero price audits no deposit: its audit names no payout artifact, root
+	// signer, source boundary or usage, all of which every row here binds. The
+	// release campaign runs under a priced schedule only.
+	if pool.AuditStatus == validatorpkg.DepositAuditZeroPrice {
+		return nil, false, errors.New("zero-price deposit audit is not admitted: the release campaign binds every pool weight to an audited deposit")
+	}
+	if pool.SourceEpoch+1 != settlementEpoch || pool.UsageBytes == 0 || pool.RateNumeratorRaoPerGiB == 0 || pool.RateDenominator == 0 || pool.BaselineRateNumeratorRaoPerGiB == 0 || pool.BaselineRateDenominator == 0 {
 		return nil, false, errors.New("deposit/rate lineage is incomplete")
 	}
 	if _, err := finalNonnegativeInteger("conviction before", pool.ConvictionBeforeRao); err != nil {
@@ -2293,8 +2338,8 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 	if err != nil {
 		return nil, false, err
 	}
-	formulaRequired := new(big.Int).Mul(new(big.Int).SetUint64(pool.UsageBytes), new(big.Int).SetUint64(pool.RateNumeratorRaoPerGiB))
-	formulaRequired.Quo(formulaRequired, new(big.Int).Mul(new(big.Int).SetUint64(pool.RateDenominator), new(big.Int).SetUint64(1<<30)))
+	owed := finalPricedUsageRao(pool.UsageBytes, pool.Users, pool.RateNumeratorRaoPerGiB, pool.RateNumeratorRaoPerUser, pool.RateDenominator)
+	formulaRequired := new(big.Int).Quo(owed.Num(), owed.Denom())
 	if formulaRequired.Cmp(capRao) > 0 {
 		formulaRequired.Set(capRao)
 	}
@@ -2334,7 +2379,7 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 		return nil, false, err
 	}
 	if !pool.AuditCompliant {
-		if pool.AuditStatus != validatorpkg.DepositAuditMismatch || pool.AuditDisposition != "zero_pool_weight" || pool.AuditError == "" || strings.ContainsAny(pool.AuditError, "\r\n\x00") || observed.Cmp(required) >= 0 || pool.AppliedWeight != 0 || pool.QualityPPM != 0 || pool.QualityFactor != (FinalRational{Numerator: "0", Denominator: "1"}) || pool.ImpliedUsageGiB != (FinalRational{Numerator: "0", Denominator: "1"}) || pool.RawScore != (FinalRational{Numerator: "0", Denominator: "1"}) {
+		if pool.AuditStatus != validatorpkg.DepositAuditMismatch || pool.AuditDisposition != "zero_pool_weight" || pool.AuditError == "" || strings.ContainsAny(pool.AuditError, "\r\n\x00") || observed.Cmp(required) >= 0 || pool.AppliedWeight != 0 || pool.QualityPPM != 0 || pool.QualityFactor != (FinalRational{Numerator: "0", Denominator: "1"}) || pool.ImpliedDemand != (FinalRational{Numerator: "0", Denominator: "1"}) || pool.RawScore != (FinalRational{Numerator: "0", Denominator: "1"}) {
 			return nil, false, errors.New("rejected deposit audit is not an exact underpayment/zero-pool disposition")
 		}
 		return big.NewRat(0, 1), false, nil
@@ -2356,20 +2401,20 @@ func verifyFinalPoolWeight(evidence *FinalSemanticEvidence, settlementEpoch uint
 	if err != nil || quality.Cmp(new(big.Rat).SetFrac(new(big.Int).SetUint64(uint64(qualityPPM)), big.NewInt(1_000_000))) != 0 {
 		return nil, false, errors.New("quality factor does not match quality PPM")
 	}
-	implied, err := finalPositiveRational("implied usage", pool.ImpliedUsageGiB)
+	implied, err := finalPositiveRational("implied demand", pool.ImpliedDemand)
 	if err != nil {
 		return nil, false, err
 	}
-	wantImplied := new(big.Rat).SetFrac(new(big.Int).Mul(observed, new(big.Int).SetUint64(pool.RateDenominator)), new(big.Int).SetUint64(pool.RateNumeratorRaoPerGiB))
-	if implied.Cmp(wantImplied) != 0 {
-		return nil, false, errors.New("implied usage does not equal deposit/rate")
+	baseline := finalPricedUsageRao(pool.UsageBytes, pool.Users, pool.BaselineRateNumeratorRaoPerGiB, pool.BaselineRateNumeratorRaoPerUser, pool.BaselineRateDenominator)
+	if implied.Cmp(finalImpliedDemand(baseline, owed, capRao)) != 0 {
+		return nil, false, errors.New("implied demand does not equal audited usage priced at the conviction-zero tier")
 	}
 	rawScore, err := finalPositiveRational("pool raw score", pool.RawScore)
 	if err != nil {
 		return nil, false, err
 	}
 	if rawScore.Cmp(new(big.Rat).Mul(implied, quality)) != 0 {
-		return nil, false, errors.New("pool raw score does not equal implied usage times Q")
+		return nil, false, errors.New("pool raw score does not equal implied demand times Q")
 	}
 	return rawScore, true, nil
 }
@@ -5490,6 +5535,10 @@ func verifyFinalPolicyInputs(evidence *FinalSemanticEvidence, policy *protocol.P
 				amount, tier, err := protocol.RequiredDepositRao(pool.UsageBytes, pool.Users, conviction, policy.Deposit)
 				if err != nil || amount.String() != pool.RequiredDepositRao || tier.RateNumeratorRaoPerGiB != pool.RateNumeratorRaoPerGiB || tier.RateNumeratorRaoPerUser != pool.RateNumeratorRaoPerUser || tier.RateDenominator != pool.RateDenominator || strconv.FormatUint(policy.Deposit.EpochCapRaoPerOperator, 10) != pool.EpochDepositCapRao {
 					return fmt.Errorf("validator %d epoch %d pool %d deposit inputs do not match canonical policy", validator.ValidatorID, cycle.SettlementEpoch, pool.NoID)
+				}
+				// RequiredDepositRao has validated the schedule, so tier zero exists.
+				if baseline := policy.Deposit.Tiers[0]; baseline.RateNumeratorRaoPerGiB != pool.BaselineRateNumeratorRaoPerGiB || baseline.RateNumeratorRaoPerUser != pool.BaselineRateNumeratorRaoPerUser || baseline.RateDenominator != pool.BaselineRateDenominator {
+					return fmt.Errorf("validator %d epoch %d pool %d baseline deposit rate does not match the canonical policy's conviction-zero tier", validator.ValidatorID, cycle.SettlementEpoch, pool.NoID)
 				}
 			}
 		}

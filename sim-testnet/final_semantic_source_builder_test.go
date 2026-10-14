@@ -1042,7 +1042,7 @@ func finalSemanticBuilderDishonestDecisionEvidence(t *testing.T) (*FinalSemantic
 			pool.ObservedDepositRao, pool.DepositReceipt = dishonest.ObservedDepositRao, underpayment
 			pool.AuditStatus, pool.AuditCompliant, pool.AuditDisposition, pool.AuditError = validatorpkg.DepositAuditMismatch, false, "zero_pool_weight", "observed deposit is below exact demand"
 			pool.QualityPPM = 0
-			pool.QualityFactor, pool.ImpliedUsageGiB, pool.RawScore = FinalRational{Numerator: "0", Denominator: "1"}, FinalRational{Numerator: "0", Denominator: "1"}, FinalRational{Numerator: "0", Denominator: "1"}
+			pool.QualityFactor, pool.ImpliedDemand, pool.RawScore = FinalRational{Numerator: "0", Denominator: "1"}, FinalRational{Numerator: "0", Denominator: "1"}, FinalRational{Numerator: "0", Denominator: "1"}
 		}
 		finalSemanticBuilderReweightCycle(t, &penaltyCycle)
 		penaltyPresent, penaltyApplied := finalSemanticSubmittedPool(penaltyCycle.Submitted, dishonest.PoolUID)
