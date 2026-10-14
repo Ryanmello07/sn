@@ -30,7 +30,11 @@ preparation, and a digest mismatch refuses the record. Storage preparation
 writes the record at full width, so a later replacement never needs more space.
 `Validate()` refuses a preparation unless one ext4 block holds all four
 attributes at their widest. It counts the block header, the 16-byte entries,
-the names and values padded to four bytes, and the terminator.
+the names and values padded to four bytes, and the terminator. A fresh native
+journal, SDK work outbox or successor-members owner may share the root and
+attach its own attribute there, outside that count. So storage-prepare and the
+runtime refuse a request root that carries any other `user.urnetwork.`
+attribute. Snapshot owners keep theirs on their own lock files and may share.
 
 Earlier releases wrote the whole checkpoint as JSON (v1). Once a window closed,
 it grew to about 2.9-3.4 KB, more than ext4 leaves for it beside the root's
@@ -41,8 +45,12 @@ replaces it with v2 in one atomic write, and restore writes v2.
 
 ## Downgrade
 
-A validator with `request_preparation` enabled must not be downgraded below
-this release once it has sealed a window. An older release reads only v1. It
-refuses the v2 record and fails closed: it does not open the request journal
-and writes nothing. Storage preparation and every append also write v2, so a
-downgrade after either is refused the same way.
+An older release reads only v1. It refuses a v2 record and fails closed: it
+does not open the request journal and writes nothing. This release writes v2
+whenever it writes the checkpoint: when storage-prepare creates or restores the
+root, and when the runtime appends a request, seals a window or finishes an
+interrupted append. So a validator with `request_preparation` enabled must not
+be downgraded below this release once this release has written its checkpoint,
+including by its own storage-prepare. Sealing a window is only one such write.
+Only a root whose v1 record this release has read but not yet replaced can go
+back.

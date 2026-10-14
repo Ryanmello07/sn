@@ -438,6 +438,48 @@ func TestProviderRequestLegacyCheckpointIsAcceptedAndMigrated(t *testing.T) {
 	}
 }
 
+// v1 spells out the preparation that v2 binds by digest. The exported decoder
+// refuses a v1 checkpoint under another identity, limits or birth, or one
+// whose signed close names another preparation, as it refuses a v2 digest.
+func TestProviderRequestLegacyCheckpointRefusesAnotherPreparation(t *testing.T) {
+	engine, journal, preparation, _ := providerRequestTestOwner(t, 32)
+	if _, err := providerRequestTestAppend(t, journal, engine.vsk, preparation, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := journal.SealWindow(t.Context(), providerRequestTestWindow(preparation), 1024*1024); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := *journal.checkpoint
+	legacy, err := json.Marshal(checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded, err := DecodeProviderAttemptRequestCheckpoint(legacy, preparation); err != nil || !reflect.DeepEqual(decoded, checkpoint) {
+		t.Fatal("v1 checkpoint of its own preparation was refused", err)
+	}
+	for name, change := range map[string]func(*ProviderAttemptRequestPreparation){
+		"identity": func(value *ProviderAttemptRequestPreparation) { value.Identity.ClientId = connect.Id{99} },
+		"limits":   func(value *ProviderAttemptRequestPreparation) { value.Limits.MaxRecords++ },
+		"birth":    func(value *ProviderAttemptRequestPreparation) { value.Birth.EVMBlock-- },
+	} {
+		other := preparation
+		change(&other)
+		if value, err := DecodeProviderAttemptRequestCheckpoint(legacy, other); !errors.Is(err, durablevolume.ErrIdentity) || value.Schema != "" {
+			t.Fatal("v1 checkpoint decoded under another preparation", name, err)
+		}
+	}
+	closed := copyClosedProviderRequestTestHead(*checkpoint.Closed)
+	closed.Preparation.Birth.EVMBlock--
+	checkpoint.Closed = &closed
+	foreign, err := json.Marshal(checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, err := DecodeProviderAttemptRequestCheckpoint(foreign, preparation); !errors.Is(err, durablevolume.ErrIdentity) || value.Schema != "" {
+		t.Fatal("v1 checkpoint decoded with a close of another preparation", err)
+	}
+}
+
 // Offline inspection accepts a v1 anchor that holds exactly the verified
 // checkpoint and returns it unchanged, as it returns a v2 anchor.
 func TestAttemptLedgerRequestPreparationKeepsEquivalentLegacyAnchor(t *testing.T) {
@@ -531,5 +573,64 @@ func TestProviderRequestBudgetMirrorsActualStoragePreparationAnchor(t *testing.T
 	}
 	if _, widest, err := providerAttemptRequestWidestRootAttributes(f.scope.Requests.Preparation); err != nil || count > len(widest) {
 		t.Fatal("storage-preparation anchor is wider than the forecast", count, err)
+	}
+}
+
+// durablevolume lets a fresh native journal, SDK work outbox or successor-
+// members owner share the ledger root and attach an attribute to it. A request
+// owner refuses such a root at runtime and in preparation. A snapshot owner's
+// attribute on its own lock file, and a ledger root without requests, are
+// admitted as they are today.
+func TestProviderRequestRootRefusesAnotherOwnerAttribute(t *testing.T) {
+	foreign := []string{"user.urnetwork.native-journal-custody", connect.OriginalWorkOutboxAttribute, "user.urnetwork.snapshot." + strings.Repeat("ab", 32)}
+	engine, journal, preparation, directory := providerRequestTestOwner(t, 32)
+	if err := journal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range foreign {
+		if err := unix.Setxattr(directory, name, []byte{1}, unix.XATTR_CREATE); err != nil {
+			t.Fatal(err)
+		}
+		if owner, err := OpenProviderAttemptRequestJournal(context.Background(), directory, preparation, engine.vsk); owner != nil || !errors.Is(err, protocol.ErrProviderAttemptsCapacity) {
+			t.Fatal("request owner opened beside another owner's root attribute", name, err)
+		}
+		if err := unix.Removexattr(directory, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	owner, err := OpenProviderAttemptRequestJournal(context.Background(), directory, preparation, engine.vsk)
+	if err != nil {
+		t.Fatal("request owner refused its own root attributes", err)
+	}
+	if err := owner.Close(); err != nil {
+		t.Fatal(err)
+	}
+	inspect := func(f *attemptLedgerRestoreFixture, path, name string) error {
+		t.Helper()
+		if err := unix.Setxattr(path, name, []byte{1}, unix.XATTR_CREATE); err != nil {
+			t.Fatal(err)
+		}
+		root, err := os.Open(f.root + ".original-held")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = InspectAttemptLedgerPreparation(t.Context(), root, f.scope)
+		return errors.Join(err, root.Close())
+	}
+	requests, _, _ := newAttemptRequestRestoreFixture(t, false, false)
+	held := requests.root + ".original-held"
+	lock := filepath.Join(held, "head.json.lock")
+	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := inspect(requests, lock, foreign[2]); err != nil {
+		t.Fatal("request preparation refused a snapshot attribute on its own lock file", err)
+	}
+	if err := inspect(requests, held, foreign[0]); !errors.Is(err, protocol.ErrProviderAttemptsCapacity) {
+		t.Fatal("request preparation admitted another owner's root attribute", err)
+	}
+	plain := newAttemptLedgerRestoreFixture(t, newAttemptRecordStoreTestFixture(t, 1), false, "")
+	if err := inspect(plain, plain.root+".original-held", foreign[0]); err != nil {
+		t.Fatal("ledger preparation without requests refused a shared root", err)
 	}
 }

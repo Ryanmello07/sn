@@ -71,6 +71,10 @@ func OpenProviderAttemptRequestJournal(ctx context.Context, path string, prepara
 		return nil, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, directory.leave()) }()
+	// Preparation is complete here, so every owner sharing the root is visible.
+	if err := checkProviderAttemptRequestRootAttributes(directory.directory); err != nil {
+		return nil, err
+	}
 	raw, absent, err := readProviderAttemptRequestAttribute(directory.directory)
 	if err != nil {
 		return nil, err
