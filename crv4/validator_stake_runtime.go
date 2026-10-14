@@ -40,7 +40,7 @@ func validateValidatorReadRuntimeAtContext(ctx context.Context, chain *Chain, ar
 		return ctx.Err()
 	}
 	if artifact.authenticationProof != nil {
-		if err := ValidateRuntimeArtifactOwnerContext(ctx, chain, artifact); err != nil {
+		if err := validateRuntimeArtifactReadOwnerContext(ctx, chain, artifact); err != nil {
 			return err
 		}
 	}
@@ -95,7 +95,7 @@ func validateValidatorReadRuntimeAtContext(ctx context.Context, chain *Chain, ar
 		return fmt.Errorf("validator stake selective-metagraph capability: %w", err)
 	}
 	if artifact.authenticationProof != nil {
-		return ValidateRuntimeArtifactOwnerContext(ctx, chain, artifact)
+		return validateRuntimeArtifactReadOwnerContext(ctx, chain, artifact)
 	}
 	return ctx.Err()
 }
