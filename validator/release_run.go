@@ -936,6 +936,18 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		}
 	}
 	production := isOwnerRecycleProductionConfig(cfg)
+	// Verified startup work outlives a failed stage attempt and serves the
+	// live service, so a retry resumes instead of starting from nothing.
+	var verified *releaseStartupVerified
+	if production {
+		verified = newReleaseStartupVerified()
+		ctx = withReleaseStartupVerified(ctx, verified)
+		defer func() {
+			if err := verified.flush(); err != nil {
+				fmt.Fprintf(os.Stderr, "validator: startup verified progress record not written: %v\n", err)
+			}
+		}()
+	}
 	startupStage := func(stage string, operation func(context.Context) error) error {
 		if production {
 			return awaitProductionStartupStage(ctx, cfg, progress, stage, operation)
@@ -1042,6 +1054,13 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	}); err != nil {
 		return fmt.Errorf("release V2 server-key startup: %w", err)
 	}
+	if production && releaseStartupVerifiedPersistenceFrom(ctx) {
+		if authority, err := releaseStartupVerifiedAuthorityFor(cfg, hotkey.PublicKey(), serverKeys); retainedSetup != nil || adoption != nil || err != nil {
+			fmt.Fprintf(os.Stderr, "validator: startup verified progress is not kept for this run: %v\n", errors.Join(err, errors.New("only a plain production history keeps it")))
+		} else {
+			verified.enableRecord(cfg.StateDir, hotkey, authority, os.Stderr)
+		}
+	}
 	var disk *releaseEvidenceV2DiskState
 	defer func() {
 		cancel()
@@ -1071,6 +1090,9 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 		return nil
 	}); err != nil {
 		return fmt.Errorf("release V2 semantic startup: %w", err)
+	}
+	if err := verified.flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "validator: startup verified progress record not written: %v\n", err)
 	}
 	// Bounded startup has closed all temporary replay/reference owners. The
 	// completed runtime now belongs to the enclosing service, not that attempt.
@@ -1130,6 +1152,13 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	if err != nil {
 		return fmt.Errorf("release V2 native startup: %w", err)
 	}
+	if production {
+		fmt.Fprintf(os.Stderr, "validator: startup reused %d already verified history units\n", verified.skippedUnits())
+		if err := verified.flush(); err != nil {
+			fmt.Fprintf(os.Stderr, "validator: startup verified progress record not written: %v\n", err)
+		}
+		go verified.flushUntilDone(ctx, os.Stderr)
+	}
 	if !production {
 		if err := advanceInitialReleaseWithRetry(ctx, snapshot, chain.ReleaseSnapshotContext, runtimeV2.advance, waitReleaseSnapshotRetry); err != nil {
 			return fmt.Errorf("release V2 initial terminal publication: %w", err)
@@ -1173,10 +1202,13 @@ func runReleaseWithStartupAndProgressV2(ctx context.Context, configPath string, 
 	})
 }
 
-func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference, ledger SettlementV2RuntimeOptions, bridge *ReleaseNativeGapBridge) {
+func runReleaseConfig(configPath, progressPath string, reference durablevolume.Reference, ledger SettlementV2RuntimeOptions, bridge *ReleaseNativeGapBridge, keepVerified bool) {
 	ctx := WithSettlementV2RuntimeOptions(context.Background(), ledger)
 	if reference.Path != "" || reference.Sha256 != "" {
 		ctx = durablevolume.WithReference(ctx, reference)
+	}
+	if keepVerified {
+		ctx = withReleaseStartupVerifiedPersistence(ctx)
 	}
 	event := connect.NewEventWithContext(ctx)
 	event.SetOnSignals(syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
