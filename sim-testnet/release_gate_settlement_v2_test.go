@@ -403,10 +403,10 @@ func verifyReleaseGateV2InvariantCampaign(script, foundry, invariant string) err
 	return verifyReleaseGateAdmission(script, "solidity", "solidity", definition)
 }
 
-// §15.7 (SV-1 to SV-8): the operator's v2 suites, normal and race, on the
-// gate's private services; every root of a v2 test file, and of the gas-floor
-// files of the v1 closes and of the deposit key's stake moves (SV-4), is
-// selected.
+// §15.7 (SV-1 to SV-8): the operator's v2 suites, normal and race, each under
+// an explicit 30-minute deadline, on the gate's private services; every root
+// of a v2 test file, and of the gas-floor files of the v1 closes and of the
+// deposit key's stake moves (SV-4), is selected.
 func releaseGateLedgerV2ServerGroup(t *testing.T) releaseEvidenceV2GateGroup {
 	t.Helper()
 	packages := ". ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work"
@@ -425,8 +425,8 @@ func releaseGateLedgerV2ServerGroup(t *testing.T) releaseEvidenceV2GateGroup {
 			"./taskworker/work": releaseEvidenceV2GateSources(t, []string{"../../server/taskworker/work/*ledger_v2*_test.go"}),
 		},
 		commands: []string{
-			"go test " + packages + ` -run "$ledger_v2_tests" -count=1`,
-			"go test -race " + packages + ` -run "$ledger_v2_tests" -count=1`,
+			"go test " + packages + ` -run "$ledger_v2_tests" -count=1 -timeout 30m`,
+			"go test -race " + packages + ` -run "$ledger_v2_tests" -count=1 -timeout 30m`,
 		},
 	}
 }
@@ -1109,6 +1109,33 @@ func TestReleaseGateSettlementV2OperatorSuitesRejectOmissions(t *testing.T) {
 	script := readReleaseGateLocalScript(t)
 	for _, group := range releaseGateOperatorV2Groups(t) {
 		verifyReleaseGateGroupRejectsOmissions(t, script, group)
+	}
+}
+
+// SV-1 to SV-8: under load the race run's ./controller reached Go's implicit
+// ten-minute deadline, at 600.6 and 601.6 seconds, with normal mode at 509 to
+// 521, so both modes keep their explicit 30-minute deadline; an implicit,
+// shorter or disabled one fails.
+func TestReleaseGateSettlementV2OperatorLedgerSuitesKeepTheirDeadline(t *testing.T) {
+	t.Parallel()
+	script := readReleaseGateLocalScript(t)
+	group := releaseGateLedgerV2ServerGroup(t)
+	if err := verifyReleaseEvidenceV2GateGroup(script, group); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range group.commands {
+		if !strings.HasSuffix(command, " -timeout 30m") || strings.Count(script, command) != 1 {
+			t.Fatalf("the gate has no one command %s with its deadline", command)
+		}
+		for _, replacement := range []string{
+			strings.TrimSuffix(command, " -timeout 30m"),
+			strings.Replace(command, " -timeout 30m", " -timeout 10m", 1),
+			command + " -timeout 0",
+		} {
+			if err := verifyReleaseEvidenceV2GateGroup(strings.Replace(script, command, replacement, 1), group); err == nil {
+				t.Fatalf("server-db accepted %s", replacement)
+			}
+		}
 	}
 }
 

@@ -508,10 +508,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # epoch driver, the ledger endpoints, the v2 earnings readers, the SN25
     # prune alert and the gas floors of the v1 closes and of the deposit key's
     # stake moves, with the liability that caps them (SV-4), most of them on
-    # this gate's private services.
+    # this gate's private services. Under load the race run's ./controller
+    # reached Go's implicit ten-minute deadline, at 600.6 and 601.6 seconds,
+    # and normal mode took 509 to 521, so both modes have an explicit one.
     ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet|StV1Close|StV1GasFloor|StV1Deposit|StV1PendingReservation|StOperatorGasRemainingLiability)'
-    go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
-    go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
+    go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1 -timeout 30m
+    go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1 -timeout 30m
     # The monitor's schema contracts of the published migration suffix, from
     # 794 on, where settlement v2's migrations 821 and 822 are appended, read a
     # real database's catalog.
