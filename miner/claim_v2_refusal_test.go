@@ -711,6 +711,36 @@ func TestClaimV2RunLoop(t *testing.T) {
 	claimV2TestRefused(t, "custody", err, "synthetic custody loss")
 }
 
+// E-5, §10.1 loop: a snapshot that arrives while the loop waits is merged by
+// the wait itself, and its failing save stops the loop.
+func TestClaimV2RunLoopStopsOnASaveInTheWait(t *testing.T) {
+	chain := newClaimV2TestChain(t)
+	chain.finalize(claimV2TestAccount(claimV2TestOther, 1), claimV2TestAccount(claimV2TestColdkey, 1))
+	daemon := newClaimV2TestDaemon(t, chain, ClaimV2DefaultThresholdRao)
+	snapshot, err := readClaimSnapshotV2(daemon.ctx, daemon.strategy, daemon.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := daemon.store.close(); err != nil {
+		t.Fatal(err)
+	}
+	// The poll reads the clock after the loop's priority read, so the snapshot
+	// it delivers can only be merged by the wait.
+	snapshots, clock, delivered := make(chan map[string]*claimAccountV2, 1), daemon.now, false
+	daemon.now = func() time.Time {
+		if !delivered {
+			delivered = true
+			snapshots <- snapshot
+		}
+		return clock()
+	}
+	err = daemon.run(daemon.ctx, snapshots, make(chan time.Time), true)
+	claimV2TestRefused(t, "closed store", err, "no durable owner")
+	if !delivered || len(snapshots) != 0 {
+		t.Fatal("the snapshot delivered during the poll was not merged by the wait")
+	}
+}
+
 // E-5, §10.1 public entry: a v2-only daemon claims on demand from its own queue
 // and stops cleanly; each startup refusal precedes any signature.
 func TestClaimV2PublicEntrypoint(t *testing.T) {
