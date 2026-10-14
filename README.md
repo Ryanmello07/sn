@@ -216,7 +216,8 @@ can claim its own **top‑level miner UID** and be paid **directly** by validato
 steering — no pool, no operator in the payout path. The fleet registers that UID itself
 (`provider fleet register`: a burned `register_limit` signed by the fleet coldkey, dry run
 until `--apply`), publishes its manifest commitment (`provider fleet publish`) and links its
-`client_id`s to the hotkey with a **dual‑signed binding** (`provider fleet bind`) so
+`client_id`s to the hotkey with a **dual‑signed binding** (`provider fleet bind`, or
+`provider fleet sign` to sign locally and submit through the ur.io Top 200 page) so
 validators can attribute its measured breadth to that slot. See
 [`WHITEPAPER.md`](WHITEPAPER.md) §8.4, §11.4 and §16.1.
 

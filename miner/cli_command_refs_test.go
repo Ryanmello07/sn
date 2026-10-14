@@ -29,6 +29,14 @@ func TestDocumentedCliCommandsExist(t *testing.T) {
 		}
 	}
 
+	// `provider fleet <sub>` names a fleet subcommand, checked the same way
+	// (support inbox 7934: the Top 200 copy names `provider fleet sign`).
+	fleetCommands := usageCommands(mainUsage(), "provider fleet")
+	if len(fleetCommands) == 0 {
+		t.Fatal("no provider fleet commands found in its usage")
+	}
+	fleetReference := regexp.MustCompile("`provider fleet ([a-z][a-z0-9_-]*)")
+
 	reference := regexp.MustCompile("`(provider|snclaim) ([a-z][a-z0-9_-]*)")
 	root := ".."
 	var missing []string
@@ -54,6 +62,11 @@ func TestDocumentedCliCommandsExist(t *testing.T) {
 		for _, match := range reference.FindAllStringSubmatch(string(b), -1) {
 			if !commands[match[1]][match[2]] {
 				missing = append(missing, rel+": "+match[1]+" "+match[2])
+			}
+		}
+		for _, match := range fleetReference.FindAllStringSubmatch(string(b), -1) {
+			if !fleetCommands[match[1]] {
+				missing = append(missing, rel+": provider fleet "+match[1])
 			}
 		}
 		return nil

@@ -153,6 +153,8 @@ Usage:
         [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
+    provider fleet sign --manifest=<path> [--client_id=<hex>] [--client_seed_file=<path>] [--hotkey_seed_file=<path>] --valid_from_epoch=<e> --valid_to_epoch=<e>
+        [-v...]
     provider fleet status --manifest=<path> --client_id=<hex> --substrate=<ws_url>... --rpc=<rpc_url>...
         [--provisional-runtime-compatibility=<profile> --runtime-observation-dir=<path>]
         [--mainnet-runtime-authority=<path> --mainnet-runtime-authority-sha256=<hex>]
@@ -251,8 +253,13 @@ Options:
 	--mainnet-runtime-authority=<path>  Independently reviewed exact mainnet fleet runtime authority document.
 	--mainnet-runtime-authority-sha256=<hex>  Approved SHA-256 of the exact authority bytes (64 lowercase hex digits).
 	--manifest=<path>                  Canonical urnetwork-fleet-manifest-v1 JSON file.
-	--client_id=<hex>                  Stable 16-byte UR client identity from the fleet manifest.
-	--client_seed_file=<path>          Raw or hex 32-byte Ed25519 client key seed.
+	--client_id=<hex>                  Stable 16-byte UR client identity from the fleet manifest. fleet sign:
+	                                   optional with --client_seed_file (the member holding that key).
+	--client_seed_file=<path>          Raw or hex 32-byte Ed25519 client key seed (a provider's is
+	                                   .provider.key in its state directory, e.g. ~/.urnetwork/.provider.key).
+	                                   fleet sign signs locally and prints the {binding, client_signature}
+	                                   payload the ur.io Top 200 page takes, plus hotkey_signature with
+	                                   --hotkey_seed_file; it sends nothing and never prints a seed.
 	--hotkey_seed_file=<path>          Hex/raw 32-byte sr25519 hotkey seed in a private file that is never created
 	                                   here: the fleet hotkey, or the miner hotkey that signs in to operators
 	                                   as a TAO wallet (--auto-register, auth --operator) and signs the hotkey

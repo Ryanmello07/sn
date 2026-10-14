@@ -135,8 +135,11 @@ BRINGYOUR_REDIS_HOSTNAME=local-redis.bringyour.com go test ./model ./controller 
   exclusivity is symmetric** — the same head-bound ckey set is removed from the pool on both sides.
 - **Tooling**: `provider fleet bind` signs the canonical fleet binding with the client key seed and
   the hotkey seed and submits it to the coordinator from a relayer EVM key (`provider fleet revoke`
-  ends it, `provider fleet status` reads it back). The original bind-head/unbind-head commands of
-  the provider and snclaim were removed; snclaim has no head-binding commands.
+  ends it, `provider fleet status` reads it back). `provider fleet sign` builds the same binding and
+  only signs it locally (client key, and the hotkey if given), printing the `{binding,
+  client_signature}` payload the ur.io Top 200 page takes; it needs no RPC or relayer key. The
+  original bind-head/unbind-head commands of the provider and snclaim were removed; snclaim has no
+  head-binding commands.
 
 ## Build-time deviations that OVERRIDE the plan text (keep)
 - Deposits **push-then-credit** (no approve/transferStakeFrom in StakingV2 v3.2.7).
