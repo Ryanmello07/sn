@@ -934,6 +934,10 @@ func TestOperatorSupervisorLimitsAutomaticSignInsAfterRejectionsInARow(t *testin
 	fixture.run()
 	at := fixture.journal.wait(t, 0, limited)
 	at = fixture.journal.wait(t, at, "idle 5m0s")
+	// The first hotkey wallet upkeep finds no chain and wakes the loop once
+	// more. A clock moved between that pass's now and after arms its timer past
+	// the move, where it never fires, so the clock moves once the loop waits.
+	at = fixture.journal.wait(t, at, "idle 5m0s")
 	fixture.clock.set(operatorAuthRecheckInterval)
 	at = fixture.journal.wait(t, at, "idle 10m0s")
 	if count := strings.Count(strings.Join(fixture.journal.entriesFrom(0), "\n"), "automatic sign-in is limited"); count != 1 || signIns.Load() != 0 {
@@ -949,6 +953,9 @@ func TestOperatorSupervisorLimitsAutomaticSignInsAfterRejectionsInARow(t *testin
 	restarted.publish(testListedOperator("alpha.example"))
 	restarted.run()
 	at = restarted.journal.wait(t, 0, limited)
+	// the restarted loop also waits again after its own first wallet upkeep
+	at = restarted.journal.wait(t, at, "idle 15m0s")
+	at = restarted.journal.wait(t, at, "idle 15m0s")
 	restarted.noStart()
 	restarted.clock.set(55 * time.Minute)
 	at = restarted.journal.wait(t, at, "log operator alpha.example: signing in again with the hotkey after 2 rejected network sign-ins in a row")
