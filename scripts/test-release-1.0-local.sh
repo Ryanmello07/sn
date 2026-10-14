@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# RELEASE_GATE_DEPENDENCY_MODE selects what the gate qualifies, as the release
+# builder's dependency_mode does. pinned, the default, seals the run: clean,
+# fetched, at-origin checkouts before and after the tests, the release lock,
+# and the runtime source and metadata attestations. local tests the working
+# checkouts as they are and skips exactly those checks; it never reads a vault
+# checkout. A local pass qualifies those checkouts, not a sealed release.
+release_gate_requested_dependency_mode="${RELEASE_GATE_DEPENDENCY_MODE:-pinned}"
+if [[ "$release_gate_requested_dependency_mode" == pinned ]]; then
+  echo "[release-1.0] dependency mode pinned: sealed, clean, fetched, at-origin checkouts and the release lock"
+elif [[ "$release_gate_requested_dependency_mode" == local ]]; then
+  echo "[release-1.0] dependency mode local: the working checkouts as they are, not sealed"
+else
+  echo 'RELEASE_GATE_DEPENDENCY_MODE must be pinned or local' >&2
+  exit 1
+fi
+# Nested gates and their fixtures keep the pinned default.
+unset RELEASE_GATE_DEPENDENCY_MODE
+
 # Release qualification cannot hide an assertion or panic behind a retry.
 export WARP_TEST_ENV_FAIL_FAST=1
 
@@ -11,6 +29,9 @@ source "$sn_repo/scripts/test-storage.sh"
 sn_test_storage_init
 source "$sn_repo/scripts/release-gate-jobs.sh"
 release_gate_jobs_init
+# The jobs owner starts every gate pinned; only this entry selects local mode.
+release_gate_dependency_mode="$release_gate_requested_dependency_mode"
+export release_gate_dependency_mode
 
 # The ordinary entry stays strict. Diagnostics run every original preflight
 # under one joined owner while independent unchanged test phases can begin.
@@ -23,10 +44,10 @@ release_gate_source_integrity_preflight() {
 }
 release_gate_initial_preflights() {
   if [[ "$release_gate_diagnostic" == 1 ]]; then
-    release_gate_record_preflight repository-inventory release_gate_diagnostic_inventory || release_gate_preflight_refusal "$?"
+    release_gate_record_preflight repository-inventory release_gate_diagnostic_inventory "$release_gate_dependency_mode" || release_gate_preflight_refusal "$?"
   fi
   echo "[release-1.0] source-freeze preflight"
-  release_source_snapshot="$(release_gate_record_preflight source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")" || release_gate_preflight_refusal "$?"
+  release_source_snapshot="$(release_gate_record_preflight source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" --dependency-mode "$release_gate_dependency_mode" "$workspace")" || release_gate_preflight_refusal "$?"
   printf '%s\n' "$release_source_snapshot"
 
   echo "[release-1.0] simulator source-integrity preflight"
@@ -35,11 +56,17 @@ release_gate_initial_preflights() {
   echo "[release-1.0] generated binding toolchain preflight"
   release_gate_record_preflight binding-toolchain "$sn_repo/stabi/generate.sh" --preflight || release_gate_preflight_refusal "$?"
 
-  echo "[release-1.0] runtime 454 source attestation"
-  release_gate_record_preflight runtime-source "$sn_repo/scripts/check-runtime-v454-source.sh" || release_gate_preflight_refusal "$?"
+  # Both attestations read the published runtime source and the testnet
+  # archive node, not the working checkouts, so local mode skips them.
+  if [[ "$release_gate_dependency_mode" == local ]]; then
+    echo "[release-1.0] runtime source and metadata artifact attestations skipped (local mode)"
+  else
+    echo "[release-1.0] runtime 454 source attestation"
+    release_gate_record_preflight runtime-source "$sn_repo/scripts/check-runtime-v454-source.sh" || release_gate_preflight_refusal "$?"
 
-  echo "[release-1.0] exact runtime metadata artifact attestation"
-  release_gate_record_preflight runtime-metadata "$sn_repo/scripts/check-runtime-metadata-artifacts.sh" || release_gate_preflight_refusal "$?"
+    echo "[release-1.0] exact runtime metadata artifact attestation"
+    release_gate_record_preflight runtime-metadata "$sn_repo/scripts/check-runtime-metadata-artifacts.sh" || release_gate_preflight_refusal "$?"
+  fi
   release_gate_preflight_status
 }
 export -f release_gate_source_integrity_preflight release_gate_initial_preflights
@@ -112,10 +139,16 @@ release_phase_sn_go() {
 release_gate_start sn-go release_phase_sn_go
 
 # The E suite needs the server's database, so the aggregate skips it; sn-e2e
-# runs every TestSettlementV2E2E test on the gate's private services.
+# runs every TestSettlementV2E2E test on the gate's private services. Local
+# mode also skips the release-lock comparison, which only a sealed run passes.
+release_gate_aggregate_skip='^TestSettlementV2E2E'
+if [[ "$release_gate_dependency_mode" == local ]]; then
+  release_gate_aggregate_skip='^(TestSettlementV2E2E|TestReleaseLockMatchesCheckout$)'
+fi
+export release_gate_aggregate_skip
 release_phase_sn_all_normal() {
   cd "$sn_repo"
-  go test -parallel=4 -timeout 90m ./... -count=1 -skip '^TestSettlementV2E2E'
+  go test -parallel=4 -timeout 90m ./... -count=1 -skip "$release_gate_aggregate_skip"
 }
 release_phase_sn_core_race() {
   cd "$sn_repo"
@@ -608,7 +641,7 @@ if (( release_gate_active != 0 )); then
   exit 1
 fi
 release_gate_fence_status=0
-if [[ "$release_gate_diagnostic" == 1 ]]; then
+if [[ "$release_gate_diagnostic" == 1 && "$release_gate_dependency_mode" == pinned ]]; then
   if [[ -f "$release_gate_root/preflights/source-freeze/stdout" ]]; then
     release_source_snapshot="$(< "$release_gate_root/preflights/source-freeze/stdout")"
   else
@@ -619,28 +652,36 @@ fi
 
 echo "[release-1.0] patch hygiene"
 for repo in "${release_repos[@]}"; do
+  # Local mode never touches a vault checkout, not even its Git metadata.
+  if [[ "$release_gate_dependency_mode" == local && "$repo" == vault ]]; then
+    continue
+  fi
   git -C "$workspace/$repo" diff --check || release_gate_fence_status=1
   git -C "$workspace/$repo" diff --cached --check || release_gate_fence_status=1
 done
 
-echo "[release-1.0] final release-lock checkout"
-(
-  cd "$sn_repo"
-  # The full Go suite checks this near the start. Repeat it after every long
-  # gate so an independently updated sibling checkout cannot escape the run.
-  go test ./sim-testnet -run '^TestReleaseLockMatchesCheckout$' -count=1
-) || release_gate_fence_status=1
+if [[ "$release_gate_dependency_mode" == local ]]; then
+  echo "[release-1.0] final release-lock and source-freeze checkouts skipped (local mode)"
+else
+  echo "[release-1.0] final release-lock checkout"
+  (
+    cd "$sn_repo"
+    # The full Go suite checks this near the start. Repeat it after every long
+    # gate so an independently updated sibling checkout cannot escape the run.
+    go test ./sim-testnet -run '^TestReleaseLockMatchesCheckout$' -count=1
+  ) || release_gate_fence_status=1
 
-echo "[release-1.0] final source-freeze checkout"
-if ! final_release_source_snapshot="$(release_gate_record_preflight final-source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")"; then
-  release_gate_fence_status=1
+  echo "[release-1.0] final source-freeze checkout"
+  if ! final_release_source_snapshot="$(release_gate_record_preflight final-source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" "$workspace")"; then
+    release_gate_fence_status=1
+  fi
+  if [[ "$final_release_source_snapshot" != "$release_source_snapshot" ]]; then
+    echo "release source revisions changed while the gate was running" >&2
+    diff -u <(printf '%s\n' "$release_source_snapshot") <(printf '%s\n' "$final_release_source_snapshot") >&2 || true
+    release_gate_fence_status=1
+  fi
+  printf '%s\n' "$final_release_source_snapshot"
 fi
-if [[ "$final_release_source_snapshot" != "$release_source_snapshot" ]]; then
-  echo "release source revisions changed while the gate was running" >&2
-  diff -u <(printf '%s\n' "$release_source_snapshot") <(printf '%s\n' "$final_release_source_snapshot") >&2 || true
-  release_gate_fence_status=1
-fi
-printf '%s\n' "$final_release_source_snapshot"
 
 if [[ "$release_gate_diagnostic" == 1 ]]; then
   diagnostic_status=0
@@ -654,4 +695,8 @@ if (( release_gate_status != 0 || release_gate_fence_status != 0 )); then
   exit "$release_gate_fence_status"
 fi
 
-echo "[release-1.0] local release gate passed"
+if [[ "$release_gate_dependency_mode" == local ]]; then
+  echo "[release-1.0] local release gate passed (local mode: working checkouts, not sealed)"
+else
+  echo "[release-1.0] local release gate passed"
+fi

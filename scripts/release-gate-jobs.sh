@@ -60,6 +60,9 @@ release_gate_jobs_init() {
   local command cpu_slots memory_slots requested reservations
   case "${RELEASE_GATE_DIAGNOSTIC:-0}" in 0 | 1) ;; *) echo 'RELEASE_GATE_DIAGNOSTIC must be 0 or 1' >&2; return 1 ;; esac
   release_gate_diagnostic="${RELEASE_GATE_DIAGNOSTIC:-0}"
+  # Every gate, nested fixtures included, starts pinned. Only the aggregate
+  # entry selects its local dependency mode, after this initializer returns.
+  release_gate_dependency_mode=pinned
   for command in setsid python3 stat nproc mkfifo timeout; do command -v "$command" >/dev/null || return 1; done
   [[ -d /proc/self ]] || { echo 'release gate jobs require Linux process identities' >&2; return 1; }
   set +m
@@ -102,7 +105,7 @@ release_gate_jobs_init() {
   export RAYON_NUM_THREADS="$release_gate_job_cpus" CARGO_BUILD_JOBS="$release_gate_job_cpus"
   export FOUNDRY_OUT="$release_gate_root/full-out" FOUNDRY_CACHE_PATH="$release_gate_root/full-cache"
   export SLITHER_FOUNDRY_OUT="$release_gate_root/slither-out" SLITHER_FOUNDRY_CACHE_PATH="$release_gate_root/slither-cache"
-  export release_gate_root sn_repo workspace release_gate_diagnostic
+  export release_gate_root sn_repo workspace release_gate_diagnostic release_gate_dependency_mode
   export -f release_gate_record_preflight release_gate_preflight_refusal release_gate_preflight_status release_gate_diagnostic_inventory
   source "$workspace/server/local/release-gate-services.sh" || return 1
   if [[ "$release_gate_diagnostic" == 1 ]]; then
@@ -163,10 +166,14 @@ release_gate_preflight_status() {
 }
 
 # Missing checkout/resource directories remain explicit failures even when
-# the original strict source checker necessarily stops at the first one.
+# the original strict source checker necessarily stops at the first one. The
+# aggregate gate's local dependency mode passes local: it never reads a vault.
 release_gate_diagnostic_inventory() {
-  local repo result=0
+  local repo result=0 mode="${1:-pinned}"
   for repo in sn server connect sdk glog goidenticons proxy userwireguard warp gvisor vault xops config; do
+    if [[ "$mode" == local && "$repo" == vault ]]; then
+      continue
+    fi
     if [[ ! -d "$workspace/$repo" ]]; then
       printf 'incomplete diagnostic repository directory: %s\n' "$repo" >&2
       result=1

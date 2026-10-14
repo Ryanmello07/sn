@@ -32,8 +32,21 @@ const releaseGateServerScaleSelector = "^TestStV2Scale"
 // private services.
 const releaseGateAggregateE2ESkip = "^TestSettlementV2E2E"
 
-// The aggregate job: every package of sn in normal mode, without the E suite.
-const releaseGateAggregateNormalCommand = "go test -parallel=4 -timeout 90m ./... -count=1 -skip '" + releaseGateAggregateE2ESkip + "'"
+// Local dependency mode also skips the release-lock comparison, which only a
+// sealed run's checkouts can pass.
+const releaseGateAggregateLocalSkip = "^(TestSettlementV2E2E|TestReleaseLockMatchesCheckout$)"
+
+// The aggregate job: every package of sn in normal mode, without the E suite
+// and, in local mode, without the release-lock comparison.
+const releaseGateAggregateNormalCommand = `go test -parallel=4 -timeout 90m ./... -count=1 -skip "$release_gate_aggregate_skip"`
+
+// Each mode's skip, assigned once before the job's definition.
+const releaseGateAggregateSkipAssignment = "release_gate_aggregate_skip='" + releaseGateAggregateE2ESkip + "'\n" +
+	"if [[ \"$release_gate_dependency_mode\" == local ]]; then\n" +
+	"  release_gate_aggregate_skip='" + releaseGateAggregateLocalSkip + "'\n" +
+	"fi\n" +
+	"export release_gate_aggregate_skip\n" +
+	"release_phase_sn_all_normal() {\n"
 
 // The database half of the scale shard and the end-to-end suite have the same
 // service-ready test as the database suites, with the unavailable owner as
@@ -705,10 +718,9 @@ func TestReleaseGateSettlementV2SnSuitesRejectDrift(t *testing.T) {
 
 // releaseGateAggregateSkipCensus maps each package under root, as ./dir, to
 // the sources of its test files that the default build compiles and that
-// name the aggregate job's skipped prefix. Like go, it skips testdata, hidden
-// and underscore directories and nested modules.
+// name a test either mode of the aggregate job skips. Like go, it skips
+// testdata, hidden and underscore directories and nested modules.
 func releaseGateAggregateSkipCensus(root string) (map[string][]string, error) {
-	literal := strings.TrimPrefix(releaseGateAggregateE2ESkip, "^")
 	census := map[string][]string{}
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -731,7 +743,7 @@ func releaseGateAggregateSkipCensus(root string) (map[string][]string, error) {
 			return err
 		}
 		source, err := os.ReadFile(path)
-		if err != nil || !strings.Contains(string(source), literal) {
+		if err != nil || !strings.Contains(string(source), "TestSettlementV2E2E") && !strings.Contains(string(source), "TestReleaseLockMatchesCheckout") {
 			return err
 		}
 		relative, err := filepath.Rel(root, filepath.Dir(path))
@@ -747,7 +759,8 @@ func releaseGateAggregateSkipCensus(root string) (map[string][]string, error) {
 
 // The aggregate job skips exactly the E suite: its whole body is the full
 // normal run with that one skip, and every test of sn that the skip names is
-// in ./mainnet and selected by sn-e2e.
+// in ./mainnet and selected by sn-e2e. Local mode's skip adds exactly the
+// release-lock comparison of ./sim-testnet.
 func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string) error {
 	commands, _, err := releaseGatePhaseCommands(script, "sn_all_normal")
 	if err != nil {
@@ -755,6 +768,9 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 	}
 	if !slices.Equal(commands, []string{`cd "$sn_repo"`, releaseGateAggregateNormalCommand}) {
 		return fmt.Errorf("release_phase_sn_all_normal runs %q, want the full run without the E suite", commands)
+	}
+	if strings.Count(script, releaseGateAggregateSkipAssignment) != 1 || strings.Count(script, "release_gate_aggregate_skip=") != 2 {
+		return errors.New("the aggregate job's skip is not each mode's exact reviewed assignment")
 	}
 	selector, err := releaseConnectPolicySelectorAssignment(script, "settlement_v2_e2e_tests")
 	if err != nil {
@@ -764,8 +780,8 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 	if err != nil {
 		return err
 	}
-	skip := regexp.MustCompile(releaseGateAggregateE2ESkip)
-	skipped := 0
+	skip, localSkip := regexp.MustCompile(releaseGateAggregateE2ESkip), regexp.MustCompile(releaseGateAggregateLocalSkip)
+	skipped, localOnly := 0, 0
 	for _, packagePath := range slices.Sorted(maps.Keys(census)) {
 		for _, source := range census[packagePath] {
 			names, err := releaseSourceTestDeclarations(source)
@@ -773,6 +789,12 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 				return err
 			}
 			for _, name := range names {
+				if skip.MatchString(name) != localSkip.MatchString(name) {
+					if skip.MatchString(name) || packagePath != "./sim-testnet" || name != "TestReleaseLockMatchesCheckout" {
+						return fmt.Errorf("the aggregate job's local mode also skips %s of %s", name, packagePath)
+					}
+					localOnly++
+				}
 				if !skip.MatchString(name) {
 					continue
 				}
@@ -785,6 +807,9 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 	}
 	if skipped == 0 {
 		return errors.New("the aggregate job's skip names no test of the E suite")
+	}
+	if localOnly != 1 {
+		return errors.New("the aggregate job's local mode does not skip exactly the release-lock comparison")
 	}
 	return nil
 }
@@ -815,10 +840,14 @@ func TestReleaseGateSettlementV2AggregateSkipRejectsDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	const assignment = "settlement_v2_e2e_tests='^Test(SettlementV2E2E)'"
+	const pinnedSkip, localSkip = "release_gate_aggregate_skip='" + releaseGateAggregateE2ESkip + "'", "release_gate_aggregate_skip='" + releaseGateAggregateLocalSkip + "'"
 	for _, change := range []struct{ old, new string }{
 		{releaseGateAggregateNormalCommand, "go test -parallel=4 -timeout 90m ./... -count=1"},
-		{releaseGateAggregateNormalCommand, strings.Replace(releaseGateAggregateNormalCommand, releaseGateAggregateE2ESkip, "^TestSettlementV2", 1)},
+		{pinnedSkip, "release_gate_aggregate_skip='^TestSettlementV2'"},
 		{releaseGateAggregateNormalCommand, releaseGateAggregateNormalCommand + " -skip '^TestValidator'"},
+		{localSkip, pinnedSkip},
+		{localSkip, "release_gate_aggregate_skip='^(TestSettlementV2E2E|TestReleaseLockMatchesCheckout$|TestValidator)'"},
+		{`[[ "$release_gate_dependency_mode" == local ]]; then` + "\n  release_gate_aggregate_skip=", `[[ "$release_gate_dependency_mode" == pinned ]]; then` + "\n  release_gate_aggregate_skip="},
 		{assignment, "settlement_v2_e2e_tests='^Test(SettlementV2E2EDaemon)'"},
 	} {
 		if strings.Count(script, change.old) != 1 {

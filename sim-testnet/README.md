@@ -836,6 +836,28 @@ any failed attestation. Complete producer coverage, including valid reused
 phases and affected replacements, precedes a live campaign write. Record its
 composed acceptance separately from each full command's actual result.
 
+The aggregate gate also takes `RELEASE_GATE_DEPENDENCY_MODE`, as the release
+builder takes `dependency_mode`. `pinned`, the default when it is unset or
+empty, is the sealed run above. `local` tests the working checkouts as they
+are:
+
+```bash
+RUN_SERVER_DB_TESTS=1 RELEASE_GATE_DEPENDENCY_MODE=local scripts/test-release-1.0-local.sh
+```
+
+It skips exactly the source freeze's provenance checks (clean, origin,
+upstream, fetch and at-origin at the start, and the final snapshot with its
+comparison), `TestReleaseLockMatchesCheckout` in `sn-all-normal` and as the
+final fence, and the runtime 454 source and runtime-metadata attestations,
+which read GitHub and the testnet archive node rather than the checkouts. It
+keeps the module inventory and tidy checks, the sourceguard and binding-toolchain
+preflights, patch hygiene, every test job and diagnostic mode. It never reads a
+vault checkout and needs no release-lock refresh. Any other value is refused
+before anything runs. The run prints its mode first, and a local pass ends with
+`[release-1.0] local release gate passed (local mode: working checkouts, not
+sealed)`: it qualifies those checkouts, not a sealed release. The producer gate
+has no local mode.
+
 The producer's ordinary capture, private fixtures, reopened prior replay,
 complete publication population and metadata census use independent admitted
 jobs. Exact source guards require every selected root to have one execution
