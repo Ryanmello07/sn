@@ -5,6 +5,7 @@ package validator
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -467,6 +468,134 @@ func TestReleaseStartupVerifiedRecordIsOwnedAndStaleTemporariesGo(t *testing.T) 
 	for _, kept := range []string{temporary + "directory", temporary + "link", target, unrelated, path} {
 		if _, err := os.Lstat(kept); err != nil {
 			t.Fatalf("start removed %s: %v", kept, err)
+		}
+	}
+}
+
+// The two-edge native gap bridge the production validator runs with, byte for
+// byte, and the pin its deploy settings carry.
+const (
+	nativeGapBridgeLiveEdges = "{\n" +
+		"  \"schema\": \"urnetwork-validator-native-gap-bridge-v2\",\n" +
+		"  \"chain_id\": 964,\n" +
+		"  \"deployment_id\": \"sn25-mainnet-20261007-01\",\n" +
+		"  \"validator_id\": 1,\n" +
+		"  \"edges\": [\n" +
+		"    {\n" +
+		"      \"last_native_epoch\": 25648,\n" +
+		"      \"last_artifact_hash\": \"sha256:510390579f2734da814406138580ad4d941885b5821d0ed3ad8899b132dd0a6d\",\n" +
+		"      \"first_native_epoch\": 25682\n" +
+		"    },\n" +
+		"    {\n" +
+		"      \"last_native_epoch\": 25714,\n" +
+		"      \"last_artifact_hash\": \"sha256:08081f80d43f4b1b493a0b260dfcc4cf5c24fcb9d3b4de1b0d639dc56acca447\",\n" +
+		"      \"first_native_epoch\": 25721\n" +
+		"    }\n" +
+		"  ]\n" +
+		"}\n"
+	nativeGapBridgeLiveEdgesPin = "sha256:d4d4934c6b0d771f5c67434de0115ff1fae666a84515f8e010865786c644c043"
+)
+
+// A record the production build's writer (3a428640) signed under
+// releaseStartupVerifiedProductionTestAuthority with production's two bridge
+// edges, after its live service admitted server-key version 2 of no_id 1:
+// seven units and a five-entry intent prefix.
+const releaseStartupVerifiedProductionRecord = `{"schema":"urnetwork-validator-startup-verified-v1","verifier":1,"chain_id":964,"deployment_id":"sn25-mainnet-20261007-01","validator_id":1,` +
+	`"hotkey":"0x34c67402debfa14a039a116bf830a7e54faa2fe28162719b1eed7d3f8eb5ae61","config_hash":"0xb61e8566faa1cd236f356cdf095d72dd4f64825bc102492bfdee1cf168ab3451",` +
+	`"bridge_edges":[{"last_native_epoch":25648,"last_artifact_hash":"sha256:510390579f2734da814406138580ad4d941885b5821d0ed3ad8899b132dd0a6d","first_native_epoch":25682},` +
+	`{"last_native_epoch":25714,"last_artifact_hash":"sha256:08081f80d43f4b1b493a0b260dfcc4cf5c24fcb9d3b4de1b0d639dc56acca447","first_native_epoch":25721}],` +
+	`"server_keys":[{"no_id":1,"version":1,"key":"ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"},` +
+	`{"no_id":1,"version":2,"key":"ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"},` +
+	`{"no_id":2,"version":1,"key":"6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1"}],` +
+	`"intents":["0x94108813714299f58e1fa2df1fd1f9aff1f26e000cfd3db8410b8487660d894f","0xb9885ceb70b2a3f79948fb4f431a16d27312e0e735198495b881c1b0568ec11d",` +
+	`"0x6c9d84fbea2e3ac8ecbdced1219e02383858dc69e4045d8c62ae8134b62ee476","0xbe13eb120eafa46327f08d4655d1b069bec6f918b84b5cc6096e849cf929e1bb",` +
+	`"0x4e12430ec3a077a40a96e2cd3cc935175acfe5275f6740ddefbd37e352a59d40"],` +
+	`"units":["0x6778b4130254c50a88ceaa228589669f1945cf0cafc4ad20f13bf9b399695e2d","0x7f722a754dc206dbb28190d65383cb6c5812153b4e3df4bce0441b1d3648b8bf",` +
+	`"0x9104f98d750421bbe94af454514caa554ac4605ac2254665cfa6a133c2521278","0xa100000000000000000000000000000000000000000000000000000000000000",` +
+	`"0xa200000000000000000000000000000000000000000000000000000000000000","0xb4f4eac0044cd8f775f977afedbcf168e06347148e9e0dd13256e6a5cca39a4c",` +
+	`"0xfc48a068d0191551e34aada25beaf29f06b54ab851f45eebfa9ce03a7f43031f"],` +
+	`"signature":"0x0a66209a6012047e76ef1f09db3a06807dfe6c89e532ef45db603b2e52dc15448826598b394d8c160246f751b43fb0752ffb4dc76f5b97716db792f327eb628e"}` + "\n"
+
+// Production's chain, deployment, validator and the given bridge, with a test
+// hotkey, a stand-in configuration hash and test server keys; runtimeKey adds
+// the version the record's live service admitted.
+func releaseStartupVerifiedProductionTestAuthority(t *testing.T, bridge []ReleaseNativeGapBridgeEdge, runtimeKey bool) (*crv4.Keypair, releaseStartupVerifiedAuthority) {
+	t.Helper()
+	hotkey, err := crv4.KeypairFromSeed([32]byte{7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := func(seed byte) ed25519.PublicKey {
+		return ed25519.NewKeyFromSeed(bytes.Repeat([]byte{seed}, 32)).Public().(ed25519.PublicKey)
+	}
+	keys := map[uint64]map[byte]ed25519.PublicKey{1: {1: key(3)}, 2: {1: key(5)}}
+	if runtimeKey {
+		keys[1][2] = key(4)
+	}
+	serverKeys, err := releaseStartupVerifiedServerKeysOf(keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configHash := sha256.Sum256([]byte("sn25 production config stand-in"))
+	return hotkey, releaseStartupVerifiedAuthority{chainID: 964, deploymentID: "sn25-mainnet-20261007-01", validatorID: 1, hotkey: hotkey.PublicKey(),
+		configHash: configHash, lineage: map[[32]byte]bool{configHash: true}, bridge: bridge, serverKeys: serverKeys}
+}
+
+// The first start of this build resumes the record the production build wrote
+// under the same chain, deployment, validator, hotkey, configuration, bridge
+// and server keys, with every unit and intent it names. A later bridge may
+// only append edges after the record's.
+func TestReleaseStartupVerifiedRecordAcceptsTheProductionRecord(t *testing.T) {
+	t.Parallel()
+	bridge, err := DecodeReleaseNativeGapBridge([]byte(nativeGapBridgeLiveEdges), nativeGapBridgeLiveEdgesPin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edges := bridge.Edges()
+	live, err := DecodeReleaseNativeGapBridge([]byte(nativeGapBridgeLiveV1), nativeGapBridgeLiveV1Pin)
+	second := ReleaseNativeGapBridgeEdge{LastNativeEpoch: 25714, LastArtifactHash: "sha256:08081f80d43f4b1b493a0b260dfcc4cf5c24fcb9d3b4de1b0d639dc56acca447", FirstNativeEpoch: 25721}
+	if err != nil || len(edges) != 2 || !slices.Equal(live.Edges(), edges[:1]) || edges[1] != second {
+		t.Fatalf("production bridge edges differ: %v %v", err, edges)
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, releaseStartupVerifiedFileName)
+	if err := os.WriteFile(path, []byte(releaseStartupVerifiedProductionRecord), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := readReleaseStartupVerifiedFile(path)
+	if err != nil {
+		t.Fatalf("this build cannot read the production record: %v", err)
+	}
+	if file.Verifier != releaseStartupVerifiedVerifier || !slices.Equal(file.BridgeEdges, edges) {
+		t.Fatalf("the production record names verifier %d and edges %v", file.Verifier, file.BridgeEdges)
+	}
+	intents, err := decodeReleaseStartupVerifiedDigests(file.Intents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := func(bridge []ReleaseNativeGapBridgeEdge, runtimeKey bool) (*releaseStartupVerified, string) {
+		t.Helper()
+		hotkey, authority := releaseStartupVerifiedProductionTestAuthority(t, bridge, runtimeKey)
+		owner := newReleaseStartupVerified()
+		var stderr bytes.Buffer
+		owner.enableRecord(dir, hotkey, authority, &stderr)
+		return owner, stderr.String()
+	}
+	appended := append(slices.Clone(edges), ReleaseNativeGapBridgeEdge{LastNativeEpoch: 25800, LastArtifactHash: "sha256:" + strings.Repeat("b", 64), FirstNativeEpoch: 25803})
+	for _, current := range [][]ReleaseNativeGapBridgeEdge{edges, appended} {
+		owner, notice := start(current, true)
+		if !strings.Contains(notice, "record accepted: 7 units and 5 intents") || !owner.has([32]byte{0xa1}) || !owner.has([32]byte{0xa2}) || owner.intentPrefix(intents) != len(intents) {
+			t.Fatalf("the production record was not resumed under %d bridge edges: %q", len(current), notice)
+		}
+	}
+	// A bridge without the record's second edge, or a census without the
+	// version its live service admitted, verifies everything.
+	for _, refused := range []struct {
+		bridge     []ReleaseNativeGapBridgeEdge
+		runtimeKey bool
+	}{{edges[:1], true}, {edges, false}} {
+		if owner, notice := start(refused.bridge, refused.runtimeKey); !strings.Contains(notice, "record ignored") || owner.has([32]byte{0xa1}) {
+			t.Fatalf("the production record was accepted under a narrower authority: %q", notice)
 		}
 	}
 }
