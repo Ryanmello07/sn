@@ -438,6 +438,48 @@ func TestProviderRequestLegacyCheckpointIsAcceptedAndMigrated(t *testing.T) {
 	}
 }
 
+// v1 spells out the preparation that v2 binds by digest. The exported decoder
+// refuses a v1 checkpoint under another identity, limits or birth, or one
+// whose signed close names another preparation, as it refuses a v2 digest.
+func TestProviderRequestLegacyCheckpointRefusesAnotherPreparation(t *testing.T) {
+	engine, journal, preparation, _ := providerRequestTestOwner(t, 32)
+	if _, err := providerRequestTestAppend(t, journal, engine.vsk, preparation, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := journal.SealWindow(t.Context(), providerRequestTestWindow(preparation), 1024*1024); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := *journal.checkpoint
+	legacy, err := json.Marshal(checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded, err := DecodeProviderAttemptRequestCheckpoint(legacy, preparation); err != nil || !reflect.DeepEqual(decoded, checkpoint) {
+		t.Fatal("v1 checkpoint of its own preparation was refused", err)
+	}
+	for name, change := range map[string]func(*ProviderAttemptRequestPreparation){
+		"identity": func(value *ProviderAttemptRequestPreparation) { value.Identity.ClientId = connect.Id{99} },
+		"limits":   func(value *ProviderAttemptRequestPreparation) { value.Limits.MaxRecords++ },
+		"birth":    func(value *ProviderAttemptRequestPreparation) { value.Birth.EVMBlock-- },
+	} {
+		other := preparation
+		change(&other)
+		if value, err := DecodeProviderAttemptRequestCheckpoint(legacy, other); !errors.Is(err, durablevolume.ErrIdentity) || value.Schema != "" {
+			t.Fatal("v1 checkpoint decoded under another preparation", name, err)
+		}
+	}
+	closed := copyClosedProviderRequestTestHead(*checkpoint.Closed)
+	closed.Preparation.Birth.EVMBlock--
+	checkpoint.Closed = &closed
+	foreign, err := json.Marshal(checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, err := DecodeProviderAttemptRequestCheckpoint(foreign, preparation); !errors.Is(err, durablevolume.ErrIdentity) || value.Schema != "" {
+		t.Fatal("v1 checkpoint decoded with a close of another preparation", err)
+	}
+}
+
 // Offline inspection accepts a v1 anchor that holds exactly the verified
 // checkpoint and returns it unchanged, as it returns a v2 anchor.
 func TestAttemptLedgerRequestPreparationKeepsEquivalentLegacyAnchor(t *testing.T) {
