@@ -223,6 +223,9 @@ func TestFleetMainnetPublishCommandSignsAndVerifiesApprovedReceipt(t *testing.T)
 }
 
 // Inclusion under new code cannot inherit the signing runtime's approval.
+// The execution runtime is admitted before any event decoding (e265cfd8),
+// so the upgraded inclusion is refused before a single storage read: neither
+// its events nor the commitment are decoded under the unapproved runtime.
 func TestFleetMainnetPublishCommandRejectsIncludedUpgradeWithoutResend(t *testing.T) {
 	fixture := newFleetMainnetTestFixture(t)
 	fixture.opts["--substrate"] = []string{fixture.nativeWebsocket(t, false)}
@@ -236,7 +239,7 @@ func TestFleetMainnetPublishCommandRejectsIncludedUpgradeWithoutResend(t *testin
 	if err := fleetPublish(fixture.durable.Context, fixture.opts, fixture.manifest); err == nil || !strings.Contains(err.Error(), "unreviewed identity") {
 		t.Fatalf("receipt upgrade: %v", err)
 	}
-	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("state_getStorage") != 1 {
+	if fixture.count("author_submitAndWatchExtrinsic") != 1 || fixture.count("state_getStorage") != 0 {
 		t.Fatal("receipt upgrade retried or decoded commitment under unapproved runtime")
 	}
 }

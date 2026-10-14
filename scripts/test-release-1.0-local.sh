@@ -154,9 +154,13 @@ release_phase_sn_all_normal() {
   cd "$sn_repo"
   go test -parallel=4 -timeout 90m ./... -count=1 -skip "$release_gate_aggregate_skip"
 }
+# Measured with one job's four CPUs at load 33-85, the serial miner package
+# alone ran 41 minutes under race before settlement v2 and 55 on main, mostly
+# in real fsyncs of its durable claim and fleet custody; crv4 ran 8 of the
+# inherited ten minutes. Allow about twice the slowest measurement.
 release_phase_sn_core_race() {
   cd "$sn_repo"
-  go test -race ./crv4 ./miner/... ./protocol -count=1
+  go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1
 }
 # Measured serial validator work exceeded the inherited ten-minute package
 # allowance. Keep focused deadlines unchanged and
