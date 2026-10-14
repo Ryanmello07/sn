@@ -3,6 +3,8 @@
 package validator
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -255,5 +257,57 @@ func TestIntentV2VerifiedHistorySkipsRepeatedReplay(t *testing.T) {
 	}
 	if len(admission.calls) != calls || fixture.artifactReads.Load() != requests {
 		t.Fatal("the changed retained measurement was not refused by the local reuse path")
+	}
+}
+
+// A reused entry's artifact is decoded only when its fields are needed. The
+// undecoded read still pins the exact retained bytes through custody and
+// still checks the source commitment and hotkey.
+func TestIntentV2VerifiedMeasurementDecodesOnlyOnRequest(t *testing.T) {
+	fixture := newProductionContinuationTestFixture(t)
+	store := fixture.steerer.intents
+	intent, err := store.beginV2(t.Context(), *fixture.intent)
+	if err != nil {
+		t.Fatalf("actual nonempty V2 begin: %v", err)
+	}
+	read := func(decode bool) (*ReleaseMeasurementArtifact, []byte, error) {
+		t.Helper()
+		custody := &releaseEvidenceV2StartupReferences{remaining: fixture.runtime.cfg.EvidenceV2.Bounds.MaxHistoryBytes}
+		artifact, measurement, err := store.readVerifiedMeasurementV2(t.Context(), custody, intent, decode)
+		return artifact, measurement, errors.Join(err, custody.close())
+	}
+	decoded, decodedBytes, err := read(true)
+	if err != nil || decoded == nil || decoded.SubnetEpoch != intent.SubnetEpoch {
+		t.Fatalf("decoded verified read: %v", err)
+	}
+	undecoded, undecodedBytes, err := read(false)
+	if err != nil || undecoded != nil || !bytes.Equal(undecodedBytes, decodedBytes) {
+		t.Fatalf("undecoded verified read: artifact %v, same bytes %t, %v", undecoded != nil, bytes.Equal(undecodedBytes, decodedBytes), err)
+	}
+	// A hotkey other than the prepared one is still refused without decoding.
+	changed := *intent
+	prepared := *intent.Prepared
+	prepared.HotkeyHex = releaseHex32([32]byte{1})
+	changed.Prepared = &prepared
+	custody := &releaseEvidenceV2StartupReferences{remaining: fixture.runtime.cfg.EvidenceV2.Bounds.MaxHistoryBytes}
+	_, _, err = store.readVerifiedMeasurementV2(t.Context(), custody, &changed, false)
+	if err = errors.Join(err, custody.close()); err == nil {
+		t.Fatal("undecoded verified read accepted a different prepared hotkey")
+	}
+	// Changed retained bytes no longer match the content address.
+	path := intent.MeasurementArtifactPath
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(fixture.runtime.cfg.StateDir, path)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw[len(raw)-2] ^= 1
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := read(false); err == nil {
+		t.Fatal("undecoded verified read accepted a changed retained measurement")
 	}
 }

@@ -282,20 +282,26 @@ func TestV2StatusAndClaimRefuseFlags(t *testing.T) {
 // CL-1: a claim verifies the endpoint's proof against vault2's root, then
 // sends one claim(noId, rootIndex, account, proof) to vault2 at the
 // relayer's pending nonce and the suggested fee, and reports the Claimed
-// event once final. An explicit gas limit replaces the estimate's 20%
-// headroom, and an unavailable estimate.
+// event once final. Its gas limit is the estimate with 20% headroom and never
+// below ClaimBatchGasPerClaim: runtime 478's estimate follows vault2's own
+// staking-hotkey list, which third parties can lengthen before the claim is
+// included, while an estimate of runtime 475's size keeps its headroom. An
+// explicit gas limit replaces both, and an unavailable estimate.
 func TestV2ClaimSendsOneFinalizedTransaction(t *testing.T) {
 	for _, c := range []struct {
 		flags    []string
-		estimate bool
+		estimate uint64 // eth_estimateGas's answer; 0 refuses it
 		gas      uint64
 	}{
-		{nil, true, 60_000},
-		{[]string{"--coldkey=0x" + aliceHex, "--no_id=3", "--index=1", "--chain_id=945", "--gas_limit=90000"}, true, 90_000},
-		{[]string{"--gas_limit=90000"}, false, 90_000},
+		{nil, 50_000, ClaimBatchGasPerClaim},
+		{nil, 206_967, ClaimBatchGasPerClaim},
+		{nil, 2_572_776, 2_572_776 + 2_572_776/5},
+		{[]string{"--coldkey=0x" + aliceHex, "--no_id=3", "--index=1", "--chain_id=945", "--gas_limit=90000"}, 50_000, 90_000},
+		{[]string{"--gas_limit=90000"}, 0, 90_000},
 	} {
 		s := newV2ClaimScenario(t)
-		if !c.estimate {
+		s.c.claimEstimate = c.estimate
+		if c.estimate == 0 {
 			s.c.failAt["eth_estimateGas:claim"] = 1
 		}
 		output, err := s.c.run(s.c.claimArgv(c.flags...))
@@ -316,7 +322,7 @@ func TestV2ClaimSendsOneFinalizedTransaction(t *testing.T) {
 				"  account:     pool 3, account 1, root 1\n  coldkey:     " + aliceSS58 + " (0x" + aliceHex + ")\n" +
 				"  cumulative:  5.000000007 α (5000000007 rao)\n  claimed:     1.000000000 α (1000000000 rao)\n  claimable:   4.000000007 α (4000000007 rao)\n" +
 				"  proof:       2 siblings, verified against root ",
-			map[bool]string{true: "\n  gas (est):   50000\n", false: "\n  gas (est):   unavailable (synthetic refusal of eth_estimateGas:claim); using --gas_limit=90000\n"}[c.estimate],
+			map[bool]string{true: fmt.Sprintf("\n  gas (est):   %d\n", c.estimate), false: "\n  gas (est):   unavailable (synthetic refusal of eth_estimateGas:claim); using --gas_limit=90000\n"}[c.estimate != 0],
 			"\nClaimed: pool 3, account 1, root 1\n  coldkey:     " + aliceSS58 + " (0x" + aliceHex + ")\n  cumulative:  5.000000007 α (5000000007 rao)\n  paid:        4.000000007 α (4000000007 rao)\n  caller:      " + testKeyAddr + "\n",
 		} {
 			if !strings.Contains(output, want) {
@@ -355,7 +361,7 @@ func TestV2ClaimPicksOneAccount(t *testing.T) {
 		if _, err := s.c.run(s.c.claimArgv(flags...)); err != nil || len(s.c.transactions()) != 1 {
 			t.Fatalf("%q did not pick pool 3: %v", flags, err)
 		}
-		requireV2Tx(t, s.c.transactions()[0], 7, 60_000, 0, s.calldata(t))
+		requireV2Tx(t, s.c.transactions()[0], 7, ClaimBatchGasPerClaim, 0, s.calldata(t))
 	}
 	for _, flags := range [][]string{{"--no_id=5"}, {"--no_id=3", "--index=0"}, {"--no_id=6"}} {
 		s := newV2ClaimScenario(t)

@@ -118,19 +118,7 @@ func TestR7ClaimBatch(t *testing.T) {
 	// least returns the least gas limit, to the gas, at which a transaction
 	// of data from the relayer to `to` satisfies ok in an eth_call.
 	least := func(to common.Address, data []byte, high uint64, ok func([]byte, error) bool) uint64 {
-		low := uint64(21_000)
-		if !ok(n.eth.CallContract(n.ctx, ethereum.CallMsg{From: relayer.address, To: &to, Data: data, Gas: high}, nil)) {
-			t.Fatalf("the call fails with %d gas", high)
-		}
-		for high-low > 1 {
-			middle := (low + high) / 2
-			if ok(n.eth.CallContract(n.ctx, ethereum.CallMsg{From: relayer.address, To: &to, Data: data, Gas: middle}, nil)) {
-				high = middle
-			} else {
-				low = middle
-			}
-		}
-		return high
+		return n.least(t, ethereum.CallMsg{From: relayer.address, To: &to, Data: data}, high, ok)
 	}
 	attempted := func(out []byte, err error) uint64 {
 		if err != nil {

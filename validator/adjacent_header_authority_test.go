@@ -237,6 +237,10 @@ func TestAdjacentHeaderUploadRejectsIncompleteCommitment(t *testing.T) {
 // The legacy durable application path re-reads the header after runtime
 // admission. A second Rpc answer cannot rewrite its original applied receipt.
 func TestAdjacentHeaderApplicationPreservesOriginalJournal(t *testing.T) {
+	// Runtime admission reads three headers: the selected finalized read block
+	// and the runtime proof's two finality witnesses. The fourth header read
+	// is the applied-weight header that the faults below replace.
+	const appliedWeightHeader = 4
 	for _, fault := range []string{"none", "number", "root", "closing"} {
 		fixture := newProductionRuntimeTestFixture(t, false)
 		store, err := NewIntentStore(t.TempDir())
@@ -276,7 +280,7 @@ func TestAdjacentHeaderApplicationPreservesOriginalJournal(t *testing.T) {
 		client.callContext = func(ctx context.Context, result any, method string, args ...any) error {
 			if method == "chain_getHeader" {
 				headers++
-				if headers == 2 && (fault == "number" || fault == "root") {
+				if headers == appliedWeightHeader && (fault == "number" || fault == "root") {
 					header := mainnetRuntimeTestHeader(150)
 					if fault == "number" {
 						header.Number = 151
@@ -306,8 +310,8 @@ func TestAdjacentHeaderApplicationPreservesOriginalJournal(t *testing.T) {
 			t.Fatal(readErr)
 		}
 		if fault == "none" {
-			if err != nil || current.Status != "applied" || current.ApplicationBlock != 150 || headers != 2 || weightReads != 1 {
-				t.Fatalf("actual approved row did not apply: %+v %v", current, err)
+			if err != nil || current.Status != "applied" || current.ApplicationBlock != 150 || headers != appliedWeightHeader || weightReads != 1 {
+				t.Fatalf("actual approved row did not apply: status=%s block=%d headers=%d weightReads=%d error=%v", current.Status, current.ApplicationBlock, headers, weightReads, err)
 			}
 		} else if err == nil || current.Status != "finalized" || !bytes.Equal(before, after) {
 			t.Fatalf("%s application changed original finalized journal: status=%s error=%v", fault, current.Status, err)

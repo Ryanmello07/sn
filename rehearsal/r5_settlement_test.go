@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/urfoundation/sn/merkle"
@@ -25,8 +26,9 @@ const deepLeafCount = 1 << 29
 // the shortest cadence it accepts, on ledgers of 2^29 accounts: close,
 // commit, approval from an auditor address, finalize and claims; then a
 // second root with a demand, paid with demandFeeWei, and its answer. It
-// records the gas each transaction used and the gas limit it needed, against
-// the operator gas policy's maximum_gas (VERSION2-FINAL.md §15.8).
+// sends each measured transaction with the least gas limit that succeeds and
+// records that limit, the gas used and the limit eth_estimateGas gives,
+// against the operator gas policy's maximum_gas (VERSION2-FINAL.md §15.8).
 func TestR5Settlement(t *testing.T) {
 	t.Parallel()
 	n := startNode(t)
@@ -39,16 +41,18 @@ func TestR5Settlement(t *testing.T) {
 	maximumGas := operatorMaximumGas(t)
 
 	type measure struct {
-		used, limit uint64
-		operator    bool
+		used, least, estimate uint64
+		operator              bool
 	}
 	gas := map[string]measure{}
-	record := func(t *testing.T, label string, operator bool, receipt *gethtypes.Receipt) {
-		tx, _, err := n.eth.TransactionByHash(n.ctx, receipt.TxHash)
-		if err != nil {
-			t.Fatal(err)
-		}
-		gas[label] = measure{used: receipt.GasUsed, limit: tx.Gas(), operator: operator}
+	measured := func(t *testing.T, label string, operator bool, from evmKey, to common.Address, contract artifact, value *big.Int, method string, args ...any) *gethtypes.Receipt {
+		receipt, estimate, least := n.sendLeast(t, from, to, contract, value, method, args...)
+		gas[label] = measure{used: receipt.GasUsed, least: least, estimate: estimate, operator: operator}
+		return receipt
+	}
+	closed := func(t *testing.T, label string, epoch uint64) {
+		s.inWindow(t, epoch)
+		measured(t, label, true, s.owner, s.settlement, s.settlementArtifact, nil, "closeOperatorEpoch", id(epoch), id(1))
 	}
 	claim := func(t *testing.T, l *ledger, rootIndex, index uint64, label string) {
 		a := l.account(index)
@@ -56,7 +60,7 @@ func TestR5Settlement(t *testing.T) {
 		paid := s.vaultUint(t, "claimed", id(1), id(index))
 		amount := new(big.Int).Sub(a.Cumulative, paid).Uint64()
 		escrow := n.stake(t, s.escrow, s.vaultColdkey, s.netuid)
-		receipt := n.send(t, relayer, s.vault, s.vaultArtifact, nil, "claim", id(1), id(rootIndex), a, l.proof(index))
+		receipt := measured(t, label, false, relayer, s.vault, s.vaultArtifact, nil, "claim", id(1), id(rootIndex), a, l.proof(index))
 		gained := n.stake(t, s.escrow, a.Coldkey, s.netuid) - before
 		if escrow-n.stake(t, s.escrow, s.vaultColdkey, s.netuid) != amount || gained != amount && gained != amount-1 {
 			t.Fatalf("claim of %d rao: escrow -%d, account +%d", amount, escrow-n.stake(t, s.escrow, s.vaultColdkey, s.netuid), gained)
@@ -69,23 +73,19 @@ func TestR5Settlement(t *testing.T) {
 			t.Fatalf("a repeated claim refused with %s", got)
 		}
 		s.requireConservation(t)
-		if label != "" {
-			record(t, label, false, receipt)
-		}
 	}
 
 	// Epoch 1: the pool's stake is captured and committed as the first root.
 	coldkeys := [][32]byte{newAccount(t), newAccount(t), newAccount(t), newAccount(t)}
 	n.stakeFor(t, alice, s.vaultColdkey, operator.pool, s.netuid, 200*tao)
-	record(t, "close (capture)", true, s.close(t, 1, 1))
+	closed(t, "close (capture)", 1)
 	funded := s.vaultUint(t, "fundedThrough", id(1), id(1)).Uint64()
 	first := newLedger(t, split(coldkeys, funded), deepLeafCount)
 	commit1 := first.commitment("ledger header epoch 1")
 	if got := n.refused(t, relayer, s.settlement, s.settlementArtifact, nil, "commitDistribution", id(1), id(1), id(0), commit1); got != "Unauthorized" {
 		t.Fatalf("a commit from another account refused with %s", got)
 	}
-	receipt := n.send(t, operator.rootSigner, s.settlement, s.settlementArtifact, nil, "commitDistribution", id(1), id(1), id(0), commit1)
-	record(t, "commit", true, receipt)
+	receipt := measured(t, "commit", true, operator.rootSigner, s.settlement, s.settlementArtifact, nil, "commitDistribution", id(1), id(1), id(0), commit1)
 	requireEvent(t, receipt, s.vaultArtifact, s.vault, "DistributionCommitted", map[string]any{
 		"noId": id(1), "seq": uint64(1), "epoch": uint64(1), "root": commit1.Root, "total": commit1.Total,
 		"leafCount": uint64(deepLeafCount), "ledgerHash": commit1.LedgerHash, "replacedSeq": uint64(0),
@@ -103,8 +103,7 @@ func TestR5Settlement(t *testing.T) {
 		if got := n.refused(t, s.auditor, s.settlement, s.settlementArtifact, nil, "approveDistribution", id(1), uint64(1), commit1.Root, [32]byte{1}); got != "PendingMismatch" {
 			t.Fatalf("approval of another ledger hash refused with %s", got)
 		}
-		receipt := n.send(t, s.auditor, s.settlement, s.settlementArtifact, nil, "approveDistribution", id(1), uint64(1), commit1.Root, commit1.LedgerHash)
-		record(t, "approve", false, receipt)
+		receipt := measured(t, "approve", false, s.auditor, s.settlement, s.settlementArtifact, nil, "approveDistribution", id(1), uint64(1), commit1.Root, commit1.LedgerHash)
 		requireEvent(t, receipt, s.settlementArtifact, s.settlement, "DistributionApproved", map[string]any{
 			"noId": id(1), "seq": uint64(1), "auditor": s.auditor.address, "auditorSetVersion": uint64(1), "approvals": id(1),
 		})
@@ -119,8 +118,7 @@ func TestR5Settlement(t *testing.T) {
 			t.Fatalf("finalize inside the window refused with %s", got)
 		}
 		n.sealUntil(t, s.pending(t, 1).CommittedBlock+challengeBlocks)
-		receipt = n.send(t, relayer, s.settlement, s.settlementArtifact, nil, "finalizeDistribution", id(1))
-		record(t, "finalize", true, receipt)
+		receipt = measured(t, "finalize", true, relayer, s.settlement, s.settlementArtifact, nil, "finalizeDistribution", id(1))
 		requireEvent(t, receipt, s.vaultArtifact, s.vault, "DistributionFinalized", map[string]any{
 			"noId": id(1), "seq": uint64(1), "rootIndex": id(0), "epoch": uint64(1), "root": commit1.Root,
 			"total": commit1.Total, "leafCount": uint64(deepLeafCount), "ledgerHash": commit1.LedgerHash,
@@ -162,8 +160,7 @@ func TestR5Settlement(t *testing.T) {
 			t.Fatalf("a short fee refused with %s", got)
 		}
 		kept := n.freeBalance(t, s.vaultColdkey)
-		receipt := n.send(t, demander, s.vault, s.vaultArtifact, demandFeeWei, "demandPath", id(1), id(0), a, first.proof(2))
-		record(t, "demand", false, receipt)
+		receipt := measured(t, "demand", false, demander, s.vault, s.vaultArtifact, demandFeeWei, "demandPath", id(1), id(0), a, first.proof(2))
 		requireEvent(t, receipt, s.vaultArtifact, s.vault, "PathDemanded", map[string]any{
 			"noId": id(1), "seq": uint64(2), "rootIndex": id(0), "index": id(2), "demander": demander.address,
 		})
@@ -178,8 +175,7 @@ func TestR5Settlement(t *testing.T) {
 		if got := n.refused(t, relayer, s.settlement, s.settlementArtifact, nil, "finalizeDistribution", id(1)); got != "DemandOpen" {
 			t.Fatalf("finalize with an open demand refused with %s", got)
 		}
-		receipt = n.send(t, operator.rootSigner, s.vault, s.vaultArtifact, nil, "checkPath", id(1), id(0), a, first.proof(2), second.path(2))
-		record(t, "answer", true, receipt)
+		receipt = measured(t, "answer", true, operator.rootSigner, s.vault, s.vaultArtifact, nil, "checkPath", id(1), id(0), a, first.proof(2), second.path(2))
 		requireEvent(t, receipt, s.vaultArtifact, s.vault, "PathAnswered", map[string]any{
 			"noId": id(1), "seq": uint64(2), "rootIndex": id(0), "index": id(2), "answerer": operator.rootSigner.address,
 		})
@@ -203,7 +199,7 @@ func TestR5Settlement(t *testing.T) {
 		current := n.read(t, s.v1, s.coordinatorArtifact, "currentEpoch")[0].(*big.Int).Uint64()
 		for _, epoch := range []uint64{current, current + 2, current + 3} {
 			gap := epoch - s.vaultUint(t, "lastFundedEpoch", id(1)).Uint64() - 1
-			record(t, fmt.Sprintf("close (gap %d)", gap), true, s.close(t, epoch, 1))
+			closed(t, fmt.Sprintf("close (gap %d)", gap), epoch)
 		}
 	})
 
@@ -215,10 +211,10 @@ func TestR5Settlement(t *testing.T) {
 	for _, label := range labels {
 		m := gas[label]
 		verdict := ""
-		if m.operator && m.limit > maximumGas {
-			verdict = fmt.Sprintf("; limit above the operator policy's maximum_gas %d", maximumGas)
+		if m.operator && m.estimate > maximumGas {
+			verdict = fmt.Sprintf("; above the operator policy's maximum_gas %d", maximumGas)
 		}
-		t.Logf("gas %-16s used %9d, limit needed %9d%s", label, m.used, m.limit, verdict)
+		t.Logf("gas %-16s used %9d, least limit %9d, eth_estimateGas limit %9d%s", label, m.used, m.least, m.estimate, verdict)
 	}
 }
 

@@ -4,7 +4,7 @@ set -euo pipefail
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="${1:-$(dirname "$sn_repo")}"
 
-release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config)
+release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp gvisor vault xops config)
 # A module is live when a released binary or library builds from it: a release
 # build's main module, or a module whose packages one links. connect/sctp backs
 # every github.com/pion/sctp replacement, and SN's substrate RPC fork backs
@@ -46,9 +46,18 @@ non_release_modules=(
   server/connect/sim-latency/baseline
 )
 
+# Release builds compile the gVisor fork through the gvisor.dev/gvisor
+# replacements of SN and the server, so its repository provenance is checked
+# like every other. Its go.mod is the fork's and is not kept tidy. No gate job
+# or release build uses it as a main module, and the tidy checks of SN, the
+# server and Connect cover the module graphs that consume it, so it is
+# inventoried and not tidied.
+fork_modules=(gvisor)
+
 expected_upstream() {
   case "$1" in
     glog | userwireguard) printf 'origin/master\n' ;;
+    gvisor) printf 'origin/go\n' ;;
     sn | server | connect | sdk | goidenticons | proxy | warp | vault | xops | config) printf 'origin/main\n' ;;
     *) return 1 ;;
   esac
@@ -65,6 +74,7 @@ expected_origin() {
     proxy) printf 'github.com/urnetwork/proxy\n' ;;
     userwireguard) printf 'github.com/urnetwork/userwireguard\n' ;;
     warp) printf 'github.com/urnetwork/warp\n' ;;
+    gvisor) printf 'github.com/urnetwork/gvisor\n' ;;
     vault) printf 'github.com/urnetwork/vault\n' ;;
     xops) printf 'github.com/urnetwork/xops\n' ;;
     config) printf 'github.com/urnetwork/config\n' ;;
@@ -179,7 +189,7 @@ discovered_modules="$({
     done <<<"$tracked_files"
   done
 } | LC_ALL=C sort -u)"
-expected_modules="$(printf '%s\n' "${live_modules[@]}" "${non_release_modules[@]}" | LC_ALL=C sort -u)"
+expected_modules="$(printf '%s\n' "${live_modules[@]}" "${non_release_modules[@]}" "${fork_modules[@]}" | LC_ALL=C sort -u)"
 if [[ "$discovered_modules" != "$expected_modules" ]]; then
   echo "release Go module inventory differs from its reviewed classification" >&2
   diff -u <(printf '%s\n' "$expected_modules") <(printf '%s\n' "$discovered_modules") >&2 || true

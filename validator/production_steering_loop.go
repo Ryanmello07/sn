@@ -5,7 +5,6 @@ package validator
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/urnetwork/connect"
@@ -119,7 +118,7 @@ func runReleaseProductionSteeringLoopWithCutWait(ctx context.Context, submit fun
 			releaseDiagnosticCauses(ctx, "steering", "hard_error", uint64(failures), err)
 		}
 		if failures >= releaseSteeringFailureLimit {
-			return fmt.Errorf("release steering failed %d consecutive attempts: %w", failures, pendingErr)
+			return &releaseSteeringFailureLimitError{failures: failures, cause: pendingErr}
 		}
 		if !wait() {
 			return releaseRuntimeError(ctx, pendingErr)

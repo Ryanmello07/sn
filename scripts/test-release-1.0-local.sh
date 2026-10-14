@@ -6,7 +6,7 @@ export WARP_TEST_ENV_FAIL_FAST=1
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="$(dirname "$sn_repo")"
-release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config)
+release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp gvisor vault xops config)
 source "$sn_repo/scripts/test-storage.sh"
 sn_test_storage_init
 source "$sn_repo/scripts/release-gate-jobs.sh"
@@ -190,7 +190,7 @@ release_gate_start sn-v2 release_phase_sn_v2
 # On 2026-10-11 the package took 170 seconds on four CPUs and peaked at 2.7 GiB.
 # The server's scale-tagged tests (SV-6) are this shard's database half, below.
 # The runtime rehearsal (activation gate 2, runtime_rehearsal tag) needs a node
-# built from runtime 477's source, so it runs beside this gate, on the same
+# built from runtime 478's source, so it runs beside this gate, on the same
 # checkout (scripts/runtime-rehearsal/README.md); R-1, the v2 contract phase,
 # runs from ./mainnet with the same tag:
 #   scripts/runtime-rehearsal/build.sh /path/to/subtensor-checkout

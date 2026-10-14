@@ -17,9 +17,9 @@ package validator
 // dials through itself), so no bytes of the verify exchange leave outside
 // the hop.
 //
-// Each request owns a fresh tunnel pinned to its exact hop. One exclusively
+// Each request owns a fresh tunnel pinned to its exact hop. Each exclusively
 // leased client retains processed key registration across sequential requests;
-// operator shutdown joins its final transport and identity retirement.
+// operator shutdown joins every final transport and identity retirement.
 //
 // IPv4 and IPv6 get equal attempts: the transport's requests alternate the
 // family their tunnel tries first, IPv4 for the first request, and each falls
@@ -57,23 +57,29 @@ type TunnelTransportConfig struct {
 	// SourceClientId is the validator's own client id — excluded from
 	// provider selection and used as the packet source.
 	SourceClientId connect.Id
+	// Clients is how many registered tunnel clients serve requests at once.
+	// Each request leases one exclusively, and waiting for a lease spends the
+	// request's step deadline, so a trail engine sets this to its concurrency.
+	// Zero means one.
+	Clients int
 }
 
 // TunnelTransport implements TrailTransport over real per-hop tunnels.
 // Every call is bounded by the caller's ctx (the engine's StepTimeout).
-// Initial registration has one bounded transport-owned lifetime across calls.
+// Each client's initial registration has one bounded transport-owned lifetime
+// across calls.
 type TunnelTransport struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	clientStrategy *connect.ClientStrategy
 	cfg            TunnelTransportConfig
-	clientLease    chan struct{}
-	client         tunnelTransportClient
-	registration   *tunnelClientRegistration
-	newClient      func(context.Context, connect.Id) (tunnelTransportClient, error)
-	createTun      func(context.Context, *connect.TunSettings) (*connect.Tun, error)
-	closed         chan struct{}
-	closeErr       error
+	// Free leases; clientCount of them exist for the transport's lifetime.
+	clientLeases chan *tunnelClientLease
+	clientCount  int
+	newClient    func(context.Context, connect.Id) (tunnelTransportClient, error)
+	createTun    func(context.Context, *connect.TunSettings) (*connect.Tun, error)
+	closed       chan struct{}
+	closeErr     error
 }
 
 type tunnelAttemptGenerator interface {
@@ -187,7 +193,8 @@ func (self *tunnelAttempt) closeAndWait(ctx context.Context) error {
 // meanwhile (connect ReceiveBuffer.Pack), so the resend would wait out a
 // transfer resend, a second or more, inside the latency the server attributes
 // to the hop. The identity's next attempt through another hop closes what the
-// answered attempt kept.
+// answered attempt kept. Each retained identity keeps its own: a resend that
+// leases another of the transport's clients rides that client's sequences.
 type tunnelHopContracts struct {
 	// the client's Flush: cancels the identity's transfer sequences, which
 	// close their contracts
@@ -215,17 +222,21 @@ func (self *tunnelHopContracts) joined(hop connect.Id, err error) func() {
 
 func NewTunnelTransport(ctx context.Context, clientStrategy *connect.ClientStrategy, cfg TunnelTransportConfig) *TunnelTransport {
 	ownerCtx, cancel := context.WithCancel(ctx)
+	clientCount := max(cfg.Clients, 1)
 	self := &TunnelTransport{
 		ctx:            ownerCtx,
 		cancel:         cancel,
 		clientStrategy: clientStrategy,
 		cfg:            cfg,
-		clientLease:    make(chan struct{}, 1),
+		clientLeases:   make(chan *tunnelClientLease, clientCount),
+		clientCount:    clientCount,
 		closed:         make(chan struct{}),
 	}
 	self.newClient = self.newRegisteredClient
 	self.createTun = connect.CreateTun
-	self.clientLease <- struct{}{}
+	for range clientCount {
+		self.clientLeases <- &tunnelClientLease{}
+	}
 	go self.run()
 	return self
 }

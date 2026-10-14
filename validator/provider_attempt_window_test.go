@@ -358,7 +358,7 @@ func TestProviderAttemptWindowRefusesMixedTerminalFork(t *testing.T) {
 	hotkey := fixture.owners[1].fixture.hotkey.PublicKey()
 	owner := options.Validators[hotkey]
 	for noId, operator := range owner.Settlement.Operators {
-		operator.Expected.Boundary.EVMBlockHash = strings.Repeat("ab", 32)
+		operator.Expected.Boundary.EVMBlockHash = "0x" + strings.Repeat("ab", 32)
 		owner.Settlement.Operators[noId] = operator
 	}
 	options.Validators[hotkey] = owner

@@ -47,11 +47,12 @@ type rootRegisterPolicy struct {
 }
 
 // Root registration admits only sources whose registration semantics were
-// reviewed, each bound to its own exact spec number. Sources 473, 475 and 477
-// share root.rs, the root pruning, replacement and burn rules, and these constants.
+// reviewed, each bound to its own exact spec number. Sources 473, 475, 477 and
+// 478 share root.rs, the root pruning, replacement and burn rules, and these
+// constants.
 func rootRegisterReviewedSpec(source string) (uint32, bool) {
 	switch source {
-	case crv4.NativeOwnerSource473, crv4.NativeOwnerSource475, crv4.NativeOwnerSource477:
+	case crv4.NativeOwnerSource473, crv4.NativeOwnerSource475, crv4.NativeOwnerSource477, crv4.NativeOwnerSource478:
 		return crv4.ReviewedNativeOwnerSourceSpec(source)
 	default:
 		return 0, false

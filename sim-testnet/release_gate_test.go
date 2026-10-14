@@ -111,7 +111,7 @@ func TestReleaseGatesPinProviderAndTransportRegressions(t *testing.T) {
 
 const releaseAdversarialSelector = "^Test(Adversarial|Adversary|VerifyAdversary|RPCAdversary|ConsensusWeightComparison|Runtime454)"
 
-const releaseRuntimeClientSelector = "^Test(DialChainContext|FinalizedHeadContext|FinalizedBlock|BlockHashContext|BlockIdentityCache|ExactBlockIdentity|AccountNonceContext|ReleaseStateReaders|ReleaseExactBlock|ReleaseSnapshot|ReleaseSteeringSource|VerifyFinalizedExtrinsicContext|LocateFinalizedExtrinsic|FleetCommitmentAtContext|FleetCommitmentInfoRuntime|RuntimeArtifactMetadata|RuntimeMetadataAtContext|FleetRuntime|FleetFinalizedRuntime|BindFleetRuntime|DialFleetNativeContext|ReleaseEpochStartBlockAtContext|ReleaseConfigRequiresExactNativeRuntimeIdentity|InitialReleaseSnapshot|AuthenticatePinnedNativeRuntime|ReleaseNativeEndpointTimeout|ReleaseRuntime458|ReleaseRuntime459|ReleaseRuntime460|EVMCheckpoint)"
+const releaseRuntimeClientSelector = "^Test(DialChainContext|FinalizedHeadContext|FinalizedBlock|BlockHashContext|BlockIdentityCache|ExactBlockIdentity|AccountNonceContext|ReleaseStateReaders|ReleaseExactBlock|ReleaseSnapshot|ReleaseSteeringSource|VerifyFinalizedExtrinsicContext|LocateFinalizedExtrinsic|FleetCommitmentAtContext|FleetCommitmentInfoRuntime|RuntimeArtifactMetadata|RuntimeMetadataAtContext|FleetRuntime|FleetFinalizedRuntime|BindFleetRuntime|DialFleetNativeContext|ReleaseEpochStartBlockAtContext|ReleaseConfigRequiresExactNativeRuntimeIdentity|InitialReleaseSnapshot|AuthenticatePinnedNativeRuntime|ReleaseNativeEndpointTimeout|ReleaseRuntime458|ReleaseRuntime459|ReleaseRuntime460|ReleaseRuntime461|ReleaseRuntime467|ReleaseCurrentRuntime|RuntimeVersion|EVMCheckpoint)"
 
 const releaseSyntheticEVMIdentitySelector = "^Test(WaitFinalized|EVMBlockIdentity|ClaimReceiptIdentity|FinalizedClaimReceipt|UncertainClaimRetryable|SyntheticEVM|EthEVMBlockReader|EVMFinality|FinalizedEVMHead|BoundFinalizedEVMHead|ReceiptRequiresCanonicalHashAndFinalizedHeight|ProducerGatePinsSyntheticEVMIdentityRegressions)"
 
@@ -1381,7 +1381,7 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 	if err := verifyReleaseGatePrivateServiceProfile(script); err != nil {
 		t.Fatal(err)
 	}
-	const repositories = "release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config)"
+	const repositories = "release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp gvisor vault xops config)"
 	if !strings.Contains(script, repositories) || !strings.Contains(script, `for repo in "${release_repos[@]}"`) {
 		t.Fatal("local release gate does not check every release repository")
 	}
@@ -1769,6 +1769,10 @@ var releaseSourceFreezeNonReleaseModules = []string{
 	"sdk/packaging", "server/connect/sim-latency/baseline",
 }
 
+// The gVisor fork reaches release binaries through local replacements: its
+// repository provenance is checked, and its untidy module is only inventoried.
+var releaseSourceFreezeForkModules = []string{"gvisor"}
+
 // One of the freeze script's module arrays, in its declared order.
 func releaseSourceFreezeModuleArray(t *testing.T, script, name string) []string {
 	t.Helper()
@@ -1779,7 +1783,7 @@ func releaseSourceFreezeModuleArray(t *testing.T, script, name string) []string 
 	return strings.Fields(declarations[0][1])
 }
 
-// Construct all twelve repositories and every classified Go module without
+// Construct all thirteen repositories and every classified Go module without
 // making ordinary tests depend on the developer's current dirty worktree.
 func releaseSourceFreezeFixture(t *testing.T) string {
 	t.Helper()
@@ -1792,15 +1796,15 @@ func releaseSourceFreezeFixture(t *testing.T) string {
 	branches := map[string]string{
 		"sn": "main", "server": "main", "connect": "main", "sdk": "main",
 		"glog": "master", "goidenticons": "main", "proxy": "main", "userwireguard": "master",
-		"warp": "main", "vault": "main", "xops": "main", "config": "main",
+		"warp": "main", "gvisor": "go", "vault": "main", "xops": "main", "config": "main",
 	}
 	origins := map[string]string{
 		"sn": "urfoundation/sn", "server": "urnetwork/server",
 		"connect": "urnetwork/connect", "sdk": "urnetwork/sdk", "glog": "urnetwork/glog",
 		"goidenticons": "urnetwork/goidenticons", "proxy": "urnetwork/proxy", "userwireguard": "urnetwork/userwireguard",
-		"warp": "urnetwork/warp", "vault": "urnetwork/vault", "xops": "urnetwork/xops", "config": "urnetwork/config",
+		"warp": "urnetwork/warp", "gvisor": "urnetwork/gvisor", "vault": "urnetwork/vault", "xops": "urnetwork/xops", "config": "urnetwork/config",
 	}
-	modules := slices.Concat(releaseSourceFreezeLiveModules, releaseSourceFreezeNonReleaseModules)
+	modules := slices.Concat(releaseSourceFreezeLiveModules, releaseSourceFreezeNonReleaseModules, releaseSourceFreezeForkModules)
 	for repo, branch := range branches {
 		root := filepath.Join(workspace, repo)
 		if err := os.MkdirAll(root, 0o700); err != nil {
@@ -1869,7 +1873,7 @@ func releaseSourceFreezeFixture(t *testing.T) string {
 }
 
 // The freeze command accepts a complete clean fixture and emits an exact
-// twelve-repository revision/upstream snapshot.
+// thirteen-repository revision/upstream snapshot.
 func TestReleaseSourceFreezeRecordsCompleteCleanWorkspace(t *testing.T) {
 	workspace := releaseSourceFreezeFixture(t)
 	command := exec.Command("../scripts/check-release-source-freeze.sh", workspace)
@@ -1878,14 +1882,14 @@ func TestReleaseSourceFreezeRecordsCompleteCleanWorkspace(t *testing.T) {
 		t.Fatalf("clean source freeze: %v", err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) != 12 {
-		t.Fatalf("source freeze recorded %d repositories, want 12: %s", len(lines), output)
+	if len(lines) != 13 {
+		t.Fatalf("source freeze recorded %d repositories, want 13: %s", len(lines), output)
 	}
 	expectedOrigins := map[string]string{
 		"sn": "github.com/urfoundation/sn", "server": "github.com/urnetwork/server",
 		"connect": "github.com/urnetwork/connect", "sdk": "github.com/urnetwork/sdk", "glog": "github.com/urnetwork/glog",
 		"goidenticons": "github.com/urnetwork/goidenticons", "proxy": "github.com/urnetwork/proxy", "userwireguard": "github.com/urnetwork/userwireguard",
-		"warp": "github.com/urnetwork/warp", "vault": "github.com/urnetwork/vault", "xops": "github.com/urnetwork/xops", "config": "github.com/urnetwork/config",
+		"warp": "github.com/urnetwork/warp", "gvisor": "github.com/urnetwork/gvisor", "vault": "github.com/urnetwork/vault", "xops": "github.com/urnetwork/xops", "config": "github.com/urnetwork/config",
 	}
 	seen := map[string]bool{}
 	for _, line := range lines {
@@ -1947,6 +1951,75 @@ func TestReleaseSourceFreezeRequiresWarpProvenance(t *testing.T) {
 	runTestGit(t, warpRoot, "add", "README.md")
 	runTestGit(t, warpRoot, "commit", "-qm", "unpublished Warp source")
 	run("is not reachable from origin/main")
+}
+
+// Release builds compile the gVisor fork through the local replacements of SN
+// and the server, so the freeze holds it to the same provenance as every other
+// repository: present, clean, the reviewed origin and published on origin/go.
+// Its own module is inventoried and never verified tidy.
+func TestReleaseSourceFreezeRequiresGvisorProvenance(t *testing.T) {
+	workspace := releaseSourceFreezeFixture(t)
+	gvisorRoot := filepath.Join(workspace, "gvisor")
+	// The fork requires a module it never imports, which go mod tidy drops.
+	manifest := "module example.invalid/gvisor\n\ngo 1.24\n\nrequire example.invalid/glog v0.0.0\n\nreplace example.invalid/glog => ../glog\n"
+	if err := os.WriteFile(filepath.Join(gvisorRoot, "go.mod"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runTestGit(t, gvisorRoot, "commit", "-qam", "leave the fork untidy")
+	runTestGit(t, gvisorRoot, "update-ref", "refs/remotes/origin/go", "HEAD")
+	runTestGit(t, gvisorRoot, "push", "-q", "--force", "origin", "HEAD:refs/heads/go")
+	var stderr strings.Builder
+	command := exec.Command("../scripts/check-release-source-freeze.sh", workspace)
+	command.Stderr = &stderr
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("published gVisor fork was refused: %v\n%s", err, stderr.String())
+	}
+	if !regexp.MustCompile(`(?m)^gvisor\t[0-9a-f]{40}\torigin/go\tgithub\.com/urnetwork/gvisor$`).Match(output) {
+		t.Fatalf("source freeze did not record the gVisor fork's provenance:\n%s", output)
+	}
+	if strings.Contains(stderr.String(), "verify tidy Go module: gvisor") {
+		t.Fatalf("source freeze verified the inventoried gVisor fork tidy:\n%s", stderr.String())
+	}
+	run := func(want string) {
+		t.Helper()
+		output, err := exec.Command("../scripts/check-release-source-freeze.sh", workspace).CombinedOutput()
+		if err == nil || !strings.Contains(string(output), want) {
+			t.Fatalf("gVisor source admission wanted %q: %v\n%s", want, err, output)
+		}
+	}
+	retained := filepath.Join(workspace, ".retained-gvisor")
+	if err := os.Rename(gvisorRoot, retained); err != nil {
+		t.Fatal(err)
+	}
+	run("release repository is missing or not a Git checkout: " + gvisorRoot)
+	inventory, err := exec.Command("bash", "-c", `set -euo pipefail; source ../scripts/release-gate-jobs.sh; workspace="$1"; release_gate_diagnostic_inventory`, "bash", workspace).CombinedOutput()
+	if err == nil || !strings.Contains(string(inventory), "incomplete diagnostic Git checkout: gvisor") {
+		t.Fatalf("diagnostic inventory omitted the missing gVisor checkout: %v\n%s", err, inventory)
+	}
+	if err := os.Rename(retained, gvisorRoot); err != nil {
+		t.Fatal(err)
+	}
+	readme := filepath.Join(gvisorRoot, "README.md")
+	if err := os.WriteFile(readme, []byte("modified\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run("tracked, staged, or untracked changes: gvisor")
+	if err := os.WriteFile(readme, []byte("fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A copied checkout without its remote cannot establish provenance.
+	runTestGit(t, gvisorRoot, "config", "--unset", "remote.origin.url")
+	run("release repository gvisor has unsupported origin URL: ")
+	runTestGit(t, gvisorRoot, "config", "remote.origin.url", "git@github.com:google/gvisor.git")
+	run("origin github.com/google/gvisor, want github.com/urnetwork/gvisor")
+	runTestGit(t, gvisorRoot, "config", "remote.origin.url", "git@github.com:urnetwork/gvisor.git")
+	if err := os.WriteFile(readme, []byte("unpublished\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runTestGit(t, gvisorRoot, "add", "README.md")
+	runTestGit(t, gvisorRoot, "commit", "-qm", "unpublished gVisor source")
+	run("is not reachable from origin/go")
 }
 
 // Cleanliness and provenance must be established before a tracked verifier can
@@ -2201,9 +2274,12 @@ func TestReleaseSourceFreezeClassifiesEveryReleaseModule(t *testing.T) {
 	if nonRelease := releaseSourceFreezeModuleArray(t, script, "non_release_modules"); !slices.Equal(nonRelease, releaseSourceFreezeNonReleaseModules) {
 		t.Errorf("source freeze non-release modules %q, want %q", nonRelease, releaseSourceFreezeNonReleaseModules)
 	}
-	for _, module := range releaseSourceFreezeNonReleaseModules {
+	if fork := releaseSourceFreezeModuleArray(t, script, "fork_modules"); !slices.Equal(fork, releaseSourceFreezeForkModules) {
+		t.Errorf("source freeze fork modules %q, want %q", fork, releaseSourceFreezeForkModules)
+	}
+	for _, module := range slices.Concat(releaseSourceFreezeNonReleaseModules, releaseSourceFreezeForkModules) {
 		if slices.Contains(releaseSourceFreezeLiveModules, module) {
-			t.Errorf("%s is classified both live and non-release", module)
+			t.Errorf("%s is classified both live and inventoried", module)
 		}
 	}
 	if strings.Count(script, `for module in "${live_modules[@]}"; do`) != 1 || strings.Count(script, "go mod tidy") != 1 {
@@ -2269,8 +2345,8 @@ func TestReleaseSourceFreezeDoesNotTidyNonReleaseModules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("untidy non-release modules were refused: %v\n%s", err, stderr.String())
 	}
-	if lines := strings.Split(strings.TrimSpace(string(output)), "\n"); len(lines) != 12 {
-		t.Fatalf("source freeze recorded %d repositories, want 12: %s", len(lines), output)
+	if lines := strings.Split(strings.TrimSpace(string(output)), "\n"); len(lines) != 13 {
+		t.Fatalf("source freeze recorded %d repositories, want 13: %s", len(lines), output)
 	}
 	verified := []string{}
 	for _, match := range regexp.MustCompile(`(?m)^verify tidy Go module: (.+)$`).FindAllStringSubmatch(stderr.String(), -1) {
@@ -2770,7 +2846,7 @@ func TestProducerGatePinsRuntime458ArtifactAndEncodingRegressions(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, family := range []string{"Runtime461|", "Runtime460|", "Runtime459|", "Runtime458|", "CarriedFleetHistory|", "FinalSemanticRPC|"} {
+	for _, family := range []string{"Runtime461|", "Runtime460|", "Runtime459|", "Runtime458|", "ReleaseSubstrateDial|", "CarriedFleetHistory|", "FinalSemanticRPC|"} {
 		changedSelector := strings.Replace(selector, family, "", 1)
 		changed := strings.Replace(script, group.variable+"='"+selector+"'", group.variable+"='"+changedSelector+"'", 1)
 		if changed == script || verifyReleaseEvidenceV2GateGroup(changed, group) == nil {
@@ -2797,7 +2873,7 @@ func TestProducerGatePinsRuntime458ArtifactAndEncodingRegressions(t *testing.T) 
 // repository set. The retired operator-proxy module is no longer checked out,
 // tested or frozen by any of them.
 func TestReleaseGatesFenceOneRepositorySetWithoutOperatorProxy(t *testing.T) {
-	const repositories = "sn server connect sdk glog goidenticons proxy userwireguard warp vault xops config"
+	const repositories = "sn server connect sdk glog goidenticons proxy userwireguard warp gvisor vault xops config"
 	declaration := "release_repos=(" + repositories + ")"
 	for _, gate := range []struct {
 		path        string
