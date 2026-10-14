@@ -5526,29 +5526,49 @@ func verifyFinalPolicyInputs(evidence *FinalSemanticEvidence, policy *protocol.P
 		return errors.New("vault minimum claim TTL does not match the canonical signed policy")
 	}
 	for _, validator := range evidence.Validators {
-		for _, cycle := range validator.Cycles {
-			if cycle.Theta.Numerator != strconv.FormatUint(policy.Steering.Theta.Numerator, 10) || cycle.Theta.Denominator != strconv.FormatUint(policy.Steering.Theta.Denominator, 10) || cycle.QualityMinimumPPM != policy.Steering.QualityTransform.MinimumPPM || cycle.QualityMaximumPPM != policy.Steering.QualityTransform.MaximumPPM || cycle.MaximumHeadFleets != policy.Steering.MaximumHeadFleets || cycle.MaxWeightLimitU16 != policy.Steering.MaxWeightLimitU16 {
-				return fmt.Errorf("validator %d epoch %d steering parameters do not match canonical policy", validator.ValidatorID, cycle.SettlementEpoch)
+		for index := range validator.Cycles {
+			cycle := &validator.Cycles[index]
+			if err := verifyFinalCyclePolicyInputs(fmt.Sprintf("validator %d epoch %d", validator.ValidatorID, cycle.SettlementEpoch), cycle, policy); err != nil {
+				return err
 			}
-			for _, pool := range cycle.Pools {
-				conviction, err := finalNonnegativeInteger("conviction before", pool.ConvictionBeforeRao)
-				if err != nil {
-					return err
-				}
-				amount, tier, err := protocol.RequiredDepositRao(pool.UsageBytes, pool.Users, conviction, policy.Deposit)
-				if err != nil || amount.String() != pool.RequiredDepositRao || tier.RateNumeratorRaoPerGiB != pool.RateNumeratorRaoPerGiB || tier.RateNumeratorRaoPerUser != pool.RateNumeratorRaoPerUser || tier.RateDenominator != pool.RateDenominator || strconv.FormatUint(policy.Deposit.EpochCapRaoPerOperator, 10) != pool.EpochDepositCapRao {
-					return fmt.Errorf("validator %d epoch %d pool %d deposit inputs do not match canonical policy", validator.ValidatorID, cycle.SettlementEpoch, pool.NoID)
-				}
-				// RequiredDepositRao has validated the schedule, so tier zero exists.
-				if baseline := policy.Deposit.Tiers[0]; baseline.RateNumeratorRaoPerGiB != pool.BaselineRateNumeratorRaoPerGiB || baseline.RateNumeratorRaoPerUser != pool.BaselineRateNumeratorRaoPerUser || baseline.RateDenominator != pool.BaselineRateDenominator {
-					return fmt.Errorf("validator %d epoch %d pool %d baseline deposit rate does not match the canonical policy's conviction-zero tier", validator.ValidatorID, cycle.SettlementEpoch, pool.NoID)
-				}
+		}
+	}
+	// A recovery decision equals an accepted cycle; a penalty decision does
+	// not, so its rows meet the policy here.
+	if evidence.DishonestDeposit != nil {
+		for index := range evidence.DishonestDeposit.Penalties {
+			decision := &evidence.DishonestDeposit.Penalties[index]
+			if err := verifyFinalCyclePolicyInputs(fmt.Sprintf("validator %d dishonest-deposit penalty epoch %d", decision.ValidatorID, decision.Cycle.SettlementEpoch), &decision.Cycle, policy); err != nil {
+				return err
 			}
 		}
 	}
 	for _, proof := range evidence.PathProofs {
 		if proof.TrailDepth != policy.Verify.TrailDepth {
 			return fmt.Errorf("validator %d pool %d trail depth does not match canonical policy", proof.ValidatorID, proof.NoID)
+		}
+	}
+	return nil
+}
+
+// verifyFinalCyclePolicyInputs compares one CRv4 cycle's steering parameters
+// and every pool row's deposit inputs with the canonical signed policy.
+func verifyFinalCyclePolicyInputs(label string, cycle *FinalCRv4Cycle, policy *protocol.Policy) error {
+	if cycle.Theta.Numerator != strconv.FormatUint(policy.Steering.Theta.Numerator, 10) || cycle.Theta.Denominator != strconv.FormatUint(policy.Steering.Theta.Denominator, 10) || cycle.QualityMinimumPPM != policy.Steering.QualityTransform.MinimumPPM || cycle.QualityMaximumPPM != policy.Steering.QualityTransform.MaximumPPM || cycle.MaximumHeadFleets != policy.Steering.MaximumHeadFleets || cycle.MaxWeightLimitU16 != policy.Steering.MaxWeightLimitU16 {
+		return fmt.Errorf("%s steering parameters do not match canonical policy", label)
+	}
+	for _, pool := range cycle.Pools {
+		conviction, err := finalNonnegativeInteger("conviction before", pool.ConvictionBeforeRao)
+		if err != nil {
+			return err
+		}
+		amount, tier, err := protocol.RequiredDepositRao(pool.UsageBytes, pool.Users, conviction, policy.Deposit)
+		if err != nil || amount.String() != pool.RequiredDepositRao || tier.RateNumeratorRaoPerGiB != pool.RateNumeratorRaoPerGiB || tier.RateNumeratorRaoPerUser != pool.RateNumeratorRaoPerUser || tier.RateDenominator != pool.RateDenominator || strconv.FormatUint(policy.Deposit.EpochCapRaoPerOperator, 10) != pool.EpochDepositCapRao {
+			return fmt.Errorf("%s pool %d deposit inputs do not match canonical policy", label, pool.NoID)
+		}
+		// RequiredDepositRao has validated the schedule, so tier zero exists.
+		if baseline := policy.Deposit.Tiers[0]; baseline.RateNumeratorRaoPerGiB != pool.BaselineRateNumeratorRaoPerGiB || baseline.RateNumeratorRaoPerUser != pool.BaselineRateNumeratorRaoPerUser || baseline.RateDenominator != pool.BaselineRateDenominator {
+			return fmt.Errorf("%s pool %d baseline deposit rate does not match the canonical policy's conviction-zero tier", label, pool.NoID)
 		}
 	}
 	return nil

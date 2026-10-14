@@ -594,6 +594,82 @@ func TestFinalSemanticPoolWeightDepositInputsAreTheCanonicalPolicyTier(t *testin
 	}
 }
 
+// A dishonest-deposit penalty cycle is not an accepted cycle, so its rows meet
+// the canonical policy themselves: the own tier, the cap, the clamp, theta and
+// the baseline rates. Each mispriced row below is consistent on its own and is
+// refused only by the policy.
+func TestFinalSemanticPoolWeightPenaltyCycleRowsMeetTheCanonicalPolicy(t *testing.T) {
+	policy, err := protocol.LoadPolicy(filepath.Join("..", "deploy", "testnet", "policy-v1.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1 alpha of conviction selects the 800,000 tier: 1 GiB owes 800,000 and
+	// implies 1,000,000 at the baseline; * 3/4 = 750,000.
+	_, discounted := finalPoolWeightTestRow()
+	discounted.ConvictionBeforeRao, discounted.RateNumeratorRaoPerGiB, discounted.RequiredDepositRao, discounted.ObservedDepositRao = "1000000000", 800_000, "800000", "800000"
+	withPenalty := func(edit func(*FinalCRv4Cycle)) *FinalSemanticEvidence {
+		evidence := finalPoolWeightTestPolicyEvidence(policy, discounted)
+		evidence.Phase = "production-soak"
+		evidence.Window = ScenarioAcceptanceWindow{EpochBlocks: policy.ProductionCadence.EpochBlocks, FinalizeOffsetBlocks: policy.ProductionCadence.FinalizeOffsetBlocks}
+		penalty := evidence.Validators[0].Cycles[0]
+		penalty.SettlementEpoch--
+		penalty.Pools = []FinalPoolWeightEvidence{discounted}
+		edit(&penalty)
+		evidence.DishonestDeposit = &FinalDishonestDepositEvidence{Penalties: []FinalDishonestDepositDecision{{ValidatorID: 1, Cycle: penalty}}}
+		return evidence
+	}
+	if err := verifyFinalPolicyInputs(withPenalty(func(*FinalCRv4Cycle) {}), policy); err != nil {
+		t.Fatalf("canonical penalty cycle was refused: %v", err)
+	}
+	evidence, _ := finalPoolWeightTestRow()
+	const (
+		deposit  = "validator 1 dishonest-deposit penalty epoch 9 pool 1 deposit inputs do not match canonical policy"
+		baseline = "validator 1 dishonest-deposit penalty epoch 9 pool 1 baseline deposit rate does not match the canonical policy's conviction-zero tier"
+		steering = "validator 1 dishonest-deposit penalty epoch 9 steering parameters do not match canonical policy"
+	)
+	for _, test := range []struct {
+		name string
+		edit func(*FinalCRv4Cycle)
+		want string
+	}{
+		{
+			// The review's case: priced at its own tier (implied 800,000, * 3/4 =
+			// 600,000) under a cap one rao below the policy's 10,000,000,000.
+			name: "own-tier baseline under a foreign cap", edit: func(cycle *FinalCRv4Cycle) {
+				row := &cycle.Pools[0]
+				row.BaselineRateNumeratorRaoPerGiB, row.EpochDepositCapRao = 800_000, "9999999999"
+				row.ImpliedDemand, row.RawScore = finalPoolWeightTestRational("800000", "1"), finalPoolWeightTestRational("600000", "1")
+			}, want: deposit,
+		},
+		{
+			name: "own-tier baseline", edit: func(cycle *FinalCRv4Cycle) {
+				row := &cycle.Pools[0]
+				row.BaselineRateNumeratorRaoPerGiB = 800_000
+				row.ImpliedDemand, row.RawScore = finalPoolWeightTestRational("800000", "1"), finalPoolWeightTestRational("600000", "1")
+			}, want: baseline,
+		},
+		{
+			// The baseline rate at 1 alpha of conviction, which pays 800,000.
+			name: "baseline rate as the own tier", edit: func(cycle *FinalCRv4Cycle) {
+				row := &cycle.Pools[0]
+				row.RateNumeratorRaoPerGiB, row.RequiredDepositRao, row.ObservedDepositRao = 1_000_000, "1000000", "1000000"
+			}, want: deposit,
+		},
+		{name: "theta", edit: func(cycle *FinalCRv4Cycle) { cycle.Theta = finalPoolWeightTestRational("1", "2") }, want: steering},
+		{name: "quality floor", edit: func(cycle *FinalCRv4Cycle) { cycle.QualityMinimumPPM = 500_000 }, want: steering},
+		{name: "quality ceiling", edit: func(cycle *FinalCRv4Cycle) { cycle.QualityMaximumPPM = 900_000 }, want: steering},
+	} {
+		mispriced := withPenalty(test.edit)
+		row := mispriced.DishonestDeposit.Penalties[0].Cycle.Pools[0]
+		if _, eligible, err := verifyFinalPoolWeightTestRow(&evidence, &row); err != nil || !eligible {
+			t.Errorf("%s: penalty row must be internally consistent: eligible=%t error=%v", test.name, eligible, err)
+		}
+		if err := verifyFinalPolicyInputs(mispriced, policy); err == nil || err.Error() != test.want {
+			t.Errorf("%s: error=%v, want exactly %q", test.name, err, test.want)
+		}
+	}
+}
+
 // finalPoolWeightBuilderTestFixture is everything buildPoolWeight reads for
 // three operators whose pool decisions come from a measurement the validator
 // itself sealed and verified.
