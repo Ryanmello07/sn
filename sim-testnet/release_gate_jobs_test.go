@@ -1060,6 +1060,7 @@ var releaseGateUncachedCommands = []struct {
 	{phase: "sn_simulator_history_race", command: releaseGateSimulatorHistoryRaceCommand},
 	{phase: "server_unit", command: "go test . -run '^Test(PgResourcesRedirectMaintenancePoolAndRestore|DatabaseTimeMatchesPostgresPrecision)$' -count=1"},
 	{phase: "server_unit", command: "go test ./st ./startifact -count=1"},
+	{phase: "server_unit", command: "go test ./local/sn25golive -count=1"},
 	{phase: "server_unit", command: "go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1"},
 	{phase: "server_unit", command: "go test ./session -run 'Test.*(UrForwardedAddress|LegacyForwardedHeaders|RemoteAddress)' -count=1"},
 	{phase: "server_unit", command: "go test ./router -run 'TestTrie' -count=1"},

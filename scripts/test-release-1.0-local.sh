@@ -261,6 +261,8 @@ release_phase_server_unit() {
   go test -race . -run "$test_env_fail_fast_tests" -count=1
   go test . -run '^Test(PgResourcesRedirectMaintenancePoolAndRestore|DatabaseTimeMatchesPostgresPrecision)$' -count=1
   go test ./st ./startifact -count=1
+  # The SN25 go-live tooling: its gas params, verify.yml and st.yml checks.
+  go test ./local/sn25golive -count=1
   go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1
   provider_input_tests='^Test(StCanonicalProviderUsages|StBuildReleaseProviderInputs)'
   go test ./controller -run "$provider_input_tests" -count=1
@@ -468,9 +470,10 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race . -run '^TestIncrementRateLimitWindowResetsAtExactBoundary$' -count=1
     # Settlement v2 (VERSION2-FINAL.md §8, §15.7): config, migration 821, the
     # mirror, records, objects, the ledger builder and its epoch commands, the
-    # epoch driver, the ledger endpoints, the v2 earnings readers and the SN25
-    # prune alert, most of them on this gate's private services.
-    ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet)'
+    # epoch driver, the ledger endpoints, the v2 earnings readers, the SN25
+    # prune alert and the v1 closes' gas floor (SV-4), most of them on this
+    # gate's private services.
+    ledger_v2_tests='^Test(StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet|StV1Close|StV1GasFloor)'
     go test . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
     go test -race . ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work -run "$ledger_v2_tests" -count=1
     # The monitor's schema contracts of the published migration suffix, from
