@@ -21,9 +21,10 @@ output="$1"
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="$(dirname "$sn_repo")"
 
-# On 2026-10-14 the build peaked at 4.4 GB, nearly all of it the Cargo target,
-# which is removed once the exports are written; require twice that free.
-required_kib=$((9 * 1024 * 1024))
+# On 2026-10-14 the build peaked at 3.3 GiB, nearly all of it the Cargo target,
+# which is removed once the Rust exports are written, leaving 0.5 GiB of
+# exports; require about twice the peak free.
+required_kib=$((7 * 1024 * 1024))
 available_kib="$(df -Pk -- "$(dirname "$output")" | awk 'NR == 2 { print $4 }')"
 if ! [[ "$available_kib" =~ ^[0-9]+$ ]] || (( available_kib < required_kib )); then
   printf 'mainnet exports: %s KiB free for %s, need %s KiB; not building\n' "$available_kib" "$output" "$required_kib" >&2

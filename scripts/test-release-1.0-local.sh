@@ -34,6 +34,15 @@ export WARP_TEST_ENV_FAIL_FAST=1
 # server/stmonitor/testfixture's admin URL comes only from this gate's private
 # PostgreSQL, in sn-e2e, never from the caller's environment or local stack.
 unset STMONITOR_TEST_ADMIN_URL
+# So do ./mainnet's qualification exports, from sn-mainnet-exports, in the
+# ./mainnet shards.
+unset URNETWORK_NATIVE_CAPTURE_ENGINE URNETWORK_NATIVE_EXECUTION_ENGINE URNETWORK_NATIVE_EXECUTION_FIXTURE \
+  URNETWORK_NATIVE_PRODUCER_FIXTURE URNETWORK_NATIVE_CONSERVATION_FIXTURE URNETWORK_NATIVE_PRINCIPAL_FIXTURE_DIR \
+  URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_DIR URNETWORK_NATIVE_VAULT_CAPTURE_FIXTURE_DIR \
+  URNETWORK_NATIVE_VAULT_CAPTURE_SEQUENCE_FIXTURE_DIR URNETWORK_NATIVE_RUNTIME_RENEWAL_FIXTURE \
+  URNETWORK_NATIVE_WHOLE_FEE_FIXTURE_DIR URNETWORK_NATIVE_YUMA_FIXTURE_DIR URNETWORK_NATIVE_YUMA_CAPACITY_FIXTURE_DIR \
+  URNETWORK_NATIVE_YUMA_POPULATED_FIXTURE_DIR URNETWORK_NATIVE_TREASURY_FIXTURE \
+  URNETWORK_PROVIDER_ATTEMPT_COMPLETED_FIXTURE_DIR URNETWORK_PROVIDER_WORK_FIXTURE_DIR URNETWORK_ECONOMIC_FEE_FIXTURE_DIR
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="$(dirname "$sn_repo")"
@@ -93,6 +102,15 @@ fi
 if ! command -v forge >/dev/null 2>&1 && [[ -x "$HOME/.foundry/bin/forge" ]]; then
   export PATH="$HOME/.foundry/bin:$PATH"
 fi
+
+# The qualification exports that ./mainnet's tests consume, built offline from
+# these checkouts into the gate's private storage; the ./mainnet shards wait
+# for this job, below. On 2026-10-14, at load 18 with four CPUs, it took seven
+# minutes and peaked at 3.3 GiB.
+release_phase_sn_mainnet_exports() {
+  "$sn_repo/scripts/build-mainnet-exports.sh" "$release_gate_mainnet_exports"
+}
+release_gate_start sn-mainnet-exports release_phase_sn_mainnet_exports
 
 release_phase_isolation_regressions() {
   cd "$sn_repo"
@@ -259,13 +277,19 @@ if not own:
 print("^(" + "|".join(own) + ")$", end="")
 ' "$1" "$2"
 }
-# Run shard $1 of ./mainnet.
+# Run shard $1 of ./mainnet, with the exports of sn-mainnet-exports, whose
+# exit the gate gives every shard.
 release_gate_mainnet_shard() {
   local shard="$1" selector
   if ! [[ "$release_gate_mainnet_shards" =~ ^[1-9][0-9]?$ && "$shard" =~ ^[1-9][0-9]?$ ]] || (( shard > release_gate_mainnet_shards )); then
     printf 'release gate: unknown ./mainnet shard %s of %s\n' "$shard" "$release_gate_mainnet_shards" >&2
     return 1
   fi
+  if [[ "${release_gate_mainnet_exports_exit:-}" != 0 ]]; then
+    printf 'release gate: ./mainnet shard %s has no qualification exports: sn-mainnet-exports exit %s\n' "$shard" "${release_gate_mainnet_exports_exit:-unknown}" >&2
+    return 1
+  fi
+  source "$release_gate_mainnet_exports/environment.sh"
   if [[ -n "$release_gate_mainnet_skip_names" ]]; then
     printf '[release-1.0] ./mainnet shards skip by name: %s\n' "$release_gate_mainnet_skip_names"
   fi
@@ -299,6 +323,10 @@ release_phase_sn_mainnet_8() {
   release_gate_mainnet_shard 8
 }
 release_gate_start sn-all-normal release_phase_sn_all_normal
+# The shards wait for the exports: a failed build fails every shard.
+release_gate_await sn-mainnet-exports
+release_gate_mainnet_exports_exit="$RELEASE_GATE_AWAITED_EXIT"
+export release_gate_mainnet_exports_exit
 release_gate_start sn-mainnet-1 release_phase_sn_mainnet_1
 release_gate_start sn-mainnet-2 release_phase_sn_mainnet_2
 release_gate_start sn-mainnet-3 release_phase_sn_mainnet_3
