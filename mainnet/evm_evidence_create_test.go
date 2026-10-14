@@ -137,10 +137,8 @@ func TestEvmEvidenceCreateRejectsChangedConstructor(t *testing.T) {
 			t.Fatalf("changed evidence %s escaped selection rejection: %d %s", fault, code, diagnostic)
 		}
 		for _, name := range []string{evmCreateStateFile, evmVaultCreateStateFile, evmCoordinatorCreateStateFile, evmEscrowRegisterStateFile, evmProxyCreateStateFile, evmReserveLinkStateFile, evmVaultLinkStateFile, evmEvidenceCreateStateFile} {
-			for _, suffix := range []string{"", ".lock"} {
-				if _, err := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, name+suffix)); !errors.Is(err, os.ErrNotExist) {
-					t.Fatalf("changed constructor %s opened %s%s: %v", fault, name, suffix, err)
-				}
+			if err := f.unclaimed(name); err != nil {
+				t.Fatalf("changed constructor %s opened %s: %v", fault, name, err)
 			}
 		}
 	}

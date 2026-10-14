@@ -744,6 +744,7 @@ func TestRepairActiveValidatorLifetimeClaimExcludesStoppedTakeover(t *testing.T)
 	}
 	repairValidatorTestWrite(t, p.MonitorCheckpoint, raw, 0600)
 	f.approval.Plan.StatePath = filepath.Join(f.directory, "stopped-takeover.json")
+	prepareMainnetSnapshotTest(t, f.approval.Plan.StatePath, "mainnet-host-action", 64*1024)
 	f.repairValidatorFixture.sign()
 	f.repairValidatorFixture.claim()
 	r, exit, detail := f.repairValidatorFixture.command("resume")
