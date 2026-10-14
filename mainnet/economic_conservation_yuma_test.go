@@ -161,6 +161,15 @@ func TestNativeProducerPublicYumaSourceReviewRequiresOriginalSignature(t *testin
 		t.Fatal(err)
 	}
 	reference.Sha256 = monitorReadDigest(raw)
+	// Re-pin the producer policy to the changed bytes, so that only the
+	// original approver's signature is left to refuse them.
+	raw, err = json.Marshal(producer.source.policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(producer.policy, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
 	negative, code, issue := producer.command(t)
 	if code == 0 || negative.Complete || !strings.Contains(issue, "native producer independent authority signature is invalid") {
 		t.Fatal("changed full Yuma source authority borrowed an earlier signature", code, issue)
