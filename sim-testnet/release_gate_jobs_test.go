@@ -727,8 +727,19 @@ const releaseGateSimulatorSeparateSelector = "^(TestCampaignEvidenceCapacityV2Me
 const releaseGateSimulatorFinalSelector = "^TestFinal.*$"
 const releaseGateSimulatorHistorySelector = "^Test(Fleet|Historical|Runtime|Scenario).*$"
 const releaseGateSimulatorPartitionedSelector = "^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*)$"
+
+// Local mode's complement also skips its two named sim-testnet tests.
+const releaseGateSimulatorLocalPartitionedSelector = "^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*|TestReleaseLockMatchesCheckout|TestRepositoryDiscoveryUsesModuleIdentity)$"
+
+// Each mode's ordinary complement, assigned once before the job's definition.
+const releaseGateSimulatorRaceSkipAssignment = "release_gate_simulator_race_skip='" + releaseGateSimulatorPartitionedSelector + "'\n" +
+	"if [[ \"$release_gate_dependency_mode\" == local ]]; then\n" +
+	"  release_gate_simulator_race_skip='" + releaseGateSimulatorLocalPartitionedSelector + "'\n" +
+	"fi\n" +
+	"export release_gate_simulator_race_skip\n" +
+	"release_phase_sn_simulator_race() {\n"
 const releaseGateSimulatorRaceCommand = "go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1"
-const releaseGateSimulatorOrdinaryRaceCommand = releaseGateSimulatorRaceCommand + " -skip '" + releaseGateSimulatorPartitionedSelector + "'"
+const releaseGateSimulatorOrdinaryRaceCommand = releaseGateSimulatorRaceCommand + ` -skip "$release_gate_simulator_race_skip"`
 const releaseGateSimulatorPopulationRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorPopulationSelector + "'"
 const releaseGateSimulatorSupplementRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorSupplementSelector + "'"
 const releaseGateSimulatorFinalRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorFinalSelector + "' -skip '" + releaseGateSimulatorSeparateSelector + "'"
@@ -863,6 +874,28 @@ func TestReleaseGateJobsRejectSimulatorPopulationPartitionDrift(t *testing.T) {
 			}
 			if err := verifyReleaseGateSimulatorRaceCensus(strings.Replace(script, command, replacement, 1), sources); err == nil {
 				t.Fatalf("aggregate accepted changed simulator execution: %s", replacement)
+			}
+		}
+	}
+	// The ordinary owner's complement is each mode's reviewed assignment.
+	for _, assignment := range []string{"release_gate_simulator_race_skip='" + releaseGateSimulatorPartitionedSelector + "'", "release_gate_simulator_race_skip='" + releaseGateSimulatorLocalPartitionedSelector + "'"} {
+		for _, replacement := range []string{
+			strings.Replace(assignment, ")$'", ")'", 1),
+			strings.Replace(assignment, "TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|", "", 1),
+			strings.Replace(assignment, "TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|", "", 1),
+			strings.Replace(assignment, "TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper", "TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper.*", 1),
+			strings.Replace(assignment, "|TestRepositoryDiscoveryUsesModuleIdentity", "", 1),
+			strings.Replace(assignment, "|TestReleaseLockMatchesCheckout", "", 1),
+			assignment + "\nrelease_gate_simulator_race_skip='^$'",
+		} {
+			if replacement == assignment {
+				continue
+			}
+			if strings.Count(script, assignment) != 1 {
+				t.Fatal("mutation does not identify one simulator complement assignment")
+			}
+			if err := verifyReleaseGateSimulatorRaceCensus(strings.Replace(script, assignment, replacement, 1), sources); err == nil {
+				t.Fatalf("aggregate accepted a changed simulator complement: %s", replacement)
 			}
 		}
 	}

@@ -1655,6 +1655,9 @@ func verifyReleaseGateSimulatorRaceCensus(script string, sources map[string]stri
 	if err := verifyReleaseGateFullValidatorRace(script); err != nil {
 		return err
 	}
+	if strings.Count(script, releaseGateSimulatorRaceSkipAssignment) != 1 || strings.Count(script, "release_gate_simulator_race_skip=") != 2 {
+		return errors.New("the ordinary simulator owner's complement is not each mode's exact reviewed skip")
+	}
 	population := regexp.MustCompile(releaseGateSimulatorPopulationSelector)
 	supplement := regexp.MustCompile(releaseGateSimulatorSupplementSelector)
 	separate := regexp.MustCompile(releaseGateSimulatorSeparateSelector)

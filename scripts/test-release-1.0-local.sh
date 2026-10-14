@@ -5,13 +5,23 @@ set -euo pipefail
 # builder's dependency_mode does. pinned, the default, seals the run: clean,
 # fetched, at-origin checkouts before and after the tests, the release lock,
 # and the runtime source and metadata attestations. local tests the working
-# checkouts as they are and skips exactly those checks; it never reads a vault
-# checkout. A local pass qualifies those checkouts, not a sealed release.
+# checkouts as they are and skips exactly those checks and the tests that need
+# a sealed run or the vault, and prints each skip with its reason first; it
+# never reads a vault checkout. A local pass qualifies those checkouts, not a
+# sealed release.
 release_gate_requested_dependency_mode="${RELEASE_GATE_DEPENDENCY_MODE:-pinned}"
 if [[ "$release_gate_requested_dependency_mode" == pinned ]]; then
   echo "[release-1.0] dependency mode pinned: sealed, clean, fetched, at-origin checkouts and the release lock"
 elif [[ "$release_gate_requested_dependency_mode" == local ]]; then
   echo "[release-1.0] dependency mode local: the working checkouts as they are, not sealed"
+  # Everything local mode skips, each with its reason. Each test skips by
+  # name in every job that would run it.
+  echo "[release-1.0] source freeze provenance skipped (local mode): it checks the working checkouts' module inventory and tidiness, not that they are clean, fetched and at origin"
+  echo "[release-1.0] runtime source and metadata artifact attestations skipped (local mode): they read the published runtime source and the testnet archive node, not the working checkouts"
+  echo "[release-1.0] final release-lock and source-freeze checkouts skipped (local mode): only a sealed run's checkouts pass them"
+  echo "[release-1.0] vault checkout skipped (local mode): local mode never reads it"
+  echo "[release-1.0] TestReleaseLockMatchesCheckout skipped (local mode): only a sealed run's checkouts match the release lock"
+  echo "[release-1.0] TestRepositoryDiscoveryUsesModuleIdentity skipped (local mode): it stats the workspace vault's main/st.yml"
 else
   echo 'RELEASE_GATE_DEPENDENCY_MODE must be pinned or local' >&2
   exit 1
@@ -144,10 +154,10 @@ release_gate_start sn-go release_phase_sn_go
 # The E suite needs the server's database, so the aggregate skips it; sn-e2e
 # runs every TestSettlementV2E2E test on the gate's private services. So do
 # the four mainnet roots of server/stmonitor/testfixture, skipped by name. Local
-# mode also skips the release-lock comparison, which only a sealed run passes.
+# mode also skips its two named sim-testnet tests, here and in sn-simulator-race.
 release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$)'
 if [[ "$release_gate_dependency_mode" == local ]]; then
-  release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$)'
+  release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$|TestRepositoryDiscoveryUsesModuleIdentity$)'
 fi
 export release_gate_aggregate_skip
 release_phase_sn_all_normal() {
@@ -169,9 +179,16 @@ release_phase_sn_validator_race() {
   cd "$sn_repo"
   go test -race -parallel=4 -timeout 90m ./validator -count=1
 }
+# The complement of the separately owned simulator roots below; local mode
+# also skips its two named sim-testnet tests.
+release_gate_simulator_race_skip='^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*)$'
+if [[ "$release_gate_dependency_mode" == local ]]; then
+  release_gate_simulator_race_skip='^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*|TestReleaseLockMatchesCheckout|TestRepositoryDiscoveryUsesModuleIdentity)$'
+fi
+export release_gate_simulator_race_skip
 release_phase_sn_simulator_race() {
   cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -skip '^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*)$'
+  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -skip "$release_gate_simulator_race_skip"
 }
 # The retained 90-minute aggregate alarm left four newly active roots and 195
 # parallel roots queued after the serial prefix. Keep the complete 1,191,936
@@ -219,9 +236,13 @@ release_phase_sn_v2() {
   cd "$sn_repo"
   go test ./ledger ./scripts/solidity-coverage -count=1
   go test -race ./ledger ./scripts/solidity-coverage -count=1
+  # At load 27 to 46 the selection's ./miner, its claim v2 tests, took 592
+  # seconds under race and 566 without, and a later race run timed out at
+  # Go's implicit ten minutes, so both modes have an explicit deadline; the
+  # whole ledger and checker packages above take seconds.
   settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2|ReleaseRuntimeRunsLedgerAudit)'
-  go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
-  go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
+  go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1 -timeout 30m
+  go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1 -timeout 30m
 }
 release_gate_start sn-v2 release_phase_sn_v2
 
