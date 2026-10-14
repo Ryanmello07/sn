@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -100,13 +99,12 @@ func (self *attemptPreparationView) requestCheckpoint(scope AttemptLedgerPrepara
 			original = self.requestAnchor
 		}
 	}
-	var checkpoint ProviderAttemptRequestCheckpoint
-	if err := attemptStoreDecode(original, &checkpoint); err != nil {
+	checkpoint, _, err := decodeProviderAttemptRequestCheckpoint(original, request.Preparation)
+	if err != nil {
 		return nil, err
 	}
-	canonical, err := json.Marshal(checkpoint)
-	if err != nil || !bytes.Equal(canonical, original) || len(original) > 4096 || checkpoint.Committed != request.ExpectedHead {
-		return nil, errors.Join(attemptLedgerCustodyLoss("request preparation differs from original canonical checkpoint and head", nil), err)
+	if len(original) > 4096 || checkpoint.Committed != request.ExpectedHead {
+		return nil, attemptLedgerCustodyLoss("request preparation differs from original canonical checkpoint and head", nil)
 	}
 	if !restoring && (checkpoint.DirectoryInode != self.rootStat.Ino || checkpoint.FileInode != self.members[ProviderAttemptRequestJournalName].stat.Ino) {
 		return nil, attemptLedgerCustodyLoss("request preparation changed original physical custody", nil)
@@ -126,8 +124,18 @@ func (self *attemptPreparationView) requestCheckpoint(scope AttemptLedgerPrepara
 	if err != nil {
 		return nil, err
 	}
-	if !self.requestAnchorAbsent && !bytes.Equal(raw, self.requestAnchor) {
-		return nil, attemptLedgerCustodyLoss("request target retains a different original checkpoint", nil)
+	if !self.requestAnchorAbsent {
+		// A retained v1 anchor stays as written until the runtime's next save,
+		// but it must hold exactly this rebound checkpoint.
+		retained, _, err := decodeProviderAttemptRequestCheckpoint(self.requestAnchor, request.Preparation)
+		var canonical []byte
+		if err == nil {
+			canonical, err = encodeProviderAttemptRequestCheckpoint(retained)
+		}
+		if err != nil || !bytes.Equal(canonical, raw) {
+			return nil, errors.Join(attemptLedgerCustodyLoss("request target retains a different original checkpoint", nil), err)
+		}
+		raw = bytes.Clone(self.requestAnchor)
 	}
 	return raw, self.checkCensus()
 }
@@ -171,13 +179,12 @@ func validateAttemptLedgerRequestRestore(scope AttemptLedgerPreparationScope, ro
 	if len(original) == 0 || !present || journal.Physical == nil {
 		return attemptLedgerCustodyLoss("ledger restore lost original request journal or checkpoint", nil)
 	}
-	var checkpoint ProviderAttemptRequestCheckpoint
-	if err := attemptStoreDecode(original, &checkpoint); err != nil {
+	checkpoint, _, err := decodeProviderAttemptRequestCheckpoint(original, request.Preparation)
+	if err != nil {
 		return err
 	}
-	canonical, err := json.Marshal(checkpoint)
-	if err != nil || !bytes.Equal(canonical, original) || len(original) > 4096 {
-		return errors.Join(attemptLedgerCustodyLoss("ledger restore changed canonical request checkpoint bytes", nil), err)
+	if len(original) > 4096 {
+		return attemptLedgerCustodyLoss("ledger restore changed canonical request checkpoint bytes", nil)
 	}
 	if err := validateProviderAttemptRequestCheckpoint(checkpoint, request.Preparation); err != nil {
 		return err
