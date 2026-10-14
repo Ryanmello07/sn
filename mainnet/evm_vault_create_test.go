@@ -832,7 +832,7 @@ func TestEvmVaultCreateKeepsReserveCheckpointDuringFreshAdmission(t *testing.T) 
 		return result
 	}
 	result, code, diagnostic := f.command("resume", "--action", "vault-create", "--online", "--submit")
-	if code != 1 || !changed || !strings.Contains(diagnostic, "canonical native ancestry changed") || len(f.writes) != 1 {
+	if code != 1 || !changed || !strings.Contains(diagnostic, evmTestCheckpointRefusal(f, 101, "canonical native ancestry changed")) || len(f.writes) != 1 {
 		t.Fatalf("vault forgot reserve checkpoint after prior audit: %+v %d %s", result, code, diagnostic)
 	}
 	f.override = nil

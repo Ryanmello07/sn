@@ -360,6 +360,16 @@ func (self *evmCreateFixture) unclaimed(name string) error {
 	return owner.close()
 }
 
+// A forked checkpoint is refused by its canonical ancestry comparison, except
+// at the finalized head: the closing finality read refuses that fork first,
+// since 98df8b5f, with the message 45d862a5 gave it.
+func evmTestCheckpointRefusal(f *evmCreateFixture, number uint64, ancestry string) string {
+	if number == f.head {
+		return fmt.Sprintf("retained native canonical hash changed at block %d", number)
+	}
+	return ancestry
+}
+
 // Every test reaches the actual top-level command dispatcher.
 func (self *evmCreateFixture) command(command string, extra ...string) (evmCreateResult, int, string) {
 	self.t.Helper()

@@ -131,7 +131,7 @@ func TestEvmEvidenceCreateFencesSevenPredecessorCheckpoints(t *testing.T) {
 				t.Fatal("pending storage selector released the evidence checkpoint barrier")
 			}
 			pendingObserved = false
-			if _, code, diagnostic := f.command("resume", "--action", "evidence-create", "--online", "--submit"); code != 1 || !changed || refresh && !pendingObserved || !strings.Contains(diagnostic, "ancestry") || len(f.writes) != 7 {
+			if _, code, diagnostic := f.command("resume", "--action", "evidence-create", "--online", "--submit"); code != 1 || !changed || refresh && !pendingObserved || !strings.Contains(diagnostic, evmTestCheckpointRefusal(f, number, "ancestry")) || len(f.writes) != 7 {
 				t.Fatalf("evidence checkpoint %d refresh=%v accepted: %d %s", number, refresh, code, diagnostic)
 			}
 			f.override = nil

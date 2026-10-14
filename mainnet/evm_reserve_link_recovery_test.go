@@ -109,7 +109,7 @@ func TestEvmReserveLinkFencesFivePredecessorCheckpoints(t *testing.T) {
 				}
 				return result
 			}
-			if _, code, diagnostic := f.command("resume", "--action", "reserve-link", "--online", "--submit"); code != 1 || !changed || !strings.Contains(diagnostic, "ancestry") || len(f.writes) != 5 {
+			if _, code, diagnostic := f.command("resume", "--action", "reserve-link", "--online", "--submit"); code != 1 || !changed || !strings.Contains(diagnostic, evmTestCheckpointRefusal(f, number, "ancestry")) || len(f.writes) != 5 {
 				t.Fatalf("binding checkpoint %d refresh=%v accepted: %d %s", number, refresh, code, diagnostic)
 			}
 			f.override = nil
