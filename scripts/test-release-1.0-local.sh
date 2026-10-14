@@ -263,7 +263,7 @@ release_phase_server_unit() {
   go test ./st ./startifact -count=1
   # The SN25 go-live tooling: its gas params, verify.yml and st.yml checks.
   go test ./local/sn25golive -count=1
-  go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1
+  go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit(ArtifactUsagePinsSignerIdentityAndFinalizedBoundaries|AttemptRejectsChangedAuthorityWithoutRewritingIntent|Custody(BindsTwoOperatorSecretsAtCanonicalBoundary|RejectsDustAndKeepsPrincipalCeilings|RejectsSharedRoleKeysBeforeRpc|RejectsWrongOperatorGraphAndAuthority)|DeadlinePinsIntendedEpoch|Funding(KeepsExactPrincipalAndBoundedRounding|RejectsInvalidAndOverflowAmounts)|RetainedCalldataRejectsChangedRetryAmount|SizeRao|SizingZeroPriceSendsNothing|TierForConvictionUsesPreEpochTierExactly)$|StEstimate|StReplacementFee$|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1
   provider_input_tests='^Test(StCanonicalProviderUsages|StBuildReleaseProviderInputs)'
   go test ./controller -run "$provider_input_tests" -count=1
   go test -race ./controller -run "$provider_input_tests" -count=1
@@ -283,8 +283,6 @@ release_phase_server_unit() {
   go test ./router -run 'TestTrie' -count=1
   go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents|ParseHeadEventCkey)$' -count=1
   go test ./taskworker/work -run '^TestStSettlementTasksRejectStaleCoordinatorPayloads$' -count=1
-  go test ./monitor -count=1
-  go test -race ./monitor -count=1
   # The separate calibration harness and its archived inputs are outside SN
   # finalization. Keep a nonempty executable server package census.
   server_package_list="$(go list ./... | grep -Ev '^github[.]com/urnetwork/server/connect/sim-latency(/|$)')"
@@ -446,7 +444,7 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     go test -race ./model -run "$evidence_source_tests" -count=1
     go test . -run "$evidence_source_tests" -count=1
     go test -race . -run "$evidence_source_tests" -count=1
-    controller_db_tests='^Test(CreateContractRejectsInactiveClient|VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|AuthNetworkClientFeedsConfiguredProxyEgressNamespace|PaymentReconcile(SkipsStripeWithSKUOnlyVault|MalformedCredentialResourcesSkipAllStores)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation|StHeadExcludedClients(EqualV1|Refusals|Configured)|CoreStClientFleetBoundEvents|StFleetBoundTopicIsTheCoordinatorEvent)'
+    controller_db_tests='^Test(CreateContractRejectsInactiveClient|VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|AuthNetworkClientFeedsConfiguredProxyEgressNamespace|PaymentReconcile(SkipsStripeWithSKUOnlyVault|MalformedCredentialResourcesSkipAllStores)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation|StHeadExcludedClients(EqualV1|Refusals|Configured)|CoreStClientFleetBoundEvents|StFleetBoundTopicIsTheCoordinatorEvent|StDepositCustody(ReconcilesPreparedFundingBeforeNewSizing|StagesRoundingOnceAndCreditsExactPrincipal|LostFundingReplyDoesNotRepeatTransfer|RetainsUnderfundedSuccessWithoutAnotherTransfer)|StReplacementWaitReadErrorCannotAuthorizeReplacement)'
     model_db_tests='Test(FindActiveClientNetwork|StreamHopListenerPrunesInactiveAdjacentClients|ActiveStreamHopsBoundsConcurrentStaleReAdd|ForceCloseRequiresPositiveParallelism|ForceCloseDisputedContract|ForceCloseDirectSettlementRemovesStream|ForceCloseMalformedContractRemovesStreamAndReturnsError|SweepOrphanClearsProxyConfigRedis|SweepOrphanReapsProxyClients|VerifyEgressIndexStoresNoRawIp|VerifyTrailLockMutualExclusion|VerifyTrailLockStaleReleasePreservesSuccessor|SweepExpiredVerifyTrails|VerifyTrailMutationLockTtlCoversLoadedTrail|StDeploymentStateIsIsolatedAcrossCoordinatorReplacements|StTransactionIntentReservationUsesChainAccountNonceScope|StTransactionRevertRetryCreatesOneImmutableSuccessor|StTransactionAttemptCandidatesConvergeOnOneWinner|StTransactionCancellationCannotRegress|StTransactionFinalizedAttemptCannotRegress|St(Retained|Roster)WalletResolutions(EqualV1|Refusals)|StWalletResolutionsVerifyEachHeadOnce|StPayoutWalletResolutionsBatched(EqualV1|KeepV1PrefixOnMismatch|Duplicates|Refusals)|StFleetBound(NextBlock|ClientIds|ClientIdsRefuseMalformedRows)|StRosterProviderPinRefusals)'
     go test ./controller -run "$controller_db_tests" -count=1
     go test ./model -run "$model_db_tests" -count=1
@@ -489,6 +487,15 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # selection. Every hosted-device and client netstack is synchronously joined
     # before the following root is admitted.
     go test -timeout 20m ./proxy -count=1
+    # The monitor's whole package, in both modes, one after the other. Its SQL
+    # fixtures fail closed without the test environment this phase sources
+    # (server monitor/RUN-MAIN.md), so it cannot run among the unit suites.
+    # On 2026-10-14, on a build host at load 40 to 58, the normal package took
+    # 43 minutes. Most of it is PostgreSQL time, which the race detector does
+    # not slow. Each catalog fixture's budget ends 30 seconds before the
+    # package deadline, so these deadlines bound the fixtures too.
+    go test -timeout 90m ./monitor -count=1
+    go test -race -timeout 180m ./monitor -count=1
   }
   # Each full history population has its own process and ten-minute modes.
   # TestEnv owns a unique Pg database and an exclusive renewable Redis lease;

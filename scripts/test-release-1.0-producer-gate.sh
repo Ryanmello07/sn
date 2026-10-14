@@ -440,7 +440,7 @@ release_phase_server_unit() {
   go test . -run "$test_env_fail_fast_tests" -count=1
   go test -race . -run "$test_env_fail_fast_tests" -count=1
   go test ./st ./startifact -count=1
-  go test ./controller -run '^Test(CoreStClient|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature)' -count=1
+  go test ./controller -run '^Test(CoreStClient|StConfig|StCompute|StBuild|StDeposit(ArtifactUsagePinsSignerIdentityAndFinalizedBoundaries|AttemptRejectsChangedAuthorityWithoutRewritingIntent|Custody(BindsTwoOperatorSecretsAtCanonicalBoundary|RejectsDustAndKeepsPrincipalCeilings|RejectsSharedRoleKeysBeforeRpc|RejectsWrongOperatorGraphAndAuthority)|DeadlinePinsIntendedEpoch|Funding(KeepsExactPrincipalAndBoundedRounding|RejectsInvalidAndOverflowAmounts)|RetainedCalldataRejectsChangedRetryAmount|SizeRao|SizingZeroPriceSendsNothing|TierForConvictionUsesPreEpochTierExactly)$|StEstimate|StReplacementFee$|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature)' -count=1
   provider_input_tests='^Test(StCanonicalProviderUsages|StBuildReleaseProviderInputs)'
   go test ./controller -run "$provider_input_tests" -count=1
   go test -race ./controller -run "$provider_input_tests" -count=1
@@ -539,7 +539,7 @@ release_phase_server_db() {
   go test -race ./model -run "$evidence_source_tests" -count=1
   go test . -run "$evidence_source_tests" -count=1
   go test -race . -run "$evidence_source_tests" -count=1
-  controller_tests='^Test(VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation)'
+  controller_tests='^Test(VerifyController(FullTrailFlow|PoisonAndFailurePaths|ConcurrentExtendReloadsAfterLock|ReplayCannotReadANewerCachedResponse)|VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)|StAccountReconcile|StSyncChainEventsBatchesCanonicalEventBlocks|StSyncChainEventsRejectsIncompleteCanonicalBatchBeforeMutation|StDepositCustody(ReconcilesPreparedFundingBeforeNewSizing|StagesRoundingOnceAndCreditsExactPrincipal|LostFundingReplyDoesNotRepeatTransfer|RetainsUnderfundedSuccessWithoutAnotherTransfer)|StReplacementWaitReadErrorCannotAuthorizeReplacement)'
   model_tests='^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|VerifyTrailLockMutualExclusion|VerifyTrailLockStaleReleasePreservesSuccessor|StDeploymentStateIsIsolatedAcrossCoordinatorReplacements|StTransactionIntentReservationUsesChainAccountNonceScope|StTransactionAttemptCandidatesConvergeOnOneWinner|StTransactionFinalizedAttemptCannotRegress)'
   go test ./controller -run "$controller_tests" -count=1
   go test ./model -run "$model_tests" -count=1

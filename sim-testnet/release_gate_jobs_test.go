@@ -1061,19 +1061,19 @@ var releaseGateUncachedCommands = []struct {
 	{phase: "server_unit", command: "go test . -run '^Test(PgResourcesRedirectMaintenancePoolAndRestore|DatabaseTimeMatchesPostgresPrecision)$' -count=1"},
 	{phase: "server_unit", command: "go test ./st ./startifact -count=1"},
 	{phase: "server_unit", command: "go test ./local/sn25golive -count=1"},
-	{phase: "server_unit", command: "go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit|StEstimate|StReplacement|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1"},
+	{phase: "server_unit", command: "go test ./controller -run '^Test(CoreStClient(BlockHashes|FinalizedHead|Epoch)|CoreStClientBindingsAt|DecodeStRPCBlockIdentity|StatsAlphaPriceURLIsMainnetOnly|StatsGaugeVecReplaceDeletesStaleSeries|StConfig|StCompute|StBuild|StDeposit(ArtifactUsagePinsSignerIdentityAndFinalizedBoundaries|AttemptRejectsChangedAuthorityWithoutRewritingIntent|Custody(BindsTwoOperatorSecretsAtCanonicalBoundary|RejectsDustAndKeepsPrincipalCeilings|RejectsSharedRoleKeysBeforeRpc|RejectsWrongOperatorGraphAndAuthority)|DeadlinePinsIntendedEpoch|Funding(KeepsExactPrincipalAndBoundedRounding|RejectsInvalidAndOverflowAmounts)|RetainedCalldataRejectsChangedRetryAmount|SizeRao|SizingZeroPriceSendsNothing|TierForConvictionUsesPreEpochTierExactly)$|StEstimate|StReplacementFee$|StDecode|StEvent|StBroadcast|StClientStub|StTransactionCancellation|VerifyEvidenceRange|VerifyKeyRotation|VerifySyntheticSeedId|VerifyUsesUrForwardedAddress|VerifyIgnoresLegacyForwardedAddress|VerifyClampM|VerifyCachedResponseRoundTrip|VerifySeedRejectsMissingSignature|StripeReconcileCredentialsRequireNonblankAPIToken|AppleReconcileCredentialsRequireCompleteServerAPIIdentity|PlayReconcileCredentialsRequireOAuthPackageAndSKUs|SolanaReconcileCredentialsRequireNonblankHeliusAPIKey)' -count=1"},
 	{phase: "server_unit", command: "go test ./session -run 'Test.*(UrForwardedAddress|LegacyForwardedHeaders|RemoteAddress)' -count=1"},
 	{phase: "server_unit", command: "go test ./router -run 'TestTrie' -count=1"},
 	{phase: "server_unit", command: "go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents|ParseHeadEventCkey)$' -count=1"},
 	{phase: "server_unit", command: "go test ./taskworker/work -run '^TestStSettlementTasksRejectStaleCoordinatorPayloads$' -count=1"},
-	{phase: "server_unit", command: "go test ./monitor -count=1"},
-	{phase: "server_unit", command: "go test -race ./monitor -count=1"},
 	{phase: "connect", command: "go test . -run '^Test(Verify|Sn)' -count=1"},
 	{phase: "sdk", command: "go test . -run '^Test(ApiSubnet|ProviderLocalUserNatSettings)' -count=1"},
 	{phase: "server_db", command: "go test ./controller -run \"$controller_db_tests\" -count=1"},
 	{phase: "server_db", command: "go test ./model -run \"$model_db_tests\" -count=1"},
 	{phase: "server_db", command: "go test -race ./controller -run \"$controller_db_tests\" -count=1"},
 	{phase: "server_db", command: "go test -race ./model -run \"$model_db_tests\" -count=1"},
+	{phase: "server_db", command: "go test -timeout 90m ./monitor -count=1"},
+	{phase: "server_db", command: "go test -race -timeout 180m ./monitor -count=1"},
 }
 
 // The bounded phase extractor ends at the first closing brace. Refuse nested
