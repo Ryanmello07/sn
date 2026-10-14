@@ -163,9 +163,10 @@ func releaseGateVerdictLine(output string) string {
 }
 
 // Local mode skips the source freeze's provenance snapshots, the release-lock
-// comparison in sn-all-normal and as a final fence, and both runtime
-// attestations. Every other preflight, fence and job runs, and every place the
-// script consults its mode is one of these.
+// comparison as a final fence and, with the vault-discovery test, in every job
+// that would run it, and both runtime attestations. Every other preflight,
+// fence and job runs, and every place the script consults its mode is one of
+// these.
 func TestReleaseGateLocalModeSkipsExactlyTheSealingChecks(t *testing.T) {
 	for _, diagnostic := range []bool{false, true} {
 		if got, want := recordReleaseGatePreflights(t, "local", diagnostic), releaseGateExpectedPreflights("local", diagnostic); !slices.Equal(got, want) {
@@ -191,6 +192,7 @@ func TestReleaseGateLocalModeSkipsExactlyTheSealingChecks(t *testing.T) {
 		"export release_gate_dependency_mode",
 		`release_gate_record_preflight repository-inventory release_gate_diagnostic_inventory "$release_gate_dependency_mode" || release_gate_preflight_refusal "$?"`,
 		`release_source_snapshot="$(release_gate_record_preflight source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" --dependency-mode "$release_gate_dependency_mode" "$workspace")" || release_gate_preflight_refusal "$?"`,
+		local,
 		local,
 		local,
 		`if [[ "$release_gate_diagnostic" == 1 && "$release_gate_dependency_mode" == pinned ]]; then`,
@@ -260,7 +262,7 @@ func TestReleaseGateRefusesAnUnknownDependencyMode(t *testing.T) {
 		}
 	}
 	output, stderr, err := runReleaseGateModeSelection(t, "RELEASE_GATE_DEPENDENCY_MODE=local")
-	if err != nil || output != "[release-1.0] dependency mode local: the working checkouts as they are, not sealed\nselected local\n" || stderr != "" {
+	if err != nil || output != strings.Join(releaseGateLocalModeSelectionLines, "\n")+"\nselected local\n" || stderr != "" {
 		t.Fatalf("local mode selection = %q %q %v", output, stderr, err)
 	}
 }

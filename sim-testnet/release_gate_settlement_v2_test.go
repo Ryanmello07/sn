@@ -58,12 +58,13 @@ var releaseGateStmonitorFixtureLines = []string{
 // The aggregate job's skip: the E suite and the stmonitor fixture's roots.
 const releaseGateAggregatePinnedSkip = "^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$)"
 
-// Local dependency mode also skips the release-lock comparison, which only a
-// sealed run's checkouts can pass.
-const releaseGateAggregateLocalSkip = "^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$)"
+// Local dependency mode also skips its two named sim-testnet tests: the
+// release-lock comparison, which only a sealed run's checkouts can pass, and
+// the discovery test that stats the workspace vault.
+const releaseGateAggregateLocalSkip = "^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$|TestRepositoryDiscoveryUsesModuleIdentity$)"
 
 // The aggregate job: every package of sn in normal mode, without the E suite
-// and, in local mode, without the release-lock comparison.
+// and, in local mode, without its named sim-testnet tests.
 const releaseGateAggregateNormalCommand = `go test -parallel=4 -timeout 90m ./... -count=1 -skip "$release_gate_aggregate_skip"`
 
 // Each mode's skip, assigned once before the job's definition.
@@ -771,7 +772,7 @@ func releaseGateAggregateSkipCensus(root string) (map[string][]string, error) {
 			return err
 		}
 		source, err := os.ReadFile(path)
-		if err != nil || !strings.Contains(string(source), "TestSettlementV2E2E") && !strings.Contains(string(source), "TestReleaseLockMatchesCheckout") && !strings.Contains(string(source), "TestMonitor") {
+		if err != nil || !strings.Contains(string(source), "TestSettlementV2E2E") && !strings.Contains(string(source), "TestMonitor") && !slices.ContainsFunc(releaseGateLocalModeTestSkips, func(skip releaseGateLocalModeTestSkip) bool { return strings.Contains(string(source), skip.name) }) {
 			return err
 		}
 		relative, err := filepath.Rel(root, filepath.Dir(path))
@@ -788,7 +789,7 @@ func releaseGateAggregateSkipCensus(root string) (map[string][]string, error) {
 // The aggregate job skips exactly the E suite and the stmonitor fixture's
 // roots: its whole body is the full normal run with that skip, and every test
 // of sn that the skip names is in ./mainnet and selected by sn-e2e. Local
-// mode's skip adds exactly the release-lock comparison of ./sim-testnet.
+// mode's skip adds exactly its named tests of ./sim-testnet.
 func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string) error {
 	commands, _, err := releaseGatePhaseCommands(script, "sn_all_normal")
 	if err != nil {
@@ -826,7 +827,7 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 			}
 			for _, name := range names {
 				if skip.MatchString(name) != localSkip.MatchString(name) {
-					if skip.MatchString(name) || packagePath != "./sim-testnet" || name != "TestReleaseLockMatchesCheckout" {
+					if skip.MatchString(name) || packagePath != "./sim-testnet" || !slices.ContainsFunc(releaseGateLocalModeTestSkips, func(skip releaseGateLocalModeTestSkip) bool { return skip.name == name }) {
 						return fmt.Errorf("the aggregate job's local mode also skips %s of %s", name, packagePath)
 					}
 					localOnly++
@@ -851,8 +852,8 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 	if fixtureSkipped != len(releaseGateStmonitorFixtureRoots) {
 		return errors.New("the aggregate job does not skip exactly the stmonitor fixture's roots")
 	}
-	if localOnly != 1 {
-		return errors.New("the aggregate job's local mode does not skip exactly the release-lock comparison")
+	if localOnly != len(releaseGateLocalModeTestSkips) {
+		return errors.New("the aggregate job's local mode does not skip exactly its named sim-testnet tests")
 	}
 	return nil
 }
