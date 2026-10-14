@@ -89,8 +89,9 @@ routable-IP breadth** — not on traffic volume; a fleet's score is its count of
 Merkle claim. A fleet is matched to its UID by a **signed `client_id`s → hotkey binding** validators read
 (§11.4); its providers **graduate out of the pool into the head, and fall back if their breadth slips**,
 with deregistration churn running that tournament. Both tiers share **one** mechanism's 256-UID metagraph
-(§14); a governance split **θ** sets how much of the 41% miner emission flows to the head vs. the pools
-(§8.4–8.5).
+(§14); a governance split **θ** sets how much of the providers' share of the 41% miner emission flows to
+the head vs. the pools (§8.4–8.5). On SN25 that share, the **momentum** `μ`, is 1/10 at launch, and the
+native treasury multisig `ur‑reserve` receives the rest (§8.5).
 
 The subnet **launches centralized‑but‑bounded** — an upgradeable policy coordinator owned by a dedicated
 testnet key and, on mainnet, a Safe multisig (1-of-1 at the SN25 launch; a Safe transaction can add owners and
@@ -177,8 +178,9 @@ alternatives):
 5. **Two miner tiers in one mechanism.** Alongside the per-NO pools (the on-ramp), the **top ~200
    fleets hold their own miner UIDs** and are steered **directly** by validators on split-adjusted
    distinct routable egress-prefix breadth, paid **natively** (§8.4). Both tiers live in **one** mechanism — a second mechanism would
-   halve the 256-UID space below 200 (§14) — and a governance split **θ** divides the 41% miner emission
-   between the head and the pools (§8.5).
+   halve the 256-UID space below 200 (§14) — and a governance split **θ** divides the providers' share of
+   the 41% miner emission between the head and the pools (§8.5). On SN25 that share, the momentum `μ`, is
+   1/10 at launch; the native treasury multisig `ur‑reserve` receives the rest.
 
 ---
 
@@ -205,11 +207,14 @@ Money flows in three coupled channels, all in α:
    = the NO's audited usage priced at the conviction‑zero rate, §8.1) and submit those weights, so the **validators' evaluation
    drives the miner emission — the Bittensor way**. With many independent validators, **Yuma Consensus
    does real work**: stake‑weighted median + **clipping**, so no NO can inflate its own pool or knife a
-   rival. Miner emission (41%) lands on miner‑pool UIDs **owned by the immutable vault coldkey** — no
-   emission ever touches a NO's keys. **The 41% splits across two tiers** (§8.4–8.5): a governance share
-   **θ** to **top-level miners** (the top ~200 fleets by **split-adjusted distinct routable egress-IP
-   count**, as their own native UIDs), and `1−θ` to the NO pools above. Validator emission (41%) flows
-   **natively** to the independent validators ∝ stake × vtrust.
+   rival. Pool emission lands on miner‑pool UIDs **owned by the immutable vault coldkey** — no
+   emission ever touches a NO's keys. **The providers' share of the 41% splits across two tiers**
+   (§8.4–8.5): a governance share **θ** to **top-level miners** (the top ~200 fleets by **split-adjusted
+   distinct routable egress-IP count**, as their own native UIDs), and `1−θ` to the NO pools above. On SN25
+   that share, the **momentum** `μ`, is 1/10 at launch: the signed treasury policy has validators weight
+   the other 9/10 to two recipient UIDs of `ur‑reserve`, a native treasury multisig separate from the
+   buyback reserve (§8.5). Validator emission (41%) flows **natively** to the independent validators
+   ∝ stake × vtrust.
 
 3. **Settlement (contract).** Over a 7‑day epoch the contract accrues the **captured miner emission**,
    then distributes it. A NO's **miner pool** — its UID's earned emission, nothing else (deposits are
@@ -270,7 +275,8 @@ widens it as the validator set and data mature (§12.3).
    customers ($) ──▶ revenue         (Merkle proof)          a top provider's own coldkey
           └────────── start in a pool ─▶ graduate to a top slot ─▶ fall back if breadth slips ──┘
 
- Bittensor coinbase: 18% owner · 41% miner (Yuma, split θ / 1−θ above) · 41% validator (NATIVE ∝ stake×vtrust)
+ Bittensor coinbase: 18% owner · 41% miner (Yuma; providers' share μ split θ / 1−θ above) · 41% validator (NATIVE ∝ stake×vtrust)
+ SN25 launch: μ = 1/10 of the 41%; the validators' row gives the other 9/10 to ur-reserve's two recipient UIDs (§8.5)
  buyback reserve: ΣD staked to the owner-validator hotkey — locked, dividend-compounding, never distributed (§7.4)
 ```
 
@@ -536,7 +542,8 @@ as `vpk` also works but couples key rotation to the wallet; binding is preferred
 | `E_mine, E_val, E_own` | α emission to the miner / validator / owner pools over the epoch (41/41/18% of subnet α emission) |
 | `Q_n` | NO `n`'s consensus‑measured pool quality (from validators' `VALIDATOR.md` trails) |
 | `score(u)` | top‑level miner (fleet) `u`'s **split‑adjusted count of distinct routable egress‑IPs** — **is** its head weight (§8.4) |
-| `θ` | governance **head share**: fraction of the 41% miner emission steered to top-level miners; `1−θ` goes to the pools (§8.5) |
+| `θ` | governance **head share**: fraction of the providers' share `μ` of the 41% miner emission steered to top-level miners; `1−θ` goes to the pools (§8.5) |
+| `μ` | **momentum**: the providers' share (head + pools) of the native miner allocation — 1/10 on SN25 at launch, pinned by the signed treasury policy, which gives the other `1 − μ` to `ur‑reserve`'s recipient UIDs; 1 without a treasury policy (testnet) (§8.5) |
 | `client_id`s ⇄ hotkey | the signed binding mapping a fleet's `client_id`s to a top-level miner's UID (§11.4) |
 | `R` | the **buyback reserve**: cumulative locked deposits + voluntary conviction + their compounded dividends (§7.4) |
 | `φ` / `ω` / `FeePool` / `effort_v` | effort‑bounty quantities — **out of scope** (parked, §9.3/§13.6, D29) |
@@ -876,8 +883,10 @@ upgradeable proxy. The reserve is publicly auditable every finalized block:
   finalizes a root only after an auditor quorum (at launch the validator alone) approves it, and the
   coordinator's pause also stops v2 closes, commits and finalization, never claims, approvals, challenges
   or demands.
-- **Treasury:** the 18% owner cut accrues to the owner multisig (a governance treasury later, §6.4.3).
-  The buyback reserve is **not** treasury — it is contract‑locked (§7.4).
+- **Treasury:** the 18% owner cut accrues to SN25's owner coldkey, the `ur‑owner` native multisig, not to
+  the Safe (a governance treasury later, §6.4.3). The native treasury `ur‑reserve`, a separate 2‑of‑3
+  multisig, receives the miner allocation beyond the providers' momentum share (9/10 at launch) through its
+  own recipient UIDs (§8.5). The buyback reserve is **not** treasury — it is contract‑locked (§7.4).
 
 #### 6.4.2 Phase 1 — Harden custody (bound the owner without losing bug‑fixes)
 
@@ -1075,10 +1084,15 @@ exactly 1 and `Q_n` alone steers (§7.1). NO `n`'s miner‑pool UID then accrues
 over the epoch
 
 ```
-emission_n  ≈  0.41 · E_epoch · (1−θ) · ŵ_n,   ŵ_n = consensus(implied_usage_n · Q_n) / Σ_m consensus(implied_usage_m · Q_m)
+emission_n  ≈  0.41 · E_epoch · μ · (1−θ) · ŵ_n,   ŵ_n = consensus(implied_usage_n · Q_n) / Σ_m consensus(implied_usage_m · Q_m)
 ```
 
-**as α stake the immutable vault holds** (the vault owns the pool UID — the NO never receives it). Demand (implied
+**as α stake the immutable vault holds** (the vault owns the pool UID — the NO never receives it). Here `μ`,
+the **momentum**, is the providers' share of the native miner allocation: on SN25 it is 1/10 at launch,
+pinned by the signed treasury policy, which has validators weight `ur‑reserve`'s recipient UIDs for the
+other `1 − μ` (§8.5); without a treasury policy (testnet) `μ = 1`. With no head fleet weighted, θ cedes and
+the pools share `μ` whole. At about 1 α per block, one pool, a weighted head and θ = 3/10, that is
+0.41 × 50,400 × 1/10 × 7/10 ≈ 1,446 α per epoch. Demand (implied
 usage) anchors `ŵ_n` to revenue‑backed usage (§7); the consensus‑measured `Q_n` modulates it — a NO with
 poor providers earn less even at high demand (swing capped at bootstrap, §12.3). The immutable vault
 captures the realized stake on each pool hotkey at the epoch boundary; it never estimates settlement
@@ -1163,7 +1177,8 @@ withholding the newest root's ledger cannot shield an older root's accounts. A w
 never be opened, so a demanded account is protected even when the tree is not published. A root still
 unfinalized at the end of the next epoch can be replaced, and its epochs' funding stays for the replacement.
 A refused or deleted root does not change the pool's weight while there is one operator: zeroing the pool
-would hand the pool channel to the head (§8.5), punishing providers for the operator's fault.
+would hand the pool channel to the head (§8.5), or with no head fleet on SN25 the whole row to `ur‑reserve`,
+punishing providers for the operator's fault.
 
 **Claims are cumulative and permissionless**, and the contract derives the α from **on‑chain state**:
 
@@ -1264,8 +1279,10 @@ winner-take-all; apply the signed policy's `max_weight_limit_u16` before every C
 so honest-but-idle fleets don't stale-decay. Runtime v454 retains v452's native getter at `65535`
 (no cap), despite retaining a `MaxWeightsLimit` storage item, so release 1.0 validators enforce the
 policy cap locally and finalized-vector analysis rejects violations. The two-NO testnet bootstrap uses
-`32768` (the smallest feasible two-recipient cap); a production policy lowers the cap toward a low
-single-digit percentage only after enough positive recipients exist. Deterministic `u16` conversion
+`32768` (the smallest feasible two-recipient cap), and so does SN25, whose treasury policy requires exactly
+`32768` (its two recipients take 45% each, or half each in a reserve-only row, §8.5); a later policy lowers
+the cap toward a low single-digit percentage only after enough positive recipients exist, which on SN25 also
+needs a newly signed treasury policy. Deterministic `u16` conversion
 repairs any one-unit rounding deficit before signing and rechecks the exact integer cap. A native
 runtime cap remains the preferred defense against non-conforming validators. This matches the strongest DePIN precedents —
 FileTAO's live-scoring and TPN's robust statistics.
@@ -1274,16 +1291,30 @@ FileTAO's live-scoring and TPN's robust statistics.
 
 Both tiers are miner UIDs in **one** mechanism (§14), so the 41% miner emission is divided by the
 **weights validators set** — and to make that a controllable policy rather than an accident, validators run
-common software that **reserves a governance share θ to the head and `1−θ` to the pools**, exactly as Data
-Universe (SN13) reserves a fixed share to one UID by rewriting weights before `set_weights`:
+common software that **reserves a governance share θ of the providers' share `μ` to the head and `1−θ` to
+the pools**, exactly as Data Universe (SN13) reserves a fixed share to one UID by rewriting weights before
+`set_weights`:
 
 ```
-head[]  =  { score(u) }               normalized so Σ head = θ      # split-adjusted routable-IP breadth (§8.4)
-pool[]  =  { implied_usage_n × Q_n }  normalized so Σ pool = 1 − θ  # implied_usage = audited usage at the baseline rate (§8.1)
-w       =  head ⊕ pool                # one vector; apply signed max_weight_limit_u16; commit-reveal
+head[]      =  { EMA(score(u)) }          normalized so Σ head = θ·μ        # split-adjusted routable-IP breadth (§8.4)
+pool[]      =  { implied_usage_n × Q_n }  normalized so Σ pool = (1 − θ)·μ  # implied_usage = audited usage at the baseline rate (§8.1)
+treasury[]  =  { (1 − μ)/k each }         # SN25: ur-reserve's k = 2 recipient UIDs; none where μ = 1
+w           =  head ⊕ pool ⊕ treasury     # one vector; apply signed max_weight_limit_u16; commit-reveal
 ```
 
-Both shares go to **real recipients** (top miners; vault-owned pool UIDs), so the **June-2026
+**Momentum and the treasury row (SN25).** `μ`, the **momentum**, is the share of the native miner allocation
+paid to providers. On SN25 the signed treasury policy pins it at **1/10** and has validators weight the other
+`1 − μ` in equal parts to the recipient UIDs of `ur‑reserve` (SN25 UIDs 170 and 250, 9/20 each), which
+receives it for future network improvements; `ur‑reserve` is a 2‑of‑3 native multisig, outside the subnet
+owner's hotkeys and separate from the buyback reserve (§7.4). An empty tier cedes its share to the other
+(`cede_to_nonempty`); with no provider weight at all the row is reserve-only, the recipients sharing it
+equally. A missing or masked recipient, or an entry over the cap, refuses the row rather than clipping or
+repairing it. Changing `μ` takes a newly signed treasury policy, and the current validator admits only 1/10;
+without a treasury policy (testnet) `μ = 1`. At θ = 3/10, one pool and one head fleet, the row (pool, head,
+the two recipients) is [7/100, 3/100, 9/20, 9/20], u16 [10194, 4369, 65535, 65535].
+
+Every share goes to **real recipients** (top miners; vault-owned pool UIDs; on SN25, `ur‑reserve`'s
+ordinary recipient UIDs, outside the owner's hotkeys), so the **June-2026
 `(1 − miner_burned)` penalty does *not* apply** — that penalty only bites emission *withheld to an
 owner/immune key* (Spec 421, subtensor PR #2781). **Do not "reserve baseline" by burning to an owner UID** —
 it would shrink the subnet's whole cross-subnet allocation. Because Yuma clips to the κ-stake-weighted
@@ -1463,10 +1494,12 @@ for validator v:
     # HEAD — top-level miners: split-adjusted routable-IP breadth (§8.4, D27)
     for each top-level-miner UID u (fleet — client_ids C_u bound to u, §11.4):
         head[u] = score_v(u) = Σ_{h ∈ v's routable IP-hashes for C_u} 1 / (# top miners v sees claiming h)   // = 0 for v's own UID
-    # split by governance share θ, into ONE vector (§8.5)
-    normalize head so Σ head = θ ;   normalize pool so Σ pool = 1 − θ
-    w_v = apply signed policy max_weight_limit_u16 to (head ⊕ pool)
+    # split the providers' share μ by governance share θ, into ONE vector (§8.5)
+    normalize head so Σ head = θ·μ ;   normalize pool so Σ pool = (1 − θ)·μ   // an empty tier cedes to the other
+    SN25: add ur-reserve's k recipient UIDs at (1 − μ)/k each (the whole row when no provider has weight)
+    w_v = apply signed policy max_weight_limit_u16 to the row
     w_v = half-up u16(w_v); deterministically repair rounding under the same cap
+                          // SN25 treasury row: no clipping or repair; an entry over the cap refuses the row
     commit / reveal w_v   (Neuron 0x804, drand timelock — §2.4)
 ```
 
@@ -1480,7 +1513,8 @@ registered in vault2 (`STSettlementVault2`). The validator checks that hotkey ag
 replay never calls a contract that did not yet exist. Live steering and replay share this one resolver, and from
 E_s the v1 pool hotkey is no longer consulted. A refused or deleted v2 payout root (§11.3) does not change the
 pool's weight while there is one operator: zeroing the pool would hand the pool channel to the head fleets,
-punishing providers for the operator's fault.
+or with no head fleet on SN25 the whole row to `ur‑reserve` (§8.5), punishing providers for the operator's
+fault.
 
 Yuma combines the validators' vectors with their stake:
 
@@ -1494,7 +1528,8 @@ Yuma combines the validators' vectors with their stake:
   high demand (swing capped at bootstrap, §12.3). The *within*‑pool split to providers is the separate
   per‑provider step (§8.2). **Head:** `incentive_u ∝ Σ_v stake_v · clipped score_v(u)`, so a top-level
   miner's emission tracks its **consensus routable-IP breadth** (§8.4), paid **natively** to its own
-  hotkey; the θ split (§8.5) sets how the 41% divides between the head and the pools.
+  hotkey; the θ split (§8.5) sets how the providers' share of the 41% (`μ`, 1/10 on SN25 at launch)
+  divides between the head and the pools.
 - **Validator rewards = dividends, and only dividends.** Native dividends grow with bonds on pools
   consensus later rewards (Liquid Alpha) and with vtrust (accurate scoring) — the **Bittensor‑native**
   reward for good evaluation, and v1's **whole** validator reward. Commit‑reveal makes accurate scoring
@@ -1738,8 +1773,9 @@ NO-trust, and is not required.)
 ### 12.1 Operator equilibrium
 
 Let a NO with real customer revenue `R_n` (α‑equivalent) choose its conviction tier and its per‑epoch
-deposit `D_n`. Over an epoch the **contract pays that NO's providers** `0.41·E·ŵ_n·(1−θ)` (the NO's pool
-emission, `ŵ_n ∝ implied_usage_n × Q_n`, `implied_usage_n` the audited usage priced at the baseline rate, §8.1); the deposit and
+deposit `D_n`. Over an epoch the **contract pays that NO's providers** `0.41·E·μ·ŵ_n·(1−θ)` (the NO's pool
+emission, `μ` the providers' momentum share, §8.1, `ŵ_n ∝ implied_usage_n × Q_n`, `implied_usage_n` the audited
+usage priced at the baseline rate, §8.1); the deposit and
 any conviction stake are both locked in the reserve (§7.4), and the NO keeps `R_n − D_n` off‑chain.
 Providers attach where expected pay is highest. Two forces balance:
 
@@ -1766,7 +1802,7 @@ round‑trips to itself. The round‑trip **does not exist**: no deposit or conv
 honest NO alike. Buying cheaper weight via a higher tier costs *more* locked capital, not less, so the
 tier discount does not open a self‑dealing edge. What remains is the *steering* channel — a deposit still
 buys pool emission `ŵ_n`, captured by whoever the NO's providers are — bounded by
-`0.41·E·(1−θ)·(implied_usage/Σ) − (sunk α) − (real infra to pass live trails)`, gated by winning
+`0.41·E·μ·(1−θ)·(implied_usage/Σ) − (sunk α) − (real infra to pass live trails)`, gated by winning
 **quality consensus** `Q_n` against independent measurement with the **self‑weight mask** on (§10). The
 honest residual (a determined self‑dealer with real infra *and* stake) is the `VALIDATOR.md` §10 class,
 exactly what a broad independent validator set + that roadmap close (§12.3).
@@ -1821,7 +1857,8 @@ designs, §9.3/§13.6) is an open post‑launch question, not a committed roadma
   withheld *and* admission is bypassed (an owner upgrade, or the root-signer and auditor keys) — watchers
   demand a value-weighted sample, so the larger the theft, the likelier it is caught; and an epoch whose
   **close is missed** beyond its 1,200-block window, whose share moves to later earners. Nor is delivery
-  time promised: at live rates about 1,450 α per epoch reaches the pool at θ = 3/10, ≈ 0.0145 α per
+  time promised: at live rates about 1,450 α per epoch reaches the pool — the providers' momentum share,
+  1/10 of the miner allocation, less θ = 3/10 for the head (§8.5) — ≈ 0.0145 α per
   provider per week at 100k providers, so a 250k-gas claim at a 5 gwei base fee (≈ 0.19 α; the rehearsal
   measured 186,707 gas for an account's first claim and 169,606 for a later one) costs about 13 weeks of
   average earnings, and gas falls under 10% of a claim only after ≈ 131 weeks; both take ten times longer
@@ -1845,7 +1882,7 @@ The reserve turns the token flow one‑directional. Per epoch, in α units:
 ```
 locked in:   B_e  =  Σ_n D_n                       // deposits: market-bought, staked to the reserve (§7.4)
              Y_e  =  0.41·E_e · s_e · (1 − take)   // reserve dividends: its share s_e of subnet validator stake
-liquid out:  L_e  ≈  0.41·E_e                      // miner emission (both tiers)
+liquid out:  L_e  ≈  0.41·E_e                      // miner emission: providers' μ (both tiers) + ur-reserve's 1 − μ (§8.5)
                    + 0.41·E_e · (1 − s_e)          // outside-validator dividends
                    + 0.18·E_e                      // owner cut
 ```
@@ -1956,8 +1993,9 @@ from day one — we ramp its *strength*, we do not defer the mechanism.
 is by usage alone, with no per-provider reliability factor (cf. §8.2), so the validator's measurement no
 longer gates which providers inside a pool are paid. Root approval is an objective ledger check, not a
 quality lever: while there is one operator, a refused or deleted root leaves the pool weight unchanged,
-because zeroing the pool would hand the pool channel to the head fleets and punish providers for the
-operator's fault (owner decisions, October 11).
+because zeroing the pool would hand the pool channel to the head fleets, or with no head fleet on SN25 the
+whole row to `ur‑reserve` (§8.5), and punish providers for the operator's fault (owner decisions,
+October 11).
 
 ### 13.5 No on‑chain oracle (simplified out)
 
@@ -2017,8 +2055,9 @@ hotkeys **cannot** route miner emission to sub-workers anyway, §8.4).
 
 ### 13.8 Head/tail split θ in one mechanism (chosen); not two mechanisms, not owner-burn
 
-The two tiers share **one mechanism's** 256-UID metagraph, and the 41% miner emission divides between them
-by a governance share **θ** baked into validator software (SN13-style weight reservation, §8.5).
+The two tiers share **one mechanism's** 256-UID metagraph, and the providers' share of the 41% miner emission
+(`μ`, 1/10 on SN25 at launch, §8.5) divides between them by a governance share **θ** baked into validator
+software (SN13-style weight reservation, §8.5).
 *Rejected:* **two sub-mechanisms** (mechanism 0 = pools, mechanism 1 = top miners) split by
 `mechanism_emission_split` — clean in theory, but `mechanism_count × max_UIDs < 256` would **halve the UID
 space to ~127**, too few for ~200 top miners (so release 1.0 fixes `mechanism_count = 1`, §14);
@@ -2037,7 +2076,8 @@ global ~256-UID capacity and make the target head impossible; the release prefli
 `max_allowed_uids` snapshot.
 
 The budget is `max_allowed_uids ≥ head fleets + one vault-owned pool UID per NO + validator UIDs + the
-owner/escrow identities that require registration`. Validators are not a separate fixed partition: they
+owner/escrow identities that require registration + the treasury recipient
+UIDs` (two on SN25, §8.5). Validators are not a separate fixed partition: they
 are live UIDs holding permits according to native stake. New product lines remain an off-chain/operator
 classification unless a future whitepaper revision supplies a new economic model and explicit UID
 budget; they are not a latent release-1.0 mechanism switch.
@@ -2063,10 +2103,10 @@ pruned v2 pool hotkey through `registerPoolUid`, paying the burn.
 | Hyperparameter | Value | Rationale |
 |---|---|---|
 | `tempo` | **360** | native ~72‑min weight/emission cadence (§5.1) |
-| `max_allowed_uids` | **256** (hard ceiling — owners may lower, never raise) | one metagraph shared by **~200 top-level miner UIDs + 1 pool UID per NO + validator UIDs** (§14); tail providers are NOT UIDs (§3) |
+| `max_allowed_uids` | **256** (hard ceiling — owners may lower, never raise) | one metagraph shared by **~200 top-level miner UIDs + 1 pool UID per NO + validator UIDs** (+ the treasury recipient UIDs on SN25, §14); tail providers are NOT UIDs (§3) |
 | `max_allowed_validators` | root-controlled/runtime-dependent; target **≤ 56** so ~200 miner slots fit | observe and compatibility-gate the live value; permit count (top-k by stake, §9.7) is *not* a fixed slot partition |
 | `mechanism_count` | **1** | a 2nd mechanism halves the 256-UID space below 200 (§13.8, §14) |
-| native `max_weight_limit` / signed policy cap | v454 native **65535** (no cap); release policy **32768** for two-NO testnet, then lower as breadth grows | v454 retains v452's getter behavior which ignores the retained storage item; validators must apply the signed cap and analysis must reject finalized violations. A low-single-digit cap requires enough positive recipients and should become native when the runtime supports it (§8.4). |
+| native `max_weight_limit` / signed policy cap | v454 native **65535** (no cap), unchanged through runtime 478; release policy **32768**, the two-NO testnet's bootstrap cap and SN25's, which its treasury policy requires; a later policy lowers it as breadth grows | v454 retains v452's getter behavior which ignores the retained storage item; validators must apply the signed cap and analysis must reject finalized violations. A low-single-digit cap requires enough positive recipients and should become native when the runtime supports it (§8.4). |
 | `commit_reveal_weights_enabled` | **true** | weights carry the subjective quality signal — anti‑copying (§10) |
 | `liquid_alpha_enabled` | **true** | reward validators who back good pools early (§10) |
 | `immunity_period` | **high (≫ 4096 default)**, and **> reveal interval** | protect new pools **and new top-level miners** (the §8.4 breadth-sampling dip risk); must exceed `commit_reveal_period × tempo` |
@@ -2095,7 +2135,8 @@ pruned v2 pool hotkey through `registerPoolUid`, paying the burn.
 | Ledger bounds (v2) | — | ≤ 96 covered epochs per root; header ≤ 256 KiB (about 3,500 chunk references); 131,072 rows per chunk (48-byte account rows, 6 MiB; 57-byte provider rows, ≈ 7.1 MiB); ≤ 2^29 accounts per pool in vault2's tree | design target and activation gate: ≥ 1,000,000 providers per pool; the validator fetches at most `--ledger_max_bytes` of new objects per root (default 2 GiB, a runtime flag) |
 | Reserve hotkey | — | the owner‑validator hotkey, set at initialize | the buyback reserve's staking target (§7.4); run its delegate **take = 0** so reserve yield compounds whole |
 | `φ` / `ω` / effort‑claim deadline / dispute window | — | — | **out of scope** — parked bounty design (§9.3/§13.6, D29) |
-| **Head share** | `θ` | governance; start ~0.3, ramp | fraction of the 41% miner emission to top-level miners; `1−θ` to pools — **the load-bearing new dial** (§8.5) |
+| **Head share** | `θ` | governance; start ~0.3, ramp | fraction of the providers' share `μ` of the 41% miner emission to top-level miners; `1−θ` to pools — **the load-bearing new dial** (§8.5) |
+| **Momentum** (provider share) | `μ` | 1/10 on SN25 at launch, pinned by the signed treasury policy | the providers' share of the native miner allocation; `1 − μ` goes in equal parts to `ur‑reserve`'s recipient UIDs 170 and 250, and the whole row when no provider has weight; changing it takes a newly signed treasury policy (§8.5) |
 | Coverage weighting | — | (parked bounty design only) | up‑weights under‑sampled / weak providers (§9.3) — not in v1 (D29) |
 | Validator min stake | — | governance | permit qualifier + Sybil ante (§9.7) |
 | **Deposit‑rate schedule per conviction tier** | `rate(tier)` | governance, **off‑chain published**; zero tier = baseline; **floored > 0** | α‑per‑usage by conviction; validators read it to weight (§7.3, §8.1). Staking lowers the rate — the onboarding/alignment lever (D25). |
@@ -2111,9 +2152,10 @@ pruned v2 pool hotkey through `registerPoolUid`, paying the burn.
 validators**, 21M α cap with halvings. The contract does **not** set these (the owner cut is
 governance‑settable, the 41/41 is hard‑coded); it steers the *distribution within* the miner pools —
 validator **dividends flow natively**, and the slice earned by the buyback reserve's stake auto‑compounds
-into the reserve (§7.4, §12.4). The 41% miner share is split **head/tail by θ** (§8.5) — steered by
-validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never withheld to an owner key
-(which would trigger the post-Spec-421 `miner_burned` penalty).
+into the reserve (§7.4, §12.4). The providers' share `μ` of the 41% miner share (1/10 on SN25 at launch) is
+split **head/tail by θ** (§8.5) — steered by validator weights to top-level-miner UIDs (native) and NO pools
+(Merkle); on SN25 the rest goes to `ur‑reserve`'s two ordinary recipient UIDs. None is withheld to an owner
+key (which would trigger the post-Spec-421 `miner_burned` penalty).
 
 ---
 
@@ -2135,7 +2177,10 @@ validator weights to top-level-miner UIDs (native) and NO pools (Merkle), never 
    October 7). The release remains one mechanism. **Top-level miners self-`register_limit`** their own
    (provider-owned, not contract-owned) UIDs with a locally approved ceiling and publish the §11.4 binding.
 3. **Validator software (independent).** Stake α; run `VALIDATOR.md` trails; each tempo score **both tiers** (pools `implied_usage × quality` —
-   implied usage = audited usage at the baseline rate, the deposit audited off the published deposit events; head on its **routable‑IP breadth score**), read the `client_id ⇄ hotkey` binding (§11.4), split by θ, and submit
+   implied usage = audited usage at the baseline rate, the deposit audited off the published deposit events;
+   head on its **routable‑IP breadth score**), read the `client_id ⇄ hotkey` binding (§11.4), split the
+   providers' share by θ (on SN25 the signed treasury policy gives providers 1/10 of the row and `ur‑reserve`'s
+   recipient UIDs 9/10, §8.5), and submit
    commit-reveal weights (standard Bittensor validator loop → native dividends) — **no central
    keeper sets weights**. A separate **permissionless settlement poke** triggers per-NO finalization after
    the +48h window. (No trail‑proof submission — the effort bounty is out of scope, §9.3/D29.)
@@ -2388,8 +2433,12 @@ starts at least two days after the last one passes.
 - **fleet `client_id`s ⇄ hotkey binding** — the dual-signed (client Ed25519 + hotkey sr25519) association a
   top-level miner publishes (commitments pallet + contract anchor) binding its fleet's `client_id`s to its
   UID, so validators count its routable IPs (§11.4).
-- **θ (head share)** — the governed fraction of the 41% miner emission steered to top-level miners; `1−θ`
-  goes to the pools (§8.5).
+- **θ (head share)** — the governed fraction of the providers' share `μ` of the 41% miner emission steered
+  to top-level miners; `1−θ` goes to the pools (§8.5).
+- **μ (momentum) / `ur‑reserve`** — the providers' share of the native miner allocation, 1/10 on SN25 at
+  launch, pinned by the signed treasury policy; validators weight the other `1 − μ` in equal parts to the
+  recipient UIDs of `ur‑reserve` (SN25 UIDs 170 and 250), a 2‑of‑3 native treasury multisig separate from
+  the buyback reserve (§8.5).
 - **Validator** (was "verifier") — an **independent** Bittensor validator UID: stakes α, runs
   `VALIDATOR.md` trails, scores pools, and earns **native dividends** — its **only** reward (a validator
   effort bounty is out of scope, §9.3/D29). No NO, no pool — the disinterested consensus baseline; the
