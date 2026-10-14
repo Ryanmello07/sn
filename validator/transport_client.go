@@ -14,8 +14,10 @@ import (
 )
 
 // The packet exchange and registration lifetime are separate ownership units.
+// A request's tunnel tries its family's first IP family (4 or 6) first, and
+// only that one when the family is pinned.
 type tunnelTransportClient interface {
-	postVerify(context.Context, connect.Id, []byte) ([]byte, error)
+	postVerify(ctx context.Context, hop connect.Id, body []byte, family hopIpFamily) ([]byte, error)
 	done() <-chan struct{}
 	closeAndWait(context.Context) error
 }
@@ -49,6 +51,9 @@ type registeredTunnelClient struct {
 	// Kept until the request's real packet workers join, including a failed
 	// bounded close. The exclusive lease bounds this to one packet path.
 	packetCleanup *tunnelAttempt
+	// When the identity's attempts close their contracts; the lease
+	// serializes it.
+	contracts tunnelHopContracts
 }
 
 // Safe for concurrent callers: waiting for a free lease consumes each
@@ -93,7 +98,9 @@ func (self *TunnelTransport) PostVerify(ctx context.Context, hop connect.Id, bod
 		}
 	}
 	observation := newTunnelVerifyObservation(lease.client, hop)
-	response, err := lease.client.postVerify(observation.context(callCtx), hop, body)
+	// the trail engine alternates the family each hop tries first, and pins
+	// one after a source-egress-unresolved answer
+	response, err := lease.client.postVerify(observation.context(callCtx), hop, body, hopIpFamilyOf(ctx))
 	observation.close()
 	err = observation.failure(err)
 	select {
@@ -269,6 +276,7 @@ func (self *TunnelTransport) newRegisteredClient(ctx context.Context, firstHop c
 		return registered, fmt.Errorf("tunnel client setup: %w", err)
 	}
 	registered.client = client
+	registered.contracts.flush = client.Flush
 	var retireOnce sync.Once
 	registered.cleanup.retireClient = func(joinCtx context.Context) error {
 		retireOnce.Do(func() { registered.generator.RemoveClientWithArgs(client, args) })

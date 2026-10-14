@@ -20,6 +20,10 @@ package validator
 // Each request owns a fresh tunnel pinned to its exact hop. Each exclusively
 // leased client retains processed key registration across sequential requests;
 // operator shutdown joins every final transport and identity retirement.
+//
+// IPv4 and IPv6 get equal attempts: the transport's requests alternate the
+// family their tunnel tries first, IPv4 for the first request, and each falls
+// back to the other family (connect IPV6.md C7, VALIDATOR.md §8.2).
 
 import (
 	"bytes"
@@ -29,8 +33,11 @@ import (
 	"fmt"
 	"io"
 	mathrand "math/rand"
+	"net"
 	"net/http"
+	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/urnetwork/connect"
@@ -70,6 +77,7 @@ type TunnelTransport struct {
 	clientLeases chan *tunnelClientLease
 	clientCount  int
 	newClient    func(context.Context, connect.Id) (tunnelTransportClient, error)
+	createTun    func(context.Context, *connect.TunSettings) (*connect.Tun, error)
 	closed       chan struct{}
 	closeErr     error
 }
@@ -174,6 +182,44 @@ func (self *tunnelAttempt) closeAndWait(ctx context.Context) error {
 	return errors.Join(closeErrors...)
 }
 
+// Decides when a retained identity's joined attempts close their contracts.
+// Every joined attempt closes them, as a hop that has ended does, except one
+// answered source-egress-unresolved: the step resends through the same hop at
+// once, pinned to the other family (VALIDATOR.md §8.2), and the resend rides
+// the identity's open transfer sequence to the provider. Closing it would make
+// the resend open a new one, and the provider replaces the receive sequence it
+// holds for this identity only once the old one has exited: on a carrier it
+// does not know to be reliable it drops the new sequence's first packet
+// meanwhile (connect ReceiveBuffer.Pack), so the resend would wait out a
+// transfer resend, a second or more, inside the latency the server attributes
+// to the hop. The identity's next attempt through another hop closes what the
+// answered attempt kept. Each retained identity keeps its own: a resend that
+// leases another of the transport's clients rides that client's sequences.
+type tunnelHopContracts struct {
+	// the client's Flush: cancels the identity's transfer sequences, which
+	// close their contracts
+	flush func()
+	// the hop an answered attempt kept the contracts open for, or zero
+	kept connect.Id
+}
+
+// Runs before each attempt through hop.
+func (self *tunnelHopContracts) begin(hop connect.Id) {
+	if self.kept != (connect.Id{}) && self.kept != hop {
+		self.flush()
+	}
+	self.kept = connect.Id{}
+}
+
+// Returns what the attempt through hop, which ended with err, runs once its
+// packet path has joined.
+func (self *tunnelHopContracts) joined(hop connect.Id, err error) func() {
+	if errors.Is(err, errSourceEgressUnresolved) {
+		return func() { self.kept = hop }
+	}
+	return self.flush
+}
+
 func NewTunnelTransport(ctx context.Context, clientStrategy *connect.ClientStrategy, cfg TunnelTransportConfig) *TunnelTransport {
 	ownerCtx, cancel := context.WithCancel(ctx)
 	clientCount := max(cfg.Clients, 1)
@@ -187,6 +233,7 @@ func NewTunnelTransport(ctx context.Context, clientStrategy *connect.ClientStrat
 		closed:         make(chan struct{}),
 	}
 	self.newClient = self.newRegisteredClient
+	self.createTun = connect.CreateTun
 	for range clientCount {
 		self.clientLeases <- &tunnelClientLease{}
 	}
@@ -241,7 +288,9 @@ func newTunnelClientSettings() *connect.ClientSettings {
 
 // Each lease constructs and joins its own exact-hop packet path. The
 // registered identity remains alive after request cancellation or rejection.
-func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.Id, jsonBody []byte) (responseBody []byte, returnErr error) {
+// The tunnel's hostname dial tries family.first first, and only it when the
+// family is pinned.
+func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.Id, jsonBody []byte, family hopIpFamily) (responseBody []byte, returnErr error) {
 	byClientJwt, err := self.owner.currentByClientJwt()
 	if err != nil {
 		return nil, err
@@ -257,13 +306,16 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 	tunnelCtx, tunnelCancel := context.WithCancel(ctx)
 	attempt := &tunnelAttempt{cancel: tunnelCancel}
 	// The exclusive lease runs one hop at a time on this identity. Once this
-	// hop's packet path has joined, the only data sequences left on the client
-	// belong to finished hops, so flushing the client closes their contracts.
-	// The flush also restarts the client's control sequence; contract close
-	// reports retry until the platform acknowledges them.
-	attempt.closeContracts = self.client.Flush
+	// attempt's packet path has joined, the only data sequences left on the
+	// client belong to finished attempts, so flushing the client closes their
+	// contracts, except for the resend through this hop that a 421 leads to
+	// (tunnelHopContracts). The flush also restarts the client's control
+	// sequence; contract close reports retry until the platform acknowledges
+	// them.
+	self.contracts.begin(hop)
 	self.packetCleanup = attempt
 	defer func() {
+		attempt.closeContracts = self.contracts.joined(hop, returnErr)
 		closeErr := attempt.close()
 		if closeErr != nil {
 			// An unjoined packet path cannot share this identity with another hop.
@@ -274,7 +326,9 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 		returnErr = errors.Join(returnErr, closeErr)
 	}()
 
-	tun, err := connect.CreateTunWithDefaults(tunnelCtx)
+	tunSettings := connect.DefaultTunSettings()
+	tunSettings.DialFirstIpFamily = family.first
+	tun, err := self.owner.createTun(tunnelCtx, tunSettings)
 	if err != nil {
 		return nil, fmt.Errorf("tunnel netstack: %w", err)
 	}
@@ -304,8 +358,17 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 		}
 	})
 
+	// the family the request's one connection reached the server on, which a
+	// source-egress-unresolved answer rules out for the rest of the step
+	var landedIpFamily atomic.Int32
 	httpTransport := &http.Transport{
-		DialContext:       tun.DialContext,
+		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
+			conn, err := tun.DialContext(ctx, hopDialNetwork(network, family), address)
+			if err == nil {
+				landedIpFamily.Store(int32(connIpFamily(conn)))
+			}
+			return conn, err
+		},
 		DisableKeepAlives: true,
 		ForceAttemptHTTP2: false,
 	}
@@ -328,9 +391,50 @@ func (self *registeredTunnelClient) postVerify(ctx context.Context, hop connect.
 		return nil, err
 	}
 	if response.StatusCode != 200 {
-		return nil, tunnelVerifyStatusFailure(response.StatusCode, fmt.Errorf("verify post via %s: http %d: %s", hop, response.StatusCode, truncateForLog(responseBody)))
+		return nil, tunnelVerifyStatusFailure(response.StatusCode, verifyPostError(hop, response.StatusCode, responseBody, int(landedIpFamily.Load())))
 	}
 	return responseBody, nil
+}
+
+// verifyPostError is the error for a /verify answer other than 200: the
+// server's retryable 421 is errSourceEgressUnresolved, for the family the
+// request reached the server on, only with exactly its body; every other
+// answer, 421 with any other body included, is an ordinary failed attempt.
+func verifyPostError(hop connect.Id, statusCode int, body []byte, ipFamily int) error {
+	if statusCode == http.StatusMisdirectedRequest && string(body) == verifySourceEgressUnresolvedBody {
+		return &sourceEgressUnresolvedError{hop: hop, ipFamily: ipFamily}
+	}
+	return fmt.Errorf("verify post via %s: http %d: %s", hop, statusCode, truncateForLog(body))
+}
+
+// hopDialNetwork narrows a hop request's dial to its family when the request
+// is pinned to it: "tcp" becomes "tcp4" or "tcp6", so the tunnel resolves and
+// dials that family alone, never falling back to the other.
+func hopDialNetwork(network string, family hopIpFamily) string {
+	if !family.pinned || network != "tcp" {
+		return network
+	}
+	switch family.first {
+	case 4:
+		return "tcp4"
+	case 6:
+		return "tcp6"
+	default:
+		return network
+	}
+}
+
+// connIpFamily is the family of the address a tunnel connection reached, or
+// 0 when it cannot tell.
+func connIpFamily(conn net.Conn) int {
+	addrPort, err := netip.ParseAddrPort(conn.RemoteAddr().String())
+	if err != nil {
+		return 0
+	}
+	if addrPort.Addr().Unmap().Is4() {
+		return 4
+	}
+	return 6
 }
 
 // Shared identities may still receive a previous hop's delayed packets. Only

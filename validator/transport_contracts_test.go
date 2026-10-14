@@ -1,13 +1,17 @@
 // transport_contracts_test.go pins the trail tunnel clients' contract policy:
 // one small fixed contract size, server replies on regular contracts, and
-// contracts closed when a hop's packet path has joined.
+// contracts closed when a hop's packet path has joined, except for the resend
+// a 421 leads to.
 package validator
 
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"reflect"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -110,6 +114,99 @@ func TestTunnelAttemptSkipsContractCloseWhenPumpDoesNotJoin(t *testing.T) {
 	}
 	if !retired {
 		t.Fatal("unjoined packet path did not retire its client")
+	}
+}
+
+// The server's retryable 421 for a request through hop, as postVerify returns it.
+func tunnelSourceEgressUnresolved(hop connect.Id) error {
+	return tunnelVerifyStatusFailure(http.StatusMisdirectedRequest, verifyPostError(hop, http.StatusMisdirectedRequest, []byte(verifySourceEgressUnresolvedBody), 6))
+}
+
+// A joined attempt closes the identity's contracts whatever it ended with,
+// except the server's retryable 421: a success, an ordinary failed answer (a
+// 421 with any other body included) and a transport failure each close them,
+// and leave nothing for the next attempt to close.
+func TestTunnelHopContractsCloseOnEveryJoinedAttemptButA421(t *testing.T) {
+	flushes := 0
+	contracts := tunnelHopContracts{flush: func() { flushes++ }}
+	hop := connect.NewId()
+	outcomes := []error{
+		nil,
+		tunnelVerifyStatusFailure(http.StatusInternalServerError, verifyPostError(hop, http.StatusInternalServerError, []byte("internal"), 4)),
+		tunnelVerifyStatusFailure(http.StatusMisdirectedRequest, verifyPostError(hop, http.StatusMisdirectedRequest, []byte("other\n"), 4)),
+		fmt.Errorf("verify post via %s: %w", hop, syscall.ECONNREFUSED),
+	}
+	for i, err := range outcomes {
+		contracts.begin(hop)
+		contracts.joined(hop, err)()
+		if flushes != i+1 {
+			t.Fatalf("attempt %d ending with %v closed contracts %d times in all, want %d", i, err, flushes, i+1)
+		}
+	}
+	contracts.begin(connect.NewId())
+	if flushes != len(outcomes) {
+		t.Fatalf("the next hop's attempt closed contracts again: %d closes", flushes)
+	}
+}
+
+// An attempt answered 421 keeps the contracts for the step's resend through the
+// same hop: the resend closes nothing before it starts, and closes them once
+// its own packet path has joined.
+func TestTunnelHopContractsKeepThemForTheResendAfterA421(t *testing.T) {
+	flushes := 0
+	contracts := tunnelHopContracts{flush: func() { flushes++ }}
+	hop := connect.NewId()
+	contracts.begin(hop)
+	contracts.joined(hop, tunnelSourceEgressUnresolved(hop))()
+	if flushes != 0 {
+		t.Fatal("the attempt answered 421 closed its contracts")
+	}
+	contracts.begin(hop)
+	if flushes != 0 {
+		t.Fatal("the resend through the same hop closed the contracts kept for it")
+	}
+	contracts.joined(hop, nil)()
+	if flushes != 1 {
+		t.Fatalf("the joined resend closed contracts %d times, want once", flushes)
+	}
+}
+
+// What an attempt answered 421 kept closes once, before the identity's next
+// attempt through another hop, even when that attempt never joins.
+func TestTunnelHopContractsCloseWhatA421KeptBeforeAnotherHop(t *testing.T) {
+	flushes := 0
+	contracts := tunnelHopContracts{flush: func() { flushes++ }}
+	hop, next := connect.NewId(), connect.NewId()
+	contracts.begin(hop)
+	contracts.joined(hop, tunnelSourceEgressUnresolved(hop))()
+	contracts.begin(next)
+	if flushes != 1 {
+		t.Fatalf("the attempt through another hop closed the kept contracts %d times, want once", flushes)
+	}
+	// that attempt's packet path did not join, so its joined function never ran
+	contracts.begin(connect.NewId())
+	if flushes != 1 {
+		t.Fatalf("kept contracts closed %d times, want once", flushes)
+	}
+}
+
+// Each of the transport's retained clients keeps its own: a 421 on one keeps
+// only that client's contracts, another client's attempt through the same hop
+// closes its own, and the first client's resend still finds its contracts kept.
+func TestTunnelHopContractsAreKeptPerRetainedClient(t *testing.T) {
+	flushes := map[string]int{}
+	newClient := func(name string) *registeredTunnelClient {
+		return &registeredTunnelClient{contracts: tunnelHopContracts{flush: func() { flushes[name]++ }}}
+	}
+	answered, other := newClient("answered"), newClient("other")
+	hop := connect.NewId()
+	answered.contracts.begin(hop)
+	answered.contracts.joined(hop, tunnelSourceEgressUnresolved(hop))()
+	other.contracts.begin(hop)
+	other.contracts.joined(hop, nil)()
+	answered.contracts.begin(hop)
+	if flushes["answered"] != 0 || flushes["other"] != 1 {
+		t.Fatalf("closes per client %v, want the answered client's kept and the other's closed once", flushes)
 	}
 }
 
