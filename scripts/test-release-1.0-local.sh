@@ -151,10 +151,12 @@ release_phase_sn_go() {
 }
 release_gate_start sn-go release_phase_sn_go
 
-# The E suite needs the server's database, so the aggregate skips it; sn-e2e
-# runs every TestSettlementV2E2E test on the gate's private services. So do
-# the four mainnet roots of server/stmonitor/testfixture, skipped by name. Local
-# mode also skips its two named sim-testnet tests, here and in sn-simulator-race.
+# The E suite needs the server's database, so the aggregate jobs skip it;
+# sn-e2e runs every TestSettlementV2E2E test on the gate's private services.
+# So do the four mainnet roots of server/stmonitor/testfixture, skipped by
+# name. Local mode also skips its two named sim-testnet tests, here and in
+# sn-simulator-race. sn-all-normal runs every package but ./mainnet, and each
+# ./mainnet shard below runs this same skip.
 release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$)'
 if [[ "$release_gate_dependency_mode" == local ]]; then
   release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$|TestRepositoryDiscoveryUsesModuleIdentity$)'
@@ -162,7 +164,10 @@ fi
 export release_gate_aggregate_skip
 release_phase_sn_all_normal() {
   cd "$sn_repo"
-  go test -parallel=4 -timeout 90m ./... -count=1 -skip "$release_gate_aggregate_skip"
+  sn_package_list="$(go list ./... | grep -Evx 'github[.]com/urfoundation/sn/mainnet')"
+  [[ -n "$sn_package_list" ]]
+  mapfile -t sn_packages <<<"$sn_package_list"
+  go test -parallel=4 -timeout 90m "${sn_packages[@]}" -count=1 -skip "$release_gate_aggregate_skip"
 }
 # Measured with one job's four CPUs at load 33-85, the serial miner package
 # alone ran 41 minutes under race before settlement v2 and 55 on main, mostly
@@ -217,7 +222,91 @@ release_phase_sn_simulator_history_race() {
   cd "$sn_repo"
   go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -run '^Test(Fleet|Historical|Runtime|Scenario).*$'
 }
+# ./mainnet runs in its own jobs. Its tests run one at a time, bound by fsync
+# and latency at about 0.46 core per second, and separate processes scale it,
+# about 3.5 times at four and 5 to 6 at eight. Each shard runs the tests of
+# the package's own list whose name's CRC-32 mod the shard count is its own,
+# so a new test joins a shard without an edit, with the aggregate skip, in its
+# job's own private TMPDIR and GOTMPDIR on the storage root: durable-volume
+# custody admits only ext4, xfs and btrfs. On 2026-10-14, at load 30 to 58,
+# the package's serial test time was about 27 hours (each test's median over
+# that day's runs; 2,599 of 2,759 tests measured, the rest counted at the
+# mean); the heaviest shard, 6, has 255 minutes of it, and each shard's
+# deadline is about twice that.
+release_gate_mainnet_shards=8
+# Tests that no shard runs, by exact name, separated by spaces; each must be
+# a test of the package's list. None yet.
+release_gate_mainnet_skip_names=''
+export release_gate_mainnet_shards release_gate_mainnet_skip_names
+# The -run selector of shard $1 of $2 for the `go test -list` output on stdin.
+release_gate_mainnet_selector() {
+  python3 -c '
+import os, re, sys, zlib
+shard, shards = int(sys.argv[1]), int(sys.argv[2])
+names = []
+for line in sys.stdin.read().splitlines():
+    if re.fullmatch("(Test|Fuzz|Example)[A-Za-z0-9_]*", line):
+        names.append(line)
+    elif re.match("(Test|Fuzz|Example)", line):
+        sys.exit("release gate: unexpected ./mainnet test name " + repr(line))
+skips = os.environ.get("release_gate_mainnet_skip_names", "").split()
+for skip in skips:
+    if skip not in names:
+        sys.exit("release gate: the ./mainnet skip names no test: " + skip)
+own = [name for name in names if name not in skips and zlib.crc32(name.encode()) % shards == shard - 1]
+if not own:
+    sys.exit("release gate: ./mainnet shard %d of %d selects no test" % (shard, shards))
+print("^(" + "|".join(own) + ")$", end="")
+' "$1" "$2"
+}
+# Run shard $1 of ./mainnet.
+release_gate_mainnet_shard() {
+  local shard="$1" selector
+  if ! [[ "$release_gate_mainnet_shards" =~ ^[1-9][0-9]?$ && "$shard" =~ ^[1-9][0-9]?$ ]] || (( shard > release_gate_mainnet_shards )); then
+    printf 'release gate: unknown ./mainnet shard %s of %s\n' "$shard" "$release_gate_mainnet_shards" >&2
+    return 1
+  fi
+  if [[ -n "$release_gate_mainnet_skip_names" ]]; then
+    printf '[release-1.0] ./mainnet shards skip by name: %s\n' "$release_gate_mainnet_skip_names"
+  fi
+  cd "$sn_repo"
+  selector="$(go test -list . ./mainnet | release_gate_mainnet_selector "$shard" "$release_gate_mainnet_shards")"
+  go test ./mainnet -run "$selector" -count=1 -timeout 510m -skip "$release_gate_aggregate_skip"
+}
+export -f release_gate_mainnet_selector release_gate_mainnet_shard
+release_phase_sn_mainnet_1() {
+  release_gate_mainnet_shard 1
+}
+release_phase_sn_mainnet_2() {
+  release_gate_mainnet_shard 2
+}
+release_phase_sn_mainnet_3() {
+  release_gate_mainnet_shard 3
+}
+release_phase_sn_mainnet_4() {
+  release_gate_mainnet_shard 4
+}
+release_phase_sn_mainnet_5() {
+  release_gate_mainnet_shard 5
+}
+release_phase_sn_mainnet_6() {
+  release_gate_mainnet_shard 6
+}
+release_phase_sn_mainnet_7() {
+  release_gate_mainnet_shard 7
+}
+release_phase_sn_mainnet_8() {
+  release_gate_mainnet_shard 8
+}
 release_gate_start sn-all-normal release_phase_sn_all_normal
+release_gate_start sn-mainnet-1 release_phase_sn_mainnet_1
+release_gate_start sn-mainnet-2 release_phase_sn_mainnet_2
+release_gate_start sn-mainnet-3 release_phase_sn_mainnet_3
+release_gate_start sn-mainnet-4 release_phase_sn_mainnet_4
+release_gate_start sn-mainnet-5 release_phase_sn_mainnet_5
+release_gate_start sn-mainnet-6 release_phase_sn_mainnet_6
+release_gate_start sn-mainnet-7 release_phase_sn_mainnet_7
+release_gate_start sn-mainnet-8 release_phase_sn_mainnet_8
 release_gate_start sn-core-race release_phase_sn_core_race
 release_gate_start sn-validator-race release_phase_sn_validator_race
 release_gate_start sn-simulator-race release_phase_sn_simulator_race

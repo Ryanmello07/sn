@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -752,8 +753,9 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 		phase   string
 		job     string
 		command string
+		body    []string
 	}{
-		{phase: "sn_all_normal", job: "sn-all-normal", command: releaseGateAggregateNormalCommand},
+		{phase: "sn_all_normal", job: "sn-all-normal", command: releaseGateAggregateNormalCommand, body: releaseGateAggregateNormalBody},
 		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"},
 		{phase: "sn_validator_race", job: "sn-validator-race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
 		{phase: "sn_simulator_race", job: "sn-simulator-race", command: releaseGateSimulatorOrdinaryRaceCommand},
@@ -776,7 +778,11 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 				commands = append(commands, line)
 			}
 		}
-		if len(commands) != 2 || commands[0] != `cd "$sn_repo"` || commands[1] != group.command {
+		body := group.body
+		if body == nil {
+			body = []string{`cd "$sn_repo"`, group.command}
+		}
+		if !slices.Equal(commands, body) {
 			return fmt.Errorf("full gate phase %s changed its complete command or scoped budget", group.phase)
 		}
 		start := "release_gate_start " + group.job + " " + function
@@ -1110,6 +1116,10 @@ var releaseGateUncachedCommands = []struct {
 	{phase: "server_db", command: "go test -race -timeout 180m ./monitor -count=1"},
 }
 
+// A here-document can hide a body from the line census; a here-string
+// (<<<), which feeds a command one word, cannot.
+var releaseGateDocumentWrapper = regexp.MustCompile(`(^|[^<])<<($|[^<])`)
+
 // The bounded phase extractor ends at the first closing brace. Refuse nested
 // declarations before an incomplete one can look executable.
 var releaseGateUncachedNestedDeclaration = regexp.MustCompile(`(?m)^[\t ]*(function[\t ]+|[A-Za-z_][A-Za-z0-9_]*[\t ]*\([\t ]*\))`)
@@ -1139,7 +1149,7 @@ func verifyReleaseGateUncachedBodies(script string) error {
 			if line == required.command {
 				break
 			}
-			if !strings.HasPrefix(line, "#") && strings.Contains(line, "<<") {
+			if !strings.HasPrefix(line, "#") && releaseGateDocumentWrapper.MatchString(line) {
 				return fmt.Errorf("uncached gate body has an unsupported document wrapper: %s", required.phase)
 			}
 		}
@@ -1231,6 +1241,7 @@ func TestReleaseGateJobsRejectCachedOrHiddenAggregateBodies(t *testing.T) {
 				"(\n" + required.command + "\n)",
 				"{\n" + required.command + "\n}",
 				"cat <<'capture_body'\n" + required.command + "\ncapture_body",
+				"cat <<-capture_body\n" + required.command + "\ncapture_body",
 				required.command + "\n" + required.command,
 			} {
 				changed := strings.Replace(script, required.command, replacement, 1)
