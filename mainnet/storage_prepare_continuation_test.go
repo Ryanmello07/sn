@@ -198,7 +198,7 @@ func TestStoragePreparationCommandRefusesPrivateKeysAndWrongScope(t *testing.T) 
 				want = "unknown field"
 			}
 			if mode == "owner-local" {
-				want = "explicitly selected scope"
+				want = "explicit scope"
 			}
 			if !strings.Contains(diagnostic.String(), want) {
 				t.Fatal("owner refusal occurred before its intended boundary", mode, diagnostic.String())
