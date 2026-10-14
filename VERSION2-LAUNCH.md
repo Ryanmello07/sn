@@ -35,17 +35,23 @@ Merged since the previous version of this runbook:
   `sn25golive`'s (sn `f3cc4492`, merged as `6caf9667`; step 4);
 - upstream's server migrations 833 to 835 (step 6).
 
-Still landing on `main` (VERSION2-HANDOFF.md, section 2):
-1. the server's gas floors for the deposit key's stake moves, held in review
-   until they respect the operation's remaining liability;
-2. the apps' v1 gas top-up hint, rising to 0.02 TAO (section 2.6).
+Still landing on `main`: fixes of the release gate's failing tests, each on
+its branch (VERSION2-HANDOFF.md, section 2). The deposit key's gas floors and
+the apps' 0.02 TAO v1 gas top-up hint have landed (VERSION2-HANDOFF.md,
+section 1).
 
 The server's written recovery of a root key that an older build stranded has
 landed: `docs/operator/st-stranded-nonce.md`, server `912859cd`, merged by
 `10b0bd3f` (section 6.5).
 
-Step 1 freezes whatever is on `main` at that moment, with any of these that
-has merged by then.
+The launch is not sealed. The release gate runs in its local mode on the
+latest `main` of every repository. A failure is fixed, merged and pulled, and
+the gate runs again, until it passes. The heads it passes on are the launch
+revisions, O1 (steps 1 and 4). The owner's decisions of 2026-10-14: "The gate
+should just run against the local checkout. We don't need to seal the
+version. That is just overhead we can avoid." And: "Pull the latest main code
+on all repos. That is what the gate should use. If it fails, fix, commit,
+merge, push, pull, repeat."
 
 The orchestration log is [VERSION2-STATE.md](VERSION2-STATE.md), cited as
 STATE.md. It is a snapshot of 2026-10-13 20:15 UTC; its lines 1 to 286 keep
@@ -199,7 +205,7 @@ when that root finalizes, at least 14,400 blocks after its commit (§5).
   STATE.md:211-212. Its branch, `v2/sn-reconcile` (`513d600d`), is in server
   `main`. The track meets this launch in one place: sn.yml is parsed with
   known fields only (`server/provider_payout_transition.go:57-58`). A
-  `bringyourctl` built from the frozen `main` knows sn.yml's v2 fields
+  `bringyourctl` built from the launch revisions knows sn.yml's v2 fields
   (:45-47), so the reconcile can run before or after step 11. This is an
   inference from the code, not a documented rule.
 - **The dual-stack validator hops** are not part of settlement v2, but they
@@ -230,14 +236,13 @@ runbook, at steps 9 and 12.
   into main. Pull and push." (STATE.md:244). The first round is merged and
   pushed, without force, after a fresh fetch and a fast-forward check
   (STATE.md:278-281). The `main` heads are the Pins table above.
-- The later merges are done, and three items are still landing (Pins).
-  Step 1 freezes whatever is on `main` at that moment, and the runbook is
-  then read against those heads.
+- The gate's fixes are still landing (Pins). The launch revisions are the
+  heads on which step 4's gate passes (O1), and the runbook is then read
+  against those heads.
 - The dual-stack validator hops are on `main`, so the launch's builds carry
   them, and their deploy order applies (section 6.3).
-- The gVisor fork is a release repository. The local build compiles it from
-  a sibling checkout, and the gate's source freeze checks that checkout like
-  the others (step 1).
+- The gVisor fork is a release repository. The local build and the gate
+  compile it from a sibling checkout `gvisor`, on its `go` branch (step 1).
 - The localization store's `main` (`3a1e7ca`) holds the eight `sn_ledger_*`
   keys (VERSION2-FINAL.md §11) and the eleven `sn_consent_*` keys (§11.1).
   Every release build regenerates the app
@@ -245,7 +250,7 @@ runbook, at steps 9 and 12.
   built against that store or a later one.
 - The server is rebuilt against the sn revision that carries the new
   successor class (VERSION2-FINAL.md §13, Server row).
-- Every launch binary is built from the frozen `main` (step 1).
+- Every launch binary is built from the launch revisions (step 1).
 
 ### 2.2 CI green
 
@@ -254,7 +259,8 @@ runbook, at steps 9 and 12.
   Actions" (sdk commit `7120b2cf`, with the matching removals in the app
   repositories and the localization store). So "CI green" means the owner's
   build pipeline and the hand-run suites below.
-- The release gate of section 2.5 passes on the merged `main` (step 4).
+- The release gate of section 2.5 passes, in its local mode, on the latest
+  `main` of every repository (step 4).
 - The apps' v2 code was not compiled where it was written (STATE.md:174,
   219, 228). Apple and Windows have never compiled the v2 and consent code,
   and Android's unit tests ran against a stub SDK, so its AAR is built from
@@ -289,7 +295,7 @@ runbook, at steps 9 and 12.
   must hold on 478. Its rerun there passed: R-1 to R-7 all pass on a node
   built from v478 (section 9.3, item 2). `main` lists 478's reviewed source
   (`crv4/native_owner_source.go:10,23`), so an `sn-mainnet` built from the
-  frozen `main` admits it (step 8.3).
+  launch revisions admits it (step 8.3).
 
 ### 2.4 R-1 to R-7 on the then-current runtime
 
@@ -386,17 +392,12 @@ runbook, at steps 9 and 12.
     with that limit too, and refuses a claim without it (mmm
     `ur.io/react/src/app/screens/Claim.jsx:119-124`;
     `ur.io/react/src/app/sn/evm.js:62-69`).
-  - **The apps' v1 gas top-up hint** is still landing. The gas key must hold
-    a claim's limit × the price, or the claim fails with `needs_gas`
+  - **The apps' v1 gas top-up hint** is 0.02 TAO. The gas key must hold a
+    claim's limit × the price, or the claim fails with `needs_gas`
     (`sdk/sn_claims.go:1002-1005`). At 2,700,000 gas that is about 0.0149
-    TAO at 5 gwei with legacy pricing. The apps' `main` still suggest 0.01
-    TAO on Android and Windows, 0.005 on Linux, and 0.005 a claim on Apple
-    (android
-    `app/app/src/main/java/com/bringyour/network/ui/wallet/EarningsViewModel.kt:816`;
-    windows `app/src/App/EarningsSheets.cpp:42`; linux
-    `app/src/EarningsPage.cpp:49`; apple
-    `app/network/Main/Account/Earnings/EarningsViewModel.swift:70`). The
-    hint rises to 0.02 TAO.
+    TAO at 5 gwei with legacy pricing. The apps' `main` suggest 0.02 TAO
+    since android `0a3a0030c`, apple `edcd545e`, linux `06717d7` and windows
+    `fac2afd` (VERSION2-HANDOFF.md, section 1).
   - **sn's claim tools** sign a single claim, from `snclaim` or the claim
     daemon, at max(estimate + 20%, 2,600,000) (`miner/onchain/v2_claim.go:319`;
     `miner/onchain/eth.go:203-206`; `miner/claim_v2_daemon.go:269-287`), so a
@@ -430,7 +431,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 
 | ID | Input | Constraint or default | Used in | Source |
 | --- | --- | --- | --- | --- |
-| O1 | The launch revisions: the `main` head of each repository that step 1 freezes, and gvisor's commit on its `go` branch | the Pins table or later; gvisor at `c0783dba2eeff7b79692a7f122ffee5f8bd837c1`, the tip of `go` on 2026-10-13. The dual-stack validator hops are on `main`, so the launch carries them (section 6.3) | 1 | section 2.1; `scripts/mainnet-release-build/PIN-PROCEDURE.md`:143-144 |
+| O1 | The launch revisions: the `main` head of every release repository, and gvisor's `go` head, on which step 4's gate passes in its local mode | the latest `main` of each, pulled; a failing gate is fixed, merged and pulled, and runs again until it passes (O28). gvisor's `go` head is `c0783dba2eeff7b79692a7f122ffee5f8bd837c1`, the commit that `server/local/source-graph/lock.yml`:37-39 names. The dual-stack validator hops are on `main`, so the launch carries them (section 6.3) | 1, 4 | the preamble; section 2.1; `scripts/mainnet-release-build/PIN-PROCEDURE.md`:143-144 |
 | O2 | The mainnet route: native and EVM RPC URLs, the HTTPS leaf SPKI pin if HTTPS, and the approved native chain name | the launch used Snow's Finney archive, `ws://172.28.208.185:9944`, or `http://` for EVM JSON-RPC. Every `sn-mainnet` command here takes only the `http(s)://` form; step 2 lists the scheme each command accepts. The route is part of each signed plan | 2, 8, 13, 15, 20 | LAUNCH.md:124-141; BOOTSTRAP-CONTRACTS.md:208-221; `mainnet/identity.go:74-79` |
 | O3 | The runtime identity the v2 phase config binds: version, code and metadata hashes and the reviewed source commit | for runtime 478: its version, code hash and metadata hash from the owner's own `runtime-snapshot`, taken immediately before step 8, and the reviewed 478 source commit `850f2755bb05a3851f948489f0ab27b0645cebce`. The binary must list that commit beside that version; `main` lists 470, 473, 475, 477 and 478 (step 8.3) | 8 | BOOTSTRAP-CONTRACTS.md:208-210,669-679; `crv4/native_owner_source.go:6-24`; `mainnet/evm_phase.go:183-191` |
 | O4 | The v2 deployer: its EVM address, next nonce and signer | neither the Safe nor an auditor; funded per section 2.6 | 8 | BOOTSTRAP-CONTRACTS.md:652-655,752-753 |
@@ -457,7 +458,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | O25 | Whether and how to hold the SN25 owner key `ur-owner` under the Safe's governance | recommended; no coldkey swap; no tooling | section 8 | VERSION2-FINAL.md §4.1, §17 |
 | O26 | Gate 1's independent review: confirmation that it is resolved | the owner confirmed it resolved, 2026-10-13 | 4 | VERSION2-FINAL.md §14; STATE.md:91,99,103,176,189,198 |
 | O27 | The native-fee denomination policy for runtime 478: its `native_authority`, `last_native_block`, wei-per-rao ratio and signature, and its authority file | `runtime_code_sha256` 478's and `first_native_block` 9,276,926; once a settlement has recorded an approver key for the scope, only that key can sign (step 5) | 5 | `server/st_native_fee_denomination.go:27-54`; `server/model/st_native_fee_settlement_model.go:124-125,189-197` |
-| O28 | Whether the release gate passes with its known failures: the three `TestProduceFinalSemanticOutputs…` tests that fail on pristine `main` | the owner decides, by name, or the gate does not pass (step 4) | 4 | VERSION2-HANDOFF.md, section 3, item 7 |
+| O28 | How the release gate's failures are handled | decided: none is accepted. Each is fixed, committed, merged, pushed and pulled, and the gate runs again until it passes (owner decision, 2026-10-14) | 1, 4 | the preamble; VERSION2-HANDOFF.md, section 2 |
 
 ## 4. Runbook
 
@@ -466,7 +467,7 @@ first exist.
 
 | Step | What | Who | Gate |
 | --- | --- | --- | --- |
-| 1 | Freeze the revisions and build | Owner, operator | |
+| 1 | Fix the launch revisions and build | Owner, operator | |
 | 2 | Check the mainnet runtime | Operator | |
 | 3 | Rerun R-1 to R-7 | Operator | 2 |
 | 4 | Run the release gates | Operator, owner | 1, 3, 4 |
@@ -489,40 +490,32 @@ first exist.
 
 ### Phase A. Qualify; nothing in production changes
 
-**Step 1. Freeze the launch revisions and build.**
+**Step 1. Fix the launch revisions and build.**
 
 - **Who.** Owner and operator.
 - **Do.**
-  1. Fix O1, and freeze in this order:
-     1. whatever of the changes still landing (Pins) the owner waits for;
-     2. the release-lock refresh, as sn's last commit, pushed (step 4);
-     3. then the release gate (step 4).
+  1. Check out the latest `main` of every release repository beside sn, and
+     gVisor's `go` (step 4, "The workspace"). The session that orchestrates
+     the launch runs the gate on goofe from worktrees at those heads
+     (VERSION2-HANDOFF.md, section 3, item 7). Confirm section 2.1,
+     including the localization store's `main`.
 
-     Step 1 freezes whatever is on `main` at that moment, and that last sn
-     commit is sn's O1. Confirm section 2.1, including the localization
-     store's `main`.
-
-     Each release repository is a physical clone beside sn, on a branch
-     that tracks its upstream (step 4). gVisor's is `gvisor`, cloned from
-     `https://github.com/urnetwork/gvisor`, on its branch `go`, at O1's
-     commit. That is the commit that `server/local/source-graph/lock.yml`:37-39
-     names, and the tip of `go` on 2026-10-13
+     gVisor's checkout is `gvisor`, cloned from
+     `https://github.com/urnetwork/gvisor` on its branch `go`. Its head is
+     `c0783dba2eeff7b79692a7f122ffee5f8bd837c1`, the commit that
+     `server/local/source-graph/lock.yml`:37-39 names
      (`scripts/mainnet-release-build/PIN-PROCEDURE.md`:143-144). With
-     `WORKSPACE` the directory that holds the sn checkout (step 4):
+     `WORKSPACE` the directory that holds the sn checkout:
 
      ```bash
      git clone --branch go https://github.com/urnetwork/gvisor "$WORKSPACE/gvisor"
      git -C "$WORKSPACE/gvisor" rev-parse HEAD
      ```
 
-     The second command prints O1's commit. Another commit means that `go`
-     has moved since; the owner then fixes O1 again.
-
-     The source freeze refuses a gvisor checkout whose `origin` is another
-     repository, whose branch does not track `origin/go`, that has any
-     change, or whose commit the fetched `origin/go` does not reach
-     (`scripts/check-release-source-freeze.sh`:57-83,113-171).
-  2. Build `sn-mainnet` with Go 1.27.2. The pin is the `go` line of `go.mod`
+  2. Run step 4's gate on those checkouts. If it fails, fix, commit, merge,
+     push and pull, and run it again, until it passes (O28). The heads it
+     passes on are O1.
+  3. Build `sn-mainnet` with Go 1.27.2. The pin is the `go` line of `go.mod`
      (`go.mod:3`, `go 1.27.2`; the server's `go.mod:3` is the same). Under
      `GOTOOLCHAIN=local` an older local toolchain is refused: "go: go.mod
      requires go >= 1.27.2 (running go …; GOTOOLCHAIN=local)". The command is
@@ -533,7 +526,7 @@ first exist.
        -o /absolute/path/sn-mainnet ./mainnet
      ```
 
-  3. Build the production composition, which holds `cli/validator`,
+  4. Build the production composition, which holds `cli/validator`,
      `cli/snclaim`, `cli/miner` and the server services
      ([mainnet/RELEASE-BUILD.md](mainnet/RELEASE-BUILD.md):3-8,37-42), in the
      local mode:
@@ -542,9 +535,9 @@ first exist.
      go run -mod=readonly ./scripts/mainnet-release-build --config /absolute/config.json
      ```
 
-     - The launch builds in the local mode, from the frozen checkouts of sn,
+     - The launch builds in the local mode, from the gated checkouts of sn,
        server, connect, sdk, gvisor and the other census repositories, each
-       clean at its recorded commit. sn's and the server's `go.mod` resolve
+       clean at its O1 commit. sn's and the server's `go.mod` resolve
        those modules to the sibling checkouts (`go.mod:205-234`; server
        `go.mod:212-235`). `main` keeps these local substitutions.
      - The config selects the mode with `"dependency_mode": "local"` and lists
@@ -558,15 +551,17 @@ first exist.
      - A pinned build version, from released module versions, is produced
        later by the owner's build
        (`scripts/mainnet-release-build/PIN-PROCEDURE.md`).
-  4. Retain each binary's SHA-256 and `go version -m` output (LAUNCH.md:334-335).
+  5. Retain each binary's SHA-256 and `go version -m` output (LAUNCH.md:334-335).
 - **Expect.** Every binary's build information names its O1 commit.
 - **Stop if** a repository's `main` lacks its pin, the store's `main` lacks
-  the `sn_ledger_*` keys, or gvisor's checkout is not at O1's commit.
+  the `sn_ledger_*` keys, or a binary's build information names a commit
+  other than O1's.
 - **For step 8.**
-  - The frozen sn revision must list the reviewed source of the runtime that
+  - sn's launch revision must list the reviewed source of the runtime that
     step 8 deploys on (step 8.3). That runtime is 478 (step 2), and `main`
     lists its source (`crv4/native_owner_source.go:10,23`). A runtime after
-    478 first needs its own reviewed source on `main`, and so a new freeze.
+    478 first needs its own reviewed source on `main`, and so new launch
+    revisions.
   - Clone the sn tree under umask 022. Step 8.1's `stabi` check and step 4's
     gate read the modes of checked-out files.
 
@@ -705,81 +700,77 @@ first exist.
 
 **Step 4. Run the release gates.**
 
-- **Who.** Operator runs; owner confirms O26 and decides O28.
-- **Do.** In a workspace with the sibling checkouts the script names
-  (`scripts/test-release-1.0-local.sh`:7-9), with `SN_TEST_STORAGE_ROOT` set
-  or `/mnt/data` mounted (`scripts/test-storage.sh`:6-17):
+- **Who.** The session that orchestrates the launch runs the gate on goofe
+  (VERSION2-HANDOFF.md, section 3, item 7). The owner decided that its
+  failures are fixed, not accepted (O28).
+- **Do.** In a workspace with the checkouts of step 1, with
+  `SN_TEST_STORAGE_ROOT` set or `/mnt/data` mounted
+  (`scripts/test-storage.sh`:6-17), run the gate in its local mode:
 
   ```bash
-  RUN_SERVER_DB_TESTS=1 ./scripts/test-release-1.0-local.sh
+  RUN_SERVER_DB_TESTS=1 RELEASE_GATE_DEPENDENCY_MODE=local RELEASE_GATE_CONCURRENT_GATES=1 \
+    ./scripts/test-release-1.0-local.sh
   ```
 
-  This is the documented invocation (FINALIZE.md:5211-5214). Run the app
-  suites of section 2.2 beside it.
-- **What the gate needs.** The owner chose to refresh the release lock and
-  has authorized running it.
-  - **The order** is step 1's: the last merges, then the lock refresh, then
-    the gate. The launch is built and gated in the local mode, from the same
-    frozen checkouts, each clean at its recorded commit. `main` keeps its
-    local `../` module substitutions; a pinned build version comes later,
-    from the owner's build.
-  - **The workspace** also needs GitHub, the Go module proxy and "the LAN
-    node" (VERSION2-HANDOFF.md, section 3, item 7).
-  - **The release repositories**, beneath one workspace: sn, server, connect,
-    sdk, glog, goidenticons, proxy, userwireguard, warp, gvisor, vault, xops
-    and config (`scripts/test-release-1.0-local.sh`:9). Each is a physical
-    checkout, not a symlink (`sim-testnet/README.md`:1349-1351). Each is on a
-    branch that tracks `origin/main`, or `origin/master` for glog and
-    userwireguard, or `origin/go` for gvisor, a clone of
-    `github.com/urnetwork/gvisor`. Each is clean, with no tracked, staged or
-    untracked change, and at exactly its upstream's freshly fetched head
-    (`scripts/check-release-source-freeze.sh`:57-64,125-130,146-159). The
-    script on `main` demands that exactness only of sn. For the others it
-    admits any commit reachable from the upstream (:160-171). Its Go module
-    inventory must equal its reviewed classification, and every live module
-    must be tidy (:180-205). gvisor's module is inventoried, not tidied.
-  - **The vault and xops checkouts** are among them. The source freeze
-    refuses a missing one: "release repository is missing or not a Git
-    checkout" (`scripts/check-release-source-freeze.sh`:113-118). The lock is
-    observed over both (`sim-testnet/README.md`:1276-1283), and "A fresh
-    git-crypt vault clone contains ciphertext until unlocked" (:1351-1352).
-    The `xops` job runs that repository's infrastructure tests
-    (`scripts/test-release-1.0-local.sh`:588-599).
-  - **The release lock**, `deploy/testnet/release.lock.yml`, refreshed as the
-    last commit after the freeze (`sim-testnet/README.md`, "Atomic
-    release-lock refresh", :1306-1345). The gate ends by checking the lock
-    against the checkouts (`TestReleaseLockMatchesCheckout`,
-    `scripts/test-release-1.0-local.sh`:625-631), which fails until the
-    refresh is committed. From the sn repository, review the candidate
-    without writing, then apply it:
+  - `RELEASE_GATE_DEPENDENCY_MODE=local` tests the working checkouts as they
+    are (`scripts/test-release-1.0-local.sh`:4-18; `sim-testnet/README.md`:839-846).
+  - `RUN_SERVER_DB_TESTS=1` runs the database suites, the scale shard's
+    database half and the E suite, on the gate's private disposable
+    PostgreSQL and Redis (`scripts/test-release-1.0-local.sh`:446-643).
+  - `RELEASE_GATE_CONCURRENT_GATES=1` gives this one gate the host's whole
+    CPU and memory share, where the default reserves half of it for a second
+    gate (`scripts/release-gate-jobs.sh`:34-36,90-91).
 
-    ```bash
-    go run ./sim-testnet release-lock --config sim-testnet/testnet.yml
-    ```
+  Run the app suites of section 2.2 beside it.
+- **What local mode skips.** Exactly the checks that seal a run
+  (`sim-testnet/README.md`:848-856):
+  - the source freeze's provenance checks: clean, origin, upstream, fetch and
+    at-origin at the start, and the final snapshot with its comparison
+    (`scripts/check-release-source-freeze.sh`:203-209,238-243);
+  - `TestReleaseLockMatchesCheckout`, in `sn-all-normal` and as the final
+    fence (`scripts/test-release-1.0-local.sh`:144-151,686-687). So the
+    release lock needs no refresh;
+  - the runtime 454 source and runtime-metadata attestations, which read
+    GitHub and the testnet archive node rather than the checkouts (:62-66).
 
-    ```bash
-    SN_REPO="$(pwd -P)"
-    WORKSPACE="$(dirname "$SN_REPO")"
-    release_head="$(git rev-parse HEAD)"
-    build_utc="$(date -u +%Y%m%dT%H%M%SZ)"
-    SIM_TESTNET_RELEASE_DIR="$WORKSPACE/temp/sim-testnet-lock-${release_head}-${build_utc}"
-    SIM_TESTNET_BINARY="$SIM_TESTNET_RELEASE_DIR/sim-testnet"
-    mkdir -p "$SIM_TESTNET_RELEASE_DIR"
-    go build -trimpath -buildvcs=true -o "$SIM_TESTNET_BINARY" ./sim-testnet
-    go version -m "$SIM_TESTNET_BINARY"
-    sha256sum "$SIM_TESTNET_BINARY"
-    "$SIM_TESTNET_BINARY" release-lock --config sim-testnet/testnet.yml --apply
-    ```
-
-    That executable "must be built from a clean commit already equal to
-    `origin/main` and invoked by that exact absolute, nonsymlink path".
-    `--apply` leaves sn dirty only by the lock file: "review and commit that
-    file" (:1337-1345). Have that commit pushed before the gate runs, because
-    the gate needs sn clean and at `origin/main`.
-  - **The generated files at mode 644**: the fifteen ABI and binding files of
-    step 8.1. Check public sources out under umask 022, and keep the server's
-    `local/postgres/initdb` directory and its script at 755
-    (`sim-testnet/README.md`:1356-1361).
+  It keeps the module inventory and tidy checks, the sourceguard and
+  binding-toolchain preflights, patch hygiene, every test job and the
+  diagnostic mode.
+- **It never touches a vault.** The source freeze and patch hygiene skip the
+  vault checkout, its Git metadata included
+  (`scripts/check-release-source-freeze.sh`:132-145;
+  `scripts/test-release-1.0-local.sh`:676-684). Two tests still do what
+  local mode drops, until sn `v2/gate-mainnet-shards` (`ec3f3d80`) merges
+  (VERSION2-HANDOFF.md, section 2):
+  - `TestReleaseLockMatchesCheckout` still runs in `sn-simulator-race`
+    (:172-175);
+  - `TestRepositoryDiscoveryUsesModuleIdentity`, in `sn-all-normal` and
+    `sn-simulator-race`, stats the workspace vault's `main/st.yml`
+    (`sim-testnet/config_test.go:608-618`). Without it the test fails:
+    "cannot discover vault repository; use --vault-repo"
+    (`sim-testnet/config.go:1440-1458`).
+- **What it prints.** Its mode first: "[release-1.0] dependency mode local:
+  the working checkouts as they are, not sealed"
+  (`scripts/test-release-1.0-local.sh`:14). Then "source freeze: local mode
+  checks the module inventory and tidiness of the working checkouts, not
+  their provenance" (`scripts/check-release-source-freeze.sh`:208), and
+  "[release-1.0] runtime source and metadata artifact attestations skipped
+  (local mode)" and "[release-1.0] final release-lock and source-freeze
+  checkouts skipped (local mode)" (`scripts/test-release-1.0-local.sh`:65,687).
+- **The workspace:** sn, server, connect, sdk, glog, goidenticons, proxy,
+  userwireguard, warp, gvisor, xops and config, each a Git checkout beside
+  sn (`scripts/test-release-1.0-local.sh`:30;
+  `scripts/check-release-source-freeze.sh`:132-145). The vault is not
+  needed once `v2/gate-mainnet-shards` merges (above). The `xops` job runs
+  that repository's infrastructure tests
+  (`scripts/test-release-1.0-local.sh`:645-656).
+- **The generated files at mode 644**: the fifteen ABI and binding files of
+  step 8.1. Check public sources out under umask 022, and keep the server's
+  `local/postgres/initdb` directory and its script at 755
+  (`sim-testnet/README.md`:1378-1383).
+- **The pinned mode**, the default, seals a run and stays for the build
+  pipeline; the launch does not use it
+  (`scripts/test-release-1.0-local.sh`:4-12).
 - **Repaired on `main`**, so these no longer fail:
   - the source freeze's module classification and tidiness (sn
     `v2/gate-preflight`);
@@ -796,33 +787,34 @@ first exist.
   - the gate's selection (sn `f3cc4492`): its `server-unit` job runs
     `go test ./local/sn25golive`, and its database suites select SV-4's v1
     close floor tests beside SV-7's
-    (`scripts/test-release-1.0-local.sh`:264-265,471-478).
-- **Known failures (O28).** On pristine `main`,
-  `TestProduceFinalSemanticOutputsWritesOneSealedPair`,
-  `TestProduceFinalSemanticOutputsScansBeforeCreatingFiles` and
-  `TestProduceFinalSemanticOutputsScannerCannotMutateVerifiedBytes`
-  (`sim-testnet/final_semantic_producer_test.go:154,192,218`) fail with
-  "measurement-derived pool decision no_id 1 differs", in the
-  `sn-all-normal` and `sn-simulator-race` jobs. The cause is not found
-  (VERSION2-HANDOFF.md, section 3, item 7).
-- **Expect.** The last line is `[release-1.0] local release gate passed`
-  (`scripts/test-release-1.0-local.sh`:656). The settlement v2 jobs:
-  - `sn-v2`, gate 3's own verdict (:171-185);
-  - `sn-scale` and `server-scale`, GL-10 and SV-6 (:187-205,522-541);
-  - `sn-e2e`, gate 4 (:543-565);
+    (`scripts/test-release-1.0-local.sh`:305-306,510-520);
+  - the local mode itself (sn `53491e14`), and the further repairs that
+    VERSION2-HANDOFF.md, section 1, lists. Among them sn `692022ac` fixes
+    the three `TestProduceFinalSemanticOutputs*` tests.
+- **Still failing:** the tests whose fixes are still on branches
+  (VERSION2-HANDOFF.md, section 2).
+- **Expect.** The last line is `[release-1.0] local release gate passed
+  (local mode: working checkouts, not sealed)`
+  (`scripts/test-release-1.0-local.sh`:721-722). It qualifies those
+  checkouts, not a sealed release (`sim-testnet/README.md`:856-858). The
+  settlement v2 jobs:
+  - `sn-v2`, gate 3's own verdict (`scripts/test-release-1.0-local.sh`:211-226);
+  - `sn-scale` and `server-scale`, GL-10 and SV-6 (:228-246,574-592);
+  - `sn-e2e`, gate 4 (:593-622);
   - `solidity`: format, release build with sizes, tests, the `v2_invariant`
-    campaign, and the catalog and binding checks (:214-237);
-  - `solidity-coverage`, gate 1's bar (:239-254), and `solidity-static`
-    (:211);
-  - `sdk`, CL-2 and CL-4 (:376-383), and the server's v2 suites, the
+    campaign, and the catalog and binding checks (:254-278);
+  - `solidity-coverage`, gate 1's bar (:280-295), and `solidity-static`
+    (:248-252);
+  - `sdk`, CL-2 and CL-4 (:415-420), and the server's v2 suites, the
     activation record's (SV-9) and the v1 close floor's (SV-4) among them,
-    with migrations 821, 822 and 832 (:471-484).
+    with migrations 821, 822 and 832 (:510-526).
   - The wiring tests `TestReleaseGateSettlementV2*` of
     `sim-testnet/release_gate_settlement_v2_test.go` run in the aggregate job.
-- **Stop if** any job fails other than by the known failures that the owner
-  accepts by name (O28), or the script prints `[release-1.0] DB suites
-  deferred` (`scripts/test-release-1.0-local.sh`:585): the database suites,
-  the scale shard's database half and the E suite then did not run.
+- **Stop if** the script prints `[release-1.0] DB suites deferred`
+  (`scripts/test-release-1.0-local.sh`:642): the database suites, the scale
+  shard's database half and the E suite then did not run. Any failed job is
+  not a stop: fix it, commit, merge, push and pull, and run the gate again
+  (O28).
 
 ### Phase B. Release, approve and deploy
 
@@ -1045,7 +1037,7 @@ makes one, under a signed denomination policy
 - **Expect.**
   - The database head is at least the binary's own migration count, and
     readiness passes. That count is 835 on server `main` (`72699c819`), so
-    the head is 835 or higher at the freeze. A binary stays not-ready while
+    the head is 835 or higher at the launch revisions. A binary stays not-ready while
     the head is below its count: "database migration head %d is below
     binary-required head %d" (`server/router/warp_handlers.go:209-210,255-260`).
     The required head is `MinimumRuntimeMigrationVersion`, which returns
@@ -1127,8 +1119,8 @@ This completes the "gate 5 software is released" part of §12.1 step 1.
 - **Start only when** all of these hold:
   1. Gate 2 holds on runtime 478. Its rerun passed, R-1 to R-7 (section 9.3,
      item 2).
-  2. `sn-mainnet` is built from the frozen `main`, which lists the reviewed
-     source of runtime 478 (step 8.3).
+  2. `sn-mainnet` is built from the launch revisions, which list the
+     reviewed source of runtime 478 (step 8.3).
   3. Step 2, repeated immediately before 8.1, shows 478 with the identity
      that gate 2 passed on. That snapshot gives O3's version and hashes.
 - **Dry run.** Steps 8.2 to 8.5 and step 15 ran end to end on a rehearsal
@@ -1346,7 +1338,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:775-778 and "Runtime
   - A binary built before 478's entry merged (`a0a8814e`, through
     `e1fc2838`) refuses 478's commit. The dry run's binary refused 477's own,
     `5c6e83e2f4936f257234f246957f75684c35227c`, in the same way, before its
-    entry merged. Build `sn-mainnet` from the frozen `main` (step 1).
+    entry merged. Build `sn-mainnet` from the launch revisions (step 1).
   - Never name another runtime's commit beside the live `specVersion`, such
     as 475's `d1718c99c34cf96abbf2bf09c0e9e48b945c76f5` under 477 or 478.
     The approval would then name a source review that nobody made of the
@@ -1546,7 +1538,7 @@ release of every app.
      `TestSnChainSettingsVault2Address` (`sdk/sn_ledger_claim_test.go:1763-1765`)
      and `TestSnChainSettingsWasmVault2Address` (`sdk/js/sn_wasm_test.go:107-109`).
   3. Run the SDK's v2 suites, the `sdk` job selector of the release gate
-     (`scripts/test-release-1.0-local.sh`:376-383).
+     (`scripts/test-release-1.0-local.sh`:415-420).
   4. Rebuild and release every app against that SDK: the Android AAR, the
      Apple framework, the Windows DLL, the Linux library and the ur.io wasm.
 - **Expect.** Each app shows the v2 tile and offers Claim when an account has
@@ -1992,7 +1984,7 @@ configured (§14 gate 6). Gate 5 completed at step 9.
     1.9 α (`miner/run.go:195-197`).
 - **Stop if** the daemon refuses its batcher, or refuses a threshold below the
   floor (`miner/claim_v2_daemon.go:643-645`).
-- The daemon and `snclaim` of the frozen sn `main` carry section 2.6's claim
+- The daemon and `snclaim` of sn's launch revision carry section 2.6's claim
   floor (step 20).
 
 ### Phase C. Activate
@@ -2489,8 +2481,8 @@ Found while writing this runbook:
 | The v1 close shares the root key, and its capture moves stake as a v2 close's does | Server `main` signs it at no less than min(3,200,000, `maximum_gas`) (SV-4; `server/controller/st_controller.go:1970-2002`). Watch v1 closes too (section 5) |
 | Under today's gas policy, `maximum_gas` 1,000,000 and per-intent liability 5·10^16 wei, step 6's build signs a close at 1,000,000 gas, and above a 25 gwei fee cap a reverted close gets no second signature | Install the re-signed policy before step 6's build runs (step 5; `server/controller/st_ledger_v2_gas_test.go:184-246,450-481`) |
 | Until a native-fee denomination policy names runtime 478, every operator send from block 9,276,926 keeps its full gas ceiling against the gas policy's intent and lifetime liabilities | Re-sign it for 478 (step 5, O27); size `maximum_lifetime_liability_wei` for sends at their ceilings (O13) |
-| The apps suggest a v1 gas top-up of 0.005 or 0.01 TAO, below the about 0.0149 TAO that a v1 claim's 2,700,000 gas needs at 5 gwei. A gas key topped up by the hint then fails a v1 claim with `needs_gas` | The hint's rise to 0.02 TAO is still landing (section 2.6). Until then the SDK's `needs_gas` message names the amount the claim needs (`sdk/sn_claims.go:903-905`) |
-| Three `TestProduceFinalSemanticOutputs…` tests fail on pristine `main`, for a reason not found | The owner's decision O28 (step 4) |
+| A gas key topped up below a v1 claim's limit × the price fails the claim with `needs_gas`: about 0.0149 TAO at 2,700,000 gas and 5 gwei | The apps' `main` suggest a 0.02 TAO v1 top-up (section 2.6), and the SDK's `needs_gas` message names the amount the claim needs (`sdk/sn_claims.go:903-905`) |
+| The release gate fails on the latest `main` | Each failure is fixed on a branch, merged and pulled, and the gate runs again until it passes (O28; VERSION2-HANDOFF.md, section 2) |
 | The loader admits an adoption that appends no authority history entry, and the validator then refuses every decision made under the running config | The by-hand check of step 10, sub-step 2, and step 10's stop condition |
 | The repair and activation controllers refuse the adopted validator, and the rendered unit starts the pre-adoption config without the auditor key | Restart the unit with its drop-in. Around a controller run, remove the drop-in and reinstall it (step 10) |
 | `preview` cannot tell a wrong but well-formed owner input, and it checks `native_chain` and `specName` only for being non-empty | The comparison step of `mainnet/SETTLEMENT-V2-FILL.md`, read against the owner inputs, and the by-eye review of step 8.3 |
@@ -2511,7 +2503,7 @@ Open owner decisions and work that the repositories leave open:
    per epoch (§6.6). Decide its retention and disk. Retain the step 8 run
    directory as the v2 deployment record.
 4. **The gate 3 CI job.** SV-8's `TestEvmV2*` runs only in the aggregate
-   normal job (STATE.md:129; `scripts/test-release-1.0-local.sh`:116-119), and
+   normal job (STATE.md:129; `scripts/test-release-1.0-local.sh`:144-156), and
    the `mainnet` package exceeded the 90-minute budget on the build machine
    (STATE.md:133). No CI runs any of this (section 2.2).
 5. **The phase C sweep**, with `E_sweep >= E_s + 8` (§16).
@@ -2522,10 +2514,8 @@ Open owner decisions and work that the repositories leave open:
    unpaid until the epoch after it signs.
 7. **The Windows v2 Claim colour**, blue or lime (STATE.md:200).
 8. **Tooling gaps** marked above:
-   - still landing: the server's gas floors for the deposit key's stake
-     moves, held in review until they respect the operation's remaining
-     liability, and the apps' v1 gas top-up hint, rising to 0.02 TAO
-     (VERSION2-HANDOFF.md, section 2; section 2.6);
+   - still landing: fixes of the release gate's failing tests, each on its
+     branch (VERSION2-HANDOFF.md, section 2);
    - a tool that writes and signs the native-fee denomination policy, and
      a decision on its native authority for 478 (step 5);
    - a rendered validator unit that names the adopted config and the auditor
@@ -2598,8 +2588,8 @@ the order:
 
 | Order | Steps | Runs in parallel | Owner signs |
 | --- | --- | --- | --- |
-| 1 | 1: the freeze, with whatever of the changes still landing the owner waits for; the lock refresh as sn's last commit; then build in the local mode | with step 2 | |
-| 2 | 2, 3, 4: the runtime check and the release gates. Gate 2's rerun on runtime 478 has passed, R-1 to R-7 | with each other | O28 (O26, the gate 1 confirmation, was given 2026-10-13) |
+| 1 | 1 and 4: the latest `main` of every repository; the gate in its local mode, its failures fixed and merged until it passes; then build in the local mode from the heads it passed on | with steps 2 and 3 | |
+| 2 | 2 and 3: the runtime check and the runtime rehearsal. Gate 2's rerun on runtime 478 has passed, R-1 to R-7 | with each other, and with order 1 | none: O26, the gate 1 confirmation, was given 2026-10-13, and O28 is decided |
 | 3 | 5, 6, 7: the gas policy and the native-fee policy, the server build with migrations, the validator binary and the tools | 7's tools and apps with 5 and 6; 6 once 5's gas policy is installed; 7's validator binary after 6's connect service (section 6.3) | step 5, with the gas approver key and the denomination approver key |
 | 4 | 8: deploy the contracts, after steps 2 to 4 pass and step 2 has run again | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
 | 5 | 10: adopt the validator config, after step 8 and step 7's validator binary | with step 13 | the treasury approval, with its approval key |

@@ -5,6 +5,9 @@ agent. Updated 2026-10-14 at about 01:15 UTC: sections 1 and 2 follow the
 merges since, and items 2 and 3 of section 3 follow the runbook. Updated again
 at about 03:45 UTC: sections 1 and 2 follow the merges since, and item 7 of
 section 3 says who runs the release gate and what stops it on goofe today.
+Updated again at about 06:30 UTC: section 1's heads, fixes and gate repairs,
+section 2's branches, and items 6, 7 and 8 of section 3 follow the owner's
+decision to run the gate in its local mode and the move of E_s to epoch 3.
 [VERSION2-LAUNCH.md](VERSION2-LAUNCH.md) is the runbook and
 [VERSION2-FINAL.md](VERSION2-FINAL.md) the plan of record; both win over this
 note. This note says what is on `main`, what is still landing, and the facts
@@ -13,24 +16,26 @@ found during the last day that the deployer must act on.
 
 ## 1. What is on main
 
-Heads on 2026-10-14 at about 03:40 UTC:
+Heads on 2026-10-14 at about 06:25 UTC, each read from its `origin/main`
+(gvisor: its `go` branch):
 
 | repo | main |
 | --- | --- |
-| sn | the commit that updates this note, on `839c906b` |
-| server | `10b0bd3f1` |
-| sdk | `1ee41b40` |
-| connect | `8d22832d` |
+| sn | the commit that updates this note, on `aaec4175` |
+| server | `81484f5b1` |
+| sdk | `0110c1ca` |
+| connect | `1e7f92c0` |
 | proxy | `ada3aac` |
 | localizations | `3a1e7ca` |
 | apple | `edcd545e` |
-| android | `0a3a0030c` |
+| android | `5ebbd7285` |
 | windows | `fac2afd` |
 | linux | `06717d7` |
-| mmm (ur.io) | `ec4760983` |
+| mmm (ur.io) | `6500bf924` |
 | web | `9526a97b` |
 | warp | `99e01ec` |
-| xops | `2f2af94` |
+| xops | `a0c2727` |
+| gvisor | `c0783dba` |
 
 Settlement v2 itself:
 
@@ -118,6 +123,11 @@ and the key's later sends go out.
 - A root-key execution whose gas was reserved, but which was not yet signed
   when its v1 close expired or its v2 operation was spent, is now signed as
   reserved: it reverts once and frees the nonce (server `b7371dc10`).
+- When a dead operation's cancellation cannot be signed, as when its
+  signatures are spent, its latest signed attempt is broadcast again. That
+  takes no new signature or liability: it reverts and frees the nonce, where
+  before a lost broadcast left the account blocked (server `bac7e5770`,
+  merged as `bfdc067ca`).
 - Known limitation: on the deposit key, a deposit reserved but not signed
   before its deadline stays refused, and no operator step frees it. It is
   dormant while deposits are at zero price, since the deposit task then sends
@@ -136,6 +146,10 @@ carry them.
 - sn `VALIDATOR.md`:812-828 ("Rolling deploy") and connect
   `IPV6.md`:332-341 describe it; the runbook's section 6.3 places it in the
   launch.
+- A tunnel connection that a reset leaves without a remote address no longer
+  ends the validator. The hops' family check called a method on that nil
+  address, on net/http's dial goroutine. It now reads the family as unknown
+  (sn `ee56449b`, merged as `aaec4175`).
 
 Release gate repairs:
 
@@ -146,7 +160,27 @@ Release gate repairs:
 - the test vault guard under `GOTMPDIR`;
 - the selection of the v1 close floor's tests and of `sn25golive`'s (sn
   `6caf9667`), and of the deposit floors' and the pending reservation's
-  (sn `839c906b`).
+  (sn `839c906b`);
+- the gate's local mode, `RELEASE_GATE_DEPENDENCY_MODE=local` (sn
+  `53491e14`);
+- `mainnet` tests stale since the custody, census and classifier commits:
+  27 bootstrap and EVM tests, eleven original-custody tests, two read-failure
+  tests and the native fee export test (sn `3dd174fc`);
+- sim-testnet's release evidence, priced at the conviction-zero tier, which
+  fixes the three `TestProduceFinalSemanticOutputs*` (sn `692022ac`);
+- the server unit job's database-backed tests, moved into server-db (sn
+  `8e0d4f26`);
+- the stmonitor fixture's mainnet roots, on the gate's private PostgreSQL,
+  and server-db's 30-minute deadline for the ledger v2 commands (sn
+  `e7cb82b4`);
+- the `miner` tests, in two rounds, and sn-core-race's 120-minute deadline
+  (sn `2573bba1`, `54a06100`, `d3545d94`);
+- the server's: the reserved-upload tests' SCALE hashes, the assignment
+  filter test's seeds, the proxy test's synthetic GeoLite2 database, the
+  monitor's schema contracts for migrations 833 to 835, its catalog
+  fixtures' deadlines and the gate PostgreSQL's statement text (server
+  `6fafc66f6`), and the partial-index guard fixture's deadline (server
+  `666940321`).
 
 Release builder: an explicit `dependency_mode`.
 
@@ -156,31 +190,45 @@ Release builder: an explicit `dependency_mode`.
 
 ## 2. Still landing on main
 
-This session keeps merging these and pushes each as it verifies:
+This session keeps fixing what the release gate still fails, each fix on its
+branch, and merges each as it verifies. The state of each branch at about
+06:30 UTC:
 
-1. **The release gate's failing tests**, each on a branch. All but the last
-   are root-caused. Apart from the monitor's missing schema contracts for
-   migrations 833 to 835, a monitoring gap, none so far is a fault in what
-   ships.
-   - sn `v2/gate-mainnet-tests`: 13 `TestBootstrap*` tests and
-     `TestIdentityFinalityClosingOutageRetainsTransportCause` in `mainnet`,
-     stale since the custody, census and classifier commits of 2 to 4
-     October.
-   - sn `v2/gate-semantic-outputs`: 11 tests of sim-testnet's release
-     evidence, the three `TestProduceFinalSemanticOutputs*` among them.
-     Upstream `9b386fe8` changed the validator's pool-weight formula and the
-     whitepaper's §8.1, but not sim-testnet's verifier, builder and fixtures.
-   - server `v2/gate-server-tests`: two reserved-upload tests (a stale
-     SCALE-hash fixture), a verify-simulation test (stale since the SEED
-     replay of 4 October), the proxy test's GeoLite fixture, the monitor's
-     schema contracts for 833 to 835, and the monitor tests' time budgets;
-     with an sn patch that moves the DB-backed tests out of the server-unit
-     job and into server-db.
-   - sn `v2/gate-miner-tests`: `TestClaimClockRestartRetainsUnfinalizedSignedReceipt`,
-     and the `miner` package outrunning sn-core-race's default 10-minute
-     clock under race.
-2. **A lost last signature is rebroadcast** (server `v2/gas-floor-3`). In a
-   narrow case that predates this work, the root key stays blocked.
+1. sn `v2/gate-mainnet-shards`: the `./mainnet` package sharded on tmpfs
+   into 8 jobs. Two commits so far. `ec3f3d80` makes local mode skip, in
+   every job, the two sim-testnet tests that only a sealed run passes, and
+   print each local skip with its reason before it starts. `e07be0a4` gives
+   sn-v2's selected v2 suites an explicit 30-minute deadline. On `main`,
+   `TestReleaseLockMatchesCheckout` still runs in sn-simulator-race, and
+   `TestRepositoryDiscoveryUsesModuleIdentity` stats the workspace vault's
+   `main/st.yml`. The sharding has no commit yet.
+2. sn `v2/gate-mainnet-tests`: ten more `mainnet` test fixes, to
+   `40e92be8`, beyond the round merged as `3dd174fc`.
+3. server `v2/task-finalization-session`: the task runner's session race, in
+   one commit, `8a4e335e5`. A Drain that lands during a Run loop's claim
+   refill closes the loop's database session, so the loop's owned
+   finalizations are lost and their rows run again after their five-minute
+   lease. It is a production bug that repeats task execution. The claim
+   fence and the task bodies' checks of their applied state keep any effect
+   from applying twice.
+4. server `v2/proxy-synctest-wireguard`: the proxy tests' synctest crash, in
+   one commit, `6a1efd2cd`. Two WireGuard tests made their proxy inside a
+   synctest bubble, so its peers' queues were bubble channels. A finalizer
+   outside the bubble drains them, which crashed the whole package. The proxy
+   and its peers are now made outside the bubble.
+5. sn `v2/gate-sim-tests`: sim-testnet's remaining tests, five commits, to
+   `17c1e970`. The last fixes the crv4 regression from `65759103`: under a
+   provisional runtime approval, the validator's strict stake and schedule
+   reads at reviewed runtimes work again. Mainnet never enables provisional
+   compatibility.
+6. sn `v2/gate-utf8-parity`: the UTF-8 parity test, in one commit,
+   `d300211c`. The test expected the `\ufffd` escape that `encoding/json`
+   wrote before Go 1.27. Go 1.27.2's default encoder, jsonv2, writes each
+   invalid byte as a literal U+FFFD. The test now derives the expected bytes
+   from the linked encoder. The comparison itself was right.
+7. sn `v2/semantic-evidence-gaps`: the semantic verifier's gaps, four
+   commits, to `385596dc`, with its review on `v2/semantic-gaps-review`
+   (`763fd96e`).
 
 ## 3. Facts the deployer must act on
 
@@ -219,40 +267,50 @@ This session keeps merging these and pushes each as it verifies:
 6. **Step 1 and the release build** use Go 1.27.2 (`go.mod`) with
    `dependency_mode: local`.
    - The census includes connect, sdk and gvisor.
-   - The source freeze requires gvisor cloned from
-     `github.com/urnetwork/gvisor`, with that remote, on its `go` branch at
-     `c0783dba`.
-7. **The release gate (step 4).**
-   - This session runs the official gate on goofe, on the frozen heads, when
-     the owner calls the freeze. It fast-forwards every release checkout on
-     goofe to its upstream, refreshes the release lock as the last sn commit
-     (`sim-testnet/README.md`, "Atomic release-lock refresh"; the owner has
-     authorized it), pushes it, and starts the gate alone on the host. The
-     deploying session does not run a second gate there.
-   - From the freeze until the gate reports, nobody pushes to sn `main`: the
-     gate requires the sn checkout at exactly `origin/main` when it starts and
-     again when it ends. The other release repositories may advance upstream,
-     but their checkouts on goofe must not change.
-   - The workspace needs the vault and xops checkouts, GitHub, the Go proxy and
-     the LAN node. Every release repository must be clean and on the branch
-     the source freeze names.
-   - **The runtime-metadata preflight cannot pass on goofe today.**
-     `scripts/check-runtime-metadata-artifacts.sh` reads
-     `http://192.168.1.162:9944` and requires a Bittensor testnet archive
-     there (genesis `0x8f9cf856…`). Snow now runs a Finney archive (xops
-     `main/ansible/host_files/snow/subtensor/README.md`), so the address
-     answers with mainnet's genesis (`0x2f0555cc…`, runtime 478), and the
-     strict gate stops at that preflight. The owner decides how the gate
-     attests the testnet runtime metadata from now on.
-   - The binding-toolchain and runtime-source preflights pass on goofe at sn
-     `8381bb59`, and the xops job passes at xops `770fffc`.
-   - The tests the gate still fails are in section 2.
-8. **The schedule.**
-   - E_s is epoch 2, which starts at block 9,297,628, about 2026-10-16 18:10
-     UTC.
-   - The plan's registration window is blocks 9,283,228 to 9,290,428.
-   - The six departures in the runbook's section 9.3 need the owner's explicit
-     acceptance. If the window is missed, E_s moves to epoch 3.
+   - gvisor is a checkout beside sn, cloned from
+     `github.com/urnetwork/gvisor` on its `go` branch, at `c0783dba`. The
+     local gate inventories its module without checking its provenance, and
+     the release build records its commit.
+7. **The release gate (step 4)** runs in its local mode, on the latest `main`
+   of every repository. The owner's decisions of 2026-10-14: "The gate should
+   just run against the local checkout. We don't need to seal the version.
+   That is just overhead we can avoid." And: "Pull the latest main code on
+   all repos. That is what the gate should use. If it fails, fix, commit,
+   merge, push, pull, repeat."
+   - The command:
+
+     ```bash
+     RUN_SERVER_DB_TESTS=1 RELEASE_GATE_DEPENDENCY_MODE=local RELEASE_GATE_CONCURRENT_GATES=1 \
+       ./scripts/test-release-1.0-local.sh
+     ```
+
+   - This session runs it on goofe, from worktrees at those heads, alone on
+     the host. The deploying session does not run a second gate there. Each
+     failure is fixed on a branch, merged, pushed and pulled, and the gate
+     runs again until it passes (section 2). The heads it passes on are the
+     launch revisions.
+   - Local mode skips exactly the checks that seal a run: the source freeze's
+     provenance checks, `TestReleaseLockMatchesCheckout` in sn-all-normal and
+     as the final fence, and the runtime 454 source and runtime-metadata
+     attestations, which read GitHub and the testnet archive node. So the
+     release lock needs no refresh, and Snow's Finney archive at the testnet
+     archive's address no longer stops the gate. It keeps the module
+     inventory and tidy checks, the sourceguard and binding-toolchain
+     preflights, patch hygiene, every test job and diagnostic mode
+     (`sim-testnet/README.md`, the paragraph on `RELEASE_GATE_DEPENDENCY_MODE`).
+   - Its scripts never touch a vault checkout. Until `v2/gate-mainnet-shards`
+     merges, one test still stats the workspace vault's `main/st.yml`, and
+     fails without it (section 2, item 1).
+   - Local mode does not compare the checkouts again at the end, so nothing
+     would catch a worktree that changes during the run. Leave them as they
+     are until the gate reports.
+   - A local pass ends with `[release-1.0] local release gate passed (local
+     mode: working checkouts, not sealed)`. It qualifies those checkouts, not
+     a sealed release. The pinned mode stays for the build pipeline.
+8. **The schedule.** E_s is epoch 3 (the runbook's O18). The runbook's
+   section 9 gives its blocks and dates, the registration window, the
+   departures from the plan of record and the decision point if the window
+   is missed.
 9. **The safeguard's first read.** The activation record arms on the first
    successful registration read. Check it with `sn-transition-status` or
    `st-check --v2-activation` after step 15, and never remove the v2 addresses
