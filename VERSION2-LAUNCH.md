@@ -455,7 +455,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | O23 | The SDK release that pins `Vault2Address`, and the app release dates | lands before step 15 | 9 | VERSION2-FINAL.md §11; `sdk/sn_chain.go:83-89` |
 | O24 | Who runs the first claim, and for which account | anyone may claim for anyone; payment goes to the leaf's coldkey | 20 | VERSION2-FINAL.md §1, §17 |
 | O25 | Whether and how to hold the SN25 owner key `ur-owner` under the Safe's governance | recommended; no coldkey swap; no tooling | section 8 | VERSION2-FINAL.md §4.1, §17 |
-| O26 | Gate 1's independent review: confirmation that it is resolved | the owner confirms | 4 | VERSION2-FINAL.md §14; STATE.md:91,99,103,176,189,198 |
+| O26 | Gate 1's independent review: confirmation that it is resolved | the owner confirmed it resolved, 2026-10-13 | 4 | VERSION2-FINAL.md §14; STATE.md:91,99,103,176,189,198 |
 | O27 | The native-fee denomination policy for runtime 478: its `native_authority`, `last_native_block`, wei-per-rao ratio and signature, and its authority file | `runtime_code_sha256` 478's and `first_native_block` 9,276,926; once a settlement has recorded an approver key for the scope, only that key can sign (step 5) | 5 | `server/st_native_fee_denomination.go:27-54`; `server/model/st_native_fee_settlement_model.go:124-125,189-197` |
 | O28 | Whether the release gate passes with its known failures: the three `TestProduceFinalSemanticOutputs…` tests that fail on pristine `main` | the owner decides, by name, or the gate does not pass (step 4) | 4 | VERSION2-HANDOFF.md, section 3, item 7 |
 
@@ -2599,7 +2599,7 @@ the order:
 | Order | Steps | Runs in parallel | Owner signs |
 | --- | --- | --- | --- |
 | 1 | 1: the freeze, with whatever of the changes still landing the owner waits for; the lock refresh as sn's last commit; then build in the local mode | with step 2 | |
-| 2 | 2, 3, 4: the runtime check and the release gates. Gate 2's rerun on runtime 478 has passed, R-1 to R-7 | with each other | O26, the gate 1 confirmation, and O28 |
+| 2 | 2, 3, 4: the runtime check and the release gates. Gate 2's rerun on runtime 478 has passed, R-1 to R-7 | with each other | O28 (O26, the gate 1 confirmation, was given 2026-10-13) |
 | 3 | 5, 6, 7: the gas policy and the native-fee policy, the server build with migrations, the validator binary and the tools | 7's tools and apps with 5 and 6; 6 once 5's gas policy is installed; 7's validator binary after 6's connect service (section 6.3) | step 5, with the gas approver key and the denomination approver key |
 | 4 | 8: deploy the contracts, after steps 2 to 4 pass and step 2 has run again | its six actions run in sequence | the phase approval, with the approval key; then six transactions, with the deployer key |
 | 5 | 10: adopt the validator config, after step 8 and step 7's validator binary | with step 13 | the treasury approval, with its approval key |
@@ -2664,8 +2664,8 @@ departure, and its rerun has passed.
      phase.
    - Step 2 is repeated immediately before step 8 and before step 15.
 3. **O26.** Gate 1 needs the independent review of vault2, `LedgerTree.sol`
-   and `STSettlement2` resolved (§14). The owner's confirmation is not given
-   yet, and step 8 waits for it.
+   and `STSettlement2` resolved (§14). The owner confirmed it resolved on
+   2026-10-13, so gate 1 does not hold step 8.
 4. **The apps.** Activation needs v2 claims in the apps (§2.1 decision 8; §11;
    §14 gate 5). For epoch 2 the releases with the pinned `Vault2Address`
    (step 9) could not precede step 15. For epoch 3 they can precede it
