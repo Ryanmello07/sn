@@ -112,11 +112,12 @@ while read -r variable path repository; do
   exit 1
 done <<< "$exports"
 
-# Each checkout's HEAD, marked when its working tree differs from it.
+# Each checkout's HEAD, marked when its working tree differs from it. Other
+# jobs share the checkouts, so status takes no index lock.
 declare -A commits
 for repository in sn server; do
   commit="$(git -C "$workspace/$repository" rev-parse HEAD)"
-  changes="$(git -C "$workspace/$repository" status --porcelain)"
+  changes="$(git -C "$workspace/$repository" --no-optional-locks status --porcelain)"
   [[ -z "$changes" ]] || commit+=+modified
   commits[$repository]="$commit"
 done

@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // The exports job's whole body.
@@ -725,11 +726,20 @@ func (self *releaseGateMainnetExportsBuild) commit(t *testing.T, repository stri
 // runs the reviewed offline Cargo builds from the pinned toolchain alone and
 // the three Go exporters, removes the Cargo target, records each export
 // file's source commit and SHA-256, and writes an environment naming every
-// export last.
+// export last. It reads the checkouts that other jobs share without writing
+// their index, even when its stat information is stale.
 func TestReleaseGateMainnetExportsBuildEveryExportOffline(t *testing.T) {
 	t.Parallel()
 	self := newReleaseGateMainnetExportsBuild(t)
 	if err := os.WriteFile(filepath.Join(self.workspace, "server", "untracked.go"), []byte("package server\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(filepath.Join(self.workspace, "sn", "README.md"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	index, err := os.ReadFile(filepath.Join(self.workspace, "sn", ".git", "index"))
+	if err != nil {
 		t.Fatal(err)
 	}
 	output := filepath.Join(self.root, "exports")
@@ -824,6 +834,9 @@ func TestReleaseGateMainnetExportsBuildEveryExportOffline(t *testing.T) {
 	}
 	if raw, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("the environment names an absent export: %v\n%s", err, raw)
+	}
+	if after, err := os.ReadFile(filepath.Join(self.workspace, "sn", ".git", "index")); err != nil || !slices.Equal(after, index) {
+		t.Fatalf("the builder rewrote a shared checkout's index: %v", err)
 	}
 }
 
