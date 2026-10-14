@@ -203,11 +203,8 @@ func TestBootstrapSuccessorSafeCurrentRevisionRejectsEventSubstitution(t *testin
 		t.Fatal(err)
 	}
 	owner.close()
-	for _, suffix := range []string{".intent", ".json"} {
-		if err := os.WriteFile(filepath.Join(root, bootstrapSuccessorExecutionEventName(2)+suffix), malformed, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	event := bootstrapSuccessorExecutionEventName(2)
+	bootstrapSuccessorExecutionTestRewrite(t, f.storageContext(t.Context()), root, rootObjectHash(f.approval), map[string][]byte{event + ".intent": malformed, event + ".json": malformed})
 	reopened, err := openBootstrapSuccessorExecutionStore(f.storageContext(t.Context()), f.approval.Plan, f.approval, f.profile, false, nil)
 	if reopened != nil {
 		reopened.close()
@@ -215,11 +212,7 @@ func TestBootstrapSuccessorSafeCurrentRevisionRejectsEventSubstitution(t *testin
 	if err == nil || !strings.Contains(err.Error(), "changed counted current-policy authority") {
 		t.Fatal("counted event replay accepted a backward current policy", err)
 	}
-	for _, suffix := range []string{".intent", ".json"} {
-		if err := os.WriteFile(filepath.Join(root, bootstrapSuccessorExecutionEventName(2)+suffix), retained, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	bootstrapSuccessorExecutionTestRewrite(t, f.storageContext(t.Context()), root, rootObjectHash(f.approval), map[string][]byte{event + ".intent": retained, event + ".json": retained})
 	owner = f.open(false, nil)
 	if owner.last.CumulativeAttempts != 10 || owner.last.SafeCurrentRevisionHash != rootObjectHash(second) || len(f.writes) != 0 {
 		t.Fatal("policy event repair renewed consumed custody")

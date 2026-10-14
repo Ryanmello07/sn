@@ -452,7 +452,7 @@ func TestEvmProxyCreateRequiresCompletedEscrow(t *testing.T) {
 		if _, code, diagnostic := f.command("apply", "--action", "proxy-create"); code != 3 {
 			t.Fatalf("%s escrow admitted proxy: %d %s", stage, code, diagnostic)
 		}
-		if _, err := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, evmProxyCreateStateFile) + ".lock"); !errors.Is(err, os.ErrNotExist) || !maps.Equal(counts, f.counts) {
+		if err := f.unclaimed(evmProxyCreateStateFile); err != nil || !maps.Equal(counts, f.counts) {
 			t.Fatalf("%s escrow opened proxy custody: %v", stage, err)
 		}
 	}
@@ -781,7 +781,7 @@ func TestEvmProxyCreateRefusesRevertedEscrow(t *testing.T) {
 	if _, code, diagnostic := f.command("apply", "--action", "proxy-create"); code != 3 || !strings.Contains(diagnostic, "successful escrow") {
 		t.Fatalf("reverted escrow admitted proxy: %d %s", code, diagnostic)
 	}
-	if _, err := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, evmProxyCreateStateFile) + ".lock"); !errors.Is(err, os.ErrNotExist) {
+	if err := f.unclaimed(evmProxyCreateStateFile); err != nil {
 		t.Fatalf("reverted escrow acquired proxy custody: %v", err)
 	}
 }

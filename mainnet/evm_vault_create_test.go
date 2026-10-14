@@ -203,7 +203,7 @@ func TestEvmVaultCreateRequiresRetainedReserveCompletion(t *testing.T) {
 		if _, code, diagnostic := f.command("apply", "--action", "vault-create"); code != 3 {
 			t.Fatalf("%s reserve admitted vault custody: %d %s", stage, code, diagnostic)
 		}
-		if _, err := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, evmVaultCreateStateFile) + ".lock"); !errors.Is(err, os.ErrNotExist) || !maps.Equal(counts, f.counts) {
+		if err := f.unclaimed(evmVaultCreateStateFile); err != nil || !maps.Equal(counts, f.counts) {
 			t.Fatalf("%s refusal acquired vault custody or RPC: %v", stage, err)
 		}
 	}
@@ -604,7 +604,7 @@ func TestEvmVaultCreateRejectsRevertedReservePrerequisite(t *testing.T) {
 	if _, code, diagnostic := f.command("apply", "--action", "vault-create"); code != 3 || !strings.Contains(diagnostic, "successful reserve") {
 		t.Fatalf("reverted reserve admitted vault: %d %s", code, diagnostic)
 	}
-	if _, err := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, evmVaultCreateStateFile) + ".lock"); !errors.Is(err, os.ErrNotExist) || len(f.writes) != 1 {
+	if err := f.unclaimed(evmVaultCreateStateFile); err != nil || len(f.writes) != 1 {
 		t.Fatalf("reverted reserve acquired vault custody: %v", err)
 	}
 }

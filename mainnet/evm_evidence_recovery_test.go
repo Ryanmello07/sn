@@ -22,7 +22,7 @@ func TestEvmEvidenceCreateRequiresCompletedVaultBinding(t *testing.T) {
 		if _, code, diagnostic := f.command("apply", "--action", "evidence-create"); code != 3 {
 			t.Fatalf("%s binding admitted evidence: %d %s", stage, code, diagnostic)
 		}
-		if _, err := os.Lstat(filepath.Join(f.config.Plan.RunDirectory, evmEvidenceCreateStateFile) + ".lock"); !errors.Is(err, os.ErrNotExist) || !maps.Equal(counts, f.counts) {
+		if err := f.unclaimed(evmEvidenceCreateStateFile); err != nil || !maps.Equal(counts, f.counts) {
 			t.Fatalf("%s binding opened evidence custody: %v", stage, err)
 		}
 	}
