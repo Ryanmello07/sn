@@ -1060,13 +1060,18 @@ implied_demand_n = 1                                                        # wh
 ```
 
 **Implied demand, not raw deposit** (decision A, D25): the audited usage is priced at the **baseline
-(conviction‑zero) rate** for every NO, so a NO on a lower tier rate posts less α for the same real usage
-and gets the **same** weight — the conviction stake that bought the lower rate is a *discount, not a
-penalty*, and the weight still tracks **real revenue‑backed usage** (the headline thesis) rather than raw
-α. With `users_n = 0` this is exactly the earlier `epoch_deposit_n / rate(tier_n)` ranking. When the
-per‑epoch cap truncates the deposit a NO owes at its own tier (`owed_n`), its demand is truncated by the
-same factor, so usage the NO did not pay for buys no weight. Under the zero‑price launch mode every
-pool's implied demand is exactly 1 and `Q_n` alone steers (§7.1). NO `n`'s miner‑pool UID then accrues
+(conviction‑zero) rate** for every NO. Below the per‑epoch cap a NO on a lower tier rate posts less α for
+the same real usage and gets the **same** weight — the conviction stake that bought the lower rate is a
+*discount, not a penalty*, and the weight still tracks **real revenue‑backed usage** (the headline
+thesis) rather than raw α. With `users_n = 0` this is the earlier `epoch_deposit_n / rate(tier_n)`
+ranking, up to the deposit's floor. When the cap truncates the deposit a NO owes at its own tier
+(`owed_n`), its demand is truncated by the same factor, so usage the NO did not pay for buys no weight.
+A capped NO's demand is `cap × baseline / owed_n`, with one priced component `cap × rate(0) / rate(tier_n)`:
+it no longer grows with usage, and a lower tier rate raises it, so at the cap the tier does change the
+weight. Under policy v2 (a 10 α cap; 40, 32 and 24 α per GiB at conviction 0, 1 α and 10 α) a pool is
+capped above 0.25, 0.3125 or about 0.42 GiB by tier, and 1 GiB carries an implied demand of 1·10^10,
+1.25·10^10 or about 1.67·10^10 rao. Under the zero‑price launch mode every pool's implied demand is
+exactly 1 and `Q_n` alone steers (§7.1). NO `n`'s miner‑pool UID then accrues
 over the epoch
 
 ```
@@ -1738,18 +1743,20 @@ emission, `ŵ_n ∝ implied_usage_n × Q_n`, `implied_usage_n` the audited usage
 any conviction stake are both locked in the reserve (§7.4), and the NO keeps `R_n − D_n` off‑chain.
 Providers attach where expected pay is highest. Two forces balance:
 
-- **Serving more real usage**, and depositing `D_n` for it at `rate(tier_n)` (a higher tier lowers `D_n`,
-  not the weight), lifts the NO's implied usage → its
+- **Serving more real usage**, and depositing `D_n` for it at `rate(tier_n)` (a higher tier lowers `D_n`
+  and, below the cap, leaves the weight unchanged), lifts the NO's implied usage → its
   emission share `ŵ_n` → the α its providers earn → attracts capacity → more real usage → more `R_n`
-  **and** higher measured `Q_n` (which feeds back into `ŵ_n`).
+  **and** higher measured `Q_n` (which feeds back into `ŵ_n`). At the per‑epoch cap more usage stops
+  lifting implied usage, and a higher tier raises it to `cap × rate(0) / rate(tier_n)` (§8.1).
 - **`D_n ≤ R_n`** in the long run: both the deposit and the conviction stake are **fully sunk** — locked
   in the reserve, recoverable by no one — so α not backed by customer revenue is pure loss.
 
 The emission `E` is a subsidy auctioned ∝ implied usage: in equilibrium NOs commit α (deposits + tier
 conviction) up to where the marginal emission steered to their providers equals the marginal cost of the
 sunk α. Staking for a lower rate is a **capital‑for‑cashflow trade** (lock more up front → post less per
-epoch) that nets to the same weight per unit of real usage, so it lowers the onboarding barrier without
-distorting the usage signal. This ties total commitment to total real demand and makes `w_n` track
+epoch) that nets to the same weight per unit of real usage below the cap, so it lowers the onboarding
+barrier without distorting the usage signal there; a capped NO, whose weight no longer tracks its usage,
+gains weight from a lower rate (§8.1). This ties total commitment to total real demand and makes `w_n` track
 genuine usage share — the intended outcome. (It is the deposit‑for‑weight pattern Bittensor already
 trusts in burned registration, with the burn replaced by a transparent, compounding lock.)
 
@@ -2393,7 +2400,8 @@ starts at least two days after the last one passes.
   not weight; finalized `Deposit`, `ConvictionAdded`, and sink-principal events are the portable record (§7.5, D25).
 - **implied usage** — NO `n`'s audited usage priced at the conviction‑zero rate, truncated as its capped
   deposit is (§8.1): the demand signal validators weight for the pool tier; staking for a lower rate
-  lowers the deposit, not the weight, so weight tracks real usage rather than raw α.
+  lowers the deposit and, below the cap, leaves the weight tracking real usage rather than raw α; at the
+  cap the demand is `cap × rate(0) / rate(tier_n)`, so a lower rate raises it.
 - **Effort bounty** — a fee‑funded reward that *would* pay ∝ verified, coverage‑weighted, server‑assigned
   completed trails; **out of v1 scope** and **not a committed phase** — a parked future‑iteration candidate
   (§9.3, §13.6, D29).
