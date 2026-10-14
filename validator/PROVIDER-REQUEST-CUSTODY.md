@@ -41,8 +41,12 @@ replaces it with v2 in one atomic write, and restore writes v2.
 
 ## Downgrade
 
-A validator with `request_preparation` enabled must not be downgraded below
-this release once it has sealed a window. An older release reads only v1. It
-refuses the v2 record and fails closed: it does not open the request journal
-and writes nothing. Storage preparation and every append also write v2, so a
-downgrade after either is refused the same way.
+An older release reads only v1. It refuses a v2 record and fails closed: it
+does not open the request journal and writes nothing. This release writes v2
+whenever it writes the checkpoint: when storage-prepare creates or restores the
+root, and when the runtime appends a request, seals a window or finishes an
+interrupted append. So a validator with `request_preparation` enabled must not
+be downgraded below this release once this release has written its checkpoint,
+including by its own storage-prepare. Sealing a window is only one such write.
+Only a root whose v1 record this release has read but not yet replaced can go
+back.
