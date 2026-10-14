@@ -287,7 +287,9 @@ func TestNativeRuntimeRenewalColdAdmissionRequiresSignedOriginalsAndReadPurposes
 	limited.RuntimeCatalog = append([]monitorEconomicRuntimeEntry{}, operating.Native.RuntimeCatalog...)
 	limited.RuntimeCatalog[1].Purposes = []string{economicRuntimeStatePurpose}
 	before, proofs := rootObjectHash(cold), producer.proofs.Load()
-	if _, err := observeMonitorEconomicNative(f.ctx, producer.source.client, limited, &cold); err == nil || !strings.Contains(err.Error(), "purpose") || rootObjectHash(cold) != before || producer.proofs.Load() != proofs {
+	// A catalog entry that withholds a purpose refuses that read with the bare
+	// profile-unavailable sentinel (881b967a5), not a decoding-layout failure.
+	if _, err := observeMonitorEconomicNative(f.ctx, producer.source.client, limited, &cold); !errors.Is(err, errRootReceiptProfileUnavailable) || err.Error() != errRootReceiptProfileUnavailable.Error() || rootObjectHash(cold) != before || producer.proofs.Load() != proofs {
 		t.Fatal("signed runtime bypassed explicit event read purpose before original capture", err)
 	}
 }
