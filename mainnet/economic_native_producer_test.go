@@ -241,6 +241,11 @@ func nativeProducerPublicFixtureWithTreasury(t *testing.T, continuous bool, feeP
 	source.incentive(t, 101, 25, amounts...)
 	if allocationCount > 2 {
 		source.policy.MaximumUids = uint16(allocationCount)
+		// The incentive event's vector has one slot per registered UID, so
+		// the RPC context registers the census the original epoch emits.
+		for _, number := range []uint64{parentNumber, childNumber} {
+			source.set(t, number, "SubnetworkN", binary.LittleEndian.AppendUint16(nil, uint16(allocationCount)))
+		}
 	}
 	source.chain.storageKVs[runtimeCodeStorageKey] = job.RuntimeCodeHex
 	ctx, filePolicy, files := nativeProducerTestFiles(t, nil)
