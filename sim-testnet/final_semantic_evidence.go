@@ -5218,7 +5218,10 @@ func verifyFinalPayoutArtifact(evidence *FinalSemanticEvidence, pool *FinalPoolU
 	if !strings.EqualFold("0x"+strings.TrimPrefix(artifact.ContentHash, "sha256:"), expected.ArtifactHash) {
 		return fmt.Errorf("payout artifact content hash %s is not the committed artifact hash %s for epoch %d operator %d", artifact.ContentHash, expected.ArtifactHash, expected.Epoch, expected.NoID)
 	}
-	if (expected.UsageBytes != 0 && artifact.TotalUsageBytes != expected.UsageBytes) || (expected.Users != 0 && artifact.TotalUsers != expected.Users) {
+	// A deposit audit declares the artifact's whole usage: bytes and users bind
+	// together, a zero user count included, since a per-user rate prices them.
+	// Epoch-row and lifecycle expectations declare no usage.
+	if (expected.UsageBytes != 0 || expected.Users != 0) && (artifact.TotalUsageBytes != expected.UsageBytes || artifact.TotalUsers != expected.Users) {
 		return errors.New("payout artifact usage does not match deposit audit")
 	}
 	if expected.PayoutRoot != "" && !strings.EqualFold("0x"+hex.EncodeToString(artifact.PayoutRoot[:]), expected.PayoutRoot) {
