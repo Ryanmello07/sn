@@ -2592,11 +2592,21 @@ func (self *finalSemanticArchive) depositReceipt(events *finalSemanticEventIndex
 	return self.receiptFromIndex(events, candidates[len(candidates)-1], name)
 }
 
-func (a *finalSemanticArchive) buildPoolWeight(cycle *FinalCRv4Cycle, epochDepositCap uint64, pool validatorpkg.VerifiedReleasePool, intent *validatorpkg.SteeringIntent, events *finalSemanticEventIndex) (FinalPoolWeightEvidence, error) {
-	if cycle == nil || intent == nil || epochDepositCap == 0 {
+// buildPoolWeight declares one pool's row from the validator's verified
+// decision under the signed deposit policy. The score is the validator's; the
+// implied demand is priced here, so verifyFinalPoolWeight admits the row only
+// if the two derivations agree.
+func (a *finalSemanticArchive) buildPoolWeight(cycle *FinalCRv4Cycle, deposit protocol.DepositPolicy, pool validatorpkg.VerifiedReleasePool, intent *validatorpkg.SteeringIntent, events *finalSemanticEventIndex) (FinalPoolWeightEvidence, error) {
+	if cycle == nil || intent == nil || deposit.EpochCapRaoPerOperator == 0 || len(deposit.Tiers) == 0 || deposit.Tiers[0].RateDenominator == 0 {
 		return FinalPoolWeightEvidence{}, errors.New("pool weight construction context is incomplete")
 	}
+	baseline := deposit.Tiers[0]
 	audit := pool.Audit
+	// A zero-price audit reads no payout artifact and requires no deposit, so
+	// there is nothing for a row to bind (WHITEPAPER 7.1).
+	if audit.Status == validatorpkg.DepositAuditZeroPrice {
+		return FinalPoolWeightEvidence{}, fmt.Errorf("operator %d zero-price deposit audit has no payout artifact or deposit receipt to bind", audit.NoID)
+	}
 	payoutLocator, ok := finalSemanticPayout(a.collected, audit.SourceEpoch, audit.NoID)
 	var payoutData []byte
 	if !ok && a.validatorReplayV2[intent.ValidatorID] != nil {
@@ -2644,11 +2654,12 @@ func (a *finalSemanticArchive) buildPoolWeight(cycle *FinalCRv4Cycle, epochDepos
 			clamped = cycle.QualityMaximumPPM
 		}
 		quality = finalRationalFromBig(new(big.Rat).SetFrac(new(big.Int).SetUint64(uint64(clamped)), big.NewInt(1_000_000)))
-		observed, observedOK := new(big.Int).SetString(audit.ObservedDepositRao, 10)
-		if !observedOK {
-			return FinalPoolWeightEvidence{}, errors.New("signed deposit audit amount is invalid")
+		if audit.RateDenominator == 0 {
+			return FinalPoolWeightEvidence{}, errors.New("signed deposit audit rate is invalid")
 		}
-		implied = finalRationalFromBig(new(big.Rat).SetFrac(new(big.Int).Mul(observed, new(big.Int).SetUint64(audit.RateDenominator)), new(big.Int).SetUint64(audit.RateNumeratorRaoPerGiB)))
+		owed := finalPricedUsageRao(audit.UsageBytes, audit.Users, audit.RateNumeratorRaoPerGiB, audit.RateNumeratorRaoPerUser, audit.RateDenominator)
+		priced := finalPricedUsageRao(audit.UsageBytes, audit.Users, baseline.RateNumeratorRaoPerGiB, baseline.RateNumeratorRaoPerUser, baseline.RateDenominator)
+		implied = finalRationalFromBig(finalImpliedDemand(priced, owed, new(big.Int).SetUint64(deposit.EpochCapRaoPerOperator)))
 		raw = finalRationalFromBig(pool.Score)
 	}
 	receipt, err := a.depositReceipt(events, audit, fmt.Sprintf("validator-%d-epoch-%d-pool-%d-deposit", intent.ValidatorID, intent.SettlementEpoch, audit.NoID))
@@ -2658,8 +2669,9 @@ func (a *finalSemanticArchive) buildPoolWeight(cycle *FinalCRv4Cycle, epochDepos
 	return FinalPoolWeightEvidence{
 		NoID: audit.NoID, UID: pool.UID, SourceEpoch: audit.SourceEpoch, UsageBytes: audit.UsageBytes, Users: audit.Users,
 		ConvictionBeforeRao: audit.ConvictionBeforeRao, RateNumeratorRaoPerGiB: audit.RateNumeratorRaoPerGiB, RateNumeratorRaoPerUser: audit.RateNumeratorRaoPerUser, RateDenominator: audit.RateDenominator,
-		EpochDepositCapRao: strconv.FormatUint(epochDepositCap, 10), RequiredDepositRao: audit.RequiredDepositRao, ObservedDepositRao: audit.ObservedDepositRao,
-		QualityPPM: qualityPPM, QualityFactor: quality, ImpliedUsageGiB: implied, RawScore: raw, Formula: finalDepositFormula,
+		BaselineRateNumeratorRaoPerGiB: baseline.RateNumeratorRaoPerGiB, BaselineRateNumeratorRaoPerUser: baseline.RateNumeratorRaoPerUser, BaselineRateDenominator: baseline.RateDenominator,
+		EpochDepositCapRao: strconv.FormatUint(deposit.EpochCapRaoPerOperator, 10), RequiredDepositRao: audit.RequiredDepositRao, ObservedDepositRao: audit.ObservedDepositRao,
+		QualityPPM: qualityPPM, QualityFactor: quality, ImpliedDemand: implied, RawScore: raw, Formula: finalDepositFormula,
 		AuditStatus: audit.Status, AuditCompliant: audit.Compliant, AuditDisposition: audit.Disposition, AuditError: audit.Error,
 		ArtifactContentHash: audit.ArtifactHash, ArtifactHash: strings.ToLower(audit.CommittedArtifactHash), PayoutRoot: strings.ToLower(audit.PayoutRoot),
 		ArtifactSigner: strings.ToLower(audit.ArtifactSigner), RootCommitter: strings.ToLower(audit.RootCommitter), RootSigner: strings.ToLower(audit.RootSigner),
@@ -2736,7 +2748,7 @@ func (a *finalSemanticArchive) buildValidatorCycle(source *FinalSemanticEvidence
 		cycle.Candidates = append(cycle.Candidates, FinalHeadCandidateEvidence{FleetID: fleetID, Rank: uint16(rank + 1), UID: head.UID, RawScore: finalRationalFromBig(head.Score), Selected: selected[head.UID], AppliedWeight: valueByUID[head.UID]})
 	}
 	for _, pool := range verified.Pools {
-		row, err := a.buildPoolWeight(&cycle, measurement.Policy.Deposit.EpochCapRaoPerOperator, pool, &intent, events)
+		row, err := a.buildPoolWeight(&cycle, measurement.Policy.Deposit, pool, &intent, events)
 		if err != nil {
 			return FinalCRv4Cycle{}, nil, err
 		}
