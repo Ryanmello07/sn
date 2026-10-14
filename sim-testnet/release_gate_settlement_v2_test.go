@@ -291,7 +291,8 @@ func verifyReleaseGateScaleShards(script string, sn, server map[string][]string)
 
 // §15 (GT, GA, GL, CL, VA) and gate 1's checker: sn's v2 suites in one job,
 // normal and race. The ledger package and the checker run whole; every root
-// of a v2 test file of the other packages is selected.
+// of a v2 test file of the other packages is selected, under an explicit
+// 30-minute deadline.
 func releaseGateSnV2Group(t *testing.T) releaseEvidenceV2GateGroup {
 	t.Helper()
 	whole := "./ledger ./scripts/solidity-coverage"
@@ -310,8 +311,8 @@ func releaseGateSnV2Group(t *testing.T) releaseEvidenceV2GateGroup {
 		commands: []string{
 			"go test " + whole + " -count=1",
 			"go test -race " + whole + " -count=1",
-			"go test " + packages + ` -run "$settlement_v2_tests" -count=1`,
-			"go test -race " + packages + ` -run "$settlement_v2_tests" -count=1`,
+			"go test " + packages + ` -run "$settlement_v2_tests" -count=1 -timeout 30m`,
+			"go test -race " + packages + ` -run "$settlement_v2_tests" -count=1 -timeout 30m`,
 		},
 	}
 }
@@ -741,6 +742,33 @@ func TestReleaseGateSettlementV2SnSuitesRejectDrift(t *testing.T) {
 		escaped.sources[packagePath] = append(slices.Clone(group.sources[packagePath]), "package fixture\nfunc TestOmittedSettlementV2Root(t *testing.T) {}\n")
 		if err := verifyReleaseGateSnV2(script, escaped); err == nil {
 			t.Fatalf("sn v2 job accepted a %s root outside its selector", packagePath)
+		}
+	}
+}
+
+// §15 (GT, GA, CL, VA): at load 27 to 46 the selection's ./miner took 592
+// seconds under race and 566 without, and a later race run timed out at Go's
+// implicit ten minutes, so both modes keep their explicit 30-minute deadline;
+// an implicit, shorter or disabled one fails.
+func TestReleaseGateSettlementV2SnSuitesKeepTheirDeadline(t *testing.T) {
+	t.Parallel()
+	script := readReleaseGateLocalScript(t)
+	group := releaseGateSnV2Group(t)
+	if err := verifyReleaseGateSnV2(script, group); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range group.commands[2:] {
+		if !strings.HasSuffix(command, " -timeout 30m") || strings.Count(script, command) != 1 {
+			t.Fatalf("the gate has no one command %s with its deadline", command)
+		}
+		for _, replacement := range []string{
+			strings.TrimSuffix(command, " -timeout 30m"),
+			strings.Replace(command, " -timeout 30m", " -timeout 10m", 1),
+			command + " -timeout 0",
+		} {
+			if err := verifyReleaseGateSnV2(strings.Replace(script, command, replacement, 1), group); err == nil {
+				t.Fatalf("sn-v2 accepted %s", replacement)
+			}
 		}
 	}
 }

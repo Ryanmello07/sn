@@ -236,9 +236,13 @@ release_phase_sn_v2() {
   cd "$sn_repo"
   go test ./ledger ./scripts/solidity-coverage -count=1
   go test -race ./ledger ./scripts/solidity-coverage -count=1
+  # At load 27 to 46 the selection's ./miner, its claim v2 tests, took 592
+  # seconds under race and 566 without, and a later race run timed out at
+  # Go's implicit ten minutes, so both modes have an explicit deadline; the
+  # whole ledger and checker packages above take seconds.
   settlement_v2_tests='^Test(Ledger|ClaimV2|MainUsageClaimDaemonV2|V2|Withdraw|SubmitCarriesValue|SettlementV2|ProductionSettlementV2|ProductionRenderedSuccessorKeepsSettlementV2|ReleaseRuntimeRunsLedgerAudit)'
-  go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
-  go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1
+  go test ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1 -timeout 30m
+  go test -race ./merkle ./protocol ./miner ./miner/onchain ./validator -run "$settlement_v2_tests" -count=1 -timeout 30m
 }
 release_gate_start sn-v2 release_phase_sn_v2
 
