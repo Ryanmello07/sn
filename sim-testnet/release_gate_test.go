@@ -1423,7 +1423,8 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"StTransactionAttemptCandidatesConvergeOnOneWinner",
 		"StatsAlphaPriceURLIsMainnetOnly",
 		"StatsGaugeVecReplaceDeletesStaleSeries",
-		"go test -race ./monitor",
+		"go test -timeout 90m ./monitor -count=1",
+		"go test -race -timeout 180m ./monitor -count=1",
 		"ParallelEvalCancellationJoinsAttemptWorker",
 		"PlatformTransportCloseAndWaitJoinsPendingDial",
 		"StreamReplacementReceiveDoesNotJoinAndPublishesAfterOldExit",
@@ -1506,6 +1507,8 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"TestIncrementRateLimitWindowResetsAtExactBoundary",
 		"StTransactionIntentReservationUsesChainAccountNonceScope",
 		"StTransactionAttemptCandidatesConvergeOnOneWinner",
+		"go test -timeout 90m ./monitor -count=1",
+		"go test -race -timeout 180m ./monitor -count=1",
 	} {
 		if testIndex := strings.Index(script, databaseTest); databaseIndex < 0 || testIndex <= databaseIndex {
 			t.Errorf("database-backed operator regression %s is outside the isolated database gate", databaseTest)
@@ -3145,6 +3148,8 @@ func assertReleaseGateAssignmentFilterProfile(t *testing.T, scriptPath, gate str
 		"VerifySimulationAssignmentFilter(BlocksSeedPendingAndFutureAssignments|DoesNotAffectAnotherValidator)",
 		"StSyncChainEventsBatchesCanonicalEventBlocks",
 		"StTransactionIntentReservationUsesChainAccountNonceScope",
+		"StDepositCustody(ReconcilesPreparedFundingBeforeNewSizing|StagesRoundingOnceAndCreditsExactPrincipal|LostFundingReplyDoesNotRepeatTransfer|RetainsUnderfundedSuccessWithoutAnotherTransfer)",
+		"StReplacementWaitReadErrorCannotAuthorizeReplacement",
 	} {
 		if strings.Contains(beforeProfile, name) || !strings.Contains(databaseProfile, name) {
 			t.Errorf("database-backed %s test %s is not confined to the isolated profile", gate, name)
