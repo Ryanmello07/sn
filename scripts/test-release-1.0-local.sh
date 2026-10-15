@@ -649,7 +649,7 @@ release_phase_server_unit() {
   go test -race ./controller -run "$filter_pure_tests" -count=1
   go test ./session -run 'Test.*(UrForwardedAddress|LegacyForwardedHeaders|RemoteAddress)' -count=1
   go test ./router -run 'TestTrie' -count=1
-  go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents|ParseHeadEventCkey)$' -count=1
+  go test ./model -run '^Test(VerifyEgressExactIndexAndPrefixScoreAreIndependent|StTransactionAdvisoryLockKeyUsesEthereumNonceScope|StHeadBoundCkeysFromEvents(WindowOverlap|UnbindDodge)|ParseHeadEventCkey)$' -count=1
   go test ./taskworker/work -run '^TestStSettlementTasksRejectStaleCoordinatorPayloads$' -count=1
   # The separate calibration harness and its archived inputs are outside SN
   # finalization. Keep a nonempty executable server package census.
