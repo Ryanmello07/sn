@@ -17,6 +17,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
@@ -67,13 +68,82 @@ func newRecycleMeasurementFixtureWithPolicy(t *testing.T, completed int, setup f
 func newRecycleMeasurementFixtureWithCensus(t *testing.T, providers, completed int, setup func(*recycleAdmissionFixture, *releaseMeasurementV2TestFixture), hotkey [32]byte, policy *protocol.Policy) *recycleMeasurementFixture {
 	t.Helper()
 	admission := newRecycleMeasurementTestAdmission(t, policy)
-	return newRecycleMeasurementFixtureWithProvider(t, admission, newRecycleMeasurementTestProvider(t, admission, providers, completed, hotkey), setup, hotkey)
+	return newRecycleMeasurementFixtureWithProvider(t, admission, sharedRecycleMeasurementTestProvider(t, admission, providers, completed, hotkey), setup, hotkey)
 }
 
 // The smallest genuine census at the pool quality minimum: each complete M8
 // trail assigns all seven providers but its seed once, so eight complete
 // trails bring each to exactly the release policy's minimum of eight.
 const recycleQualityTestProviders, recycleQualityTestCompleted = 8, 8
+
+// Both operators' genuine M8 sources and compact cuts depend only on the
+// network, policy, completed census and activation hotkey, so each is built
+// once per test process and shared read-only. Every test seals and signs its
+// own copy of the artifact, and its cleanup confirms the sources are as built.
+type recycleMeasurementTestSources struct {
+	provider    *releaseMeasurementV2TestFixture
+	headKVs     map[uint64]AttemptLedgerHead
+	snapshotKVs map[uint64]statsSnapshot
+	expectedKVs map[uint64]AttemptCutV2Context
+}
+
+type recycleMeasurementTestSourcesKey struct {
+	genesis, policy      string
+	providers, completed int
+	hotkey               [32]byte
+}
+
+var recycleMeasurementTestSourcesCache struct {
+	stateLock sync.Mutex
+	sourceKVs map[recycleMeasurementTestSourcesKey]*recycleMeasurementTestSources
+}
+
+// The first test to need sources builds them under the process's owner.
+func sharedRecycleMeasurementTestProvider(t *testing.T, admission *recycleAdmissionFixture, providers, completed int, hotkey [32]byte) *releaseMeasurementV2TestFixture {
+	t.Helper()
+	key := recycleMeasurementTestSourcesKey{genesis: admission.cfg.GenesisHash, policy: admission.cfg.PolicyHash, providers: providers, completed: completed, hotkey: hotkey}
+	cache := &recycleMeasurementTestSourcesCache
+	cache.stateLock.Lock()
+	defer cache.stateLock.Unlock()
+	sources := cache.sourceKVs[key]
+	if sources == nil {
+		provider := newRecycleMeasurementTestProvider(sharedTestFixtureOwner{T: t}, admission, providers, completed, hotkey)
+		sources = &recycleMeasurementTestSources{provider: provider, headKVs: map[uint64]AttemptLedgerHead{}, snapshotKVs: map[uint64]statsSnapshot{}, expectedKVs: map[uint64]AttemptCutV2Context{}}
+		for noID, operator := range provider.operators {
+			head, err := operator.seal.ledger.Head()
+			if err != nil {
+				t.Fatal(err)
+			}
+			sources.headKVs[noID], sources.snapshotKVs[noID], sources.expectedKVs[noID] = head, operator.seal.engine.stats.snapshotStats(), operator.seal.expected
+		}
+		if cache.sourceKVs == nil {
+			cache.sourceKVs = map[recycleMeasurementTestSourcesKey]*recycleMeasurementTestSources{}
+		}
+		cache.sourceKVs[key] = sources
+	}
+	t.Cleanup(func() { sources.check(t, key) })
+	return copyReleaseMeasurementTestProvider(t, sources.provider)
+}
+
+// A test that changed a shared ledger, Stats owner or cut context fails, and
+// the next test builds its sources again.
+func (self *recycleMeasurementTestSources) check(t *testing.T, key recycleMeasurementTestSourcesKey) {
+	t.Helper()
+	for noID, operator := range self.provider.operators {
+		head, err := operator.seal.ledger.Head()
+		if err == nil && head == self.headKVs[noID] && reflect.DeepEqual(operator.seal.expected, self.expectedKVs[noID]) && reflect.DeepEqual(operator.seal.engine.stats.snapshotStats(), self.snapshotKVs[noID]) {
+			continue
+		}
+		t.Errorf("test changed operator %d's shared measurement sources: %v", noID, err)
+		cache := &recycleMeasurementTestSourcesCache
+		cache.stateLock.Lock()
+		if cache.sourceKVs[key] == self {
+			delete(cache.sourceKVs, key)
+		}
+		cache.stateLock.Unlock()
+		return
+	}
+}
 
 // A distinct policy is selected before any source, proof or approval exists.
 func newRecycleMeasurementTestAdmission(t testing.TB, policy *protocol.Policy) *recycleAdmissionFixture {
