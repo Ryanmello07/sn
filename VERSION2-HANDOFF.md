@@ -8,6 +8,9 @@ section 3 says who runs the release gate and what stops it on goofe today.
 Updated again at about 06:30 UTC: section 1's heads, fixes and gate repairs,
 section 2's branches, and items 6, 7 and 8 of section 3 follow the owner's
 decision to run the gate in its local mode and the move of E_s to epoch 3.
+Updated again on 2026-10-15 at about 04:00 UTC: section 1's heads, database
+head and merges, section 2, and items 2, 3, 7 and 8 of section 3 follow the
+merges since, step 5's completion and the schedule of record.
 [VERSION2-LAUNCH.md](VERSION2-LAUNCH.md) is the runbook and
 [VERSION2-FINAL.md](VERSION2-FINAL.md) the plan of record; both win over this
 note. This note says what is on `main`, what is still landing, and the facts
@@ -16,25 +19,25 @@ found during the last day that the deployer must act on.
 
 ## 1. What is on main
 
-Heads on 2026-10-14 at about 06:25 UTC, each read from its `origin/main`
-(gvisor: its `go` branch):
+Heads on 2026-10-15 between about 03:30 and 04:00 UTC, each read from its
+`origin/main` after a fetch (gvisor: its `go` branch):
 
 | repo | main |
 | --- | --- |
-| sn | the commit that updates this note, on `aaec4175` |
-| server | `81484f5b1` |
-| sdk | `0110c1ca` |
-| connect | `1e7f92c0` |
+| sn | the commit that updates this note, on `819f00c5` |
+| server | `99ddde9f6` |
+| sdk | `9c8a2237` |
+| connect | `b31ec82d` |
 | proxy | `ada3aac` |
-| localizations | `3a1e7ca` |
+| localizations | `980b741` |
 | apple | `edcd545e` |
-| android | `5ebbd7285` |
-| windows | `fac2afd` |
-| linux | `06717d7` |
-| mmm (ur.io) | `6500bf924` |
-| web | `9526a97b` |
-| warp | `99e01ec` |
-| xops | `a0c2727` |
+| android | `4d8331238` |
+| windows | `db7d7f51` |
+| linux | `c958e7d` |
+| mmm (ur.io) | `460cf7169` |
+| web | `95e4ff50` |
+| warp | `1fedc0d` |
+| xops | `2e6f0f1` |
 | gvisor | `c0783dba` |
 
 Settlement v2 itself:
@@ -96,9 +99,11 @@ the pool's registration, the st subsystem refuses to run without the
 recorded v2 address pair. `st v2-activation` shows the record, and
 `st v2-activation-clear` clears one that names the wrong pair.
 
-The server's database head is 835. Upstream added migrations 833 to 835
-after the activation record's 832, and `bringyourctl db migrate` applies
-them all (runbook step 6).
+The production database is at migration 836, server `main`'s newest.
+Upstream added 833 to 836 after the activation record's 832; 836 holds the
+FP2 modern provider gate's evidence (server `ebc1f95a9`). `bringyourctl db
+migrate` (runbook step 6) applies any migration that server `main` adds
+after 836.
 
 The root-key stranding fix (server `8d63033c9`, merged as `4e5759875`):
 under a gas policy a new nonce is reserved only together with its first
@@ -180,7 +185,42 @@ Release gate repairs:
   monitor's schema contracts for migrations 833 to 835, its catalog
   fixtures' deadlines and the gate PostgreSQL's statement text (server
   `6fafc66f6`), and the partial-index guard fixture's deadline (server
-  `666940321`).
+  `666940321`);
+- local mode's two named sim-testnet skips, `TestReleaseLockMatchesCheckout`
+  and `TestRepositoryDiscoveryUsesModuleIdentity`, in every job, each printed
+  with its reason before anything runs, and sn-v2's 30-minute deadline for
+  its selected v2 suites (sn `a47111d6`). So no job needs the vault or a
+  refreshed release lock;
+- the long packages in hash shards, each shard a job: `./mainnet` in eight
+  (sn `15825bc9`), and `./validator`, `./sim-testnet` and connect's race
+  runs (sn `6b007ed1`);
+- the `./mainnet` qualification exports, built offline from the working
+  checkouts by a job of their own that every `./mainnet` shard waits for (sn
+  `5038df78`); further fixes, some to product code in `mainnet` and
+  `validator` (sn `ec80d224`, `f50e2f91`, `c9d5988a`, `ff8fc27e`,
+  `c3628860`, `af128ef1`, `1ffef6af`); and a guard that keeps a nested gate
+  fixture from removing the exports (sn `819f00c5`);
+- a second round of `mainnet` test fixes, twelve commits (sn `9b0bdfff`);
+- sim-testnet's remaining tests (sn `0c458b18`, then `dc776819`). Among
+  them `17c1e970` fixes the crv4 regression from `65759103`: under a
+  provisional runtime approval, the validator's strict stake and schedule
+  reads at reviewed runtimes work again. Mainnet never enables provisional
+  compatibility;
+- the UTF-8 parity test, which now derives the expected bytes from the
+  linked encoder: Go 1.27.2's jsonv2 writes each invalid byte as a literal
+  U+FFFD (sn `3891b58f`);
+- the semantic verifier's gaps (sn `d8297d2b`);
+- the server's proxy tests' synctest crash: the proxy and its peers are now
+  made outside the bubble (server `53361bcf4`).
+
+The task runner's session race, a production bug that repeated task
+execution, is fixed on server `main` (`6aa947605`, merged as `9b6368637`).
+Drain no longer closes a Run loop's claim session, and finalization borrows
+only an idle session. Before, a Drain during a claim refill lost the loop's
+owned finalizations, and their rows ran again after their five-minute lease;
+the claim fence and the task bodies' checks of their applied state kept any
+effect from applying twice. Server `94b9b89bd` follows it: what a refill
+claims after Drain began is handed back instead of started.
 
 Release builder: an explicit `dependency_mode`.
 
@@ -190,45 +230,26 @@ Release builder: an explicit `dependency_mode`.
 
 ## 2. Still landing on main
 
-This session keeps fixing what the release gate still fails, each fix on its
-branch, and merges each as it verifies. The state of each branch at about
-06:30 UTC:
+Nothing that this section listed on 2026-10-14 at about 06:30 UTC is still
+on a branch. Each item has merged, and section 1 lists it:
 
-1. sn `v2/gate-mainnet-shards`: the `./mainnet` package sharded on tmpfs
-   into 8 jobs. Two commits so far. `ec3f3d80` makes local mode skip, in
-   every job, the two sim-testnet tests that only a sealed run passes, and
-   print each local skip with its reason before it starts. `e07be0a4` gives
-   sn-v2's selected v2 suites an explicit 30-minute deadline. On `main`,
-   `TestReleaseLockMatchesCheckout` still runs in sn-simulator-race, and
-   `TestRepositoryDiscoveryUsesModuleIdentity` stats the workspace vault's
-   `main/st.yml`. The sharding has no commit yet.
-2. sn `v2/gate-mainnet-tests`: ten more `mainnet` test fixes, to
-   `40e92be8`, beyond the round merged as `3dd174fc`.
-3. server `v2/task-finalization-session`: the task runner's session race, in
-   one commit, `8a4e335e5`. A Drain that lands during a Run loop's claim
-   refill closes the loop's database session, so the loop's owned
-   finalizations are lost and their rows run again after their five-minute
-   lease. It is a production bug that repeats task execution. The claim
-   fence and the task bodies' checks of their applied state keep any effect
-   from applying twice.
-4. server `v2/proxy-synctest-wireguard`: the proxy tests' synctest crash, in
-   one commit, `6a1efd2cd`. Two WireGuard tests made their proxy inside a
-   synctest bubble, so its peers' queues were bubble channels. A finalizer
-   outside the bubble drains them, which crashed the whole package. The proxy
-   and its peers are now made outside the bubble.
-5. sn `v2/gate-sim-tests`: sim-testnet's remaining tests, five commits, to
-   `17c1e970`. The last fixes the crv4 regression from `65759103`: under a
-   provisional runtime approval, the validator's strict stake and schedule
-   reads at reviewed runtimes work again. Mainnet never enables provisional
-   compatibility.
-6. sn `v2/gate-utf8-parity`: the UTF-8 parity test, in one commit,
-   `d300211c`. The test expected the `\ufffd` escape that `encoding/json`
-   wrote before Go 1.27. Go 1.27.2's default encoder, jsonv2, writes each
-   invalid byte as a literal U+FFFD. The test now derives the expected bytes
-   from the linked encoder. The comparison itself was right.
-7. sn `v2/semantic-evidence-gaps`: the semantic verifier's gaps, four
-   commits, to `385596dc`, with its review on `v2/semantic-gaps-review`
-   (`763fd96e`).
+1. sn `v2/gate-mainnet-shards`: merged as `a47111d6`, with sn-v2's
+   deadline as `ae29ed1d` in place of `e07be0a4`, and as `15825bc9`, the
+   sharding.
+2. sn `v2/gate-mainnet-tests`: merged as `9b0bdfff`.
+3. server `v2/task-finalization-session`: merged as `9b6368637`, with
+   `6aa947605` in place of `8a4e335e5`.
+4. server `v2/proxy-synctest-wireguard`: `6a1efd2cd`, merged as `53361bcf4`.
+5. sn `v2/gate-sim-tests`: merged as `0c458b18`, to `17c1e970`, and again
+   as `dc776819`.
+6. sn `v2/gate-utf8-parity`: `d300211c`, merged as `3891b58f`.
+7. sn `v2/semantic-evidence-gaps`: merged as `d8297d2b`, to `385596dc`. Its
+   review, `v2/semantic-gaps-review` (`763fd96e`), is not on `main`;
+   whether it should be is to confirm.
+
+Whether the gate passes on section 1's heads is to confirm. A failure is
+still fixed on a branch, merged, pushed and pulled, and the gate runs again
+(section 3, item 7).
 
 ## 3. Facts the deployer must act on
 
@@ -238,23 +259,31 @@ branch, and merges each as it verifies. The state of each branch at about
      at version 478. `sn-mainnet` refuses any source named for another
      version.
    - Repeat step 2 immediately before steps 8 and 15.
-2. **Re-sign the operator gas policy (step 5) before the server build of
-   step 6 runs, and so before switching the server to v2 (step 11).**
-   - `maximum_gas` must be at least 3,200,000; 3.5M is planned.
-   - `maximum_intent_liability_wei` must be at least 3 × `maximum_gas` × the
-     fee cap: 3.15·10^17 wei at 3.5M gas and 30 gwei.
-   - Under today's 1M policy the floors sign closes at 1M, and nothing new is
-     refused.
-   - `maximum_lifetime_liability_wei`: today's 10^19 covers a year of floored
-     closes at a 30 gwei fee cap with about half to spare. Once deposits are
-     priced, the floors of the closes, the stagings and the deposits need
-     about 1.5·10^19 a year, so set at least 2·10^19.
-3. **Re-sign the native-fee settlement policy for runtime 478.**
-   - The policy binds the runtime code hash and a native block range
-     (`model/st_native_fee_settlement_model.go`, `policy.RuntimeCodeSha256`).
-   - Statements of the blocks that 478 executed, from block 9,276,926, are
-     refused as "outside its approved denomination" until the policy names
-     478.
+2. **Step 5 is done: operator gas policy revision 1 is live** since
+   2026-10-14 19:20 UTC, so step 6's server build runs under it.
+   - The config authority at revision 1 (config `f647123`) and the vault's
+     st.yml at revision 1 were delivered, and api, alt and the taskworker
+     restarted to load them.
+   - `policy_sha256` is
+     `1ef468cea2810f72eff1e04f63298eccbe13080fb4339627c148f67c149cc073`. A
+     later revision names it as `previous_policy_sha256` and is signed with
+     the same approver key (runbook section 6.1, row 5).
+   - The config commit's message gives `maximum_gas` 3.6M, an intent
+     liability of 3.24·10^17 wei and a lifetime liability of 5·10^19 wei. At
+     a 30 gwei fee cap these meet the runbook's O13: `maximum_gas` at least
+     3,200,000, and an intent liability of at least 3 × `maximum_gas` × the
+     fee cap, 3.24·10^17 at 3.6M. The lifetime cap is above the 2·10^19
+     that priced deposits need: a year of floored closes, stagings and
+     deposits at that fee cap comes to about 1.5·10^19.
+   - The server's budget row moves to revision 1 at the first signing under
+     it (runbook step 5, "Expect"). Whether that signing has happened is to
+     confirm.
+3. **Nothing to re-sign for native fees.** Native-fee settlement was never
+   provisioned on mainnet, so there is no denomination policy to re-sign
+   for runtime 478. The native-fee half of runbook step 5 (O27) does not
+   apply. Without a settlement every operator send stays charged its signed
+   ceiling, gas × fee cap, against the gas policy's intent and lifetime
+   liabilities (runbook step 5), which item 2's lifetime figures count.
 4. **Deploy ur.io from mmm main** before any app release that carries consent
    signing. It carries the wallet bridge security fix (`64173fd13`), the
    consent bridge page and the claim gas.
@@ -290,27 +319,33 @@ branch, and merges each as it verifies. The state of each branch at about
      runs again until it passes (section 2). The heads it passes on are the
      launch revisions.
    - Local mode skips exactly the checks that seal a run: the source freeze's
-     provenance checks, `TestReleaseLockMatchesCheckout` in sn-all-normal and
-     as the final fence, and the runtime 454 source and runtime-metadata
-     attestations, which read GitHub and the testnet archive node. So the
-     release lock needs no refresh, and Snow's Finney archive at the testnet
-     archive's address no longer stops the gate. It keeps the module
-     inventory and tidy checks, the sourceguard and binding-toolchain
-     preflights, patch hygiene, every test job and diagnostic mode
-     (`sim-testnet/README.md`, the paragraph on `RELEASE_GATE_DEPENDENCY_MODE`).
-   - Its scripts never touch a vault checkout. Until `v2/gate-mainnet-shards`
-     merges, one test still stats the workspace vault's `main/st.yml`, and
-     fails without it (section 2, item 1).
+     provenance checks; `TestReleaseLockMatchesCheckout` and
+     `TestRepositoryDiscoveryUsesModuleIdentity`, by name in every job; the
+     final release-lock fence; and the runtime 454 source and
+     runtime-metadata attestations, which read GitHub and the testnet archive
+     node. It prints each skip with its reason before anything runs. So
+     there is no freeze and no release-lock refresh, and Snow's Finney
+     archive at the testnet archive's address no longer stops the gate. It
+     keeps the module inventory and tidy checks, the sourceguard and
+     binding-toolchain preflights, patch hygiene, every test job and
+     diagnostic mode (`sim-testnet/README.md`, the paragraph on
+     `RELEASE_GATE_DEPENDENCY_MODE`; `scripts/test-release-1.0-local.sh`:16-24).
+   - Its scripts never touch a vault checkout, and since
+     `v2/gate-mainnet-shards` merged no test that reads one runs (section 1).
    - Local mode does not compare the checkouts again at the end, so nothing
      would catch a worktree that changes during the run. Leave them as they
      are until the gate reports.
    - A local pass ends with `[release-1.0] local release gate passed (local
      mode: working checkouts, not sealed)`. It qualifies those checkouts, not
      a sealed release. The pinned mode stays for the build pipeline.
-8. **The schedule.** E_s is epoch 3 (the runbook's O18). The runbook's
-   section 9 gives its blocks and dates, the registration window, the
-   departures from the plan of record and the decision point if the window
-   is missed.
+8. **The schedule.** E_s is epoch 3 (the runbook's O18; VERSION2-FINAL.md
+   §14).
+   - Epoch 3 starts at block 9,348,028, about 2026-10-23 18:10 UTC.
+   - The registration window is blocks 9,333,628 to 9,340,828, and every
+     gate must pass by block 9,333,628.
+   - If the window is missed, E_s moves to epoch 4, from block 9,398,428.
+   - The runbook's section 9 gives the other blocks and dates, the
+     departures from the plan of record and the decision point.
 9. **The safeguard's first read.** The activation record arms on the first
    successful registration read. Check it with `sn-transition-status` or
    `st-check --v2-activation` after step 15, and never remove the v2 addresses
