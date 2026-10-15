@@ -53,6 +53,8 @@ func goldenNative(t *testing.T) *fakeNative {
 	native := newFakeNative(nativeHead{number: goldenFinalized, hash: goldenHeadHash()})
 	native.block(goldenBlock, mustHash(t, goldenBlockHashHex))
 	native.put(goldenHeadHash(), mustHash(t, goldenHotkeyHex), mustHex(t, goldenRegistrationHex), mustHex(t, goldenLastHex))
+	native.roles[mustHash(t, goldenHotkeyHex)] = neuronRole{registered: true, uid: goldenUid}
+	native.bodies[mustHash(t, goldenBlockHashHex)] = [][]byte{mustHex(t, goldenTimestampExtrinsicHex), mustHex(t, goldenFleetExtrinsicHex)}
 	return native
 }
 

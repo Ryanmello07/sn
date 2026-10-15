@@ -32,7 +32,10 @@ type metrics struct {
 	expired         int
 	conflicting     int
 	inconsistent    int
-	pending         int
+	// Fleet-format commitments that are not a fleet's: a validator-permit or
+	// unregistered hotkey, or no standalone fleet set_commitment.
+	excluded int
+	pending  int
 	// Blocks until the nearest pending commitment ages past
 	// commitmentMaxAgeBlocks; meaningful only while pending > 0.
 	minBlocksToExpiry uint64
@@ -85,6 +88,7 @@ func (self *metrics) setCommitments(total int, fleet int, counts map[skipReason]
 	self.expired = counts[skipExpired]
 	self.conflicting = counts[skipConflict] + counts[skipNewerMirrored]
 	self.inconsistent = counts[skipInconsistent]
+	self.excluded = counts[skipValidator] + counts[skipUnregistered] + counts[skipNoFleetEvidence]
 }
 
 func (self *metrics) setPending(pending int, head uint64, expiries []uint64) {
@@ -144,6 +148,7 @@ func (self *metrics) render(now time.Time) string {
 		gauge("fleet_commitments_expired", "Unmirrored fleet commitments older than commitmentMaxAgeBlocks.", float64(self.expired))
 		gauge("fleet_commitments_conflicting", "Fleet commitments the coordinator holds a different or newer record for.", float64(self.conflicting))
 		gauge("fleet_commitments_inconsistent", "Fleet commitments whose finalized evidence did not verify or agree across endpoints.", float64(self.inconsistent))
+		gauge("fleet_format_excluded", "One-field Sha256 commitments never mirrored because the hotkey holds a validator permit, is unregistered, or has no standalone fleet set_commitment.", float64(self.excluded))
 		gauge("pending_unmirrored", "Fresh fleet commitments not yet mirrored.", float64(self.pending))
 		if self.pending > 0 {
 			gauge("pending_min_blocks_to_expiry", "Blocks until the nearest pending commitment can no longer be bound.", float64(self.minBlocksToExpiry))

@@ -7,10 +7,13 @@ package commitmentoracle
 //  2. reconciles its own unfinished transaction, and sends nothing new while
 //     one is in flight;
 //  3. lists CommitmentOf(netuid, *) at the native finalized head, keeps the
-//     fleet-format entries that are not mirrored at the EVM finalized block and
+//     fleet-format entries whose hotkey is registered without a validator
+//     permit on every endpoint (a role read failure mirrors nothing that
+//     cycle), that are not mirrored at the EVM finalized block and
 //     not older than commitmentMaxAgeBlocks, and derives each one's arguments
 //     from that same finalized state (LastCommitment, the canonical block hash
-//     and its header), cross-checked on every other configured endpoint;
+//     and its header) plus positive fleet evidence in the commitment block's
+//     body (role.go), cross-checked on every other configured endpoint;
 //  4. mirrors them nearest expiry first, one at a time, each waiting for a
 //     final receipt and checking the coordinator's record afterwards.
 //
@@ -279,6 +282,21 @@ func (self *oracle) cycle(ctx context.Context) error {
 			continue
 		}
 		fleetCount += 1
+		// Role first: a validator's source commitment has the fleet format. A
+		// role that cannot be read fails the cycle before anything is sent.
+		role, err := self.role(ctx, commitment.hotkey, head)
+		if err != nil {
+			return err
+		}
+		if !role.registered || role.validatorPermit {
+			reason := skipUnregistered
+			if role.validatorPermit {
+				reason = skipValidator
+			}
+			counts[reason] += 1
+			self.logf("not mirroring hotkey 0x%x commitment 0x%x block %d: %s", commitment.hotkey, commitment.commitmentHash, commitment.commitmentBlock, reason)
+			continue
+		}
 		mirrored, err := self.coordinator.mirroredCommitment(ctx, commitment.hotkey, evmFinalized)
 		if err != nil {
 			return err
@@ -292,6 +310,12 @@ func (self *oracle) cycle(ctx context.Context) error {
 			continue
 		}
 		args, err := self.derive(ctx, commitment, head)
+		var noEvidence *noFleetEvidenceError
+		if errors.As(err, &noEvidence) {
+			counts[skipNoFleetEvidence] += 1
+			self.logf("not mirroring hotkey 0x%x block %d: %s: %v", commitment.hotkey, commitment.commitmentBlock, skipNoFleetEvidence, err)
+			continue
+		}
 		if err != nil {
 			counts[skipInconsistent] += 1
 			self.logf("not mirroring hotkey 0x%x block %d: %v", commitment.hotkey, commitment.commitmentBlock, err)
@@ -369,9 +393,57 @@ func pendingExpiries(pending []pendingMirror) []uint64 {
 	return expiries
 }
 
+// The hotkey's role at the finalized head on every endpoint, combined to the
+// most restrictive. Any read failure or disagreement is an error.
+func (self *oracle) role(ctx context.Context, hotkey [32]byte, head nativeHead) (neuronRole, error) {
+	roles := []neuronRole{}
+	for index, reader := range append([]nativeReader{self.connections.primary}, self.connections.secondaries...) {
+		role, err := reader.role(ctx, self.settings.Netuid, hotkey, head.hash)
+		if err != nil {
+			return neuronRole{}, fmt.Errorf("substrate endpoint %d role: %w", index+1, err)
+		}
+		roles = append(roles, role)
+	}
+	return combineRoles(roles)
+}
+
+// The commitment block holds no positive fleet evidence on some endpoint.
+type noFleetEvidenceError struct {
+	endpoint int
+	err      error
+}
+
+func (self *noFleetEvidenceError) Error() string {
+	return fmt.Sprintf("substrate endpoint %d: %v", self.endpoint, self.err)
+}
+
+func (self *noFleetEvidenceError) Unwrap() error {
+	return self.err
+}
+
+// Requires positive fleet evidence (role.go fleetEvidence) in the body of the
+// commitment block at blockHash on every endpoint.
+func (self *oracle) requireFleetEvidence(ctx context.Context, commitment fleetCommitment, blockHash [32]byte) error {
+	for index, reader := range append([]nativeReader{self.connections.primary}, self.connections.secondaries...) {
+		call, err := reader.fleetCommitmentCall(self.settings.Netuid, commitment.commitmentHash)
+		if err != nil {
+			return fmt.Errorf("substrate endpoint %d: %w", index+1, err)
+		}
+		extrinsics, err := reader.blockExtrinsics(ctx, blockHash)
+		if err != nil {
+			return fmt.Errorf("substrate endpoint %d: %w", index+1, err)
+		}
+		if err := fleetEvidence(extrinsics, commitment.hotkey, call); err != nil {
+			return &noFleetEvidenceError{endpoint: index + 1, err: err}
+		}
+	}
+	return nil
+}
+
 // Derives the mirror arguments at the finalized head and requires every other
 // endpoint to report the same commitment bytes at that head and the same
-// canonical hash at the commitment block.
+// canonical hash at the commitment block, and every endpoint to show positive
+// fleet evidence in that block.
 func (self *oracle) derive(ctx context.Context, commitment fleetCommitment, head nativeHead) (mirrorArgs, error) {
 	primary := self.connections.primary
 	lastCommitment, err := primary.lastCommitment(ctx, self.settings.Netuid, commitment.hotkey, head.hash)
@@ -409,6 +481,9 @@ func (self *oracle) derive(ctx context.Context, commitment fleetCommitment, head
 		if hash != blockHash {
 			return mirrorArgs{}, fmt.Errorf("substrate endpoint %d disagrees on the hash of block %d", index+2, commitment.commitmentBlock)
 		}
+	}
+	if err := self.requireFleetEvidence(ctx, commitment, blockHash); err != nil {
+		return mirrorArgs{}, err
 	}
 	return args, nil
 }

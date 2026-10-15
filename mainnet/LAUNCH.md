@@ -857,6 +857,18 @@ fleet-format SN25 commitments of factury's
 `support/plans/sn25-commitment-mirror-runbook.md` with exactly its arguments,
 at a gas estimate of about 107,500.
 
+**Validator exclusion, 2026-10-15.** The one-field `Sha256` format does not
+identify a fleet. The validator's source commitment
+(`crv4/source_commitment.go`) writes the same field from the validator hotkey,
+and the validator refuses any coordinator mirror of its source hotkey
+(`validator/release_submit_v2.go` `checkSourceRoleV2`). On 2026-10-15 a manual
+mirror of the SN25 validator's source commitment (UID 1, tx
+`0x4bb7941d…222b5`) halted its steering. The oracle therefore **never mirrors a
+hotkey that holds a validator permit, is unregistered, or has no standalone fleet
+`set_commitment` in its commitment block**, and it fails closed: if a role
+cannot be read, it mirrors nothing in that cycle. Steps 3 and 4 below say how.
+Don't mirror by hand around these rules.
+
 ### What it does
 
 Every `--poll_interval` (30 s) it runs one cycle:
@@ -870,7 +882,12 @@ Every `--poll_interval` (30 s) it runs one cycle:
 3. At the native finalized head it lists `Commitments.CommitmentOf(netuid, *)`
    and keeps entries that are exactly one `Sha256` field
    (`crv4.DecodeFleetCommitmentRegistrationWithBlockV454`); the old multi-field
-   entries are ignored. It skips a commitment that `mirroredCommitments(hotkey)`
+   entries are ignored. The format alone is not enough. At the same finalized
+   head, on every `--substrate` endpoint, it reads `SubnetworkN`,
+   `Uids(netuid, hotkey)`, `Keys(netuid, uid)` and `ValidatorPermit(netuid)`.
+   It never mirrors a hotkey that holds a validator permit on any endpoint, or
+   one that is not registered. If any of these reads fails or is malformed, or
+   the endpoints disagree on the UID, the cycle fails and nothing is sent. It skips a commitment that `mirroredCommitments(hotkey)`
    at the EVM finalized block already holds (or holds newer), and one older than
    `policyAt(currentEpoch()).commitmentMaxAgeBlocks`, which could no longer be
    bound.
@@ -879,7 +896,16 @@ Every `--poll_interval` (30 s) it runs one cycle:
    state: `LastCommitment` must name the registration's block, and
    `chain_getBlockHash(commitmentBlock)` must be a header of that height. Every
    additional `--substrate` endpoint must return the same commitment bytes and
-   block hash. The block hash is the Substrate hash, never an EVM hash.
+   block hash. The block hash is the Substrate hash, never an EVM hash. It also
+   requires positive fleet evidence in that block's body, read with
+   `chain_getBlock` and authenticated against the block hash and extrinsics root
+   (`crv4.Chain.BlockExtrinsicsAtContext`) on every endpoint. The hotkey must
+   have signed exactly one extrinsic there, and its call must be exactly the
+   standalone `Commitments.set_commitment(netuid, [Sha256(hash)])` that
+   `provider fleet publish` sends. A validator source write
+   (`Utility.batch_all` of `set_commitment` and its CRv4 weight commit), a proxy
+   call, a different hash or an extrinsic it can't parse is not evidence, and
+   the commitment is not mirrored (`commitmentoracle/role.go`).
 5. It mirrors nearest expiry first, at most `--max_sends` per cycle, one
    transaction at a time: an `eth_call` preflight from the oracle address, an
    estimate plus 20% no higher than `--max_gas_limit` (250,000), a legacy gas
@@ -925,7 +951,9 @@ health gauges use. Every name starts with `urnetwork_sn_commitment_oracle_`:
 blocks not yet covered by a complete cycle), `commitments`, `fleet_commitments`,
 `fleet_commitments_mirrored`, `fleet_commitments_expired`,
 `fleet_commitments_conflicting`, `fleet_commitments_inconsistent`,
-`pending_unmirrored`, `pending_min_blocks_to_expiry`, `in_flight`,
+`fleet_format_excluded` (one-field `Sha256` commitments never mirrored because
+the hotkey holds a validator permit, is unregistered or has no standalone fleet
+`set_commitment`), `pending_unmirrored`, `pending_min_blocks_to_expiry`, `in_flight`,
 `in_flight_age_seconds`, `oracle_balance_wei`, `oracle_balance_low` (1 below
 `--low_balance_wei`, default 0.01 TAO, or when unknown),
 `low_balance_threshold_wei`, `mirrors_sent`, `last_success_timestamp_seconds`,

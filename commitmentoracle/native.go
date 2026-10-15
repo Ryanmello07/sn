@@ -39,6 +39,12 @@ type nativeReader interface {
 	blockHash(ctx context.Context, number uint64) ([32]byte, error)
 	// The number in the header of blockHash.
 	headerNumber(ctx context.Context, blockHash [32]byte) (uint64, error)
+	// The hotkey's registration and validator permit on netuid at blockHash.
+	role(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash [32]byte) (neuronRole, error)
+	// The extrinsics of the block at blockHash, authenticated against it.
+	blockExtrinsics(ctx context.Context, blockHash [32]byte) ([][]byte, error)
+	// The SCALE call Commitments.set_commitment(netuid, [Sha256(hash)]).
+	fleetCommitmentCall(netuid uint16, hash [32]byte) ([]byte, error)
 	close()
 }
 
@@ -131,6 +137,53 @@ func (self *substrateReader) commitment(ctx context.Context, netuid uint16, hotk
 		return nil, err
 	}
 	return self.storage(ctx, key, blockHash)
+}
+
+func (self *substrateReader) subtensorStorage(ctx context.Context, item string, blockHash [32]byte, args ...[]byte) ([]byte, error) {
+	key, err := types.CreateStorageKey(self.chain.Meta, crv4.PalletName, item, args...)
+	if err != nil {
+		return nil, err
+	}
+	return self.storage(ctx, key, blockHash)
+}
+
+func (self *substrateReader) role(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash [32]byte) (neuronRole, error) {
+	subnetworkN, err := self.subtensorStorage(ctx, "SubnetworkN", blockHash, encodeNetuid(netuid))
+	if err != nil {
+		return neuronRole{}, err
+	}
+	uid, err := self.subtensorStorage(ctx, "Uids", blockHash, encodeNetuid(netuid), hotkey[:])
+	if err != nil {
+		return neuronRole{}, err
+	}
+	permits, err := self.subtensorStorage(ctx, "ValidatorPermit", blockHash, encodeNetuid(netuid))
+	if err != nil {
+		return neuronRole{}, err
+	}
+	keyOfUid := func(uid uint16) ([]byte, error) {
+		return self.subtensorStorage(ctx, "Keys", blockHash, encodeNetuid(netuid), encodeNetuid(uid))
+	}
+	role, err := decodeNeuronRole(hotkey, subnetworkN, uid, keyOfUid, permits)
+	if err != nil {
+		return neuronRole{}, fmt.Errorf("%s role of 0x%x: %w", self.endpoint, hotkey, err)
+	}
+	return role, nil
+}
+
+func (self *substrateReader) blockExtrinsics(ctx context.Context, blockHash [32]byte) ([][]byte, error) {
+	_, extrinsics, err := self.chain.BlockExtrinsicsAtContext(ctx, types.Hash(blockHash))
+	if err != nil {
+		return nil, fmt.Errorf("%s block 0x%x: %w", self.endpoint, blockHash, err)
+	}
+	return extrinsics, nil
+}
+
+func (self *substrateReader) fleetCommitmentCall(netuid uint16, hash [32]byte) ([]byte, error) {
+	call, err := self.chain.NewSetFleetCommitmentCall(netuid, hash)
+	if err != nil {
+		return nil, err
+	}
+	return codec.Encode(call)
 }
 
 func (self *substrateReader) lastCommitment(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash [32]byte) ([]byte, error) {
