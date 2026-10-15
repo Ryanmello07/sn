@@ -39,6 +39,8 @@ var suiteFixtureResourceKindNames = map[string][]string{
 // The portable suite resolves its documentation and local transport subnets
 // without importing the production-sized location database. Public addresses
 // outside those fixtures retain their separate database resource contract.
+// The last two entries match connect/tun.go's default local allocators. Keep
+// the generator dependency-free; tests exercise actual allocated addresses.
 const suiteFixtureSettings = `all:
   ip_overrides:
     - subnet: "192.0.2.0/24"
@@ -57,6 +59,16 @@ const suiteFixtureSettings = `all:
       region: "Fixture Region"
       city: "Fixture City"
     - subnet: "::1/128"
+      country_code: "zz"
+      country: "Fixture Country"
+      region: "Fixture Region"
+      city: "Fixture City"
+    - subnet: "169.254.0.0/16"
+      country_code: "zz"
+      country: "Fixture Country"
+      region: "Fixture Region"
+      city: "Fixture City"
+    - subnet: "fd75:726e:6574::/96"
       country_code: "zz"
       country: "Fixture Country"
       region: "Fixture Region"
