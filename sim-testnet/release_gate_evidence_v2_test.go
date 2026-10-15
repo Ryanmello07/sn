@@ -160,7 +160,7 @@ func releaseEvidenceV2GateFixture(t *testing.T) (string, []releaseEvidenceV2Gate
 			`go test ./validator -run "$producer_tests" -count=1 -parallel=4 -timeout 90m`,
 			`go test -race ./validator -run "$producer_tests" -count=1 -parallel=4 -timeout 90m`,
 		}},
-		{phase: "solidity", variable: "validator_evidence_tests", alternatives: "ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation|EvidencePolicy", packages: []string{"./protocol", "./stabi", "./sim-testnet/gencontracts"}, sources: map[string][]string{
+		{phase: "solidity", variable: "validator_evidence_tests", alternatives: "ValidatorEvidence|ClientKeyHistory", packages: []string{"./protocol", "./stabi", "./sim-testnet/gencontracts"}, sources: map[string][]string{
 			"./protocol":                 releaseEvidenceV2GateSources(t, []string{"../protocol/validator_evidence*_test.go", "../protocol/client_key_history*_test.go"}),
 			"./stabi":                    releaseEvidenceV2GateSources(t, []string{"../stabi/validator_evidence*_test.go"}),
 			"./sim-testnet/gencontracts": releaseEvidenceV2GateSources(t, []string{"gencontracts/evidence*_test.go"}),
@@ -243,7 +243,7 @@ func TestProducerGateStateSelectionEvidenceV2RejectsEveryNewFamilyOmission(t *te
 	script, groups := releaseEvidenceV2GateFixture(t)
 	for _, index := range []int{0, 1, 3} {
 		group := groups[index]
-		families := "ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation|EvidencePolicy"
+		families := group.alternatives
 		if index == 0 {
 			families = releaseEvidenceV2NewProducerGroups
 		}

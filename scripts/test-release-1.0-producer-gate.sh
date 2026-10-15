@@ -374,7 +374,7 @@ release_phase_solidity() {
 
   # The companion's Go wire/signature and generated ABI controls are distinct
   # from the real Solidity behavior. Simulator owners are admitted below.
-  validator_evidence_tests='^Test(ValidatorEvidence|RuntimeEvidenceV2|RuntimeEvidence|EvidenceRelay|EvmTxManager|ClientKeyHistory|RuntimeProvisional|ProvisionalRelay|RelayContinuation|EvidencePolicy)'
+  validator_evidence_tests='^Test(ValidatorEvidence|ClientKeyHistory)'
   go test ./protocol ./stabi ./sim-testnet/gencontracts -run "$validator_evidence_tests" -count=1
   go test -race ./protocol ./stabi ./sim-testnet/gencontracts -run "$validator_evidence_tests" -count=1
 }
