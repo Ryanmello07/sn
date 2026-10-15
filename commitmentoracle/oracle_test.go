@@ -180,6 +180,7 @@ func TestCycleWaitsForFinalReceipt(t *testing.T) {
 	second := [32]byte{0x52}
 	harness.native.block(goldenBlock+10, [32]byte{0x99})
 	harness.native.put(goldenHeadHash(), second, mustHex(t, "0000000000000000"+"6b4b8d00"+"04"+"83"+strings.Repeat("12", 32)), mustHex(t, "6b4b8d00"))
+	harness.native.fleet(second, 200, [32]byte{0x99}, mustHash(t, strings.Repeat("12", 32)))
 	// Mined but never finalized during the cycle.
 	harness.oracle.sleep = func(ctx context.Context, duration time.Duration) error {
 		harness.clock.now = harness.clock.now.Add(duration)

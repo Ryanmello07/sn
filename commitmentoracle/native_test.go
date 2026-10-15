@@ -168,3 +168,92 @@ func TestSubstrateReaderRefusesNonConcatHasher(t *testing.T) {
 		t.Fatal("listed commitments under a non-concat hasher")
 	}
 }
+
+// SubtensorModule metadata for the role reads: SubnetworkN and
+// ValidatorPermit by netuid, Uids by (netuid, hotkey), Keys by (netuid, uid).
+func roleMetadata() *types.Metadata {
+	identity := types.StorageHasherV10{IsIdentity: true}
+	entry := func(name string, hashers ...types.StorageHasherV10) types.StorageEntryMetadataV14 {
+		return types.StorageEntryMetadataV14{
+			Name: types.Text(name),
+			Type: types.StorageEntryTypeV14{IsMap: true, AsMap: types.MapTypeV14{Hashers: hashers}},
+		}
+	}
+	metadata := types.NewMetadataV14()
+	metadata.AsMetadataV14.Pallets = []types.PalletMetadataV14{{
+		Name:       types.Text(crv4.PalletName),
+		HasStorage: true,
+		Storage: types.StorageMetadataV14{
+			Prefix: types.Text(crv4.PalletName),
+			Items: []types.StorageEntryMetadataV14{
+				entry("SubnetworkN", identity),
+				entry("ValidatorPermit", identity),
+				entry("Uids", identity, types.StorageHasherV10{IsBlake2_128Concat: true}),
+				entry("Keys", identity, identity),
+			},
+		},
+	}}
+	return metadata
+}
+
+// The reader builds every role key from the metadata, reads them at the given
+// block, and decodes the validator's permit.
+func TestSubstrateReaderReadsRoleAtBlock(t *testing.T) {
+	metadata := roleMetadata()
+	at := [32]byte{0xab}
+	validator := [32]byte{0x28, 0x30}
+	key := func(item string, args ...[]byte) string {
+		built, err := types.CreateStorageKey(metadata, crv4.PalletName, item, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return built.Hex()
+	}
+	netuid := encodeNetuid(25)
+	values := map[string][]byte{
+		key("SubnetworkN", netuid):           {0x03, 0x00},
+		key("ValidatorPermit", netuid):       {0x0c, 0x00, 0x01, 0x00},
+		key("Uids", netuid, validator[:]):    {0x01, 0x00},
+		key("Keys", netuid, encodeNetuid(1)): validator[:],
+	}
+	blocks := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var rpcRequest nativeRpcRequest
+		if err := json.NewDecoder(request.Body).Decode(&rpcRequest); err != nil || rpcRequest.Method != "state_getStorage" {
+			t.Errorf("unexpected request %s", rpcRequest.Method)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var storageKey, block string
+		json.Unmarshal(rpcRequest.Params[0], &storageKey)
+		json.Unmarshal(rpcRequest.Params[1], &block)
+		blocks = append(blocks, block)
+		var result any
+		if value, ok := values[storageKey]; ok {
+			result = codec.HexEncodeToString(value)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(writer).Encode(map[string]any{"jsonrpc": "2.0", "id": rpcRequest.Id, "result": result})
+	}))
+	defer server.Close()
+	reader := newTestSubstrateReader(t, server.URL, metadata)
+	role, err := reader.role(context.Background(), 25, validator, at)
+	if err != nil || role != (neuronRole{registered: true, uid: 1, validatorPermit: true}) {
+		t.Fatalf("role %+v err %v", role, err)
+	}
+	for _, block := range blocks {
+		if block != types.Hash(at).Hex() {
+			t.Fatalf("read at %s", block)
+		}
+	}
+	// An unregistered hotkey has no UID and no permit.
+	role, err = reader.role(context.Background(), 25, [32]byte{0x77}, at)
+	if err != nil || role.registered || role.validatorPermit {
+		t.Fatalf("unregistered role %+v err %v", role, err)
+	}
+	// A missing permit census is an error, not "no permit".
+	delete(values, key("ValidatorPermit", netuid))
+	if _, err := reader.role(context.Background(), 25, validator, at); err == nil {
+		t.Fatal("read a role without ValidatorPermit")
+	}
+}

@@ -40,8 +40,11 @@ func usage() string {
 
 Mirrors finalized native fleet commitments (Commitments.CommitmentOf(netuid, *)
 with exactly one Sha256 field) into STCoordinator.mirrorCommitment, signed by
-the coordinator's active commitment oracle key. It reads only finalized chain
-state and refuses to start unless the key's address is the active oracle.
+the coordinator's active commitment oracle key. It never mirrors a hotkey that
+holds a validator permit, is unregistered, or has no standalone fleet
+set_commitment in its commitment block, and mirrors nothing while a role cannot
+be read. It reads only finalized chain state and refuses to start unless the
+key's address is the active oracle.
 
 Usage:
     commitment-oracle run --netuid=<id> --chain_id=<id> --coordinator=<addr> --state_dir=<path>

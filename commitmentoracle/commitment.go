@@ -6,7 +6,10 @@
 // The only input is finalized chain state. Native commitments are read from
 // Commitments.CommitmentOf(netuid, *) at the subtensor finalized head; only the
 // release fleet format (exactly one Sha256 field, crv4.DecodeFleetCommitment*)
-// is mirrored. The arguments are the hotkey, the commitment hash, the
+// is considered, and the format alone is not enough: a validator's source
+// commitment has the same format, so role.go also requires a registered hotkey
+// without a validator permit and a standalone fleet set_commitment in the
+// commitment block. The arguments are the hotkey, the commitment hash, the
 // registration's commitment block and that block's Substrate hash, which is
 // what sim-testnet/fleet.go mirrorFleetCommitment sends on the closed testnet.
 // Coordinator state (active oracle, mirrored records, policy) is read at the
@@ -37,6 +40,13 @@ const (
 	skipNewerMirrored  skipReason = "newer_mirrored"
 	skipConflict       skipReason = "conflict"
 	skipInconsistent   skipReason = "inconsistent"
+	// The hotkey holds a validator permit (role.go).
+	skipValidator skipReason = "validator"
+	// The hotkey is not registered on the netuid.
+	skipUnregistered skipReason = "unregistered"
+	// The commitment block has no standalone fleet set_commitment from the
+	// hotkey, e.g. a validator source commitment's batch.
+	skipNoFleetEvidence skipReason = "no_fleet_evidence"
 )
 
 // One raw CommitmentOf(netuid, hotkey) storage value read at a finalized head.
