@@ -25,7 +25,6 @@ var (
 	releaseSHA256          = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	releaseHex256          = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
 	releaseImageDigest     = regexp.MustCompile(`^[^@[:space:]]+@sha256:[0-9a-f]{64}$`)
-	releaseAbigenVersion   = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 )
 
 const (
@@ -619,24 +618,15 @@ func parseFoundryVersion(output []byte) (string, string, error) {
 	return version, commit, nil
 }
 
-// The sole success line emitted by the shared binding-generator preflight is
-// the complete identity contract for release observation and generation.
+// The two pinned source/release banners retain their raw preflight identity;
+// only the structured release lock normalizes them to the module version.
 func parseAbigenVersion(output []byte) (string, error) {
-	const prefix = "abigen version "
-	const suffix = "-stable"
-	raw := string(output)
-	if !strings.HasSuffix(raw, "\n") || strings.Count(raw, "\n") != 1 || strings.Contains(raw, "\r") {
+	switch string(output) {
+	case "abigen version 1.17.0-stable\n", "abigen version 1.17.0-stable-0cf3d3ba\n":
+		return "1.17.0", nil
+	default:
 		return "", errors.New("abigen version output is malformed")
 	}
-	value := strings.TrimSuffix(raw, "\n")
-	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
-		return "", errors.New("abigen version output is malformed")
-	}
-	version := strings.TrimSuffix(strings.TrimPrefix(value, prefix), suffix)
-	if !releaseAbigenVersion.MatchString(version) {
-		return "", errors.New("abigen version output is malformed")
-	}
-	return version, nil
 }
 
 // Use the generator's own resolver and version policy so the release lock

@@ -544,3 +544,61 @@ func TestGenerateRejectsMissingAbigen(t *testing.T) {
 		t.Fatalf("missing-tool diagnostic is incomplete:\n%s", output)
 	}
 }
+
+// The authenticated release keeps its commit suffix in the actual preflight
+// result, and preflight still stops before any artifact tool is needed.
+func TestGeneratePreflightPreservesPinnedReleaseVersion(t *testing.T) {
+	environment := newGeneratorTestEnvironment(t)
+	installGeneratorTestAbigen(t, filepath.Join(environment.pathDir, "abigen"), "1.17.0-stable-0cf3d3ba")
+	if err := os.Remove(filepath.Join(environment.pathDir, "jq")); err != nil {
+		t.Fatal(err)
+	}
+	output, err := environment.runMode(t, "", "--preflight")
+	if err != nil {
+		t.Fatalf("pinned release preflight: %v\n%s", err, output)
+	}
+	if got, want := string(output), "abigen version 1.17.0-stable-0cf3d3ba\n"; got != want {
+		t.Fatalf("release preflight changed the observed identity: got %q, want %q", got, want)
+	}
+}
+
+// The same accepted release reaches all ordinary binding/ABI freshness checks.
+func TestGenerateChecksPinnedAbigenRelease(t *testing.T) {
+	environment := newGeneratorTestEnvironment(t)
+	installGeneratorTestAbigen(t, filepath.Join(environment.pathDir, "abigen"), "1.17.0-stable-0cf3d3ba")
+	output, err := environment.run(t, "")
+	if err != nil || len(output) != 0 {
+		t.Fatalf("pinned release generation check: %v\n%s", err, output)
+	}
+}
+
+// Only the exact pinned suffix is admitted; neighboring identities fail before
+// artifact access in both the shared preflight and ordinary check entry points.
+func TestGenerateRejectsUnpinnedAbigenIdentity(t *testing.T) {
+	for _, version := range []string{
+		"1.17.1-stable",
+		"1.17.1-stable-0cf3d3ba",
+		"1.17.0-stable-00000000",
+		"1.17.0-stable-0cf3d3ba-dirty",
+		"1.17.0-stable-dirty",
+		"1.17.0-unstable-0cf3d3ba",
+		"1.17.0-stable-0CF3D3BA",
+		"1.17.0-stable-0cf3d3ba4f7062fd2bbf2bda10972d528974e876",
+		"1.17.0-stable-0cf3d3ba ",
+		"1.17.0-stable-0cf3d3ba\r",
+		"1.17.0-stable-0cf3d3ba\nextra",
+	} {
+		environment := newGeneratorTestEnvironment(t)
+		installGeneratorTestAbigen(t, filepath.Join(environment.pathDir, "abigen"), version)
+		if err := os.Remove(filepath.Join(environment.pathDir, "jq")); err != nil {
+			t.Fatal(err)
+		}
+		for _, mode := range []string{"--preflight", "--check"} {
+			output, err := environment.runMode(t, "", mode)
+			if err == nil || !strings.Contains(string(output), "wrong abigen version at ") ||
+				!strings.Contains(string(output), "got 'abigen version "+version+"'") {
+				t.Errorf("%s admitted an unpinned identity or failed after admission: %q: %v\n%s", mode, version, err, output)
+			}
+		}
+	}
+}
