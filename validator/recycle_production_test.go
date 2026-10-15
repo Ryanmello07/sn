@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +39,8 @@ type ownerRecycleProductionTestFixture struct {
 	epoch          uint64
 	head           uint64
 	extrinsicsKVs  map[uint64][]string
+	blockLock      sync.Mutex
+	blocks         []ownerRecycleProductionTestBlock
 }
 
 // The complete reviewed producer interface is retained. Only missing owner
@@ -303,16 +306,34 @@ func (self *ownerRecycleProductionTestFixture) header(number uint64) types.Heade
 }
 
 // Hashes are fixed before approvals and artifacts select their native blocks.
+// Each height's header is kept with the body it commits; a changed body
+// rebuilds that height and every later one, as the parent chain requires.
 func (self *ownerRecycleProductionTestFixture) receiptBlock(number uint64) (types.Header, types.Hash) {
 	if number < 100 || number > 1000 {
 		self.test.Fatal("synthetic production header height is outside its fixture")
 	}
+	self.blockLock.Lock()
+	defer self.blockLock.Unlock()
 	parent := types.Hash{2}
-	var header types.Header
 	for current := uint64(100); current <= number; current++ {
-		header, parent = releaseReceiptTestHeader(self.test, parent, current, self.extrinsicsKVs[current]...)
+		index, extrinsics := int(current-100), self.extrinsicsKVs[current]
+		if index < len(self.blocks) && slices.Equal(self.blocks[index].extrinsics, extrinsics) {
+			parent = self.blocks[index].hash
+			continue
+		}
+		header, hash := releaseReceiptTestHeader(self.test, parent, current, extrinsics...)
+		self.blocks = append(self.blocks[:index], ownerRecycleProductionTestBlock{header: header, hash: hash, extrinsics: slices.Clone(extrinsics)})
+		parent = hash
 	}
-	return header, parent
+	block := self.blocks[number-100]
+	return block.header, block.hash
+}
+
+// One synthetic canonical height and the body its header commits.
+type ownerRecycleProductionTestBlock struct {
+	header     types.Header
+	hash       types.Hash
+	extrinsics []string
 }
 
 // Fresh proof scratch is supplied to every genuine replay, as in production.
