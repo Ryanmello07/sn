@@ -5,8 +5,9 @@ settlement v2, phase A of [VERSION2-FINAL.md](VERSION2-FINAL.md), on SN25
 mainnet. The owner runs it. The plan of record wins wherever the two differ.
 
 Pins. These `main` heads are the runbook's premises, and its file and line
-citations hold at them. They were read at about 01:00 UTC on 2026-10-14
-([VERSION2-HANDOFF.md](VERSION2-HANDOFF.md), section 1):
+citations hold at them. They were read at about 01:00 UTC on 2026-10-14.
+[VERSION2-HANDOFF.md](VERSION2-HANDOFF.md), section 1, gives the current
+heads; a citation into another repository at a later head names it:
 
 | Repository | `main` head |
 | --- | --- |
@@ -35,10 +36,27 @@ Merged since the previous version of this runbook:
   `sn25golive`'s (sn `f3cc4492`, merged as `6caf9667`; step 4);
 - upstream's server migrations 833 to 835 (step 6).
 
-Still landing on `main`: fixes of the release gate's failing tests, each on
-its branch (VERSION2-HANDOFF.md, section 2). The deposit key's gas floors and
-the apps' 0.02 TAO v1 gas top-up hint have landed (VERSION2-HANDOFF.md,
-section 1).
+Merged on 2026-10-14 and 2026-10-15, after the Pins were read
+(VERSION2-HANDOFF.md, section 1, which gives the heads):
+- the release gate in its local mode, with `./mainnet`, `./validator`,
+  `./sim-testnet` and connect's race run in hash shards, the `./mainnet`
+  exports job, and the job runner's fix (sn `819f00c5`; step 4);
+- the economic monitor's fixes: the witness budget, the archive's Yuma carry
+  and the window clock (sn `f50e2f913`, `c9d5988af` and `ce5fc285e`);
+- the H3 and alt admission fix (server `0d98bde5b`), whose tests the gate runs
+  (step 4);
+- the task runner's finalization fix and the drain handback (server
+  `9b6368637` and `94b9b89bd`);
+- the validator's provider request checkpoint as a fixed v2 record that fits
+  ext4 (sn `27e786d97` and `c3628860f`), and its rule: no validator downgrade
+  after any v2 checkpoint write (step 7; section 6.1, row 7);
+- the connect restore re-apply fix (connect `e6af5701c`).
+
+Still landing on `main`: the fix for a deposit reserved but not signed before
+its deadline, on server branch `v2/deposit-pending-reservation` (section 7).
+Every gate fix that VERSION2-HANDOFF.md, section 2, listed has merged. The
+deposit key's gas floors and the apps' 0.02 TAO v1 gas top-up hint have
+landed (VERSION2-HANDOFF.md, section 1).
 
 The server's written recovery of a root key that an older build stranded has
 landed: `docs/operator/st-stranded-nonce.md`, server `912859cd`, merged by
@@ -236,7 +254,7 @@ runbook, at steps 9 and 12.
   into main. Pull and push." (STATE.md:244). The first round is merged and
   pushed, without force, after a fresh fetch and a fast-forward check
   (STATE.md:278-281). The `main` heads are the Pins table above.
-- The gate's fixes are still landing (Pins). The launch revisions are the
+- The gate's fixes have landed (the preamble). The launch revisions are the
   heads on which step 4's gate passes (O1), and the runbook is then read
   against those heads.
 - The dual-stack validator hops are on `main`, so the launch's builds carry
@@ -323,6 +341,7 @@ runbook, at steps 9 and 12.
 | Deployer (O4) | the six v2 actions, and the escrow registration's value | limits 4,000,000, 2,500,000, 3,000,000, 1,000,000, 150,000 and 400,000; used 2,821,690, 1,463,833, 1,935,622, 310,486, 31,329 and 285,209; value `maximumBurnRao × 10^9` wei | BOOTSTRAP-CONTRACTS.md:660,707-722 |
 | Governance Safe (O8) | `registerOperatorPool`'s value, which the Safe must hold before step 15's review; the surplus over the burn comes back to the Safe | R-4 sent a 100 TAO ceiling, burned 3.80 TAO and used 1,594,088 gas. Through a SafeL2 1.4.1 `execTransaction` the dry run used 1,654,438 gas, estimated at 1,797,143 (step 15) | `scripts/runtime-rehearsal/README.md` R-4; `rehearsal/stack_test.go:31-32,190-194` |
 | Operator root key | every v1 and v2 close, commit, finalize and answer | the §8.1 table; a capturing close needed a limit of about 2.69M. The server signs every v1 and v2 close at max(estimate + 20%, min(3,200,000, `maximum_gas`)) | VERSION2-FINAL.md §8.1; `server/controller/st_controller.go:1135-1153,1970-2002`; `server/controller/st_ledger_v2_client.go:367-385` |
+| Operator deposit key | each deposit's staging and the deposit, two stake moves with floors of 2,800,000 and 3,400,000 | at 30 gwei a pair needs 0.06 TAO under a `maximum_gas` of 1,000,000 and 0.186 TAO at the full floors; one send can need `maximum_gas` at the fee cap, 0.105 TAO at 3,500,000 and 0.108 at revision 1's 3.6M. A key short of its largest send's limit at the fee cap has the send refused, and its later sends wait | server `docs/operator/st-stranded-nonce.md`, "When the account cannot pay", and `controller/st_controller.go:2049-2062`, at server `ab207cbf9`; VERSION2-HANDOFF.md, section 3, item 12 |
 | Validator auditor key (O10) | approvals, challenges and demands | approve: 132,524 used, limit 135,736; demand: 98,268 used, limit 104,424, plus the fee | §8.1 table |
 | Watcher key (O21) | demands and challenges | each demand pays `demandFeeWei`, 750,000 rao, plus gas; a sample starts at 256 demands and doubles | §7.1, §9.3, §10.2 |
 | Claimants: the daemon relayer, app gas keys, anyone | claims | an account's first claim uses 186,707 gas and needs a limit of 2,572,776; in a batch of 32, 147,740 gas a claim | §8.1 table; README R-7 |
@@ -349,7 +368,7 @@ runbook, at steps 9 and 12.
     capturing close and 206,967 for a first claim. A capturing close used
     226,055 gas, with a least limit of 236,399 at which an `eth_call` of it
     succeeds. A first claim used 187,332 gas, with a least limit of 192,318;
-  - a batch of 32 uses 148,358 gas a claim, and a transaction holds at most
+  - a batch of 32 uses 148,378 gas a claim, and a transaction holds at most
     416 claims, against 418 on 475;
   - a stake exit's admission now grows by 8,750 gas for each entry of
     vault2's own staking-hotkey list. The list holds up to 128 entries, which
@@ -412,8 +431,8 @@ runbook, at steps 9 and 12.
 | Key | Role in this launch | Custody | Source |
 | --- | --- | --- | --- |
 | Deployer EVM key (O4) | sends the six v2 actions at consecutive nonces | an external EVM signer; the v1 deployer is on the owner's Ledger | BOOTSTRAP-CONTRACTS.md:652-655; LAUNCH.md:161-163 |
-| Ed25519 approval key | signs the v2 phase approval | `root/subtensor/approval/`, operator-held | LAUNCH.md:185,369-376 |
-| Governance Safe owner and Safe relayer (O8) | own `STSettlement2`; send `registerOperatorPool`; upgrade; pause | the owner's Ledger; the Safe is 1-of-1 | LAUNCH.md:47-48,164-166,187-188; VERSION2-FINAL.md §4.1 |
+| Ed25519 approval key | signs the v2 phase approval | `root/subtensor/approval/`, operator-held | LAUNCH.md:187,371-378 |
+| Governance Safe owner and Safe relayer (O8) | own `STSettlement2`; send `registerOperatorPool`; upgrade; pause | the owner's Ledger; the Safe is 1-of-1 | LAUNCH.md:47-48,164-166,189-190; VERSION2-FINAL.md §4.1 |
 | Guardian | pauses v1 settlement, and with it v2 | the owner's Ledger | LAUNCH.md:161-163; VERSION2-FINAL.md §4.1 |
 | Operator gas approver key | signs the operator gas policy | off the operator host; the server refuses any other approver for the scope | `server/st_operator_gas_policy.go:24-25`; `server/model/st_transaction_gas_model.go:386-388` |
 | Treasury approval key | re-signs the treasury production approval | the Ed25519 key the validator config pins as `treasury_approval.signer` | `mainnet/treasury_approval.go:192-251`; `validator/treasury_approval_draft.go:64-66` |
@@ -421,7 +440,7 @@ runbook, at steps 9 and 12.
 | Validator auditor key (O10) | approvals, challenges and demands | a hex secp256k1 key file on the validator host, `--ledger_auditor_key_file` | `validator/run.go:142-143` |
 | Watcher key (O21) | `snclaim v2 check --all --challenge --demand` | a host other than the validator's | VERSION2-FINAL.md §10.2 |
 | Claim daemon relayer key (O22) | claims | the daemon config's `key_file` | `miner/claim_v2_daemon.go:61` |
-| SN25 owner, `ur-owner` | holds SN25's stake-transfer switch, which can freeze every claim | 2-of-3 native multisig | LAUNCH.md:184,197-203,222-235; VERSION2-FINAL.md §4.1, §17 |
+| SN25 owner, `ur-owner` | holds SN25's stake-transfer switch, which can freeze every claim | 2-of-3 native multisig | LAUNCH.md:186,199-205,224-237; VERSION2-FINAL.md §4.1, §17 |
 
 The deployer, guardian, Safe relayer and Safe owner keys are all on the
 owner's single Ledger. The owner's availability is therefore a dependency of
@@ -443,7 +462,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | O10 | The auditor key and its EVM address | one address, quorum 1 at launch; the same key runs with `--ledger_auditor_key_file` | 8, 10 | BOOTSTRAP-CONTRACTS.md:750-754; VERSION2-FINAL.md §2.1 decision 2 |
 | O11 | Whether to create the claim batcher | optional sixth action | 8, 13 | VERSION2-FINAL.md §8.5 |
 | O12 | The demand fee | decided: 750,000 rao, 750,000,000,000,000 wei (owner decision, 2026-10-12); the command has no default | 8 | VERSION2-FINAL.md §7.1; BOOTSTRAP-CONTRACTS.md:734-739 |
-| O13 | The re-signed operator gas policy: `revision`, `previous_policy_sha256`, `maximum_gas`, `maximum_intent_liability_wei`, `maximum_lifetime_liability_wei`, the validity window and the attempt caps | `maximum_gas` about 3.5M, and at least 3,200,000, the floor of every v1 and v2 close; intent liability at least 3 × `maximum_gas` × `maximum_fee_per_gas_wei`, 3.15·10^17 wei at 3.5M and 30 gwei; `maximum_intent_attempts` at most 3; same bindings (step 5) | 5 | VERSION2-FINAL.md §8.1, §13; `server/local/sn25golive/gas.go:26-28`; `server/model/st_transaction_gas_model.go:95-112,332-368` |
+| O13 | The re-signed operator gas policy: `revision`, `previous_policy_sha256`, `maximum_gas`, `maximum_intent_liability_wei`, `maximum_lifetime_liability_wei`, the validity window and the attempt caps | `maximum_gas` about 3.5M, and at least 3,200,000, the floor of every v1 and v2 close; intent liability at least 3 × `maximum_gas` × `maximum_fee_per_gas_wei`, 3.15·10^17 wei at 3.5M and 30 gwei; `maximum_lifetime_liability_wei` at least 2·10^19 once deposits are priced; `maximum_intent_attempts` at most 3; same bindings (step 5) | 5 | VERSION2-FINAL.md §8.1, §13; `server/local/sn25golive/gas.go:26-28`; `server/model/st_transaction_gas_model.go:95-112,332-368` |
 | O14 | The treasury re-sign inputs: the input file and the unsigned policy plan the live approval was drafted from, with their SHA-256, and the approval key's signature | unchanged; only `config_hash` may change. The written sequence is [mainnet/SETTLEMENT-V2-ADOPTION.md](mainnet/SETTLEMENT-V2-ADOPTION.md) | 10 | `mainnet/treasury_approval_test.go:534-557`; `validator/production_authority_history.go:368-388` |
 | O15 | The adopted validator config: its absolute path, the predecessor's retained authority bundle, the progress file, the durable-volume declaration, and how the service command line gains `--ledger_auditor_key_file` | all paths absolute; on snow the flag comes from xops `group_vars/validator.yml`, which renders it into `sn-validator.service`'s `ExecStart`; for a unit this repository renders, through the systemd drop-in [mainnet/validator-ledger-auditor.example.conf](mainnet/validator-ledger-auditor.example.conf) (step 10) | 10 | `validator/treasury_approval_draft.go:71-77`; `validator/run.go:112-117`; SETTLEMENT-V2-EXAMPLES.md:102-123 |
 | O16 | The v2 pool hotkey (`poolHotkeyV2`) | new; nonzero; not the escrow hotkey; not used by another pool | 15 | `evm/src/STSettlementVault2.sol:166-171`; VERSION2-FINAL.md §12.1 |
@@ -452,7 +471,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | O19 | `v2_prune_alert_positions` | default 3 | 11 | `server/controller/st_ledger_v2_prune.go:33-35` |
 | O20 | `--ledger_max_bytes` | default 2147483648 (2 GiB); a runtime flag, raised without a re-sign | 10 | `validator/run.go:144-145`; VERSION2-FINAL.md §6.6 |
 | O21 | The watcher: host, key, RPC and fee budget, and how often it runs | a host other than the validator's; the example units run it hourly as the system user `snclaim-watcher` | 13 | VERSION2-FINAL.md §10.2; SETTLEMENT-V2-EXAMPLES.md:143-161 |
-| O22 | The claim daemon: coldkeys, relayer key, state directory, threshold and batcher | threshold default 1,900,000,000 rao (1.9 α), never below 15,200,000 rao; the state directory is a durable root of its own, prepared as `provider-claim-queue` (step 13) | 13, 20 | `miner/run.go:195-197`; `miner/claim_v2_daemon.go:39-112`; SETTLEMENT-V2-EXAMPLES.md:125-141 |
+| O22 | The claim daemon: coldkeys, relayer key, state directory, threshold and batcher | threshold default 1,900,000,000 rao (1.9 α), never below 15,200,000 rao; the state directory is a durable root of its own, prepared as `provider-claim-queue` (step 13) | 13, 20 | `miner/run.go:197-199`; `miner/claim_v2_daemon.go:39-112`; SETTLEMENT-V2-EXAMPLES.md:125-141 |
 | O23 | The SDK release that pins `Vault2Address`, and the app release dates | lands before step 15 | 9 | VERSION2-FINAL.md §11; `sdk/sn_chain.go:83-89` |
 | O24 | Who runs the first claim, and for which account | anyone may claim for anyone; payment goes to the leaf's coldkey | 20 | VERSION2-FINAL.md §1, §17 |
 | O25 | Whether and how to hold the SN25 owner key `ur-owner` under the Safe's governance | recommended; no coldkey swap; no tooling | section 8 | VERSION2-FINAL.md §4.1, §17 |
@@ -551,7 +570,7 @@ first exist.
      - A pinned build version, from released module versions, is produced
        later by the owner's build
        (`scripts/mainnet-release-build/PIN-PROCEDURE.md`).
-  5. Retain each binary's SHA-256 and `go version -m` output (LAUNCH.md:334-335).
+  5. Retain each binary's SHA-256 and `go version -m` output (LAUNCH.md:336-337).
 - **Expect.** Every binary's build information names its O1 commit.
 - **Stop if** a repository's `main` lacks its pin, the store's `main` lacks
   the `sn_ledger_*` keys, or a binary's build information names a commit
@@ -617,7 +636,7 @@ first exist.
     holds for runtime 478" ("Limits and assessment").
 
   The output is an unapproved observation, never an approval
-  ([mainnet/MAINNET.md](mainnet/MAINNET.md):1653).
+  ([mainnet/MAINNET.md](mainnet/MAINNET.md):1663).
 - **Observed already.** These are public nodes' answers, not the check of
   record. The owner's own `runtime-snapshot` above still decides, and it
   gives O3's version and hashes.
@@ -716,10 +735,10 @@ first exist.
     are (`scripts/test-release-1.0-local.sh`:4-18; `sim-testnet/README.md`:839-846).
   - `RUN_SERVER_DB_TESTS=1` runs the database suites, the scale shard's
     database half and the E suite, on the gate's private disposable
-    PostgreSQL and Redis (`scripts/test-release-1.0-local.sh`:446-643).
+    PostgreSQL and Redis (`scripts/test-release-1.0-local.sh`:894-1101).
   - `RELEASE_GATE_CONCURRENT_GATES=1` gives this one gate the host's whole
     CPU and memory share, where the default reserves half of it for a second
-    gate (`scripts/release-gate-jobs.sh`:34-36,90-91).
+    gate (`scripts/release-gate-jobs.sh`:34-36,99-101).
 
   Run the app suites of section 2.2 beside it.
 - **What local mode skips.** Exactly the checks that seal a run
@@ -777,6 +796,16 @@ first exist.
 - **The pinned mode**, the default, seals a run and stays for the build
   pipeline; the launch does not use it
   (`scripts/test-release-1.0-local.sh`:4-12).
+- **The jobs.** The long packages run in hash shards, each shard a job that
+  runs the tests whose names hash to it
+  (`scripts/test-release-1.0-local.sh`:206-333): `./mainnet` in eight,
+  `sn-mainnet-1` to `sn-mainnet-8`; `./validator` in 2 normal and 12 race;
+  `./sim-testnet` in 5 normal and 17 race; and connect's race run in 15,
+  `connect-race-1` to `connect-race-15`, beside 15 seeded-shuffle race runs
+  (:484-533,811-840). `sn-mainnet-exports` builds the `./mainnet`
+  qualification exports offline from the working checkouts, and every
+  `./mainnet` shard waits for it: a failed build fails every shard
+  (:104-113,484-496).
 - **Repaired on `main`**, so these no longer fail:
   - the source freeze's module classification and tidiness (sn
     `v2/gate-preflight`);
@@ -793,31 +822,42 @@ first exist.
   - the gate's selection (sn `f3cc4492`): its `server-unit` job runs
     `go test ./local/sn25golive`, and its database suites select SV-4's v1
     close floor tests beside SV-7's
-    (`scripts/test-release-1.0-local.sh`:305-306,510-520);
+    (`scripts/test-release-1.0-local.sh`:633,968-978);
   - the local mode itself (sn `53491e14`), and the further repairs that
     VERSION2-HANDOFF.md, section 1, lists. Among them sn `692022ac` fixes
-    the three `TestProduceFinalSemanticOutputs*` tests.
-- **Still failing:** the tests whose fixes are still on branches
-  (VERSION2-HANDOFF.md, section 2).
+    the three `TestProduceFinalSemanticOutputs*` tests;
+  - the job runner (sn `819f00c5`): a nested fixture gate whose initializer
+    refused removed the running gate's exports, which failed every
+    `./mainnet` shard of the second official run's first attempt. The
+    initializer now sets its own exports path before its exit trap, and
+    only the gate that made the exports removes them
+    (`scripts/release-gate-jobs.sh`:70-83,377-384);
+  - the H3 and alt admission tests of server `0d98bde5b`, which
+    `server-connect` and `server-db` run in normal and race mode (sn
+    `58faf413`; `scripts/test-release-1.0-local.sh`:878-887,955-965).
+- **Status.** The second official run started on 2026-10-15 at 02:14 UTC on
+  sn `819f00c5`. Its result: in progress (VERSION2-HANDOFF.md, section 3,
+  item 7).
 - **Expect.** The last line is `[release-1.0] local release gate passed
   (local mode: working checkouts, not sealed)`
-  (`scripts/test-release-1.0-local.sh`:721-722). It qualifies those
+  (`scripts/test-release-1.0-local.sh`:1179-1180). It qualifies those
   checkouts, not a sealed release (`sim-testnet/README.md`:856-858). The
   settlement v2 jobs:
-  - `sn-v2`, gate 3's own verdict (`scripts/test-release-1.0-local.sh`:211-226);
-  - `sn-scale` and `server-scale`, GL-10 and SV-6 (:228-246,574-592);
-  - `sn-e2e`, gate 4 (:593-622);
+  - `sn-v2`, gate 3's own verdict (`scripts/test-release-1.0-local.sh`:535-553);
+  - `sn-scale` and `server-scale`, GL-10 and SV-6 (:555-573,1032-1050);
+  - `sn-e2e`, gate 4 (:1051-1080);
   - `solidity`: format, release build with sizes, tests, the `v2_invariant`
-    campaign, and the catalog and binding checks (:254-278);
-  - `solidity-coverage`, gate 1's bar (:280-295), and `solidity-static`
-    (:248-252);
-  - `sdk`, CL-2 and CL-4 (:415-420), and the server's v2 suites, the
+    campaign, and the catalog and binding checks (:581-605);
+  - `solidity-coverage`, gate 1's bar (:607-622), and `solidity-static`
+    (:575-579);
+  - `sdk`, CL-2 and CL-4 (:854-859), and the server's v2 suites, the
     activation record's (SV-9) and the v1 close floor's (SV-4) among them,
-    with migrations 821, 822 and 832 (:510-526).
+    with migrations 821, 822 and 832 (:968-984).
   - The wiring tests `TestReleaseGateSettlementV2*` of
-    `sim-testnet/release_gate_settlement_v2_test.go` run in the aggregate job.
+    `sim-testnet/release_gate_settlement_v2_test.go` run in the
+    `./sim-testnet` shards.
 - **Stop if** the script prints `[release-1.0] DB suites deferred`
-  (`scripts/test-release-1.0-local.sh`:642): the database suites, the scale
+  (`scripts/test-release-1.0-local.sh`:1100): the database suites, the scale
   shard's database half and the E suite then did not run. Any failed job is
   not a stop: fix it, commit, merge, push and pull, and run the gate again
   (O28).
@@ -907,6 +947,9 @@ liability is at least 3.15·10^17 wei at 3.5M and 30 gwei.
      - `maximum_lifetime_liability_wei`, the validity window and the attempt
        caps: checked against v2 traffic (O13; §13). Until the native-fee
        policy below settles them, every send counts at its full ceiling.
+       Once deposits are priced, the lifetime liability is at least 2·10^19
+       wei: a year of floored closes, stagings and deposits at 30 gwei comes
+       to about 1.5·10^19 (VERSION2-HANDOFF.md, section 3, item 2).
 
      Keep `chain_id`, `genesis_hash`, `no_id`, `coordinator`, `policy_hash` and
      `accounts` ("re-signed with the same bindings", §13).
@@ -1084,7 +1127,10 @@ This completes the "gate 5 software is released" part of §12.1 step 1.
 - **Who.** Operator for the validator and the tools; owner for the releases.
 - **Do.**
   1. Run the new validator binary on its unchanged config, after step 6's
-     connect service is deployed (section 6.3).
+     connect service is deployed (section 6.3). It writes its provider
+     request checkpoint as the v2 record, so from that write on a validator
+     with `request_preparation` enabled is never downgraded below it
+     (section 6.1, row 7).
   2. Publish `snclaim` and the `provider` binary (`cli/snclaim`, `cli/miner`;
      RELEASE-BUILD.md:39).
   3. Release the SDK and the apps with the v2 display and claims, and without
@@ -1293,7 +1339,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:775-778 and "Runtime
 - Pass the result's `declaration.path` and `declaration.sha256` on every
   `apply` and `resume` (OWNER-CUSTODY-PREPARATION.md:100-102):
   `HOST=(--durable-volumes "$HOST_DECLARATION" --durable-volumes-sha256 "$HOST_DECLARATION_SHA256")`
-  (LAUNCH.md:349-352). The result's `declaration.sha256` already has the
+  (LAUNCH.md:351-354). The result's `declaration.sha256` already has the
   `sha256:` prefix. Pass it whole. With the example request the declaration
   is `/secure/ur-mainnet/run-v2-custody/durable-volumes.json`.
 
@@ -1386,7 +1432,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:775-778 and "Runtime
     after the checkpoint (`mainnet/evm_phase.go:180`).
 - The recipe ends with the preview and its comparison with the owner
   inputs. The block below repeats that preview, then extracts the approval
-  bytes and signs them (BOOTSTRAP-CONTRACTS.md:194-198; LAUNCH.md:369-376):
+  bytes and signs them (BOOTSTRAP-CONTRACTS.md:194-198; LAUNCH.md:371-378):
 
   ```bash
   umask 077
@@ -1447,7 +1493,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:775-778 and "Runtime
   2. The deployer signs both before any send: `unsigned_transaction` and
      `escrow_unsigned_transaction`. Each signature is canonical binary
      EIP-1559 bytes in its own file. The file's pin is `sha256:` and its
-     SHA-256 in 64 lowercase hex characters (LAUNCH.md:422-423,443;
+     SHA-256 in 64 lowercase hex characters (LAUNCH.md:424-425,445;
      `mainnet/bootstrap_contract_command.go:36,38,42`). `escrow2-register`'s
      later `apply` prints the identical transaction and digest as its own.
   3. Import both, send both back to back, and complete vault2. Expect
@@ -1531,7 +1577,7 @@ approved journal, with daemon scope (BOOTSTRAP-CONTRACTS.md:775-778 and "Runtime
 - **Stop if** any readback mismatches, or a call exits 1 for a changed
   runtime (step 8.3). Never repeat a completed CREATE, and never change the
   accepted graph or nonces to escape an ambiguous outcome
-  (LAUNCH.md:443-447).
+  (LAUNCH.md:445-449).
 
 *8.6 Keep the record.* The six journals' receipts are the v2 deployment record
 (BOOTSTRAP-CONTRACTS.md:839-843). Retain the run directory, the config, the
@@ -1554,7 +1600,7 @@ release of every app.
      `TestSnChainSettingsVault2Address` (`sdk/sn_ledger_claim_test.go:1763-1765`)
      and `TestSnChainSettingsWasmVault2Address` (`sdk/js/sn_wasm_test.go:107-109`).
   3. Run the SDK's v2 suites, the `sdk` job selector of the release gate
-     (`scripts/test-release-1.0-local.sh`:415-420).
+     (`scripts/test-release-1.0-local.sh`:854-859).
   4. Rebuild and release every app against that SDK: the Android AAR, the
      Apple framework, the Windows DLL, the Linux library and the ur.io wasm.
 - **Expect.** Each app shows the v2 tile and offers Claim when an account has
@@ -1705,7 +1751,7 @@ release of every app.
      ```
 
      - The declaration's pin keeps its `sha256:` prefix
-       (`validator/run.go:489`; connect `durablevolume/config.go:240-251`).
+       (`validator/run.go:492`; connect `durablevolume/config.go:240-251`).
      - The key file holds the O10 auditor's hex secp256k1 key. "Root owns it,
        its group is the service's GID and its mode 0440, in a directory the
        service cannot write" (SETTLEMENT-V2-EXAMPLES.md:112-116).
@@ -1982,7 +2028,7 @@ configured (§14 gate 6). Gate 5 completed at step 9.
      those of OWNER-CUSTODY-PREPARATION.md:16-39, with `scope: daemon` and
      the state directory as `root_path`.
   4. Run the daemon with the declaration that this preparation returns,
-     which it requires (`miner/run.go:136-138`; `miner/claim_v2_daemon.go:646`):
+     which it requires (`miner/run.go:136-138`; `miner/claim_v2_daemon.go:656`):
 
      ```bash
      provider claim-daemon-v2 --config=<path> [--v1-config=<path>] [--threshold-rao=<rao>] [--claim-now] \
@@ -1990,16 +2036,16 @@ configured (§14 gate 6). Gate 5 completed at step 9.
      ```
 
      The threshold is the `--threshold-rao` flag. The pin is a "Reviewed
-     sha256: digest" (`miner/run.go:182`), and the declaration is a protected
+     sha256: digest" (`miner/run.go:184`), and the declaration is a protected
      file under a protected ancestry, as in step 8 (connect
      `durablevolume/config.go:240-251`).
 - **Expect.**
   - The daemon starts only if the batcher's code is exactly the release
     runtime (`miner/claim_v2_daemon.go:448-457`).
   - It claims an account when its claimable reaches the threshold, default
-    1.9 α (`miner/run.go:195-197`).
+    1.9 α (`miner/run.go:197-199`).
 - **Stop if** the daemon refuses its batcher, or refuses a threshold below the
-  floor (`miner/claim_v2_daemon.go:643-645`).
+  floor (`miner/claim_v2_daemon.go:653-655`).
 - The daemon and `snclaim` of sn's launch revision carry section 2.6's claim
   floor (step 20).
 
@@ -2335,7 +2381,7 @@ exists for them.
 | 1 to 4 | Yes | Nothing in production changed. |
 | 5, gas policy | Only forward | A changed policy must be the next revision naming the current digest; the server refuses "operator gas policy rollback or disconnected revision" (`server/model/st_transaction_gas_model.go:389-391`). To lower the caps, sign a further revision with the same approver key. The native-fee policy is replaced by installing another policy and authority pair. Once a settlement has recorded an approver key, only that key can sign one, and a transaction already settled keeps its original denomination (`server/model/st_native_fee_settlement_model.go:189-197,266-269`). |
 | 6, server build | Yes, while v2 is off | v2's migrations 821, 822 and 832 add new tables only, which v1 settlement does not need: without the v2 pair the server reads the activation table only where it exists (`server/db_migrations.go:10013-10025,10169-10187`; `server/model/st_ledger_v2_activation.go:71-86`). An older binary requires a lower migration head, so it passes readiness (`server/router/warp_handlers.go:186-189,255-260`). Upstream's 823 to 831 and 833 to 835 come with the same `main`; their rollback is upstream's, not this runbook's. |
-| 7, validator build and app releases | Yes | Without the block, the new validator hashes today's config identically (§13). The released app code hides the v2 claim without `Vault2Address`. |
+| 7, validator build and app releases | Yes, the validator only until it writes its request checkpoint | Without the block, the new validator hashes today's config identically (§13). The released app code hides the v2 claim without `Vault2Address`. The launch's validator writes its provider request checkpoint as a v2 record, which an older release refuses, failing closed. So a validator with `request_preparation` enabled is not downgraded below sn `43ed5e30` once that release has written its checkpoint, including by its own storage-prepare (`validator/PROVIDER-REQUEST-CUSTODY.md`:46-56). |
 | 8, contracts | No, but they can be abandoned | vault2 is immutable. Until a pool registers it holds nothing and nothing depends on it (BOOTSTRAP-CONTRACTS.md, "Two residuals remain"). A redeploy needs a new approval, a fresh escrow hotkey and fresh nonces. After step 10 a redeploy also meets the validator's one-way adoption (row 10). |
 | 9, `Vault2Address` | Yes, by a release | The compiled default is never stored on the device (`sdk/sn_chain.go:352-355`; `sdk/sn_local_state.go:72-80`), so a release that clears or changes it takes effect on update. This is an inference from the code. |
 | 10, adoption | No | The block "can be neither re-pointed nor removed" (`validator/production_authority_history.go:256-260`). Until step 15 the validator still weights through `operatorAt` (§9.1). No repository path re-points it; a redeploy after adoption needs new validator code. |
@@ -2503,6 +2549,8 @@ Found while writing this runbook:
 | The repair and activation controllers refuse the adopted validator, and the rendered unit starts the pre-adoption config without the auditor key | Restart the unit with its drop-in. Around a controller run, remove the drop-in and reinstall it (step 10) |
 | `preview` cannot tell a wrong but well-formed owner input, and it checks `native_chain` and `specName` only for being non-empty | The comparison step of `mainnet/SETTLEMENT-V2-FILL.md`, read against the owner inputs, and the by-eye review of step 8.3 |
 | The claim daemon's state directory is not a prepared durable root | The `provider-claim-queue` preparation of step 13 |
+| A deposit reserved but not signed before its deadline stays refused on the deposit key ("pending original signing outcome cannot become a different request"), and no operator step frees it | Dormant while deposits are at zero price, since the deposit task then sends nothing. The fix is in progress on server branch `v2/deposit-pending-reservation`; land it before deposits are priced (VERSION2-HANDOFF.md, section 3, item 12) |
+| A validator downgraded below the launch's release after that release wrote its v2 request checkpoint refuses the record and fails closed | Never downgrade it below that release (section 6.1, row 7) |
 
 ## 8. Follow-ups after launch
 
@@ -2518,10 +2566,12 @@ Open owner decisions and work that the repositories leave open:
    that grows by about 46 MiB of accounts per root and about 54 MiB of rows
    per epoch (§6.6). Decide its retention and disk. Retain the step 8 run
    directory as the v2 deployment record.
-4. **The gate 3 CI job.** SV-8's `TestEvmV2*` runs only in the aggregate
-   normal job (STATE.md:129; `scripts/test-release-1.0-local.sh`:144-156), and
-   the `mainnet` package exceeded the 90-minute budget on the build machine
-   (STATE.md:133). No CI runs any of this (section 2.2).
+4. **The gate 3 CI job.** SV-8's `TestEvmV2*` runs only in the `./mainnet`
+   hash shards, not in `sn-v2`, gate 3's own job (STATE.md:129;
+   `scripts/test-release-1.0-local.sh`:177-178,535-553). The `mainnet`
+   package, which exceeded the 90-minute budget on the build machine
+   (STATE.md:133), now runs in eight shards (step 4). No CI runs any of this
+   (section 2.2).
 5. **The phase C sweep**, with `E_sweep >= E_s + 8` (§16).
 6. **Network payout consent** (§11.1), the largest single increase in
    providers paid. It ships on its own, independent of activation, after
@@ -2530,8 +2580,8 @@ Open owner decisions and work that the repositories leave open:
    unpaid until the epoch after it signs.
 7. **The Windows v2 Claim colour**, blue or lime (STATE.md:200).
 8. **Tooling gaps** marked above:
-   - still landing: fixes of the release gate's failing tests, each on its
-     branch (VERSION2-HANDOFF.md, section 2);
+   - still landing: the fix for a deposit reserved but not signed before
+     its deadline, on server `v2/deposit-pending-reservation` (section 7);
    - a tool that writes and signs the native-fee denomination policy, and
      a decision on its native authority for 478 (step 5);
    - a rendered validator unit that names the adopted config and the auditor
@@ -2569,7 +2619,9 @@ Open owner decisions and work that the repositories leave open:
      (step 4);
    - the server's written recovery of a root key that an older build
      stranded, `docs/operator/st-stranded-nonce.md` (server `912859cd`;
-     section 6.5).
+     section 6.5);
+   - the release gate's failing tests, each fixed and merged
+     (VERSION2-HANDOFF.md, sections 1 and 2).
 
 ## 9. Schedule for E_s = 3
 

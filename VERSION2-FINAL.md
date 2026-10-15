@@ -15,8 +15,11 @@ Two rules govern every choice:
    behaviour without a passing test that names it is not done.
 
 Pins: this repository at `56f44577`; the operator server (`server/`) at
-`0ef73084`; the app SDK (`sdk/`) at `14625631`; runtime 475 (`d1718c99`) on
-chain 964. Unprefixed paths are in this repository. The version 2
+`0ef73084`; the app SDK (`sdk/`) at `14625631`; runtime 478 (`850f2755`) on
+chain 964, which mainnet has run since block 9,276,925 and which the code
+targets (`scripts/runtime-rehearsal/build.sh`;
+`docs/spec/runtime-478-audit.md`). The plan was first written against runtime
+475 (`d1718c99`). Unprefixed paths are in this repository. The version 2
 implementation is on branch `snv2` in every repository (this repository at
 `2f406bac`), to be merged to `main` later. Apart from the runtime facts and
 gas figures measured on the rehearsal node
@@ -187,17 +190,17 @@ That is worth doing once the balance is large relative to the claim's gas.
 **Latency.** The provider share is about 2,070 α per epoch, about 1,450 α to
 the pool after head fleets' θ = 3/10 (VERSION2-REVIEW-RESPONSE.md:602-608).
 That is about 0.0145 α per provider per week at 100k providers. At the
-250k-gas planning figure (R-6 measured 186,707 gas for an account's first
-claim at depth 29, and 169,606 for a later one),
+250k-gas planning figure (R-6 measured 187,332 gas for an account's first
+claim at depth 29 on runtime 478, and 170,243 for a later one),
 a 5 gwei base fee and 0.006587 TAO/α (VERSION2-REVIEW-RESPONSE.md:604-605),
 a claim costs about 0.19 α.
 That is about 13 weeks of an average 100k-population provider's earnings, and
 gas is under 10% of a claim after about 131 weeks. At 1M providers both take
 ten times longer. Claimed through the claim batcher (§10.2), twenty or more
-claims in one transaction use 146,000 to 149,000 gas each, 17 to 18% less
+claims in one transaction use 147,000 to 149,000 gas each, 17 to 18% less
 than alone (R-7). A third party can raise the cost by filling vault2's
 staking-hotkey list (§7.3), paying a transfer above the floor per entry:
-every claim then uses about 1.1M gas more (R-3: 1,256,716 against 154,218).
+every claim then uses about 1.1M gas more (R-3: 1,257,365 against 154,831).
 At the same prices a claim then costs about 1 α, about 69 weeks of that
 provider's earnings, and gas falls under 10% of a claim only above about
 10 α. A claim below the runtime's 100,000-rao TAO-equivalent transfer floor,
@@ -639,11 +642,12 @@ finalization admits it without a copy; its `committedBlock` is
 epochs' `fundedThrough` snapshots, and two accounts' `claimed` watermarks,
 share a slot. `totalCaptured` and `totalPaid` share one, and `escrowAccounted`
 is their difference; the reentrancy flag shares `coordinator`'s slot. It stays
-in persistent storage, because runtime 475's EVM keeps a transient write made
-in a call that reverts (`scripts/runtime-rehearsal/README.md`). Amounts are
-held in 128 bits: a capture moves less than 2^64, and a funding total of 2^128
-or more, which no real stake reaches, is refused (`SafeCastOverflowedUintDowncast`)
-rather than truncated.
+in persistent storage, because the runtime's EVM, on 475 as on 478, keeps a
+transient write made in a call that reverts
+(`scripts/runtime-rehearsal/README.md`; `docs/spec/runtime-478-audit.md`).
+Amounts are held in 128 bits: a capture moves less than 2^64, and a funding
+total of 2^128 or more, which no real stake reaches, is refused
+(`SafeCastOverflowedUintDowncast`) rather than truncated.
 
 **Functions.** C means coordinator only, B bootstrap only, A anyone. Every
 state-changing function shares one `nonReentrant` guard. The functions that
@@ -740,9 +744,12 @@ upgrade (§16).
 
 These come from the local subtensor sources (v451-v454) and the upstream
 runtime-475 source `d1718c99`, checked against `docs/spec/runtime-475-audit.md`.
-The rehearsal node, built from that source by `scripts/runtime-rehearsal/`,
-measured them on 2026-10-11 (`scripts/runtime-rehearsal/README.md`). All of
-them are qualified on the real runtime before deployment (R-1 to R-6).
+They hold on runtime 478, source `850f2755`, which changes only how the
+staking precompile admits `moveStake` and `transferStake` (below;
+`docs/spec/runtime-478-audit.md`, "What settlement v2 relies on"). The
+rehearsal node, built by `scripts/runtime-rehearsal/`, measured them on 475 on
+2026-10-11 and on 478 on 2026-10-13 (`scripts/runtime-rehearsal/README.md`).
+All of them are qualified on the real runtime before deployment (R-1 to R-6).
 
 - **Stake moves.** Capture by `moveStake` and claims by `transferStake` move
   exactly the requested amount out of the source. The destination's
@@ -790,28 +797,39 @@ them are qualified on the real runtime before deployment (R-1 to R-6).
   (R-4).
 - **Transfer floor.** A same-subnet move or transfer needs a TAO-equivalent
   of at least 100,000 rao, or it reverts (`AmountTooLow`).
-- **Staking-hotkey caps.** Runtime 475 refuses a transfer to another
-  coldkey that would add the escrow hotkey to that coldkey's
+- **Staking-hotkey caps.** Runtime 478, as 475 did, refuses a transfer to
+  another coldkey that would add the escrow hotkey to that coldkey's
   `StakingHotkeys` list once the list holds `MAX_THIRD_PARTY_STAKING_HOTKEYS`
-  entries (`TooManyStakingHotkeys`). The source is upstream `d1718c99`
-  `pallets/subtensor/src/staking/stake_utils.rs:1808-1822`. A coldkey's own
-  moves face the larger `MAX_STAKING_HOTKEYS` cap (`:1403-1418`). For such an
+  entries (`TooManyStakingHotkeys`). The source is upstream `850f2755`
+  `pallets/subtensor/src/staking/stake_utils.rs:1865-1874` (`:1808-1822` in
+  475's `d1718c99`). A coldkey's own moves face the larger
+  `MAX_STAKING_HOTKEYS` cap (`:1403-1418` in both). For such an
   account the claim reverts and stays claimable. Third parties can likewise
   fill vault2's own list, up to `MAX_THIRD_PARTY_STAKING_HOTKEYS`, 128
   entries. Claims and `absorbStake` keep working, but the runtime charges a
-  walk of the list: on the rehearsal node a claim then used 1,256,716 gas
-  instead of 154,218, and `absorbStake` 1,220,874 (R-3).
+  walk of the list: on the 478 rehearsal node a claim then used 1,257,365
+  gas instead of 154,831 and needed a limit of 1,273,292 instead of 159,817,
+  and `absorbStake` used 1,221,499 (R-3).
 - **Whole-position sentinel.** The staking precompile reads an amount of
   2^64−1 or more as "the whole position".
-- **Gas.** Runtime 475 charges a precompile dispatch's actual weight as gas,
-  but admits it only if the gas forwarded covers its declared weight. For
-  `move_stake` and `transfer_stake` that includes walking a full 256-entry
-  `StakingHotkeys` list, so a transaction that moves stake uses about
-  105,000 gas but needs a gas limit of about 2.4M. A refused precompile call
+- **Gas.** The runtime charges a precompile dispatch's actual weight as gas,
+  but admits it only if the gas forwarded covers its declared weight. On 475
+  and 477 that weight, for `move_stake` and `transfer_stake`, included a walk
+  of a full 256-entry `StakingHotkeys` list, so a transaction that moved
+  stake used about 105,000 gas but needed a gas limit of about 2.4M. Runtime
+  478 admits them against a walk of the caller's own list plus one entry, at
+  most 256: 65,517 gas plus 8,750 an entry for `moveStake`, and 63,085 plus
+  8,750 an entry for `transferStake`. Each also uses 625 gas more
+  (`docs/spec/runtime-478-audit.md`, "The admission rule, before and after").
+  While vault2's list is short, a claim needs a limit of about 192,000 gas
+  and a capturing close about 236,000. Third parties can lengthen the list
+  between an estimate and the inclusion (above), so senders never sign a
+  stake move below its pre-478 size (§8.1). A refused precompile call
   consumes all the gas forwarded to it. Measured inside a contract:
-  `getStake` 4,748 gas, `getUid` 995, `getMinerCollateral` 1,013,
-  `moveStake` 81,753, `transferStake` 79,321, `registerLimit` 1,409,550.
-  §8.1 gives each v2 transaction's gas (R-6).
+  `getStake` 4,748 gas, `getUid` 995, `getMinerCollateral` 1,013 and
+  `registerLimit` 1,409,550 on 475 and 478; `moveStake` 81,753 and
+  `transferStake` 79,321 on 475, and 82,378 and 79,946 on 478. §8.1 gives
+  each v2 transaction's gas (R-6).
 
 ## 8. Operator server
 
@@ -854,36 +872,52 @@ Paths in this section are in `server/` unless marked.
   row). The driver reads that census from Subtensor storage at the finalized
   head at most every ten minutes.
 
-**Gas.** R-6 measured each v2 transaction on ledgers of 2^29 accounts, the
-deepest vault2 takes, as gas used and the gas limit `eth_estimateGas` needs:
+**Gas.** R-6 measured each v2 transaction on runtime 478, on ledgers of 2^29
+accounts, the deepest vault2 takes, with vault2's staking-hotkey list at one
+or two entries, as at launch: the gas used, and the least gas limit at which
+an `eth_call` of it succeeds (`docs/spec/runtime-478-audit.md`, "Runtime
+rehearsal on 478"):
 
-| Transaction | Sender | Gas used | Gas limit needed |
+| Transaction | Sender | Gas used | Least gas limit |
 | --- | --- | ---: | ---: |
-| close, capturing | operator | 225,430 | 2,688,632 |
-| close, nothing to capture | operator | 126,610 | 144,347 |
-| close deferring 1 epoch | operator | 131,633 | 149,526 |
-| close deferring 144 epochs | operator | 2,409,622 | 2,949,195 |
-| commit | operator | 205,288 | 225,484 |
-| answer (`checkPath`) | operator | 149,074 | 154,089 |
-| finalize | operator | 94,389 | 100,877 |
-| approve | auditor | 132,524 | 135,736 |
-| demand | anyone | 98,268 | 104,424 |
-| claim, an account's first | anyone | 186,707 | 2,572,776 |
-| claim, after the account's neighbour's first | anyone | 169,595 | 2,521,578 |
-| claim, a repeat | anyone | 169,606 | 2,521,610 |
+| close, capturing | operator | 226,055 | 236,399 |
+| close, nothing to capture | operator | 126,610 | 133,826 |
+| close deferring 1 epoch | operator | 131,633 | 141,343 |
+| close deferring 144 epochs | operator | 2,409,622 | 2,862,246 |
+| commit | operator | 205,288 | 214,491 |
+| answer (`checkPath`) | operator | 149,026 | 153,963 |
+| finalize | operator | 94,389 | 100,822 |
+| approve | auditor | 132,524 | 134,165 |
+| demand | anyone | 98,256 | 103,252 |
+| claim, an account's first | anyone | 187,332 | 192,318 |
+| claim, after the account's neighbour's first | anyone | 170,208 | 175,194 |
+| claim, a repeat | anyone | 170,243 | 175,229 |
 
-Each deferred epoch costs about 15,900 gas and 19,500 of limit. A capturing
-close and a claim need limits of about 2.7M and 2.5M because the runtime
-admits a stake move only if the forwarded gas covers its declared weight
-(§7.3); `eth_estimateGas` on the rehearsal node stops within 10% of the least
-sufficient limit (`scripts/runtime-rehearsal/README.md`). The engine signs the
-estimated limit plus 20%, about 3.2M for a capturing close. The SN25 operator
-gas policy (`local/sn25golive/sn25-mainnet-gas-params.json`) allows a
-`maximum_gas` of 1,000,000, below a capturing close and below a close that
-defers more than about 43 epochs, and a per-intent liability of 5·10^16
-wei, below the 8.1·10^16 wei of a 2.69M limit at its 30 gwei fee cap. It
-is therefore re-signed for v2 (§13). Anyone can still send a close that
-defers more epochs than the policy covers.
+Each deferred epoch costs about 15,900 gas and 19,000 of limit.
+`eth_estimateGas` gave a capturing close 246,899 and an account's first claim
+206,967; on the rehearsal node its search stops within 10% of the least
+sufficient limit (`scripts/runtime-rehearsal/README.md`). On 475 and 477 the
+two needed limits of about 2.5M and 2.4M, and `eth_estimateGas` gave them
+about 2.7M and 2.6M, because the runtime admitted a stake move only against
+a full 256-entry walk (§7.3). On 478 the limit follows vault2's own list,
+which third parties can lengthen after an estimate. So no sender signs a
+stake move below its pre-478 size, by the owner's sizing rule
+(VERSION2-LAUNCH.md section 2.6; `docs/spec/runtime-478-audit.md`, "Gas
+limits on 478"):
+
+- a close at the larger of its estimate plus 20% and 3,200,000 gas, which
+  covers every length of the list for a capturing close that defers at most
+  94 epochs. The server caps that floor at the gas the operator gas policy
+  still accepts;
+- a claim at the larger of its estimate with margin and 2,600,000 (§10.2,
+  §11).
+
+The engine signs commit, finalize and answer at the estimate plus 20%. The
+SN25 operator gas policy (`local/sn25golive/sn25-mainnet-gas-params.json`)
+allows a `maximum_gas` of 1,000,000, below the close floor, and a per-intent
+liability of 5·10^16 wei, below the 9.6·10^16 wei of one floored close at its
+30 gwei fee cap. It is therefore re-signed for v2 (§13). Anyone can still
+send a close that defers more epochs than the policy covers.
 
 ### 8.2 Ledger build
 
@@ -1209,20 +1243,21 @@ while the gas left covers `gasPerClaim` at the call, which keeps 1/64 of it
 vault2 pays each leaf's coldkey whoever calls, so the batcher can redirect
 nothing. A batch succeeds at any gas limit, so `eth_estimateGas` cannot size
 it: senders find the least limit at which an `eth_call` attempts every claim
-and add 20%. They cap each claim at the larger of 2,600,000 gas, a single
-claim's least limit with margin, and the batch's largest single-claim
-estimate. The tools name at most 13/15 of the latest block's gas limit less
-1,500 gas, the most the pool takes, and at most 64,998,500, less a
-10,000-gas margin; they put at most 32 claims in a batch (§10.1), and refuse
-a batcher whose code is not exactly the release runtime. Measured on runtime
-475 at depth 29 (R-7): a transaction may name at most 64,998,500 gas, below
-the 75,000,000 block gas limit, and so holds at most 418 claims; from ten
-claims on a batch uses 15 to 18% less gas than the same claims alone
-(148,611 per claim in a batch of 20 and 147,740 in one of 32, against
-169,992 to 187,126 alone), and its gas limit grows by about 149,000 per
-claim where each single claim needs about 2.44M. A batch of one costs 6%
-more than a claim alone, so the tools send a lone claim directly. The deployment phase can
-create the batcher (§8.5).
+and add 20%. They cap each claim at the larger of 2,600,000 gas, the claim
+floor, which was a single claim's least limit with margin on 475 and 477
+(§8.1), and the batch's largest single-claim estimate. The tools name at most
+13/15 of the latest block's gas limit less 1,500 gas, the most the pool
+takes, and at most 64,998,500, less a 10,000-gas margin; they put at most 32
+claims in a batch (§10.1), and refuse a batcher whose code is not exactly the
+release runtime. Measured on runtime 478 at depth 29 (R-7): a transaction may
+name at most 64,998,500 gas, below the 75,000,000 block gas limit, and so
+holds at most 416 claims (418 on 475); from ten claims on a batch uses 15 to
+18% less gas than the same claims alone (149,232 per claim in a batch of 20
+and 148,378 in one of 32, against 170,605 to 187,740 alone), and its gas
+limit grows by about 150,000 per claim, where each single claim is signed at
+2,600,000 or more (§8.1). A batch of one costs 6% more than a claim alone, so
+the tools send a lone claim directly. The deployment phase can create the
+batcher (§8.5).
 
 ## 11. Apps and SDK
 
@@ -1468,8 +1503,9 @@ gates hold:
    - Sizes and margins are recorded.
    - An independent review of vault2, `LedgerTree.sol` and `STSettlement2`
      is resolved.
-2. **Runtime rehearsal (R-1 to R-6).** The exact bytecode runs on a node
-   built from runtime 475's source. No other environment can run it:
+2. **Runtime rehearsal (R-1 to R-7).** The exact bytecode runs on a node
+   built from the source of the runtime mainnet runs, now 478 (`850f2755`).
+   No other environment can run it:
    - the testnet campaign closed on 2026-09-28 (`FINALIZE.md:3-11`);
    - there is no localnet;
    - an Anvil fork cannot run the precompiles.
@@ -1715,8 +1751,8 @@ handler that never reaches a claim fails instead of passing silently.
 
 ### 15.8 Runtime rehearsal (R)
 
-These run on a node built from runtime 475's source, with the exact release
-bytecode.
+These run on a node built from runtime 478's source (`850f2755`), with the
+exact release bytecode.
 
 | ID | Behaviour |
 | --- | --- |
@@ -1825,9 +1861,9 @@ activation"). It never signs or sends.
 | Someone registers vault2's escrow hotkey between vault2's creation, which reveals it, and `registerEscrow` | Both are broadcast back to back at consecutive nonces (§8.5). If it still happens, `registerEscrow` fails for good and vault2 is redeployed. `registerPool` requires the escrow registered, so that vault2 never holds a pool, and no funds are at risk |
 | Admission bypassed (an owner upgrade, or root signer plus auditor keys) with the tree withheld | Demands block finalization (§6.5). They may name any finalized root, so withholding the newest root's tree does not stop them (§4.2). Watchers sample by value; a faulted account that is never demanded is lost |
 | A root finalized after a bypass that is not tight, or that lowered an account of an older root, halts honest successors | The validator refuses to build on a root that is not tight, and anyone can delete a successor that keeps an account below an older root's value; recovery needs a reviewed validator release and is outside phase A |
-| Demand griefing | Each demand costs the demander its gas and the fee. An answer costs about 1.5 times a demand's gas (R-6: 149,074 against 98,268), and the fee is one answer's gas at the planning fee: 750,000 rao (§7.1). Each account of each finalized root can be demanded once per pending root, so the demands possible on one pending root grow with the number of roots; each still pays the fee. Answers are automatic (§8.1) |
-| Stake-moving transactions need a gas limit far above the gas they use, and a refused precompile call consumes all the gas forwarded to it (§7.3) | Senders preflight with `eth_call` and size limits with `eth_estimateGas`; the operator gas policy is re-signed to cover a capturing close (§8.1, §13); anyone can send a close that defers more epochs than the policy covers |
-| Third parties fill vault2's own staking-hotkey list, up to 128 entries | Claims and `absorbStake` keep working; a claim then uses about 1.27M gas instead of 0.2M (R-3), about 1 α at the §3 figures, so the daemon's threshold should rise to match (§10.1). Each entry costs the griefer a transfer above the floor, which vault2 can absorb as surplus |
+| Demand griefing | Each demand costs the demander its gas and the fee. An answer costs about 1.5 times a demand's gas (R-6 on 478: 149,026 against 98,256), and the fee is one answer's gas at the planning fee: 750,000 rao (§7.1). Each account of each finalized root can be demanded once per pending root, so the demands possible on one pending root grow with the number of roots; each still pays the fee. Answers are automatic (§8.1) |
+| On 478 the gas limit a stake-moving transaction needs follows vault2's own staking-hotkey list, about 8,750 gas an entry, which third parties can lengthen after an estimate, and a refused precompile call consumes all the gas forwarded to it (§7.3) | Senders preflight with `eth_call` and never sign a stake move below its pre-478 size: a claim at the larger of its estimate with margin and 2,600,000 gas, a close at the larger of its estimate plus 20% and 3,200,000 (§8.1); the operator gas policy is re-signed to cover the close floor (§13); anyone can send a close that defers more epochs than the policy covers |
+| Third parties fill vault2's own staking-hotkey list, up to 128 entries | Claims and `absorbStake` keep working; a claim then uses about 1.26M gas instead of 0.15M and needs a limit of about 1.27M, within the 2,600,000 claim floor (R-3 on 478), about 1 α at the §3 figures, so the daemon's threshold should rise to match (§10.1). Each entry costs the griefer a transfer above the floor, which vault2 can absorb as surplus |
 | A missed close moves an epoch's share to the next epoch's earners | The 1,200-block window and alerts |
 | App users without a paying consent stay unpaid | Network payout consent in the SDK and every app (§11.1), independent of phase A. Epochs before a network's first consent stay unpaid |
 | The owner's availability for Ledger-signed steps | Plan steps 2, 3 and 5 of §12.1 with the owner |
@@ -1847,7 +1883,7 @@ These tracks run in parallel. Dependencies are noted.
    tracks 2, 4 and 5.
 2. **Contracts**: `evm/src/LedgerTree.sol`, `evm/src/STSettlementVault2.sol`,
    `evm/src/STSettlement2.sol`, and the T, V, S and I suites.
-3. **Runtime and deployment**: a node built from runtime 475's source with
+3. **Runtime and deployment**: a node built from runtime 478's source with
    fast blocks (`scripts/runtime-rehearsal/`); the R battery (`rehearsal/`);
    the v2 contract phase in `sn-mainnet bootstrap-contracts`.
 4. **Server**. The scale changes to bindings, wallets and resolutions can
