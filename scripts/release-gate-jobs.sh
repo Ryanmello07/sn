@@ -67,8 +67,17 @@ release_gate_jobs_init() {
   [[ -d /proc/self ]] || { echo 'release gate jobs require Linux process identities' >&2; return 1; }
   set +m
   release_gate_jobs_script="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/release-gate-jobs.sh"
+  # A job inherits its gate's exports path. Clear it before anything can
+  # fail, so the exit trap below never removes another gate's exports.
+  release_gate_mainnet_exports=''
   release_gate_root="$(mktemp -d "${TMPDIR:-/tmp}/urnetwork-release-gate.XXXXXXXX")" || return 1
   release_gate_root="$(cd -- "$release_gate_root" && pwd -P)" || return 1
+  # The ./mainnet qualification exports, built by one job for the jobs that
+  # read them, and removed once every job has joined.
+  release_gate_mainnet_exports="$release_gate_root/mainnet-exports"
+  # Not exported: only the process that made this gate's root removes its
+  # exports, never a job or fixture that inherits the path.
+  release_gate_exports_owner="$$"
   declare -ga release_gate_pids=() release_gate_starts=() release_gate_labels=() release_gate_pending=() release_gate_ack_fds=() release_gate_exits=()
   release_gate_active=0 release_gate_result=0 release_gate_body_result=0 release_gate_services_cleaned=0
   trap 'release_gate_jobs_exit "$?"' EXIT
@@ -105,9 +114,6 @@ release_gate_jobs_init() {
   export RAYON_NUM_THREADS="$release_gate_job_cpus" CARGO_BUILD_JOBS="$release_gate_job_cpus" RUST_TEST_THREADS="$release_gate_job_cpus"
   export FOUNDRY_OUT="$release_gate_root/full-out" FOUNDRY_CACHE_PATH="$release_gate_root/full-cache"
   export SLITHER_FOUNDRY_OUT="$release_gate_root/slither-out" SLITHER_FOUNDRY_CACHE_PATH="$release_gate_root/slither-cache"
-  # The ./mainnet qualification exports, built by one job for the jobs that
-  # read them, and removed once every job has joined.
-  release_gate_mainnet_exports="$release_gate_root/mainnet-exports"
   export release_gate_root sn_repo workspace release_gate_diagnostic release_gate_dependency_mode release_gate_mainnet_exports
   export -f release_gate_record_preflight release_gate_preflight_refusal release_gate_preflight_status release_gate_diagnostic_inventory
   source "$workspace/server/local/release-gate-services.sh" || return 1
@@ -368,6 +374,15 @@ release_gate_await() {
   return 1
 }
 
+# Remove the ./mainnet exports only when they are this gate's own: a nested
+# fixture whose initializer fails still holds its parent gate's path.
+release_gate_remove_own_exports() {
+  [[ -n "${release_gate_mainnet_exports:-}" && -n "${release_gate_root:-}" ]] || return 0
+  [[ "${release_gate_exports_owner:-}" == "$$" ]] || return 0
+  [[ "$release_gate_mainnet_exports" == "$release_gate_root/mainnet-exports" ]] || return 0
+  rm -rf -- "$release_gate_mainnet_exports"
+}
+
 release_gate_complete() {
   local status=0
   release_gate_join || status=$?
@@ -377,7 +392,7 @@ release_gate_complete() {
   else
     (( status != 0 )) || status=1
   fi
-  rm -rf -- "${release_gate_mainnet_exports:?}" || { (( status != 0 )) || status=1; }
+  release_gate_remove_own_exports || { (( status != 0 )) || status=1; }
   return "$status"
 }
 
@@ -418,9 +433,7 @@ release_gate_jobs_exit() {
     if [[ "$release_gate_services_cleaned" != 1 ]] && declare -F release_gate_services_cleanup >/dev/null; then
       release_gate_services_cleanup || { (( status != 0 )) || status=1; }
     fi
-    if [[ -n "${release_gate_mainnet_exports:-}" ]]; then
-      rm -rf -- "$release_gate_mainnet_exports" || { (( status != 0 )) || status=1; }
-    fi
+    release_gate_remove_own_exports || { (( status != 0 )) || status=1; }
   else
     echo "release gate: not all child identities joined; private services retained for inspection" >&2
     (( status != 0 )) || status=1
