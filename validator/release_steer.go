@@ -40,7 +40,10 @@ type ReleaseSteerer struct {
 	headEMA   *HeadEMAStore
 
 	sourceRolePredecessorV2 *releaseSourceRoleWitnessV2
-	productionReadHooks     releaseHttpGetRetryHooks
+	// Nil in production, where checkSourceRoleMirrorV2 judges a nonzero
+	// coordinator mirror. Tests set it to run a fixture under a retired rule.
+	sourceRoleMirrorRuleV2 func(context.Context, []byte) error
+	productionReadHooks    releaseHttpGetRetryHooks
 	// The settlement v2 contracts that move a pool's weight destination (§9.1).
 	settlementV2 SettlementV2Addresses
 
