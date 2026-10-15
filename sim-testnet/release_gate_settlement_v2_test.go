@@ -419,13 +419,16 @@ func verifyReleaseGateV2InvariantCampaign(script, foundry, invariant string) err
 // §15.7 (SV-1 to SV-8): the operator's v2 suites, normal and race, each under
 // an explicit 30-minute deadline, on the gate's private services; every root
 // of a v2 test file, and of the gas-floor files of the v1 closes and of the
-// deposit key's stake moves (SV-4), is selected.
+// deposit key's stake moves (SV-4), is selected. The deposit key's retries
+// (SV-1) are selected by prefix, since their files hold other roots that this
+// selector leaves out: a reserved deposit whose deadline has passed is signed
+// as reserved, so it reverts and frees the key.
 func releaseGateLedgerV2ServerGroup(t *testing.T) releaseEvidenceV2GateGroup {
 	t.Helper()
 	packages := ". ./api ./bringyourctl ./controller ./model ./startifact ./taskworker ./taskworker/work"
 	return releaseEvidenceV2GateGroup{
 		phase: "server_db", job: "server-db", variable: "ledger_v2_tests",
-		alternatives: "StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet|StV1Close|StV1GasFloor|StV1Deposit|StV1PendingReservation|StOperatorGasRemainingLiability",
+		alternatives: "StLedgerV2|LedgerV2|LedgerObject|StConfigSelectsLedgerV2|StConfigRefusesMalformedLedgerV2|StSyncEventsMirrorsLedgerV2|StV1DriverStopsAtFirstV2Epoch|StSyncChainKeepsV1BelowFirstV2Epoch|WorkloadsRunLedgerV2|SnLedger|StSubtensorStorageKeys|StConfigSelectsPruneAlertPositions|StV1FinalizationOfAV2EpochNotifiesNothing|StEpochEarningsKeepV1ForV1Epochs|EpochEarningsTemplateWithAV2Amount|RouterInstallsTheLedgerBuilder|StV2EpochCommands|ProviderWalletEpochRetainedRefusesUnusableSubnet|StV1Close|StV1GasFloor|StV1Deposit|StV1PendingReservation|StOperatorGasRemainingLiability|StOperatorGasPending|StOperatorGasRevertOfAPendingExpiredDeposit|StDepositReservedAttemptAdmitsOnlyAnExpiredDeposit",
 		packages:     strings.Fields(packages),
 		sources: map[string][]string{
 			".":                 releaseEvidenceV2GateSources(t, []string{"../../server/*ledger_v2*_test.go"}),
