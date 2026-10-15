@@ -100,6 +100,12 @@ func newValidatorUploadAuthorityTestFixture(t *testing.T) *validatorUploadAuthor
 		if method == "chain_getFinalizedHead" {
 			return setValidatorRuntimeIdentityTestResult(result, self.currentHash.Hex())
 		}
+		if self.fault == "native-anchor-changed" && method == "chain_getBlockHash" && len(args) == 1 && args[0] == base.authority.Expected.NativeBlock {
+			return setValidatorRuntimeIdentityTestResult(result, types.Hash{0x77}.Hex())
+		}
+		if self.fault == "current-schedule-unavailable" && method == "state_getStorage" && len(args) == 2 && args[0] != timeKey.Hex() && args[1] == self.currentHash.Hex() {
+			return errors.New("fixture current native storage is unavailable")
+		}
 		if method == "chain_getBlockHash" && len(args) == 1 && args[0] == uint64(101) {
 			self.currentCanonicalCalls++
 			if self.reorgAfterCurrentCanonical && self.currentCanonicalCalls > 1 {
@@ -310,6 +316,10 @@ func (self *validatorUploadAuthorityTestFixture) GetLogs(ctx context.Context, fi
 		return nil, nil
 	}
 	rows := make([]map[string]any, 0)
+	if self.fault == "empty-logs" {
+		// A log-pruned provider returns a well-formed empty range.
+		return rows, ctx.Err()
+	}
 	for _, event := range self.events {
 		if event.Block < uint64(from) || event.Block > uint64(to) {
 			continue
