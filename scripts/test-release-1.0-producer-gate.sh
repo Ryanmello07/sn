@@ -60,8 +60,10 @@ release_phase_isolation_regressions() {
   go test -race ./scripts/server-fixture -count=1
   go test ./scripts/test-storage -count=1
   go test -race ./scripts/test-storage -count=1
-  go test ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 3m
-  go test -race ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 3m
+  # On 2026-10-14 the race run of the gate's own job pins took 172 seconds of
+  # its former three minutes, so both modes have ten.
+  go test ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 10m
+  go test -race ./sim-testnet -run '^TestReleaseGate(Child|Jobs|Isolation)' -count=1 -parallel=4 -timeout 10m
   cd "$workspace/server"
   go test . -run '^Test(ReleaseGateServices|TestEnvironmentPrivatePortable|TestEnvironmentDoesNotStartSharedHTTPProfiler)' -count=1
   go test -race . -run '^Test(ReleaseGateServices|TestEnvironmentPrivatePortable|TestEnvironmentDoesNotStartSharedHTTPProfiler)' -count=1
@@ -168,7 +170,7 @@ release_phase_settlement() {
   cd "$sn_repo"
   # This near-complete validator census exceeds the implicit ten-minute budget.
   # Scope its aggregate allowance here; individual stress deadlines stay fixed.
-  producer_tests='^Test(Tunnel|Attempt|DiskAttempt|HTTPAttemptStreamV2|SealAttemptCutV2|TrailPolicyDepth|StatsWrite|StatsSnapshotWrite|StatsMultiBatch|StatsSettlement|Deposited|ReleaseMeasurement|ReleaseStatsV2Runtime|ReleaseHeadV2|IntentStore|SteeringIntent|MeasurementStats|ExactPoolQuality|HeadEMA|ReleaseSteeringLoop|ReleaseSettlementRefresh|ReleaseEvidenceV2|ReleaseActivationV2|ReleaseBootstrapV2|ReleaseActivationHistoryV2|ReleaseInitialBoundaryV2|ReleaseStartupV2|ReleaseStartupOwnerV2|ValidatorEvidenceCensusV2|ChainEvidence|RunRelease|ValidatorEvidence|ValidatorUpload|ReleaseClientKeyHistory|ReleaseClientKeyAuthority|ReleaseRuntimeV2|ArtifactHttpObservation|NativeSourceHash|IntentV2|ReleaseNativeCaptureV2|ReleaseCaptureV2|ReleaseArchiveV2|ReleaseHistoryAdoptionV2|ReleaseNativeObservationV2|ProductionLoader)'
+  producer_tests='^Test(Tunnel|Attempt|DiskAttempt|HTTPAttemptStreamV2|SealAttemptCutV2|TrailPolicyDepth|StatsWrite|StatsSnapshotWrite|StatsMultiBatch|StatsSettlement|Deposited|ReleaseMeasurement|ReleaseStatsV2Runtime|ReleaseHeadV2|IntentStore|SteeringIntent|MeasurementStats|ExactPoolQuality|HeadEMA|ReleaseSteeringLoop|ReleaseSettlementRefresh|ReleaseEvidenceV2|ReleaseActivationV2|ReleaseBootstrapV2|ReleaseActivationHistoryV2|ReleaseInitialBoundaryV2|ReleaseStartupV2|ReleaseStartupVerified|ReleaseStartupOwnerV2|ValidatorEvidenceCensusV2|ChainEvidence|RunRelease|ValidatorEvidence|ValidatorUpload|ReleaseClientKeyHistory|ReleaseClientKeyAuthority|ReleaseRuntimeV2|ArtifactHttpObservation|NativeSourceHash|IntentV2|ReleaseNativeCaptureV2|ReleaseCaptureV2|ReleaseArchiveV2|ReleaseHistoryAdoptionV2|ReleaseNativeObservationV2|ProductionLoader)'
   go test ./validator -run "$producer_tests" -count=1 -parallel=4 -timeout 90m
   go test -race ./validator -run "$producer_tests" -count=1 -parallel=4 -timeout 90m
 }

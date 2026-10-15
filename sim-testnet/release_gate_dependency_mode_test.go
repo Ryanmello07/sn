@@ -194,7 +194,6 @@ func TestReleaseGateLocalModeSkipsExactlyTheSealingChecks(t *testing.T) {
 		`release_source_snapshot="$(release_gate_record_preflight source-freeze "$sn_repo/scripts/check-release-source-freeze.sh" --dependency-mode "$release_gate_dependency_mode" "$workspace")" || release_gate_preflight_refusal "$?"`,
 		local,
 		local,
-		local,
 		`if [[ "$release_gate_diagnostic" == 1 && "$release_gate_dependency_mode" == pinned ]]; then`,
 		`if [[ "$release_gate_dependency_mode" == local && "$repo" == vault ]]; then`,
 		local,

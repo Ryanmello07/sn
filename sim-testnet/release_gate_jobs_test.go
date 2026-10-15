@@ -727,31 +727,6 @@ func TestReleaseGateIsolationPinsPrivateResourcesAndFinalJoins(t *testing.T) {
 // Reuse the gate source guards' exact phase/admission grammar. Require actual
 // complete commands and owned working directories, with no extra shell branch
 // that could skip execution.
-// The simulator's five complementary owners retain its complete race census.
-const releaseGateSimulatorPopulationSelector = "^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners)$"
-const releaseGateSimulatorSupplementSelector = "^(TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica)$"
-const releaseGateSimulatorSeparateSelector = "^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica)$"
-const releaseGateSimulatorFinalSelector = "^TestFinal.*$"
-const releaseGateSimulatorHistorySelector = "^Test(Fleet|Historical|Runtime|Scenario).*$"
-const releaseGateSimulatorPartitionedSelector = "^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*)$"
-
-// Local mode's complement also skips its two named sim-testnet tests.
-const releaseGateSimulatorLocalPartitionedSelector = "^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*|TestReleaseLockMatchesCheckout|TestRepositoryDiscoveryUsesModuleIdentity)$"
-
-// Each mode's ordinary complement, assigned once before the job's definition.
-const releaseGateSimulatorRaceSkipAssignment = "release_gate_simulator_race_skip='" + releaseGateSimulatorPartitionedSelector + "'\n" +
-	"if [[ \"$release_gate_dependency_mode\" == local ]]; then\n" +
-	"  release_gate_simulator_race_skip='" + releaseGateSimulatorLocalPartitionedSelector + "'\n" +
-	"fi\n" +
-	"export release_gate_simulator_race_skip\n" +
-	"release_phase_sn_simulator_race() {\n"
-const releaseGateSimulatorRaceCommand = "go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1"
-const releaseGateSimulatorOrdinaryRaceCommand = releaseGateSimulatorRaceCommand + ` -skip "$release_gate_simulator_race_skip"`
-const releaseGateSimulatorPopulationRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorPopulationSelector + "'"
-const releaseGateSimulatorSupplementRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorSupplementSelector + "'"
-const releaseGateSimulatorFinalRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorFinalSelector + "' -skip '" + releaseGateSimulatorSeparateSelector + "'"
-const releaseGateSimulatorHistoryRaceCommand = releaseGateSimulatorRaceCommand + " -run '" + releaseGateSimulatorHistorySelector + "'"
-
 func verifyReleaseGateFullValidatorRace(script string) error {
 	phaseDefinitions := regexp.MustCompile(`(?ms)^[\t ]*release_phase_[a-z0-9_]+\(\) \{\n.*?^[\t ]*\}[\t ]*$`)
 	registry := phaseDefinitions.ReplaceAllString(script, "")
@@ -763,12 +738,6 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 	}{
 		{phase: "sn_all_normal", job: "sn-all-normal", command: releaseGateAggregateNormalCommand, body: releaseGateAggregateNormalBody},
 		{phase: "sn_core_race", job: "sn-core-race", command: "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"},
-		{phase: "sn_validator_race", job: "sn-validator-race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
-		{phase: "sn_simulator_race", job: "sn-simulator-race", command: releaseGateSimulatorOrdinaryRaceCommand},
-		{phase: "sn_simulator_populations_race", job: "sn-simulator-populations-race", command: releaseGateSimulatorPopulationRaceCommand},
-		{phase: "sn_simulator_supplements_race", job: "sn-simulator-supplements-race", command: releaseGateSimulatorSupplementRaceCommand},
-		{phase: "sn_simulator_final_race", job: "sn-simulator-final-race", command: releaseGateSimulatorFinalRaceCommand},
-		{phase: "sn_simulator_history_race", job: "sn-simulator-history-race", command: releaseGateSimulatorHistoryRaceCommand},
 	}
 	for _, group := range groups {
 		function := "release_phase_" + group.phase
@@ -803,12 +772,19 @@ func verifyReleaseGateFullValidatorRace(script string) error {
 			return fmt.Errorf("full gate has conditional job admission: %v %v", conditions, err)
 		}
 	}
+	// The whole ./validator and ./sim-testnet packages run in their own normal
+	// and race shards.
+	for _, shards := range []releaseGateShards{releaseGateValidatorNormalShards, releaseGateValidatorRaceShards, releaseGateSimulatorNormalShards, releaseGateSimulatorRaceShards} {
+		if err := verifyReleaseGateShardJobs(script, shards); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // The inherited combined core race command allowed less time than the measured
-// passing serial work alone. The dedicated full-validator allowance is
-// separate from the other core packages' own measured budget.
+// passing serial work alone. The full validator's shards have their own
+// measured allowance, separate from the other core packages' budget.
 func TestReleaseGateJobsRequireIndependentCompleteValidatorRace(t *testing.T) {
 	t.Parallel()
 	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
@@ -817,123 +793,6 @@ func TestReleaseGateJobsRequireIndependentCompleteValidatorRace(t *testing.T) {
 	}
 	if err := verifyReleaseGateFullValidatorRace(string(encoded)); err != nil {
 		t.Fatalf("full validator race phase is not independently budgeted: %v", err)
-	}
-}
-
-// Reproduce the exhausted single-package clock's original ownership, then
-// reject omissions, overlaps, hidden owners and changes to any allowance.
-func TestReleaseGateJobsRejectSimulatorPopulationPartitionDrift(t *testing.T) {
-	t.Parallel()
-	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := string(encoded)
-	sources := map[string]string{"population_test.go": "package main\nimport \"testing\"\n" +
-		"func TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier(t *testing.T) {}\n" +
-		"func TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners(t *testing.T) {}\n" +
-		"func TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwnersFuture(t *testing.T) {}\n" +
-		"func TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage(t *testing.T) {}\n" +
-		"func TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper(t *testing.T) {}\n" +
-		"func TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica(t *testing.T) {}\n" +
-		"func TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamperFuture(t *testing.T) {}\n" +
-		"func TestRuntimeFutureControl(t *testing.T) {}\n" +
-		"func TestOrdinaryControl(t *testing.T) {}\n"}
-	if err := verifyReleaseGateSimulatorRaceCensus(script, sources); err != nil {
-		t.Fatal(err)
-	}
-	const start = "release_gate_start sn-simulator-populations-race release_phase_sn_simulator_populations_race"
-	const definition = "release_phase_sn_simulator_populations_race() {\n  cd \"$sn_repo\"\n  " + releaseGateSimulatorPopulationRaceCommand + "\n}"
-	const supplementStart = "release_gate_start sn-simulator-supplements-race release_phase_sn_simulator_supplements_race"
-	const supplementDefinition = "release_phase_sn_simulator_supplements_race() {\n  cd \"$sn_repo\"\n  " + releaseGateSimulatorSupplementRaceCommand + "\n}"
-	previous := strings.Replace(script, releaseGateSimulatorOrdinaryRaceCommand, releaseGateSimulatorRaceCommand+" -skip '"+releaseGateSimulatorPopulationSelector+"'", 1)
-	previous = strings.Replace(previous, supplementDefinition, "", 1)
-	previous = strings.Replace(previous, supplementStart, "", 1)
-	if err := verifyReleaseGateSimulatorRaceCensus(previous, sources); err == nil {
-		t.Fatal("aggregate restored the timed-out supplement/complement package clock")
-	}
-	old := strings.Replace(script, releaseGateSimulatorOrdinaryRaceCommand, releaseGateSimulatorRaceCommand, 1)
-	old = strings.Replace(old, definition, "", 1)
-	old = strings.Replace(old, start, "", 1)
-	if err := verifyReleaseGateSimulatorRaceCensus(old, sources); err == nil {
-		t.Fatal("aggregate restored the serial population in one exhausted package clock")
-	}
-	for _, command := range []string{releaseGateSimulatorOrdinaryRaceCommand, releaseGateSimulatorPopulationRaceCommand, releaseGateSimulatorSupplementRaceCommand, releaseGateSimulatorFinalRaceCommand, releaseGateSimulatorHistoryRaceCommand} {
-		for _, replacement := range []string{
-			releaseGateSimulatorRaceCommand,
-			strings.Replace(command, " -race", "", 1),
-			strings.Replace(command, " -count=1", "", 1),
-			strings.Replace(command, "-parallel=4", "-parallel=8", 1),
-			strings.Replace(command, "-timeout 90m", "-timeout 180m", 1),
-			strings.Replace(command, "-timeout 90m", "-timeout 45m", 1),
-			strings.Replace(command, "-timeout 90m", "-timeout 0", 1),
-			strings.Replace(command, ")$'", ")'", 1),
-			strings.Replace(command, "TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|", "", 1),
-			strings.Replace(command, "TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|", "", 1),
-			strings.Replace(command, "TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper", "TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper.*", 1),
-			strings.Replace(command, "-skip", "-run", 1),
-			strings.Replace(command, "-run", "-skip", 1),
-			"# " + command,
-			command + " -run '^$'",
-			command + " || true",
-			command + "\n  " + command,
-		} {
-			if replacement == command {
-				continue
-			}
-			if strings.Count(script, command) != 1 {
-				t.Fatal("mutation does not identify one simulator owner command")
-			}
-			if err := verifyReleaseGateSimulatorRaceCensus(strings.Replace(script, command, replacement, 1), sources); err == nil {
-				t.Fatalf("aggregate accepted changed simulator execution: %s", replacement)
-			}
-		}
-	}
-	// The ordinary owner's complement is each mode's reviewed assignment.
-	for _, assignment := range []string{"release_gate_simulator_race_skip='" + releaseGateSimulatorPartitionedSelector + "'", "release_gate_simulator_race_skip='" + releaseGateSimulatorLocalPartitionedSelector + "'"} {
-		for _, replacement := range []string{
-			strings.Replace(assignment, ")$'", ")'", 1),
-			strings.Replace(assignment, "TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|", "", 1),
-			strings.Replace(assignment, "TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|", "", 1),
-			strings.Replace(assignment, "TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper", "TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper.*", 1),
-			strings.Replace(assignment, "|TestRepositoryDiscoveryUsesModuleIdentity", "", 1),
-			strings.Replace(assignment, "|TestReleaseLockMatchesCheckout", "", 1),
-			assignment + "\nrelease_gate_simulator_race_skip='^$'",
-		} {
-			if replacement == assignment {
-				continue
-			}
-			if strings.Count(script, assignment) != 1 {
-				t.Fatal("mutation does not identify one simulator complement assignment")
-			}
-			if err := verifyReleaseGateSimulatorRaceCensus(strings.Replace(script, assignment, replacement, 1), sources); err == nil {
-				t.Fatalf("aggregate accepted a changed simulator complement: %s", replacement)
-			}
-		}
-	}
-	for _, admission := range []string{start, supplementStart, "release_gate_start sn-simulator-race release_phase_sn_simulator_race", "release_gate_start sn-simulator-final-race release_phase_sn_simulator_final_race", "release_gate_start sn-simulator-history-race release_phase_sn_simulator_history_race"} {
-		for _, replacement := range []string{
-			"# " + admission,
-			admission + "\n" + admission,
-			"if false; then\n" + admission + "\nfi",
-			"release_phase_unused() {\n" + admission + "\n}",
-		} {
-			if err := verifyReleaseGateSimulatorRaceCensus(strings.Replace(script, admission, replacement, 1), sources); err == nil {
-				t.Fatalf("aggregate accepted changed simulator admission: %s", replacement)
-			}
-		}
-	}
-	for _, omitted := range []string{
-		"func TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier(t *testing.T) {}\n",
-		"func TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners(t *testing.T) {}\n",
-		"func TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage(t *testing.T) {}\n",
-		"func TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper(t *testing.T) {}\n",
-		"func TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica(t *testing.T) {}\n",
-	} {
-		changed := map[string]string{"population_test.go": strings.Replace(sources["population_test.go"], omitted, "", 1)}
-		if err := verifyReleaseGateSimulatorRaceCensus(script, changed); err == nil {
-			t.Fatal("aggregate separate owner admitted a missing required root")
-		}
 	}
 }
 
@@ -1028,7 +887,8 @@ func TestReleaseGateJobsRejectSubtensorInfrastructureScopeDrift(t *testing.T) {
 }
 
 // Commented, narrowed, disconnected or duplicated text cannot certify the
-// actual phase; a validator allowance cannot silently fund other core packages.
+// actual shards; a validator allowance cannot silently fund other core
+// packages.
 func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T) {
 	t.Parallel()
 	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
@@ -1039,27 +899,30 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 	if err := verifyReleaseGateFullValidatorRace(script); err != nil {
 		t.Fatal(err)
 	}
-	const command = "go test -race -parallel=4 -timeout 90m ./validator -count=1"
+	command := releaseGateValidatorRaceShards.ownerCommand()
 	const core = "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"
-	const start = "release_gate_start sn-validator-race release_phase_sn_validator_race"
-	const definition = "release_phase_sn_validator_race() {\n  cd \"$sn_repo\"\n  " + command + "\n}"
+	const start = "release_gate_start sn-validator-race-1 release_phase_sn_validator_race_1"
+	const definition = "release_phase_sn_validator_race_1() {\n  release_gate_validator_race_shard 1\n}"
+	source := "  cd \"$sn_repo\"\n  " + command + "\n"
+	deadline := "-timeout " + releaseGateValidatorRaceShards.flags[slices.Index(releaseGateValidatorRaceShards.flags, "-timeout")+1]
 	cases := []struct {
 		name        string
 		old         string
 		replacement string
 	}{
-		{name: "implicit deadline", old: command, replacement: "go test -race -parallel=4 ./validator -count=1"},
-		{name: "inherited short deadline", old: command, replacement: "go test -race -parallel=4 -timeout 10m ./validator -count=1"},
-		{name: "race omitted", old: command, replacement: "go test -parallel=4 -timeout 90m ./validator -count=1"},
-		{name: "reduced workers", old: command, replacement: "go test -race -parallel=2 -timeout 90m ./validator -count=1"},
-		{name: "cached execution", old: command, replacement: strings.Replace(command, " -count=1", "", 1)},
-		{name: "no test bodies", old: command, replacement: strings.Replace(command, "-count=1", "-count=0", 1)},
+		{name: "implicit deadline", old: command, replacement: strings.Replace(command, " "+deadline, "", 1)},
+		{name: "inherited short deadline", old: command, replacement: strings.Replace(command, deadline, "-timeout 10m", 1)},
+		{name: "race omitted", old: command, replacement: strings.Replace(command, " race ", " normal ", 1)},
+		{name: "reduced workers", old: command, replacement: strings.Replace(command, "-parallel=4", "-parallel=2", 1)},
+		{name: "one shard", old: "\nrelease_gate_validator_race_shards=" + strconv.Itoa(releaseGateValidatorRaceShards.count) + "\n", replacement: "\nrelease_gate_validator_race_shards=1\n"},
+		{name: "cached execution", old: releaseGateShardCommand, replacement: strings.Replace(releaseGateShardCommand, " -count=1", "", 1)},
+		{name: "no test bodies", old: releaseGateShardCommand, replacement: strings.Replace(releaseGateShardCommand, "-count=1", "-count=0", 1)},
 		{name: "compile only", old: command, replacement: command + " -run '^$'"},
 		{name: "narrowed population", old: command, replacement: command + " -run '^TestIntent'"},
 		{name: "commented command", old: command, replacement: "# " + command},
 		{name: "hidden failure", old: command, replacement: command + " || true"},
 		{name: "unreachable command", old: command, replacement: "if false; then\n  " + command + "\n  fi"},
-		{name: "different source", old: definition, replacement: strings.Replace(definition, `cd "$sn_repo"`, `cd "$workspace/server"`, 1)},
+		{name: "different source", old: source, replacement: strings.Replace(source, `cd "$sn_repo"`, `cd "$workspace/server"`, 1)},
 		{name: "lost core runtime", old: core, replacement: "go test -race -timeout 120m ./miner/... ./protocol -count=1"},
 		{name: "lost core miner", old: core, replacement: "go test -race -timeout 120m ./crv4 ./protocol -count=1"},
 		{name: "lost core protocol", old: core, replacement: "go test -race -timeout 120m ./crv4 ./miner/... -count=1"},
@@ -1067,7 +930,7 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 		{name: "core budget leak", old: core, replacement: strings.Replace(core, "-timeout 120m", "-timeout 90m", 1)},
 		{name: "combined core owner", old: core, replacement: core + " ./validator"},
 		{name: "commented admission", old: start, replacement: "# " + start},
-		{name: "wrong admitted owner", old: start, replacement: "release_gate_start sn-validator-race release_phase_sn_core_race"},
+		{name: "wrong admitted owner", old: start, replacement: "release_gate_start sn-validator-race-1 release_phase_sn_core_race"},
 		{name: "nested admission", old: start, replacement: "release_phase_unused() {\n" + start + "\n}"},
 		{name: "unreachable admission", old: start, replacement: "if false; then\n" + start + "\nfi"},
 		{name: "empty loop admission", old: start, replacement: "for omitted in; do\n" + start + "\ndone"},
@@ -1095,15 +958,14 @@ func TestReleaseGateJobsRejectCompleteValidatorRaceBudgetOmissions(t *testing.T)
 var releaseGateUncachedCommands = []struct {
 	phase   string
 	command string
+	// The function that runs the command, when it is no phase's own body.
+	function string
 }{
 	{phase: "sn_all_normal", command: releaseGateAggregateNormalCommand},
 	{phase: "sn_core_race", command: "go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1"},
-	{phase: "sn_validator_race", command: "go test -race -parallel=4 -timeout 90m ./validator -count=1"},
-	{phase: "sn_simulator_race", command: releaseGateSimulatorOrdinaryRaceCommand},
-	{phase: "sn_simulator_populations_race", command: releaseGateSimulatorPopulationRaceCommand},
-	{phase: "sn_simulator_supplements_race", command: releaseGateSimulatorSupplementRaceCommand},
-	{phase: "sn_simulator_final_race", command: releaseGateSimulatorFinalRaceCommand},
-	{phase: "sn_simulator_history_race", command: releaseGateSimulatorHistoryRaceCommand},
+	// Every shard of ./mainnet, ./validator and ./sim-testnet runs this one
+	// command of the shard owner.
+	{phase: "shards", function: "release_gate_shard", command: releaseGateShardCommand},
 	{phase: "server_unit", command: "go test . -run '^Test(PgResourcesRedirectMaintenancePoolAndRestore|DatabaseTimeMatchesPostgresPrecision)$' -count=1"},
 	{phase: "server_unit", command: "go test ./st ./startifact -count=1"},
 	{phase: "server_unit", command: "go test ./local/sn25golive -count=1"},
@@ -1137,11 +999,15 @@ var releaseGateUncachedNestedDeclaration = regexp.MustCompile(`(?m)^[\t ]*(funct
 func verifyReleaseGateUncachedBodies(script string) error {
 	phaseDefinitions := map[string][][]string{}
 	for _, required := range releaseGateUncachedCommands {
-		definitions, read := phaseDefinitions[required.phase]
+		function := required.function
+		if function == "" {
+			function = "release_phase_" + required.phase
+		}
+		definitions, read := phaseDefinitions[function]
 		if !read {
-			pattern := regexp.MustCompile("(?ms)^[\\t ]*release_phase_" + regexp.QuoteMeta(required.phase) + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
+			pattern := regexp.MustCompile("(?ms)^[\\t ]*" + regexp.QuoteMeta(function) + "\\(\\) \\{\\n(.*?)^[\\t ]*\\}[\\t ]*$")
 			definitions = pattern.FindAllStringSubmatch(script, -1)
-			phaseDefinitions[required.phase] = definitions
+			phaseDefinitions[function] = definitions
 		}
 		if len(definitions) != 1 {
 			return fmt.Errorf("uncached gate requires one %s phase", required.phase)

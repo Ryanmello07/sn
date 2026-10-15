@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1352,21 +1353,58 @@ func TestReleaseGatesRunSourceIntegrityBeforeSimulatorCompile(t *testing.T) {
 	}
 }
 
+// The command with longer, shorter, disabled and implicit deadlines than its
+// own number of minutes.
+func releaseGateChangedDeadlines(command string) []string {
+	current := regexp.MustCompile(` -timeout ([0-9]+)m `).FindStringSubmatch(command)
+	if current == nil {
+		panic("release gate command has no deadline of minutes: " + command)
+	}
+	minutes, _ := strconv.Atoi(current[1])
+	var changed []string
+	for _, deadline := range []string{" -timeout " + strconv.Itoa(2*minutes) + "m ", " -timeout " + strconv.Itoa(minutes/2) + "m ", " -timeout 0 ", " "} {
+		changed = append(changed, strings.Replace(command, current[0], deadline, 1))
+	}
+	return changed
+}
+
+// connect-all-normal runs the whole connect package in one process, with its
+// measured deadline; its race run and the shuffled ordering run in shards.
+var releaseGateConnectPackageJobs = []struct{ job, phase, command string }{
+	{job: "connect-all-normal", phase: "connect_all_normal", command: "go test -count=1 -timeout 240m ."},
+}
+
 // The aggregate certificate retains process-global ordering and residue that
-// exact-name shards erase, including one reproducible alternate ordering.
+// shards erase: connect's normal run stays one process. Its race run, about
+// ten hours, and the reproducible alternate ordering run in shards.
 func TestAggregateGateRunsUnshardedConnectRaceCertificates(t *testing.T) {
 	scriptBytes, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
 	script := string(scriptBytes)
-	for _, command := range []string{
-		"go test -count=1 -timeout 30m .",
-		"GOMAXPROCS=4 go test -race -count=1 -timeout 30m .",
-		"GOMAXPROCS=4 go test -race -count=1 -timeout 30m -shuffle=4535211000 .",
-	} {
-		if strings.Count(script, command) != 1 {
-			t.Errorf("aggregate gate has %d copies of %q, want exactly 1", strings.Count(script, command), command)
+	for _, job := range releaseGateConnectPackageJobs {
+		if strings.Count(script, job.command) != 1 {
+			t.Errorf("aggregate gate has %d copies of %q, want exactly 1", strings.Count(script, job.command), job.command)
+		}
+	}
+}
+
+// The connect package job is exactly its one unsharded command, admitted once,
+// unconditionally, and refuses a longer, shorter, disabled or implicit
+// deadline.
+func TestReleaseGateConnectJobsKeepTheirDeadlines(t *testing.T) {
+	t.Parallel()
+	script := readReleaseGateLocalScript(t)
+	for _, job := range releaseGateConnectPackageJobs {
+		body := []string{`cd "$workspace/connect"`, job.command}
+		if err := verifyReleaseGateExactPhase(script, job.job, job.phase, body); err != nil {
+			t.Fatal(err)
+		}
+		for _, changed := range releaseGateChangedDeadlines(job.command) {
+			if verifyReleaseGateExactPhase(strings.Replace(script, job.command, changed, 1), job.job, job.phase, body) == nil {
+				t.Fatalf("%s accepted %q", job.job, changed)
+			}
 		}
 	}
 }
@@ -1631,106 +1669,16 @@ func TestReleaseGatesPreflightBindingToolBeforeLongWork(t *testing.T) {
 	}
 }
 
-// The original complete race package exhausted its 90-minute shared clock
-// before its parallel roots could finish. The later complement also exhausted
-// its clock during full supplement publication and later short history roots.
-// All five owners retain that deadline and every root, including future roots.
+// The complete race package, then its five name-pattern owners, exhausted
+// their 90-minute clocks at gate load. Every root, including future roots, now
+// runs in exactly one of the simulator's race shards, each admitted with its
+// own deadline.
 func TestLocalReleaseGateAllowsCompleteSimulatorRaceSuite(t *testing.T) {
-	scriptBytes, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
-	if err != nil {
+	t.Parallel()
+	if err := verifyReleaseGateShardJobs(readReleaseGateLocalScript(t), releaseGateSimulatorRaceShards); err != nil {
 		t.Fatal(err)
 	}
-	paths, err := filepath.Glob("*_test.go")
-	if err != nil || len(paths) == 0 {
-		t.Fatalf("aggregate simulator source census is absent: %v", err)
-	}
-	sources := map[string]string{}
-	for _, path := range paths {
-		encoded, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		sources[path] = string(encoded)
-	}
-	if err := verifyReleaseGateSimulatorRaceCensus(string(scriptBytes), sources); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// Verify actual admitted commands before projecting their complementary root
-// sets. AST declarations exclude TestMain and test-shaped text inside fixtures.
-// Whole-root selectors retain all descendants without a second subtest census.
-func verifyReleaseGateSimulatorRaceCensus(script string, sources map[string]string) error {
-	if err := verifyReleaseGateFullValidatorRace(script); err != nil {
-		return err
-	}
-	if strings.Count(script, releaseGateSimulatorRaceSkipAssignment) != 1 || strings.Count(script, "release_gate_simulator_race_skip=") != 2 {
-		return errors.New("the ordinary simulator owner's complement is not each mode's exact reviewed skip")
-	}
-	population := regexp.MustCompile(releaseGateSimulatorPopulationSelector)
-	supplement := regexp.MustCompile(releaseGateSimulatorSupplementSelector)
-	separate := regexp.MustCompile(releaseGateSimulatorSeparateSelector)
-	final := regexp.MustCompile(releaseGateSimulatorFinalSelector)
-	history := regexp.MustCompile(releaseGateSimulatorHistorySelector)
-	partitioned := regexp.MustCompile(releaseGateSimulatorPartitionedSelector)
-	seen := map[string]bool{}
-	ordinaryCount, populationCount, supplementCount, finalCount, historyCount := 0, 0, 0, 0, 0
-	for path, source := range sources {
-		parsed, err := parser.ParseFile(token.NewFileSet(), path, source, 0)
-		if err != nil {
-			return err
-		}
-		for _, declaration := range parsed.Decls {
-			function, ok := declaration.(*ast.FuncDecl)
-			if !ok || function.Recv != nil || !strings.HasPrefix(function.Name.Name, "Test") || function.Name.Name == "TestMain" {
-				continue
-			}
-			if function.Type.Params == nil || len(function.Type.Params.List) != 1 {
-				continue
-			}
-			pointer, ok := function.Type.Params.List[0].Type.(*ast.StarExpr)
-			if !ok {
-				continue
-			}
-			parameter, ok := pointer.X.(*ast.SelectorExpr)
-			if !ok || parameter.Sel.Name != "T" {
-				continue
-			}
-			name := function.Name.Name
-			if seen[name] {
-				return fmt.Errorf("aggregate simulator root is duplicated: %s", name)
-			}
-			seen[name] = true
-			// The guarded ordinary command has no -run filter: its sole -skip
-			// is exactly the disjoint union of the other anchored -run sets.
-			isPopulation, isSupplement := population.MatchString(name), supplement.MatchString(name)
-			isFinal, isHistory := final.MatchString(name) && !separate.MatchString(name), history.MatchString(name)
-			owners := 0
-			for _, selected := range []bool{isPopulation, isSupplement, isFinal, isHistory, !partitioned.MatchString(name)} {
-				if selected {
-					owners++
-				}
-			}
-			if owners != 1 || separate.MatchString(name) != (isPopulation || isSupplement) {
-				return fmt.Errorf("aggregate simulator root has overlapping or missing ownership: %s", name)
-			}
-			if isPopulation {
-				populationCount++
-			} else if isSupplement {
-				supplementCount++
-			} else if isFinal {
-				finalCount++
-			} else if isHistory {
-				historyCount++
-			} else {
-				ordinaryCount++
-			}
-		}
-	}
-	if populationCount != 2 || supplementCount != 3 || ordinaryCount == 0 || finalCount == 0 || historyCount == 0 || len(seen) != ordinaryCount+populationCount+supplementCount+finalCount+historyCount {
-		return fmt.Errorf("aggregate simulator census has %d population, %d supplement, %d final, %d history and %d ordinary roots", populationCount, supplementCount, finalCount, historyCount, ordinaryCount)
-	}
-	return nil
+	verifyReleaseGateShardsPartition(t, releaseGateSimulatorRaceShards, 1000)
 }
 
 // Keeps the additive contract-lane diagnostic in both release paths instead

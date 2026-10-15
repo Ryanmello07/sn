@@ -421,7 +421,7 @@ func TestReleaseGateMainnetShardsAwaitTheExports(t *testing.T) {
 		if job := strings.Index(registry, "\nrelease_gate_start sn-mainnet-exports release_phase_sn_mainnet_exports\n"); job < 0 || job > await {
 			return errors.New("the gate joins the exports job before admitting it")
 		}
-		for shard := 1; shard <= releaseGateMainnetShardCount; shard++ {
+		for shard := 1; shard <= releaseGateMainnetShards.count; shard++ {
 			index := strconv.Itoa(shard)
 			if start := strings.Index(registry, "\nrelease_gate_start sn-mainnet-"+index+" release_phase_sn_mainnet_"+index+"\n"); start < await {
 				return fmt.Errorf("shard %d is admitted before the exports job joins", shard)
@@ -490,13 +490,13 @@ func TestReleaseGateMainnetShardsTakeTheVariablesOnlyFromTheExports(t *testing.T
 	if strings.Count(script, `"$release_gate_mainnet_exports/environment.sh"`) != 1 || len(owner) != 1 || strings.Count(owner[0][1], "\n  source \"$release_gate_mainnet_exports/environment.sh\"\n") != 1 {
 		t.Fatal("the shard owner is not the one reader of the exports' environment")
 	}
-	names := releaseGateMainnetTestList(t)
-	fixture := newReleaseGateMainnetShardFixture(t, names)
+	names := releaseGatePackageTestList(t, releaseGateMainnetShards)
+	fixture := newReleaseGateShardFixture(t, "./mainnet", names)
 	stale := ""
 	for _, variable := range variables {
 		stale += "export " + variable + "=/stale\n"
 	}
-	if output, err := runReleaseGateMainnetShardOwner(t, fixture.prelude("skip")+stale, `release_gate_mainnet_shard 1`); err != nil {
+	if output, err := runReleaseGateShardOwner(t, fixture.prelude("skip")+stale, `release_gate_mainnet_shard 1`); err != nil {
 		t.Fatalf("the shard failed: %v\n%s", err, output)
 	}
 	seen, err := os.ReadFile(filepath.Join(fixture.root, "environment"))
@@ -522,10 +522,10 @@ func TestReleaseGateMainnetShardsTakeTheVariablesOnlyFromTheExports(t *testing.T
 // eight shards, each joined with its own failure, and the gate.
 func TestReleaseGateMainnetShardsFailWhenTheExportsFail(t *testing.T) {
 	t.Parallel()
-	names := releaseGateMainnetTestList(t)
+	names := releaseGatePackageTestList(t, releaseGateMainnetShards)
 	for _, exit := range []string{"release_gate_mainnet_exports_exit=1", "release_gate_mainnet_exports_exit=", "unset release_gate_mainnet_exports_exit"} {
-		fixture := newReleaseGateMainnetShardFixture(t, names)
-		output, err := runReleaseGateMainnetShardOwner(t, fixture.prelude("skip")+exit+"\n", `release_gate_mainnet_shard 3`)
+		fixture := newReleaseGateShardFixture(t, "./mainnet", names)
+		output, err := runReleaseGateShardOwner(t, fixture.prelude("skip")+exit+"\n", `release_gate_mainnet_shard 3`)
 		want := map[string]string{"release_gate_mainnet_exports_exit=1": "1", "release_gate_mainnet_exports_exit=": "unknown", "unset release_gate_mainnet_exports_exit": "unknown"}[exit]
 		if err == nil || output != "release gate: ./mainnet shard 3 has no qualification exports: sn-mainnet-exports exit "+want+"\n" {
 			t.Fatalf("%s: the shard ran: %v\n%s", exit, err, output)
@@ -536,7 +536,7 @@ func TestReleaseGateMainnetShardsFailWhenTheExportsFail(t *testing.T) {
 			}
 		}
 	}
-	fragment := releaseGateLocalFragment(t, "release_gate_mainnet_shards=", "release_gate_start sn-core-race")
+	fragment := releaseGateLocalFragment(t, "release_gate_shard_selector() {", "release_gate_start sn-core-race")
 	queue := newReleaseGateJobsFixture(t, `
 release_phase_sn_mainnet_exports() { return 9; }
 release_phase_sn_all_normal() { true; }
@@ -550,7 +550,7 @@ exit "$status"
 	queue.join(t, 9)
 	output := queue.output.String()
 	logs := releaseGateQueueLogs(t, queue.root)
-	for shard := 1; shard <= releaseGateMainnetShardCount; shard++ {
+	for shard := 1; shard <= releaseGateMainnetShards.count; shard++ {
 		label := "sn-mainnet-" + strconv.Itoa(shard)
 		raw, err := os.ReadFile(filepath.Join(logs, label+".log"))
 		if !strings.Contains(output, "[release gate] joined "+label+" (exit 1)") || err != nil || !strings.Contains(string(raw), "release gate: ./mainnet shard "+strconv.Itoa(shard)+" has no qualification exports: sn-mainnet-exports exit 9\n") {
@@ -566,12 +566,12 @@ exit "$status"
 // test run, and the exports are removed once every shard has joined.
 func TestReleaseGateMainnetShardsRunWithThePassingExports(t *testing.T) {
 	t.Parallel()
-	names := releaseGateMainnetTestList(t)
+	names := releaseGatePackageTestList(t, releaseGateMainnetShards)
 	list := filepath.Join(t.TempDir(), "list")
 	if err := os.WriteFile(list, []byte(strings.Join(names, "\n")+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	fragment := releaseGateLocalFragment(t, "release_gate_mainnet_shards=", "release_gate_start sn-core-race")
+	fragment := releaseGateLocalFragment(t, "release_gate_shard_selector() {", "release_gate_start sn-core-race")
 	queue := newReleaseGateJobsFixture(t, `
 release_phase_sn_mainnet_exports() {
   mkdir -m 700 "$release_gate_mainnet_exports"
@@ -602,8 +602,8 @@ release_gate_complete
 			t.Fatalf("a shard's tests ran with %q", run)
 		}
 	}
-	if len(runs) != releaseGateMainnetShardCount {
-		t.Fatalf("%d shards ran their tests, want %d\n%s", len(runs), releaseGateMainnetShardCount, queue.output.String())
+	if len(runs) != releaseGateMainnetShards.count {
+		t.Fatalf("%d shards ran their tests, want %d\n%s", len(runs), releaseGateMainnetShards.count, queue.output.String())
 	}
 }
 
