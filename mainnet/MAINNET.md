@@ -40,6 +40,15 @@ steps that the launch replaced.
   `e2de5acf…`, 30 gwei fee cap) and the launch readiness digest `10541276…1924`. `config/main/sn.yml` activation is
   `reviewed`. The operator's enablement and the reserved validator-upload block follow the validator's epoch-1 start.
 
+## Commitment oracle built — October 14
+
+Fleet binding on mainnet was blocked: `bindFleetMember` reverted `StaleCommitment()` for every miner because no
+service ever mirrored finalized native commitments into `mirrorCommitment` (support items 7906 and 7916). The
+`commitment-oracle` service (`cli/commitment-oracle`, `commitmentoracle/`) now exists. It mirrors one-field `Sha256`
+commitments from finalized native state with the active oracle key, and publishes lag, pending, balance and success
+gauges. It is **not deployed**: xops has no unit for it, the oracle `0x56Dd…CF03` is unfunded, and as of
+finalized block 9,286,264 no fleet commitment is mirrored on chain 964. See [LAUNCH.md](LAUNCH.md#commitment-oracle).
+
 ## One operator and one validator — October 7
 
 The owner decided that SN25 launches with **one network operator (UR) and one validator (`ur-mainnet`)**, and that the
@@ -77,7 +86,8 @@ forms with unchanged behavior and bytes; the launch uses the new one-operator, o
 - **EVM roles.** Brien's Ledger (Ethereum app) holds the deployer `0xA9D4A6a331F59942BD7389a5402120D69047C090`, the Safe
   owner, the guardian `0x450C14EA62F76F11630780e194E01F9f524BAbFd` and the Safe relayer
   `0x81E925DAEC15cb334d4b9FD90e9c4f10025eB666`. The commitment oracle `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a
-  service key in `vault/main/sn.yml`; no mainnet oracle service exists yet.
+  service key in `vault/main/sn.yml`. Its service, `commitment-oracle`, was built on October 14 but is not yet deployed
+  ([commitment oracle](LAUNCH.md#commitment-oracle)); until it runs, no fleet commitment is mirrored.
 
 Older passages below that require two UR validators, two healthy operators or a 2-of-3 Safe keep their dated scope; for
 the launch, this decision supersedes them.
@@ -2139,7 +2149,7 @@ receipts as explicitly retained observations, not fresh chain audits; these
 | EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. `0xA9D4A6a331F59942BD7389a5402120D69047C090` on Brien's Ledger (Ethereum app). |
 | Coordinator owner | Actual Safe with its approved owners and threshold. The launch Safe is SafeL2 1.4.1 `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` on Brien's Ledger (owner decision, October 7); owners can be added and the threshold raised later by a Safe transaction. The tooling also keeps the 2-of-3, three-owner profile. |
 | Guardian | Separate limited operational authority. `0x450C14EA62F76F11630780e194E01F9f524BAbFd` on Brien's Ledger (Ethereum app). |
-| Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. Its key `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a service key in `vault/main/sn.yml`; no mainnet oracle service exists yet. |
+| Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. Its key `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a service key in `vault/main/sn.yml`. The `commitment-oracle` service ([LAUNCH.md](LAUNCH.md#commitment-oracle)) is built but not yet deployed; it refuses to run unless that key is `activeCommitmentOracle()`. |
 | Root validator coldkey/hotkey | Existing root hotkey hardware custody and the actual root-owning/staker coldkeys or allowed proxies must be identified independently. The passive observer uses public identity and independent config/host approvals, without a native signer. Reviewed v470 accumulation needs no periodic hotkey signature; registration, claims, stake and basket actions use their specific coldkey/proxy authority. Neither root key role inherits the subnet owners' Ledger or approval. Actual device/API and live participation remain unverified. At launch: the `ur-mainnet` hotkey under the `ur-mainnet` multisig, root seat UID 21, through the passive root service. |
 | UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. At launch: the SN25 owner hotkey, UID 1, coldkey `ur-owner`. |
 | Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. The [qualified worker custody check](evidence/operator-deposit-custody-qualification-20260930.md) still needs real wallet and coordinator verification. |
