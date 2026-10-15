@@ -320,6 +320,16 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
 .sources li { margin: 0 0 7px; padding-left: 2px; }
 .sources li:target { background: var(--note-bg); border-radius: 4px; outline: 1px solid var(--note-edge); }
 .sources b { color: var(--ink); }
+
+/* Plan condition */
+.cond {
+  margin: 0 0 18px 34px; padding: 8px 12px; border-radius: 10px;
+  border: 1px dashed var(--ink-2); background: var(--surface);
+  font-size: 0.875rem; color: var(--ink-2);
+}
+.cond p { margin: 0; }
+.cond b { color: var(--ink); }
+@media (min-width: 720px) { .cond { margin-left: 244px; } }
 </style>
 </head>
 <body>
@@ -329,14 +339,14 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
   <p class="eyebrow">urnetwork · Bittensor subnet 25</p>
   <h1>SN25 mainnet launch timeline</h1>
   <p class="lede">From the version 1 launch to the first version 2 claim, by payout epoch. These are UR settlement epochs: epoch 0 lasted one day, and each later epoch lasts 7 days (50,400 blocks). They are not the chain's 72-minute tempo. All times are UTC, and a time marked ≈ is projected from its block number.</p>
-  <p class="asof">Page as of <time datetime="2026-10-14T23:44:12Z">Wed Oct 14, 2026&nbsp;· 23:44 UTC</time>&nbsp;· block&nbsp;9,284,903&nbsp;· epoch&nbsp;1</p>
+  <p class="asof">Page as of <time datetime="2026-10-15T01:51:48Z">Thu Oct 15, 2026&nbsp;· 01:51 UTC</time>&nbsp;· block&nbsp;9,285,541&nbsp;· epoch&nbsp;1</p>
 </header>
 
 <section class="glance" aria-labelledby="glance-h">
   <h2 id="glance-h" class="visually-hidden">At a glance</h2>
   <ol class="ribbon" role="img" aria-label="Epoch 0, October 8 to 9: version 1 bootstrap. Epoch 1, October 9 to 16: version 1, the current epoch. Epoch 2, October 16 to 23: the last version 1 epoch, with the version 2 registration window on October 21 to 22. Epoch 3, October 23 to 30: the first version 2 epoch. The first version 2 claim comes no earlier than November 1.">
     <li class="seg seg-e0" style="--h: 24"><span class="seg-label"><b>E0</b>Oct&nbsp;8</span></li>
-    <li class="seg seg-v1" style="--h: 168"><span class="seg-label"><b>Epoch 1</b>Oct 9–16</span><span class="pin-now" style="left: 74.75%"><span>now</span></span></li>
+    <li class="seg seg-v1" style="--h: 168"><span class="seg-label"><b>Epoch 1</b>Oct 9–16</span><span class="pin-now" style="left: 76.02%"><span>now</span></span></li>
     <li class="seg seg-v1" style="--h: 168"><span class="seg-label"><b>Epoch 2</b>Oct 16–23</span><span class="pin-reg" style="left: 71.43%; width: 14.29%"></span></li>
     <li class="seg seg-v2" style="--h: 168"><span class="seg-label"><b>Epoch 3</b>Oct 23–30</span></li>
     <li class="seg seg-after" style="--h: 52"><span class="seg-label"><b>Nov&nbsp;1</b>v2&nbsp;claim</span></li>
@@ -345,7 +355,7 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
     <li><span class="sw sw-v1" aria-hidden="true"></span>Settled by version 1</li>
     <li><span class="sw sw-v2" aria-hidden="true"></span>Settled by version 2</li>
     <li><span class="sw sw-reg" aria-hidden="true"></span>v2 registration window, Oct 21–22</li>
-    <li><span class="sw sw-now" aria-hidden="true"></span>Now, Oct 14</li>
+    <li><span class="sw sw-now" aria-hidden="true"></span>Now, Oct 15</li>
   </ul>
 
   <h3 class="visually-hidden">Key dates</h3>
@@ -353,9 +363,9 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
     <li class="cat-contract"><span class="k">v1 validator and contracts launch</span><span class="d"><time datetime="2026-10-08">Oct 8</time></span><span class="s">Done</span></li>
     <li class="cat-payout"><span class="k">First SN payout epoch starts</span><span class="d"><time datetime="2026-10-09T18:09:00Z">Oct 9</time></span><span class="s">Done</span></li>
     <li class="cat-payout"><span class="k">Last USDC payout batch</span><span class="d"><time datetime="2026-10-11">Oct 11</time></span><span class="s">Done</span></li>
-    <li class="cat-contract"><span class="k">v2 server, validator and contracts</span><span class="d"><time datetime="2026-10-16">Oct 16</time>–<time datetime="2026-10-17">17</time></span><span class="s">Planned</span></li>
-    <li class="cat-fp2"><span class="k">FP2 modern provider gate on</span><span class="d"><time datetime="2026-10-21T00:00:00Z">Oct 21</time></span><span class="s">Planned</span></li>
-    <li class="cat-gov"><span class="k">v2 pool registration</span><span class="d"><time datetime="2026-10-21T18:09Z">Oct 21</time>–<time datetime="2026-10-22T18:09Z">22</time></span><span class="s">Scheduled</span></li>
+    <li class="cat-contract"><span class="k">v2 server, validator and contracts</span><span class="d"><time datetime="2026-10-16">Oct 16</time>–<time datetime="2026-10-17">17</time></span><span class="s">Planned, if the release gate passes</span></li>
+    <li class="cat-fp2"><span class="k">FP2 modern provider gate on</span><span class="d"><time datetime="2026-10-21T00:00:00Z">Oct 21</time></span><span class="s">Planned, pending decision</span></li>
+    <li class="cat-gov"><span class="k">v2 pool registration</span><span class="d"><time datetime="2026-10-21T19:00Z">Oct 21</time></span><span class="s">Planned, in the Oct 21–22 window</span></li>
     <li class="cat-contract"><span class="k">Settlement v2 active</span><span class="d"><time datetime="2026-10-23T18:09Z">Oct 23</time></span><span class="s">Scheduled</span></li>
     <li class="cat-payout"><span class="k">First v2 claim</span><span class="d"><time datetime="2026-11-01T18:09Z">Nov 1</time></span><span class="s">Scheduled, earliest</span></li>
   </ul>
@@ -363,8 +373,8 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
 
 <aside class="note" id="v1-note" aria-labelledby="v1-note-h">
   <h2 id="v1-note-h">Note: the version 1 claim will not include all miners</h2>
-  <p>Version 1 pays only the providers the validator has measured, and that measurement is capped at a bounded cohort (by default 1,500 providers per epoch, under the validator's hard limit of 4,096), so most miners get no v1 share; version 2 pays by usage and removes that cap.</p>
-  <p class="src">Sources: <code>VERSION2.md</code>:32, 38-43 and 383-388; server <code>controller/verify_controller.go</code>:302-303; <code>VERSION2-FINAL.md</code>:32-33.</p>
+  <p>Version 1 pays only the providers the validator has measured, and that measurement is capped at a cohort of about 1,500 providers per epoch (the live census levelled off at 1,471), so most miners get no v1 share; version 2 pays by usage and removes that cap.</p>
+  <p class="src">Sources: <code>VERSION2.md</code>:32, 38-43 and 383-388; server <code>controller/verify_controller.go</code>:302-303, whose defaults production uses (1,500 per epoch and 2,000 over the deployment, under the validator's hard stop of 4,096); the census figure is the validator operator's report; <code>VERSION2-FINAL.md</code>:32-33.</p>
 </aside>
 
 <section class="legend" aria-labelledby="legend-h">
@@ -377,7 +387,7 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
     <li><span class="dot cat-gov" aria-hidden="true"></span>Governance / registration</li>
   </ul>
   <ul aria-label="Status">
-    <li><span class="dot" aria-hidden="true"></span><b>Done</b> <span class="why">happened; time from the chain or a commit</span></li>
+    <li><span class="dot" aria-hidden="true"></span><b>Done</b> <span class="why">happened; time from the chain, a commit or operator records</span></li>
     <li><span class="dot st-scheduled" aria-hidden="true"></span><b>Scheduled</b> <span class="why">fixed by the chain or a contract</span></li>
     <li><span class="dot st-planned" aria-hidden="true"></span><b>Planned</b> <span class="why">intended; date or decision not final</span></li>
     <li><span class="dot st-tbd" aria-hidden="true"></span><b>TBD</b> <span class="why">not yet verified; the operator fills it in</span></li>
@@ -450,12 +460,12 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
           <p class="meta"><span class="badge">Done</span><span class="cat-label">Network / server / chain</span><a href="#src-6">Source 6</a></p>
         </div>
       </li>
-      <li class="ev cat-network st-tbd">
-        <p class="when"><time datetime="2026-10-09">Fri Oct 9</time> · time TBD</p>
+      <li class="ev cat-network st-done">
+        <p class="when"><time datetime="2026-10-09T17:55Z">Fri Oct 9 · ≈17:55</time> UTC</p>
         <div>
           <h3>Signed client-key registration live</h3>
-          <p class="line">Not yet recorded in a repository; the operator confirms the date and time.</p>
-          <p class="meta"><span class="badge b-tbd">TBD</span><span class="cat-label">Network / server / chain</span><a href="#src-7">Source 7</a></p>
+          <p class="line">The first registrations are observed. The deploy time is not confirmed.</p>
+          <p class="meta"><span class="badge">Done</span><span class="cat-label">Network / server / chain</span><a href="#src-7">Source 7</a></p>
         </div>
       </li>
     </ol>
@@ -479,8 +489,8 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
       <li class="ev cat-payout st-done key">
         <p class="when"><time datetime="2026-10-11">Sun Oct 11</time></p>
         <div>
-          <h3>Last USDC payout batch to date</h3>
-          <p class="line">The most recent batch of legacy USDC provider payouts on urnetwork Main.</p>
+          <h3>Last USDC payout batch</h3>
+          <p class="line">The latest batch of legacy USDC provider payouts.</p>
           <p class="meta"><span class="badge">Done</span><span class="cat-label">Payouts</span><a href="#src-9">Source 9</a></p>
         </div>
       </li>
@@ -501,18 +511,29 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
         </div>
       </li>
       <li class="ev cat-network st-done">
-        <p class="when"><time datetime="2026-10-14T17:22:40Z">Wed Oct 14 · 17:22</time> UTC</p>
+        <p class="when"><time datetime="2026-10-14T19:20Z">Wed Oct 14 · 19:20</time> UTC</p>
         <div>
-          <h3>Gas policy re-signed for v2 (step 5)</h3>
-          <p class="line">Operator gas policy revision 1, sized for 3.2M-gas closes, is committed to the vault.</p>
+          <h3>v2 step 5 complete: gas policy live</h3>
+          <p class="line">The server loads operator gas policy revision 1, for 3.2M-gas closes; no native-fee policy needs re-signing.</p>
           <p class="meta"><span class="badge">Done</span><span class="cat-label">Network / server / chain</span><a href="#src-12">Source 12</a></p>
         </div>
       </li>
       <li class="now">
         <p class="now-label">Now</p>
         <div>
-          <p><time datetime="2026-10-14T23:44:12Z">Wed Oct 14 · 23:44 UTC</time> · block 9,284,903</p>
+          <p><time datetime="2026-10-15T01:51:48Z">Thu Oct 15 · 01:51 UTC</time> · block 9,285,541</p>
           <div class="now-rule" aria-hidden="true"></div>
+        </div>
+      </li>
+      <li class="cond">
+        <p><b>Plan:</b> the v2 rollout dates from here, steps 6 to 15, hold if the release gate passes by the morning of Oct 16.</p>
+      </li>
+      <li class="ev cat-network st-planned">
+        <p class="when"><time datetime="2026-10-16">Fri Oct 16</time> · daytime</p>
+        <div>
+          <h3>v2 step 6: server services, v2 off</h3>
+          <p class="line">api, alt, gossip, mcp and proxy; the taskworker before 17:00 or after the epoch 1 commit (≈19:21).</p>
+          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Network / server / chain</span><a href="#src-13">Source 13</a></p>
         </div>
       </li>
     </ol>
@@ -526,35 +547,35 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
     </div>
     <ol class="events">
       <li class="ev cat-payout st-scheduled key">
-        <p class="when"><time datetime="2026-10-16T18:09Z">Fri Oct 16 · ≈18:09</time>–<time datetime="2026-10-16T22:09Z">22:09</time> UTC</p>
+        <p class="when"><time datetime="2026-10-16T18:09Z">Fri Oct 16 · close ≈18:09</time>–<time datetime="2026-10-16T18:33Z">18:33</time>, root by <time datetime="2026-10-16T22:09Z">≈22:09</time> UTC</p>
         <div>
           <h3>Epoch 1 closes on v1</h3>
-          <p class="line">The close opens at block 9,297,628 for 120 blocks; the epoch 1 payout root is due by block 9,298,828.</p>
-          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-13">Source 13</a></p>
+          <p class="line">The close window is 120 blocks, 9,297,628–9,297,748; the epoch 1 payout root is due by block 9,298,828.</p>
+          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-14">Source 14</a></p>
         </div>
       </li>
       <li class="ev cat-network st-planned">
-        <p class="when"><time datetime="2026-10-16">Fri Oct 16</time>–<time datetime="2026-10-17">Sat Oct 17</time></p>
+        <p class="when"><time datetime="2026-10-17T08:35Z">Sat Oct 17 · from ≈08:35</time> UTC</p>
         <div>
-          <h3>v2 step 6: server v2 build, v2 off</h3>
-          <p class="line">Database migrations, then the API and taskworker, then the connect service.</p>
-          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Network / server / chain</span><a href="#src-14">Source 14</a></p>
+          <h3>v2 step 6: connect service, v2 off</h3>
+          <p class="line">The connect service follows the API and taskworker, and goes before the validator.</p>
+          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Network / server / chain</span><a href="#src-15">Source 15</a></p>
         </div>
       </li>
       <li class="ev cat-contract st-planned key">
-        <p class="when"><time datetime="2026-10-16">Fri Oct 16</time>–<time datetime="2026-10-17">Sat Oct 17</time></p>
+        <p class="when"><time datetime="2026-10-17T15:48Z">Sat Oct 17 · ≈15:48</time>–<time datetime="2026-10-17T16:08Z">16:08</time> UTC</p>
         <div>
           <h3>v2 step 7: v2 validator starts, v2 off</h3>
           <p class="line">The new validator binary runs on its unchanged config, after the connect service.</p>
-          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Validator / contract</span><a href="#src-15">Source 15</a></p>
+          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Validator / contract</span><a href="#src-16">Source 16</a></p>
         </div>
       </li>
       <li class="ev cat-contract st-planned key">
-        <p class="when">≈ <time datetime="2026-10-17">Sat Oct 17</time></p>
+        <p class="when">≈ <time datetime="2026-10-17">Sat Oct 17</time>, after step 7</p>
         <div>
           <h3>v2 step 8: v2 contracts deployed</h3>
           <p class="line">vault2, which holds the funds, and STSettlement2 go on chain beside the unchanged v1 contracts.</p>
-          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Validator / contract</span><a href="#src-16">Source 16</a></p>
+          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Validator / contract</span><a href="#src-17">Source 17</a></p>
         </div>
       </li>
       <li class="ev cat-payout st-scheduled key">
@@ -562,31 +583,47 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
         <div>
           <h3>First v1 claims (epoch 1)</h3>
           <p class="line">The epoch 1 root can finalize from block 9,312,028, and claims open then. <a href="#v1-note">Not every miner is in it.</a></p>
-          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-17">Source 17</a></p>
+          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-18">Source 18</a></p>
         </div>
       </li>
       <li class="ev cat-contract st-planned">
-        <p class="when">Before <time datetime="2026-10-21T18:09Z">Wed Oct 21 · ≈18:09</time> UTC</p>
+        <p class="when"><time datetime="2026-10-18">Sun Oct 18</time>–<time datetime="2026-10-19">Mon Oct 19</time></p>
         <div>
-          <h3>v2 steps 9–12: apps, validator, server</h3>
-          <p class="line">Apps pin vault2, the validator adopts its v2 config and the server switches to the v2 contracts; dates TBD.</p>
-          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Validator / contract</span><a href="#src-18">Source 18</a></p>
+          <h3>v2 step 10: validator adopts its v2 config</h3>
+          <p class="line">Kept clear of the epoch 1 v1 finalization on the evening of Oct 18.</p>
+          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Validator / contract</span><a href="#src-19">Source 19</a></p>
+        </div>
+      </li>
+      <li class="ev cat-network st-planned">
+        <p class="when"><time datetime="2026-10-19">Mon Oct 19</time>–<time datetime="2026-10-20">Tue Oct 20</time></p>
+        <div>
+          <h3>v2 steps 11–12: server switch and checks</h3>
+          <p class="line">The server switches to the v2 contracts Oct 19 and checks run Oct 20; apps pin vault2 (step 9) Oct 18–20.</p>
+          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Network / server / chain</span><a href="#src-20">Source 20</a></p>
         </div>
       </li>
       <li class="ev cat-fp2 st-planned key">
         <p class="when"><time datetime="2026-10-21T00:00:00Z">Wed Oct 21 · 00:00</time> UTC</p>
         <div>
           <h3>FP2 modern provider gate on</h3>
-          <p class="line">Quality and Speed admit only providers verified as modern; the rest stay in Online. Pending the owner's decision.</p>
-          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">FP2 / provider gates</span><a href="#src-19">Source 19</a></p>
+          <p class="line">Quality and Speed admit only providers verified as modern. The code is merged with the gate off; turning it on awaits the owner's decision.</p>
+          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">FP2 / provider gates</span><a href="#src-21">Source 21</a></p>
         </div>
       </li>
-      <li class="ev cat-gov st-scheduled key">
+      <li class="ev cat-gov st-scheduled">
         <p class="when"><time datetime="2026-10-21T18:09Z">Wed Oct 21 · ≈18:09</time> → <time datetime="2026-10-22T18:09Z">Thu Oct 22 · ≈18:09</time> UTC</p>
         <div>
           <h3>v2 pool registration window</h3>
-          <p class="line">The governance Safe registers the v2 pool for epoch 3, which is the activation. Blocks 9,333,628–9,340,828.</p>
-          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Governance / registration</span><a href="#src-20">Source 20</a></p>
+          <p class="line">Blocks 9,333,628–9,340,828. The v2 pool must register here to activate in epoch 3.</p>
+          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Governance / registration</span><a href="#src-22">Source 22</a></p>
+        </div>
+      </li>
+      <li class="ev cat-gov st-planned key">
+        <p class="when"><time datetime="2026-10-21T19:00Z">Wed Oct 21 · ≈19:00</time>–<time datetime="2026-10-21T22:00Z">22:00</time> UTC</p>
+        <div>
+          <h3>v2 step 15: register the v2 pool</h3>
+          <p class="line">The governance Safe registers the v2 pool for epoch 3. This is the activation.</p>
+          <p class="meta"><span class="badge b-planned">Planned</span><span class="cat-label">Governance / registration</span><a href="#src-23">Source 23</a></p>
         </div>
       </li>
     </ol>
@@ -603,8 +640,8 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
         <p class="when"><time datetime="2026-10-23T18:09Z">Fri Oct 23 · ≈18:09</time> UTC</p>
         <div>
           <h3>Settlement v2 active</h3>
-          <p class="line">The validator weights the v2 pool, and v1 settles no later epoch. Epoch 2 still closes on v1, its root due by ≈22:09.</p>
-          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Validator / contract</span><a href="#src-21">Source 21</a></p>
+          <p class="line">From block 9,348,028 the validator weights the v2 pool. Epoch 2 still closes on v1, its root due by ≈22:09.</p>
+          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Validator / contract</span><a href="#src-24">Source 24</a></p>
         </div>
       </li>
       <li class="ev cat-payout st-scheduled">
@@ -612,7 +649,7 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
         <div>
           <h3>Last v1 claims (epoch 2)</h3>
           <p class="line">The epoch 2 root can finalize from block 9,362,428. <a href="#v1-note">The same v1 limit applies.</a></p>
-          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-22">Source 22</a></p>
+          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-25">Source 25</a></p>
         </div>
       </li>
     </ol>
@@ -627,16 +664,16 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
         <p class="when"><time datetime="2026-10-30T18:09Z">Fri Oct 30 · ≈18:09</time>–<time datetime="2026-10-30T22:09Z">22:09</time> UTC</p>
         <div>
           <h3>First v2 close and commit</h3>
-          <p class="line">Epoch 3 closes and the first v2 ledger root is committed, in blocks 9,398,428–9,399,628.</p>
-          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-23">Source 23</a></p>
+          <p class="line">The first v2 close window opens at block 9,398,428; the first v2 ledger root is due by block 9,399,628.</p>
+          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-26">Source 26</a></p>
         </div>
       </li>
       <li class="ev cat-payout st-scheduled key">
         <p class="when"><time datetime="2026-11-01T18:09Z">Sun Nov 1 · ≈18:09</time>–<time datetime="2026-11-01T22:09Z">22:09</time> UTC, earliest</p>
         <div>
           <h3>First v2 claim</h3>
-          <p class="line">The first v2 root can finalize 14,400 blocks after its commit, in blocks 9,412,828–9,414,028; the first claims follow.</p>
-          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-24">Source 24</a></p>
+          <p class="line">The first v2 root can finalize 14,400 blocks after its commit, from block 9,412,828; the first claims follow.</p>
+          <p class="meta"><span class="badge b-scheduled">Scheduled</span><span class="cat-label">Payouts</span><a href="#src-27">Source 27</a></p>
         </div>
       </li>
     </ol>
@@ -647,8 +684,8 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
 
 <footer>
   <h2>Sources</h2>
-  <p>Unprefixed paths are in this repository, at the revision that adds this page. "Chain" means a read of Bittensor mainnet (Finney, EVM chain ID 964) through the archive the launch uses (<code>mainnet/LAUNCH.md</code>:124-126), taken on 2026-10-14: block timestamps, and the v1 coordinator's <code>epochStartBlock</code>, <code>epochEndBlock</code>, <code>policyAt</code> and <code>rootCommitments</code>. The archive agrees with the two block times the docs record: block 9,276,925 at 21:08:36 (<code>VERSION2-HANDOFF.md</code>:235-236) and block 9,279,060 at 04:15:36 (<code>VERSION2-LAUNCH.md</code>:2565-2566).</p>
-  <p>Future times convert each block at 12 seconds a block from block 9,284,903, read at 2026-10-14 23:44:12 UTC; blocks have averaged 12.0 seconds since epoch 1 began. <code>VERSION2-LAUNCH.md</code> §9.1 rounds the same blocks to :10. The windows are the coordinator's (<code>evm/src/STCoordinator.sol</code>:302-310, 596, 623 and 638): a close within 120 blocks of an epoch's end, a payout root within 1,200 blocks, and finalization from 14,400 blocks. The epoch bands are <code>epochStartBlock</code> and <code>epochEndBlock</code> of epochs 0 to 3 (<code>mainnet/LAUNCH.md</code>:29-32 and 535-538). Epoch 0 has no payout root: <code>rootCommitments(0, 1)</code> is empty and its commit window has closed. Tempo and settlement epoch are the two clocks of <code>WHITEPAPER.md</code>:179 and 2551.</p>
+  <p>Unprefixed paths are in this repository, at the revision that adds this page. "Chain" means a read of Bittensor mainnet (Finney, EVM chain ID 964) through the archive the launch uses (<code>mainnet/LAUNCH.md</code>:124-126), taken on 2026-10-14 and 2026-10-15: block timestamps, and the v1 coordinator's <code>epochStartBlock</code>, <code>epochEndBlock</code>, <code>policyAt</code> and <code>rootCommitments</code>. The archive agrees with the two block times the docs record: block 9,276,925 at 21:08:36 (<code>VERSION2-HANDOFF.md</code>:235-236) and block 9,279,060 at 04:15:36 (<code>VERSION2-LAUNCH.md</code>:2565-2566). "The validator operator" means the operator's own report of what it ran or observed, and of its plan.</p>
+  <p>Future times convert each block at 12 seconds a block from block 9,285,541, read at 2026-10-15 01:51:48 UTC; blocks have averaged 12.0 seconds since epoch 1 began. <code>VERSION2-LAUNCH.md</code> §9.1 rounds the same blocks to :10. The windows are the coordinator's (<code>evm/src/STCoordinator.sol</code>:302-310, 596, 623 and 638): a close within 120 blocks of an epoch's end, a payout root within 1,200 blocks, and finalization from 14,400 blocks. The epoch bands are <code>epochStartBlock</code> and <code>epochEndBlock</code> of epochs 0 to 3 (<code>mainnet/LAUNCH.md</code>:29-32 and 535-538). Epoch 0 has no payout root: <code>rootCommitments(0, 1)</code> is empty and its commit window has closed. Tempo and settlement epoch are the two clocks of <code>WHITEPAPER.md</code>:179 and 2551.</p>
   <ol class="sources">
     <li id="src-1"><b>Provider earnings move to SN25.</b> config <code>main/sn.yml</code>:2-4 (<code>cutoff_utc</code>, <code>attribution</code>, <code>legacy_usdc</code>), added by config <code>93dc65f</code> on 2026-10-02.</li>
     <li id="src-2"><b>v1 contracts deployed.</b> <code>mainnet/LAUNCH.md</code>:13 and 33-45; chain timestamps of blocks 9,239,983, 9,240,028 and 9,240,067.</li>
@@ -656,24 +693,27 @@ footer p { margin: 0 0 10px; max-width: 82ch; }
     <li id="src-4"><b>v1 validator activated.</b> <code>mainnet/LAUNCH.md</code>:19-20 and 59-60; chain, block 9,240,402.</li>
     <li id="src-5"><b>Weekly epochs scheduled.</b> <code>mainnet/LAUNCH.md</code>:29-32, 52 and 535-538; chain, block 9,240,407, and <code>policyAt(1)</code>.</li>
     <li id="src-6"><b>Operator server enabled.</b> vault <code>3501caa</code>, "Enable the SN25 mainnet operator server", 2026-10-09 03:22:45 UTC.</li>
-    <li id="src-7"><b>Signed client-key registration.</b> Not recorded in any repository read for this page. TBD: the operator confirms the date and time.</li>
+    <li id="src-7"><b>Signed client-key registration.</b> The validator operator observed the first registrations at about 17:55 UTC on Oct 9, after vault <code>3501caa</code> enabled the operator server. The deploy time is not confirmed.</li>
     <li id="src-8"><b>First SN payout epoch.</b> <code>mainnet/LAUNCH.md</code>:29-32 and 59-60; chain, <code>epochStartBlock(1)</code> = 9,247,228 and that block's timestamp.</li>
-    <li id="src-9"><b>Last USDC payout batch.</b> factury <code>postmortem/2026-10-10.md</code>:121-122.</li>
+    <li id="src-9"><b>Last USDC payout batch.</b> Operator payout records.</li>
     <li id="src-10"><b>Runtime 478.</b> <code>VERSION2-HANDOFF.md</code>:235-236; <code>VERSION2-LAUNCH.md</code>:292-296 and 2633-2640; chain, block 9,276,925.</li>
     <li id="src-11"><b>v2 start set to epoch 3.</b> <code>VERSION2-LAUNCH.md</code>:451 and 2558-2562; sn <code>7e1a5f26</code>, 2026-10-14 05:43:56 UTC.</li>
-    <li id="src-12"><b>Gas policy re-signed.</b> vault <code>9dcc311</code>, "Install operator gas policy revision 1 for the 3.2M close floors", 2026-10-14 17:22:40 UTC; <code>VERSION2-LAUNCH.md</code>:821-867.</li>
-    <li id="src-13"><b>Epoch 1 closes on v1.</b> <code>evm/src/STCoordinator.sol</code>:596 and 623; chain, <code>policyAt(1)</code>; <code>VERSION2-LAUNCH.md</code>:2575; factury <code>postmortem/2026-10-13-owner-decisions.md</code>:31.</li>
-    <li id="src-14"><b>v2 step 6.</b> <code>VERSION2-LAUNCH.md</code>:1001-1062 and 2372-2390. The date is the operator's plan and is not yet in a repository.</li>
-    <li id="src-15"><b>v2 step 7.</b> <code>VERSION2-LAUNCH.md</code>:1064-1112 and 2385-2390. The date is the operator's plan.</li>
-    <li id="src-16"><b>v2 step 8.</b> <code>VERSION2-LAUNCH.md</code>:94-102 and 1114-1128. The date is the operator's plan.</li>
-    <li id="src-17"><b>First v1 claims.</b> <code>evm/src/STCoordinator.sol</code>:635-648; chain, <code>policyAt(1)</code>.</li>
-    <li id="src-18"><b>v2 steps 9 to 12.</b> <code>VERSION2-LAUNCH.md</code>:1525-1553, 1554-1560, 1767-1790 and 2584-2597.</li>
-    <li id="src-19"><b>FP2 modern provider gate.</b> server branch <code>feat/fp2-modern-provider-gate</code>, <code>FP2FIX.md</code>, "Modern provider gate (2026-10-14)", at <code>6cf4a994b</code>, not yet merged. The date is the owner's plan, pending a decision.</li>
-    <li id="src-20"><b>v2 pool registration window.</b> <code>VERSION2-LAUNCH.md</code>:2020-2027, 2576-2577 and 2597.</li>
-    <li id="src-21"><b>Settlement v2 active.</b> <code>VERSION2-LAUNCH.md</code>:149-162, 2157-2170 and 2578.</li>
-    <li id="src-22"><b>Last v1 claims.</b> <code>evm/src/STCoordinator.sol</code>:635-648; chain, <code>policyAt(2)</code>; <code>VERSION2-LAUNCH.md</code>:162.</li>
-    <li id="src-23"><b>First v2 close and commit.</b> <code>VERSION2-LAUNCH.md</code>:2186-2203 and 2579-2580.</li>
-    <li id="src-24"><b>First v2 claim.</b> <code>VERSION2-LAUNCH.md</code>:2240-2274 and 2581-2582.</li>
+    <li id="src-12"><b>v2 step 5 complete.</b> The validator operator: the server loaded gas policy revision 1 at 19:20 UTC, with api, alt and taskworker restarted, and native-fee settlement was never provisioned on mainnet, so nothing needs re-signing. The policy is vault <code>9dcc311</code>, "Install operator gas policy revision 1 for the 3.2M close floors", 2026-10-14 17:22:40 UTC; the step is <code>VERSION2-LAUNCH.md</code>:821-867.</li>
+    <li id="src-13"><b>v2 step 6, server services.</b> <code>VERSION2-LAUNCH.md</code>:1001-1062 and 2372-2390. The date and the taskworker's slots are the validator operator's plan; the epoch 1 commit time is its estimate.</li>
+    <li id="src-14"><b>Epoch 1 closes on v1.</b> <code>evm/src/STCoordinator.sol</code>:596 and 623; chain, <code>policyAt(1)</code>; <code>VERSION2-LAUNCH.md</code>:2575.</li>
+    <li id="src-15"><b>v2 step 6, connect service.</b> <code>VERSION2-LAUNCH.md</code>:1019-1021 and 2385-2390. The time is the validator operator's plan.</li>
+    <li id="src-16"><b>v2 step 7.</b> <code>VERSION2-LAUNCH.md</code>:1064-1112 and 2385-2390. The time is the validator operator's plan.</li>
+    <li id="src-17"><b>v2 step 8.</b> <code>VERSION2-LAUNCH.md</code>:94-102 and 1114-1128. The date is the validator operator's plan.</li>
+    <li id="src-18"><b>First v1 claims.</b> <code>evm/src/STCoordinator.sol</code>:635-648; chain, <code>policyAt(1)</code>.</li>
+    <li id="src-19"><b>v2 step 10.</b> <code>VERSION2-LAUNCH.md</code>:1554-1560 and 2584-2597. The dates are the validator operator's plan.</li>
+    <li id="src-20"><b>v2 steps 9, 11 and 12.</b> <code>VERSION2-LAUNCH.md</code>:1525-1553, 1767-1790, 1857-1890 and 2584-2597. The dates are the validator operator's plan.</li>
+    <li id="src-21"><b>FP2 modern provider gate.</b> server <code>main</code> <code>ebc1f95a9</code>, "Merge the FP2 modern provider gate for Quality and Speed, off, with migration 836"; <code>FP2FIX.md</code>:285-352 at that commit. The date is the owner's plan, pending a decision.</li>
+    <li id="src-22"><b>v2 pool registration window.</b> <code>VERSION2-LAUNCH.md</code>:2576-2577 and 2597; chain projection of blocks 9,333,628 and 9,340,828.</li>
+    <li id="src-23"><b>v2 step 15.</b> <code>VERSION2-LAUNCH.md</code>:2020-2027 and 2597. The time is the validator operator's recommendation.</li>
+    <li id="src-24"><b>Settlement v2 active.</b> <code>VERSION2-LAUNCH.md</code>:149-162, 2157-2170 and 2578.</li>
+    <li id="src-25"><b>Last v1 claims.</b> <code>evm/src/STCoordinator.sol</code>:635-648; chain, <code>policyAt(2)</code>; <code>VERSION2-LAUNCH.md</code>:162.</li>
+    <li id="src-26"><b>First v2 close and commit.</b> <code>VERSION2-LAUNCH.md</code>:2186-2203 and 2579-2580.</li>
+    <li id="src-27"><b>First v2 claim.</b> <code>VERSION2-LAUNCH.md</code>:2240-2274 and 2581-2582.</li>
   </ol>
 </footer>
 
