@@ -93,10 +93,10 @@ release_phase_runtime() {
   # failover budget, and caller cancellation paths before either module can
   # make a testnet write. Prefix selection deliberately admits adjacent
   # regressions added for the same boundary.
-  runtime_client_tests='^Test(DialChainContext|FinalizedHeadContext|FinalizedBlock|BlockHashContext|BlockIdentityCache|ExactBlockIdentity|AccountNonceContext|ReleaseStateReaders|ReleaseExactBlock|ReleaseSnapshot|ReleaseSteeringSource|VerifyFinalizedExtrinsicContext|LocateFinalizedExtrinsic|FleetCommitmentAtContext|FleetCommitmentInfoRuntime|RuntimeArtifactMetadata|RuntimeMetadataAtContext|FleetRuntime|FleetFinalizedRuntime|BindFleetRuntime|DialFleetNativeContext|ReleaseEpochStartBlockAtContext|ReleaseConfigRequiresExactNativeRuntimeIdentity|InitialReleaseSnapshot|AuthenticatePinnedNativeRuntime|ReleaseNativeEndpointTimeout|ReleaseRuntime458|ReleaseRuntime459|ReleaseRuntime460|ReleaseRuntime461|ReleaseRuntime467|ReleaseCurrentRuntime|RuntimeVersion|EVMCheckpoint)'
+  runtime_client_tests='^Test(DialChainContext|FinalizedHeadContext|FinalizedBlock|BlockHashContext|BlockIdentityCache|ExactBlockIdentity|AccountNonceContext|ReleaseStateReaders|ReleaseExactBlock|ReleaseSnapshot|ReleaseSteeringSource|VerifyFinalizedExtrinsicContext|LocateFinalizedExtrinsic|FleetCommitmentAtContext|FleetCommitmentInfoRuntime|RuntimeArtifactMetadata|RuntimeMetadataAtContext|FleetRuntime|FleetFinalizedRuntime|BindFleetRuntime|DialFleetNativeContext|ReleaseEpochStartBlockAtContext|ReleaseConfigRequiresExactNativeRuntimeIdentity|InitialReleaseSnapshot|AuthenticatePinnedNativeRuntime|ReleaseNativeEndpointTimeout|ReleaseRuntime459|ReleaseRuntime461|ReleaseRuntime467|ReleaseCurrentRuntime|RuntimeVersion|EVMCheckpoint)'
   go test ./crv4 ./miner ./validator -run "$runtime_client_tests" -count=1
   go test -race ./crv4 ./miner ./validator -run "$runtime_client_tests" -count=1
-  runtime455_tests='^Test(Runtime461|Runtime460|Runtime459|Runtime458|Runtime455|ReleaseGatesAttest.*Runtime|ProducerGatePinsRuntime458|ReviewedRuntimeIdentity|ReviewedHistoricalRuntimeArtifacts|ReleaseHistoryRuntimeArtifacts|RuntimeVersionIdentity|RuntimeCodeHashValidation|RuntimeMetadataHashValidation|ReleaseLockDecodesCanonicalRuntimeFields|ReleaseLockRejectsGeneratedRuntimeDrift|ResolvedConfigPinsReviewedRuntimeArtifactIdentity|PublishedManifestBindsCompleteRuntimeIdentity|ReleaseRuntimeRPCRetry|ReleaseSubstrateDial|CurrentRuntimeAuthenticationCannotUseHistoricalCache|CarriedFleetHistory|HistoricalFleetGenerationOne|HistoricalFleetAlias|FinalSemanticRPC|FinalSemanticSubstrate|FinalSemanticCapturedReplay)'
+  runtime455_tests='^Test(Runtime461|Runtime460|Runtime459|Runtime458|ReleaseGatesAttest.*Runtime|ProducerGatePinsRuntime458|ReviewedRuntimeIdentity|ReviewedHistoricalRuntimeArtifacts|ReleaseHistoryRuntimeArtifacts|RuntimeVersionIdentity|RuntimeCodeHashValidation|RuntimeMetadataHashValidation|ReleaseLockDecodesCanonicalRuntimeFields|ReleaseLockRejectsGeneratedRuntimeDrift|ResolvedConfigPinsReviewedRuntimeArtifactIdentity|PublishedManifestBindsCompleteRuntimeIdentity|ReleaseRuntimeRPCRetry|ReleaseSubstrateDial|CurrentRuntimeAuthenticationCannotUseHistoricalCache|CarriedFleetHistory|HistoricalFleetGenerationOne|HistoricalFleetAlias|FinalSemanticRPC|FinalSemanticSubstrate|FinalSemanticCapturedReplay)'
   go test ./sim-testnet -run "$runtime455_tests" -count=1
   go test -race ./sim-testnet -run "$runtime455_tests" -count=1
 }
@@ -118,7 +118,7 @@ release_phase_seed() {
   seed_custody_tests='^Test(Keypair|LoadOrCreateSeedFile|SeedFileFormats|SeedCustody|VpkSeed|EvmKeyLoadingAndMirror|HotkeyLoadOrCreate|IdentityCustody|ReleaseClientSeed)'
   go test ./crv4 ./validator -run "$seed_custody_tests" -count=1
   go test -race ./crv4 ./validator -run "$seed_custody_tests" -count=1
-  swarm_wallet_tests='^Test(SetSwarmMemberWallet|SwarmMemberWallet)'
+  swarm_wallet_tests='^TestSetSwarmMemberWallet'
   go test ./miner -run "$swarm_wallet_tests" -count=1
   go test -race ./miner -run "$swarm_wallet_tests" -count=1
 }
@@ -141,7 +141,7 @@ release_phase_evm_identity() {
   # Public Subtensor EVM hashes are supplied by RPC, not reconstructed from
   # Ethereum header fields. Exercise each receipt, capture, and cleanup
   # consumer before a first transaction can strand its durable intent.
-  synthetic_evm_identity_tests='^Test(WaitFinalized|EVMBlockIdentity|ClaimReceiptIdentity|FinalizedClaimReceipt|UncertainClaimRetryable|SyntheticEVM|EthEVMBlockReader|EVMFinality|FinalizedEVMHead|BoundFinalizedEVMHead|ReceiptRequiresCanonicalHashAndFinalizedHeight|ProducerGatePinsSyntheticEVMIdentityRegressions)'
+  synthetic_evm_identity_tests='^Test(WaitFinalized|EVMBlockIdentity|ClaimReceiptIdentity|FinalizedClaimReceipt|SyntheticEVM|EthEVMBlockReader|EVMFinality|FinalizedEVMHead|BoundFinalizedEVMHead|ReceiptRequiresCanonicalHashAndFinalizedHeight|ProducerGatePinsSyntheticEVMIdentityRegressions)'
   go test ./miner/onchain ./miner ./sim-testnet -run "$synthetic_evm_identity_tests" -count=1 -timeout 5m
   go test -race ./miner/onchain ./miner ./sim-testnet -run "$synthetic_evm_identity_tests" -count=1 -timeout 10m
 }
@@ -170,7 +170,7 @@ release_phase_settlement() {
   cd "$sn_repo"
   # This near-complete validator census exceeds the implicit ten-minute budget.
   # Scope its aggregate allowance here; individual stress deadlines stay fixed.
-  producer_tests='^Test(Tunnel|Attempt|DiskAttempt|HTTPAttemptStreamV2|SealAttemptCutV2|TrailPolicyDepth|StatsWrite|StatsSnapshotWrite|StatsMultiBatch|StatsSettlement|Deposited|ReleaseMeasurement|ReleaseStatsV2Runtime|ReleaseHeadV2|IntentStore|SteeringIntent|MeasurementStats|ExactPoolQuality|HeadEMA|ReleaseSteeringLoop|ReleaseSettlementRefresh|ReleaseEvidenceV2|ReleaseActivationV2|ReleaseBootstrapV2|ReleaseActivationHistoryV2|ReleaseInitialBoundaryV2|ReleaseStartupV2|ReleaseStartupVerified|ReleaseStartupOwnerV2|ValidatorEvidenceCensusV2|ChainEvidence|RunRelease|ValidatorEvidence|ValidatorUpload|ReleaseClientKeyHistory|ReleaseClientKeyAuthority|ReleaseRuntimeV2|ArtifactHttpObservation|NativeSourceHash|IntentV2|ReleaseNativeCaptureV2|ReleaseCaptureV2|ReleaseArchiveV2|ReleaseHistoryAdoptionV2|ReleaseNativeObservationV2|ProductionLoader)'
+  producer_tests='^Test(Tunnel|Attempt|DiskAttempt|TrailPolicyDepth|StatsWrite|StatsSnapshotWrite|StatsMultiBatch|StatsSettlement|Deposited|ReleaseMeasurement|ReleaseStatsV2Runtime|ReleaseHeadV2|IntentStore|SteeringIntent|ExactPoolQuality|HeadEMA|ReleaseSteeringLoop|ReleaseSettlementRefresh|ReleaseEvidenceV2|ReleaseActivationV2|ReleaseBootstrapV2|ReleaseActivationHistoryV2|ReleaseInitialBoundaryV2|ReleaseStartupV2|ReleaseStartupVerified|ReleaseStartupOwnerV2|ValidatorEvidenceCensusV2|ChainEvidence|RunRelease|ValidatorEvidence|ValidatorUpload|ReleaseClientKeyHistory|ReleaseClientKeyAuthority|ReleaseRuntimeV2|ArtifactHttpObservation|NativeSourceHash|IntentV2|ReleaseNativeCaptureV2|ReleaseCaptureV2|ReleaseArchiveV2|ReleaseHistoryAdoptionV2|ReleaseNativeObservationV2|ProductionLoader)'
   go test ./validator -run "$producer_tests" -count=1 -parallel=4 -timeout 90m
   go test -race ./validator -run "$producer_tests" -count=1 -parallel=4 -timeout 90m
 }

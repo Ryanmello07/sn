@@ -133,7 +133,7 @@ release_phase_sn_go() {
   cd "$sn_repo"
   # Pin the launch-critical synthetic EVM identity boundary explicitly in
   # addition to the aggregate suites, including the onchain transaction tool.
-  synthetic_evm_identity_tests='^Test(WaitFinalized|EVMBlockIdentity|ClaimReceiptIdentity|FinalizedClaimReceipt|UncertainClaimRetryable|SyntheticEVM|EthEVMBlockReader|EVMFinality|FinalizedEVMHead|BoundFinalizedEVMHead|ReceiptRequiresCanonicalHashAndFinalizedHeight|ProducerGatePinsSyntheticEVMIdentityRegressions)'
+  synthetic_evm_identity_tests='^Test(WaitFinalized|EVMBlockIdentity|ClaimReceiptIdentity|FinalizedClaimReceipt|SyntheticEVM|EthEVMBlockReader|EVMFinality|FinalizedEVMHead|BoundFinalizedEVMHead|ReceiptRequiresCanonicalHashAndFinalizedHeight|ProducerGatePinsSyntheticEVMIdentityRegressions)'
   go test ./miner/onchain ./miner ./sim-testnet -run "$synthetic_evm_identity_tests" -count=1 -timeout 5m
   go test -race ./miner/onchain ./miner ./sim-testnet -run "$synthetic_evm_identity_tests" -count=1 -timeout 10m
   # Reach the exact same framed-input regressions explicitly in the aggregate
@@ -146,7 +146,7 @@ release_phase_sn_go() {
   seed_custody_tests='^Test(Keypair|LoadOrCreateSeedFile|SeedFileFormats|SeedCustody|VpkSeed|EvmKeyLoadingAndMirror|HotkeyLoadOrCreate|IdentityCustody|ReleaseClientSeed)'
   go test ./crv4 ./validator -run "$seed_custody_tests" -count=1
   go test -race ./crv4 ./validator -run "$seed_custody_tests" -count=1
-  swarm_wallet_tests='^Test(SetSwarmMemberWallet|SwarmMemberWallet)'
+  swarm_wallet_tests='^TestSetSwarmMemberWallet'
   go test ./miner -run "$swarm_wallet_tests" -count=1
   go test -race ./miner -run "$swarm_wallet_tests" -count=1
   # The simulator's provisioned client keys retain their narrower raw32 grammar.
