@@ -63,16 +63,16 @@ const releaseGateAggregatePinnedSkip = "^(TestSettlementV2E2E|TestMonitorOperato
 // the discovery test that stats the workspace vault.
 const releaseGateAggregateLocalSkip = "^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$|TestRepositoryDiscoveryUsesModuleIdentity$)"
 
-// The aggregate job: every package of sn but ./mainnet, whose shards run it,
-// in normal mode, without the E suite and, in local mode, without its named
-// sim-testnet tests.
+// The aggregate job: every package of sn but ./mainnet, ./validator and
+// ./sim-testnet, whose shards run them with the same skip, in normal mode,
+// without the E suite and, in local mode, without its named sim-testnet tests.
 const releaseGateAggregateNormalCommand = `go test -parallel=4 -timeout 90m "${sn_packages[@]}" -count=1 -skip "$release_gate_aggregate_skip"`
 
-// The aggregate job's whole body: sn's package list without ./mainnet, then
-// the run.
+// The aggregate job's whole body: sn's package list without the sharded
+// packages, then the run.
 var releaseGateAggregateNormalBody = []string{
 	`cd "$sn_repo"`,
-	`sn_package_list="$(go list ./... | grep -Evx 'github[.]com/urfoundation/sn/mainnet')"`,
+	`sn_package_list="$(go list ./... | grep -Evx 'github[.]com/urfoundation/sn/(mainnet|validator|sim-testnet)')"`,
 	`[[ -n "$sn_package_list" ]]`,
 	`mapfile -t sn_packages <<<"$sn_package_list"`,
 	releaseGateAggregateNormalCommand,
@@ -835,7 +835,7 @@ func verifyReleaseGateAggregateE2ESkip(script string, census map[string][]string
 		return err
 	}
 	if !slices.Equal(commands, releaseGateAggregateNormalBody) {
-		return fmt.Errorf("release_phase_sn_all_normal runs %q, want the full run without ./mainnet and the E suite", commands)
+		return fmt.Errorf("release_phase_sn_all_normal runs %q, want the full run without the sharded packages and the E suite", commands)
 	}
 	if strings.Count(script, releaseGateAggregateSkipAssignment) != 1 || strings.Count(script, "release_gate_aggregate_skip=") != 2 {
 		return errors.New("the aggregate job's skip is not each mode's exact reviewed assignment")

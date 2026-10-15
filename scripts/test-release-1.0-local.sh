@@ -159,24 +159,23 @@ release_phase_sn_go() {
   # isolated 90-minute race deadline below; do not let Go's implicit 10-minute
   # package deadline terminate the faster ordinary pass while its independent
   # durability tests are still running.
-  # The complete uncached ordinary and validator race jobs below own every
+  # The complete uncached ./validator shards below, in both modes, own every
   # settlement-closure root. Do not repeat that census under an implicit 10m
   # package deadline before admitting unrelated focused checks.
   validator_lifecycle_tests='^Test(TunnelAttemptCloseJoinsPumpBeforeGenerator|TunnelAttemptCloseReleasesPartialConstruction)$'
   go test ./validator -run "$validator_lifecycle_tests" -count=1
   go test -race ./validator -run "$validator_lifecycle_tests" -count=1
-  # The complete simulator race union below retains every launch-scale test.
-  # The finite populations and full supplement publications have independent
-  # package clocks so their work cannot consume the remaining roots' allowance.
+  # The complete ./sim-testnet shards below, in both modes, retain every
+  # launch-scale test.
 }
 release_gate_start sn-go release_phase_sn_go
 
 # The E suite needs the server's database, so the aggregate jobs skip it;
 # sn-e2e runs every TestSettlementV2E2E test on the gate's private services.
 # So do the four mainnet roots of server/stmonitor/testfixture, skipped by
-# name. Local mode also skips its two named sim-testnet tests, here and in
-# sn-simulator-race. sn-all-normal runs every package but ./mainnet, and each
-# ./mainnet shard below runs this same skip.
+# name. Local mode also skips its two named sim-testnet tests.
+# sn-all-normal runs every package but ./mainnet, ./validator and
+# ./sim-testnet, and each of their shards below runs this same skip.
 release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$)'
 if [[ "$release_gate_dependency_mode" == local ]]; then
   release_gate_aggregate_skip='^(TestSettlementV2E2E|TestMonitorOperatorCredentialFenceAndPublicationAmbiguity$|TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage$|TestMonitorStorageStoppedOperatorReleasesOwnersBeforePeerStops$|TestMonitorStorageOperatorLostAckRetainsIncident$|TestReleaseLockMatchesCheckout$|TestRepositoryDiscoveryUsesModuleIdentity$)'
@@ -184,7 +183,7 @@ fi
 export release_gate_aggregate_skip
 release_phase_sn_all_normal() {
   cd "$sn_repo"
-  sn_package_list="$(go list ./... | grep -Evx 'github[.]com/urfoundation/sn/mainnet')"
+  sn_package_list="$(go list ./... | grep -Evx 'github[.]com/urfoundation/sn/(mainnet|validator|sim-testnet)')"
   [[ -n "$sn_package_list" ]]
   mapfile -t sn_packages <<<"$sn_package_list"
   go test -parallel=4 -timeout 90m "${sn_packages[@]}" -count=1 -skip "$release_gate_aggregate_skip"
@@ -197,109 +196,159 @@ release_phase_sn_core_race() {
   cd "$sn_repo"
   go test -race -timeout 120m ./crv4 ./miner/... ./protocol -count=1
 }
-# Measured serial validator work exceeded the inherited ten-minute package
-# allowance. Keep focused deadlines unchanged and
-# give only this full package the same explicit budget as the other full jobs.
-release_phase_sn_validator_race() {
-  cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./validator -count=1
+# A package too large for one job's deadline runs in shards, each its own
+# job. Shard i of n runs the tests of the package's own list, from go test
+# -list in the shard's build mode, whose name's CRC-32 mod n is i - 1, so a
+# new test joins a shard without an edit, with the aggregate skip, which names
+# only tests of sn, in its job's own private TMPDIR and GOTMPDIR on the storage
+# root: durable-volume custody admits only ext4, xfs and btrfs. Each sharded
+# package has a named skip list, which takes tests out of every one of its
+# shards; the selector refuses a name that is no test of the package's list.
+#
+# The -run selector of shard $2 of $3 of package $1, without the names in $4,
+# for the `go test -list` output on stdin.
+release_gate_shard_selector() {
+  python3 -c '
+import re, sys, zlib
+package, shard, shards, skips = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4].split()
+names = []
+for line in sys.stdin.read().splitlines():
+    if re.fullmatch("(Test|Fuzz|Example)[A-Za-z0-9_]*", line):
+        names.append(line)
+    elif re.match("(Test|Fuzz|Example)", line):
+        sys.exit("release gate: unexpected %s test name %r" % (package, line))
+for skip in skips:
+    if skip not in names:
+        sys.exit("release gate: the %s skip names no test: %s" % (package, skip))
+own = [name for name in names if name not in skips and zlib.crc32(name.encode()) % shards == shard - 1]
+if not own:
+    sys.exit("release gate: %s shard %d of %d selects no test" % (package, shard, shards))
+print("^(" + "|".join(own) + ")$", end="")
+' "$1" "$2" "$3" "$4"
 }
-# The complement of the separately owned simulator roots below; local mode
-# also skips its two named sim-testnet tests.
-release_gate_simulator_race_skip='^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*)$'
-if [[ "$release_gate_dependency_mode" == local ]]; then
-  release_gate_simulator_race_skip='^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica|TestFinal.*|Test(Fleet|Historical|Runtime|Scenario).*|TestReleaseLockMatchesCheckout|TestRepositoryDiscoveryUsesModuleIdentity)$'
-fi
-export release_gate_simulator_race_skip
-release_phase_sn_simulator_race() {
-  cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -skip "$release_gate_simulator_race_skip"
-}
-# The retained 90-minute aggregate alarm left four newly active roots and 195
-# parallel roots queued after the serial prefix. Keep the complete 1,191,936
-# metadata slots and 900-object publication together in one independent owner;
-# the exact complementary selectors omit and duplicate no aggregate race root.
-release_phase_sn_simulator_populations_race() {
-  cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -run '^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners)$'
-}
-# The later complement alarm left three full supplement publications active
-# for 17--19 minutes after a long serial prefix, with 188 roots still queued.
-# Keep their complete derived files, immutable writes and replica readback in
-# one independently admitted 90-minute owner; every other root stays above.
-release_phase_sn_simulator_supplements_race() {
-  cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -run '^(TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica)$'
-}
-# The remaining package clock expired with four 25--68 second roots active.
-# Admit complete final-evidence and history/campaign families separately; the
-# ordinary complement still includes every other and future test root.
-release_phase_sn_simulator_final_race() {
-  cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -run '^TestFinal.*$' -skip '^(TestCampaignEvidenceCapacityV2MetadataFullCensusMaterializesFlatWireAndCarrier|TestCampaignEvidencePopulationV2StreamsPhaseCensusWithBoundedOwners|TestFinalSemanticSupplementFailedReplicaDoesNotCommitAndRetryReusesStage|TestFinalSemanticSupplementPublishesResumesAndRejectsLooseTamper|TestValidateFinalSemanticSupplementDefaultCapturedStoresRequiresEveryReplica)$'
-}
-release_phase_sn_simulator_history_race() {
-  cd "$sn_repo"
-  go test -race -parallel=4 -timeout 90m ./sim-testnet -count=1 -run '^Test(Fleet|Historical|Runtime|Scenario).*$'
+# Run shard $3 of $4 of the package $1 of the current directory's module, in
+# mode $2, normal or race, without the names in $5, with the go test flags that
+# follow. A failed list or selection returns before any test runs, even where
+# errexit does not reach it.
+release_gate_shard() {
+  local package="$1" mode="$2" shard="$3" shards="$4" skips="$5" selector
+  local -a build=()
+  shift 5
+  if ! [[ "$shards" =~ ^[1-9][0-9]?$ && "$shard" =~ ^[1-9][0-9]?$ ]] || (( shard > shards )); then
+    printf 'release gate: unknown %s shard %s of %s\n' "$package" "$shard" "$shards" >&2
+    return 1
+  fi
+  if [[ "$mode" == race ]]; then
+    build=(-race)
+  elif [[ "$mode" != normal ]]; then
+    printf 'release gate: unknown %s shard mode %s\n' "$package" "$mode" >&2
+    return 1
+  fi
+  if [[ -n "$skips" ]]; then
+    printf '[release-1.0] %s shards skip by name: %s\n' "$package" "$skips"
+  fi
+  selector="$(go test "${build[@]}" -list . "$package" | release_gate_shard_selector "$package" "$shard" "$shards" "$skips")" || return 1
+  go test "${build[@]}" "$package" -run "$selector" -count=1 "$@" -skip "$release_gate_aggregate_skip"
 }
 # ./mainnet runs in its own jobs. Its tests run one at a time, bound by fsync
 # and latency at about 0.46 core per second, and separate processes scale it,
-# about 3.5 times at four and 5 to 6 at eight. Each shard runs the tests of
-# the package's own list whose name's CRC-32 mod the shard count is its own,
-# so a new test joins a shard without an edit, with the aggregate skip, in its
-# job's own private TMPDIR and GOTMPDIR on the storage root: durable-volume
-# custody admits only ext4, xfs and btrfs. On 2026-10-14, at load 30 to 58,
-# the package's serial test time was about 27 hours (each test's median over
-# that day's runs; 2,599 of 2,759 tests measured, the rest counted at the
+# about 3.5 times at four and 5 to 6 at eight. On 2026-10-14, at load 30 to
+# 58, the package's serial test time was about 27 hours (each test's median
+# over that day's runs; 2,599 of 2,759 tests measured, the rest counted at the
 # mean); the heaviest shard, 6, has 255 minutes of it, and each shard's
 # deadline is about twice that.
 release_gate_mainnet_shards=8
 # Tests that no shard runs, by exact name, separated by spaces; each must be
 # a test of the package's list. None yet.
 release_gate_mainnet_skip_names=''
-export release_gate_mainnet_shards release_gate_mainnet_skip_names
-# The -run selector of shard $1 of $2 for the `go test -list` output on stdin.
-release_gate_mainnet_selector() {
-  python3 -c '
-import os, re, sys, zlib
-shard, shards = int(sys.argv[1]), int(sys.argv[2])
-names = []
-for line in sys.stdin.read().splitlines():
-    if re.fullmatch("(Test|Fuzz|Example)[A-Za-z0-9_]*", line):
-        names.append(line)
-    elif re.match("(Test|Fuzz|Example)", line):
-        sys.exit("release gate: unexpected ./mainnet test name " + repr(line))
-skips = os.environ.get("release_gate_mainnet_skip_names", "").split()
-for skip in skips:
-    if skip not in names:
-        sys.exit("release gate: the ./mainnet skip names no test: " + skip)
-own = [name for name in names if name not in skips and zlib.crc32(name.encode()) % shards == shard - 1]
-if not own:
-    sys.exit("release gate: ./mainnet shard %d of %d selects no test" % (shard, shards))
-print("^(" + "|".join(own) + ")$", end="")
-' "$1" "$2"
-}
 # Run shard $1 of ./mainnet, with the exports of sn-mainnet-exports, whose
 # exit the gate gives every shard.
 release_gate_mainnet_shard() {
-  local shard="$1" selector
-  if ! [[ "$release_gate_mainnet_shards" =~ ^[1-9][0-9]?$ && "$shard" =~ ^[1-9][0-9]?$ ]] || (( shard > release_gate_mainnet_shards )); then
-    printf 'release gate: unknown ./mainnet shard %s of %s\n' "$shard" "$release_gate_mainnet_shards" >&2
-    return 1
-  fi
   if [[ "${release_gate_mainnet_exports_exit:-}" != 0 ]]; then
-    printf 'release gate: ./mainnet shard %s has no qualification exports: sn-mainnet-exports exit %s\n' "$shard" "${release_gate_mainnet_exports_exit:-unknown}" >&2
+    printf 'release gate: ./mainnet shard %s has no qualification exports: sn-mainnet-exports exit %s\n' "$1" "${release_gate_mainnet_exports_exit:-unknown}" >&2
     return 1
   fi
   source "$release_gate_mainnet_exports/environment.sh"
-  if [[ -n "$release_gate_mainnet_skip_names" ]]; then
-    printf '[release-1.0] ./mainnet shards skip by name: %s\n' "$release_gate_mainnet_skip_names"
-  fi
   cd "$sn_repo"
-  selector="$(go test -list . ./mainnet | release_gate_mainnet_selector "$shard" "$release_gate_mainnet_shards")"
-  go test ./mainnet -run "$selector" -count=1 -timeout 510m -skip "$release_gate_aggregate_skip"
+  release_gate_shard ./mainnet normal "$1" "$release_gate_mainnet_shards" "$release_gate_mainnet_skip_names" -timeout 510m
 }
-export -f release_gate_mainnet_selector release_gate_mainnet_shard
+# ./validator runs in its own jobs, normal and race. On 2026-10-14, at load 3
+# to 8 with nice 19, its two normal shards took 38 and 35 minutes, about 55 at
+# the official run's pace, which was 1.45 times slower in its race run. Under
+# race the package is about eight hours of test time at that pace (each test's
+# time from a four-hour race run of the package where it reached the test,
+# otherwise 4.5 times its normal time), in 12 shards: the heaviest projects to
+# 55 minutes, and took 32 alone at load 3 to 4, 46 at the official pace. Each
+# mode's deadline is about twice its heaviest shard's.
+release_gate_validator_normal_shards=2
+release_gate_validator_race_shards=12
+# Tests that no ./validator shard runs, in either mode, by exact name,
+# separated by spaces; each must be a test of the package's list. None yet.
+release_gate_validator_skip_names=''
+# Run normal shard $1 of ./validator.
+release_gate_validator_normal_shard() {
+  cd "$sn_repo"
+  release_gate_shard ./validator normal "$1" "$release_gate_validator_normal_shards" "$release_gate_validator_skip_names" -parallel=4 -timeout 110m
+}
+# Run race shard $1 of ./validator.
+release_gate_validator_race_shard() {
+  cd "$sn_repo"
+  release_gate_shard ./validator race "$1" "$release_gate_validator_race_shards" "$release_gate_validator_skip_names" -parallel=4 -timeout 110m
+}
+# ./sim-testnet runs in its own jobs, normal and race. Its race run was five
+# jobs partitioned by name until the official run of 2026-10-14, at load 16 to
+# 50, where the ordinary complement and the history family each used their
+# whole 90 minutes, the final family took 66 and the supplements 73. From that
+# day's normal run of the package at load about 20, the heaviest of five
+# normal shards projects to 39 minutes. Under race, at about 4.5 times its
+# normal time as those race jobs ran, the package is about 11 hours of test
+# time, in 17 shards; the three with a TestFinalSemanticSupplement test, each
+# of which took 73 minutes beside the other two, project to 100 to 106. Each
+# mode's deadline is about twice its heaviest shard's.
+release_gate_simulator_normal_shards=5
+release_gate_simulator_race_shards=17
+# Tests that no ./sim-testnet shard runs, in either mode, by exact name,
+# separated by spaces; each must be a test of the package's list. None yet.
+release_gate_simulator_skip_names=''
+# Run normal shard $1 of ./sim-testnet.
+release_gate_simulator_normal_shard() {
+  cd "$sn_repo"
+  release_gate_shard ./sim-testnet normal "$1" "$release_gate_simulator_normal_shards" "$release_gate_simulator_skip_names" -parallel=4 -timeout 80m
+}
+# Run race shard $1 of ./sim-testnet.
+release_gate_simulator_race_shard() {
+  cd "$sn_repo"
+  release_gate_shard ./sim-testnet race "$1" "$release_gate_simulator_race_shards" "$release_gate_simulator_skip_names" -parallel=4 -timeout 210m
+}
+# connect's race run and its one reproducible shuffled ordering, with the
+# same fixed seed, run in shards; its normal run stays one process, below. On
+# 2026-10-14, at load 6 to 28 with nice 19, connect's 48 TestWindowPath tests
+# ran about eight times slower under race than in normal mode, which makes the
+# race run about ten hours, and TestWindowPathSdkProfiles alone about 140
+# minutes. The heaviest of 15 shards, which holds that test, projects to 170
+# minutes at the official run's pace, 1.18 times that of these measurements,
+# and the next to 80; each shard's deadline is about twice the heaviest.
+release_gate_connect_race_shards=15
+# Tests that no connect shard runs, by exact name, separated by spaces; each
+# must be a test of the package's list. None yet.
+release_gate_connect_skip_names=''
+# Run race shard $1 of connect.
+release_gate_connect_race_shard() {
+  cd "$workspace/connect"
+  GOMAXPROCS=4 release_gate_shard github.com/urnetwork/connect race "$1" "$release_gate_connect_race_shards" "$release_gate_connect_skip_names" -timeout 340m
+}
+# Run race shard $1 of connect in the shuffled ordering.
+release_gate_connect_shuffle_shard() {
+  cd "$workspace/connect"
+  GOMAXPROCS=4 release_gate_shard github.com/urnetwork/connect race "$1" "$release_gate_connect_race_shards" "$release_gate_connect_skip_names" -timeout 340m -shuffle=4535211000
+}
+export release_gate_mainnet_shards release_gate_mainnet_skip_names
+export release_gate_validator_normal_shards release_gate_validator_race_shards release_gate_validator_skip_names
+export release_gate_simulator_normal_shards release_gate_simulator_race_shards release_gate_simulator_skip_names
+export release_gate_connect_race_shards release_gate_connect_skip_names
+export -f release_gate_shard_selector release_gate_shard release_gate_mainnet_shard
+export -f release_gate_validator_normal_shard release_gate_validator_race_shard release_gate_simulator_normal_shard release_gate_simulator_race_shard
+export -f release_gate_connect_race_shard release_gate_connect_shuffle_shard
 release_phase_sn_mainnet_1() {
   release_gate_mainnet_shard 1
 }
@@ -324,6 +373,114 @@ release_phase_sn_mainnet_7() {
 release_phase_sn_mainnet_8() {
   release_gate_mainnet_shard 8
 }
+release_phase_sn_validator_normal_1() {
+  release_gate_validator_normal_shard 1
+}
+release_phase_sn_validator_normal_2() {
+  release_gate_validator_normal_shard 2
+}
+release_phase_sn_validator_race_1() {
+  release_gate_validator_race_shard 1
+}
+release_phase_sn_validator_race_2() {
+  release_gate_validator_race_shard 2
+}
+release_phase_sn_validator_race_3() {
+  release_gate_validator_race_shard 3
+}
+release_phase_sn_validator_race_4() {
+  release_gate_validator_race_shard 4
+}
+release_phase_sn_validator_race_5() {
+  release_gate_validator_race_shard 5
+}
+release_phase_sn_validator_race_6() {
+  release_gate_validator_race_shard 6
+}
+release_phase_sn_validator_race_7() {
+  release_gate_validator_race_shard 7
+}
+release_phase_sn_validator_race_8() {
+  release_gate_validator_race_shard 8
+}
+release_phase_sn_validator_race_9() {
+  release_gate_validator_race_shard 9
+}
+release_phase_sn_validator_race_10() {
+  release_gate_validator_race_shard 10
+}
+release_phase_sn_validator_race_11() {
+  release_gate_validator_race_shard 11
+}
+release_phase_sn_validator_race_12() {
+  release_gate_validator_race_shard 12
+}
+release_phase_sn_simulator_normal_1() {
+  release_gate_simulator_normal_shard 1
+}
+release_phase_sn_simulator_normal_2() {
+  release_gate_simulator_normal_shard 2
+}
+release_phase_sn_simulator_normal_3() {
+  release_gate_simulator_normal_shard 3
+}
+release_phase_sn_simulator_normal_4() {
+  release_gate_simulator_normal_shard 4
+}
+release_phase_sn_simulator_normal_5() {
+  release_gate_simulator_normal_shard 5
+}
+release_phase_sn_simulator_race_1() {
+  release_gate_simulator_race_shard 1
+}
+release_phase_sn_simulator_race_2() {
+  release_gate_simulator_race_shard 2
+}
+release_phase_sn_simulator_race_3() {
+  release_gate_simulator_race_shard 3
+}
+release_phase_sn_simulator_race_4() {
+  release_gate_simulator_race_shard 4
+}
+release_phase_sn_simulator_race_5() {
+  release_gate_simulator_race_shard 5
+}
+release_phase_sn_simulator_race_6() {
+  release_gate_simulator_race_shard 6
+}
+release_phase_sn_simulator_race_7() {
+  release_gate_simulator_race_shard 7
+}
+release_phase_sn_simulator_race_8() {
+  release_gate_simulator_race_shard 8
+}
+release_phase_sn_simulator_race_9() {
+  release_gate_simulator_race_shard 9
+}
+release_phase_sn_simulator_race_10() {
+  release_gate_simulator_race_shard 10
+}
+release_phase_sn_simulator_race_11() {
+  release_gate_simulator_race_shard 11
+}
+release_phase_sn_simulator_race_12() {
+  release_gate_simulator_race_shard 12
+}
+release_phase_sn_simulator_race_13() {
+  release_gate_simulator_race_shard 13
+}
+release_phase_sn_simulator_race_14() {
+  release_gate_simulator_race_shard 14
+}
+release_phase_sn_simulator_race_15() {
+  release_gate_simulator_race_shard 15
+}
+release_phase_sn_simulator_race_16() {
+  release_gate_simulator_race_shard 16
+}
+release_phase_sn_simulator_race_17() {
+  release_gate_simulator_race_shard 17
+}
 release_gate_start sn-all-normal release_phase_sn_all_normal
 # The shards wait for the exports: a failed build fails every shard.
 release_gate_await sn-mainnet-exports
@@ -338,12 +495,42 @@ release_gate_start sn-mainnet-6 release_phase_sn_mainnet_6
 release_gate_start sn-mainnet-7 release_phase_sn_mainnet_7
 release_gate_start sn-mainnet-8 release_phase_sn_mainnet_8
 release_gate_start sn-core-race release_phase_sn_core_race
-release_gate_start sn-validator-race release_phase_sn_validator_race
-release_gate_start sn-simulator-race release_phase_sn_simulator_race
-release_gate_start sn-simulator-populations-race release_phase_sn_simulator_populations_race
-release_gate_start sn-simulator-supplements-race release_phase_sn_simulator_supplements_race
-release_gate_start sn-simulator-final-race release_phase_sn_simulator_final_race
-release_gate_start sn-simulator-history-race release_phase_sn_simulator_history_race
+release_gate_start sn-validator-normal-1 release_phase_sn_validator_normal_1
+release_gate_start sn-validator-normal-2 release_phase_sn_validator_normal_2
+release_gate_start sn-simulator-normal-1 release_phase_sn_simulator_normal_1
+release_gate_start sn-simulator-normal-2 release_phase_sn_simulator_normal_2
+release_gate_start sn-simulator-normal-3 release_phase_sn_simulator_normal_3
+release_gate_start sn-simulator-normal-4 release_phase_sn_simulator_normal_4
+release_gate_start sn-simulator-normal-5 release_phase_sn_simulator_normal_5
+release_gate_start sn-validator-race-1 release_phase_sn_validator_race_1
+release_gate_start sn-validator-race-2 release_phase_sn_validator_race_2
+release_gate_start sn-validator-race-3 release_phase_sn_validator_race_3
+release_gate_start sn-validator-race-4 release_phase_sn_validator_race_4
+release_gate_start sn-validator-race-5 release_phase_sn_validator_race_5
+release_gate_start sn-validator-race-6 release_phase_sn_validator_race_6
+release_gate_start sn-validator-race-7 release_phase_sn_validator_race_7
+release_gate_start sn-validator-race-8 release_phase_sn_validator_race_8
+release_gate_start sn-validator-race-9 release_phase_sn_validator_race_9
+release_gate_start sn-validator-race-10 release_phase_sn_validator_race_10
+release_gate_start sn-validator-race-11 release_phase_sn_validator_race_11
+release_gate_start sn-validator-race-12 release_phase_sn_validator_race_12
+release_gate_start sn-simulator-race-1 release_phase_sn_simulator_race_1
+release_gate_start sn-simulator-race-2 release_phase_sn_simulator_race_2
+release_gate_start sn-simulator-race-3 release_phase_sn_simulator_race_3
+release_gate_start sn-simulator-race-4 release_phase_sn_simulator_race_4
+release_gate_start sn-simulator-race-5 release_phase_sn_simulator_race_5
+release_gate_start sn-simulator-race-6 release_phase_sn_simulator_race_6
+release_gate_start sn-simulator-race-7 release_phase_sn_simulator_race_7
+release_gate_start sn-simulator-race-8 release_phase_sn_simulator_race_8
+release_gate_start sn-simulator-race-9 release_phase_sn_simulator_race_9
+release_gate_start sn-simulator-race-10 release_phase_sn_simulator_race_10
+release_gate_start sn-simulator-race-11 release_phase_sn_simulator_race_11
+release_gate_start sn-simulator-race-12 release_phase_sn_simulator_race_12
+release_gate_start sn-simulator-race-13 release_phase_sn_simulator_race_13
+release_gate_start sn-simulator-race-14 release_phase_sn_simulator_race_14
+release_gate_start sn-simulator-race-15 release_phase_sn_simulator_race_15
+release_gate_start sn-simulator-race-16 release_phase_sn_simulator_race_16
+release_gate_start sn-simulator-race-17 release_phase_sn_simulator_race_17
 
 # Settlement v2 (VERSION2-FINAL.md §14 gate 3, §15): the ledger package (GL),
 # the sum tree (GT) and allocation (GA) additions, the claim daemon (E-5),
@@ -522,23 +709,135 @@ release_phase_connect() {
 }
 release_gate_start connect release_phase_connect
 
-# Each ordering remains an unsharded process, so package-global residue is
-# still observable. Independent processes do not need to wait for each other.
+# The normal run remains one unsharded process, so package-global residue is
+# still observable across every test. On 2026-10-14, at load 12 to 18 with
+# nice 19, it took 100 minutes, 68 of them in its 48 TestWindowPath tests; the
+# official run's was 1.18 times slower, so its deadline is about twice 118.
 release_phase_connect_all_normal() {
   cd "$workspace/connect"
-  go test -count=1 -timeout 30m .
-}
-release_phase_connect_all_race() {
-  cd "$workspace/connect"
-  GOMAXPROCS=4 go test -race -count=1 -timeout 30m .
-}
-release_phase_connect_all_shuffle() {
-  cd "$workspace/connect"
-  GOMAXPROCS=4 go test -race -count=1 -timeout 30m -shuffle=4535211000 .
+  go test -count=1 -timeout 240m .
 }
 release_gate_start connect-all-normal release_phase_connect_all_normal
-release_gate_start connect-all-race release_phase_connect_all_race
-release_gate_start connect-all-shuffle release_phase_connect_all_shuffle
+release_phase_connect_race_1() {
+  release_gate_connect_race_shard 1
+}
+release_phase_connect_race_2() {
+  release_gate_connect_race_shard 2
+}
+release_phase_connect_race_3() {
+  release_gate_connect_race_shard 3
+}
+release_phase_connect_race_4() {
+  release_gate_connect_race_shard 4
+}
+release_phase_connect_race_5() {
+  release_gate_connect_race_shard 5
+}
+release_phase_connect_race_6() {
+  release_gate_connect_race_shard 6
+}
+release_phase_connect_race_7() {
+  release_gate_connect_race_shard 7
+}
+release_phase_connect_race_8() {
+  release_gate_connect_race_shard 8
+}
+release_phase_connect_race_9() {
+  release_gate_connect_race_shard 9
+}
+release_phase_connect_race_10() {
+  release_gate_connect_race_shard 10
+}
+release_phase_connect_race_11() {
+  release_gate_connect_race_shard 11
+}
+release_phase_connect_race_12() {
+  release_gate_connect_race_shard 12
+}
+release_phase_connect_race_13() {
+  release_gate_connect_race_shard 13
+}
+release_phase_connect_race_14() {
+  release_gate_connect_race_shard 14
+}
+release_phase_connect_race_15() {
+  release_gate_connect_race_shard 15
+}
+release_phase_connect_shuffle_1() {
+  release_gate_connect_shuffle_shard 1
+}
+release_phase_connect_shuffle_2() {
+  release_gate_connect_shuffle_shard 2
+}
+release_phase_connect_shuffle_3() {
+  release_gate_connect_shuffle_shard 3
+}
+release_phase_connect_shuffle_4() {
+  release_gate_connect_shuffle_shard 4
+}
+release_phase_connect_shuffle_5() {
+  release_gate_connect_shuffle_shard 5
+}
+release_phase_connect_shuffle_6() {
+  release_gate_connect_shuffle_shard 6
+}
+release_phase_connect_shuffle_7() {
+  release_gate_connect_shuffle_shard 7
+}
+release_phase_connect_shuffle_8() {
+  release_gate_connect_shuffle_shard 8
+}
+release_phase_connect_shuffle_9() {
+  release_gate_connect_shuffle_shard 9
+}
+release_phase_connect_shuffle_10() {
+  release_gate_connect_shuffle_shard 10
+}
+release_phase_connect_shuffle_11() {
+  release_gate_connect_shuffle_shard 11
+}
+release_phase_connect_shuffle_12() {
+  release_gate_connect_shuffle_shard 12
+}
+release_phase_connect_shuffle_13() {
+  release_gate_connect_shuffle_shard 13
+}
+release_phase_connect_shuffle_14() {
+  release_gate_connect_shuffle_shard 14
+}
+release_phase_connect_shuffle_15() {
+  release_gate_connect_shuffle_shard 15
+}
+release_gate_start connect-race-1 release_phase_connect_race_1
+release_gate_start connect-race-2 release_phase_connect_race_2
+release_gate_start connect-race-3 release_phase_connect_race_3
+release_gate_start connect-race-4 release_phase_connect_race_4
+release_gate_start connect-race-5 release_phase_connect_race_5
+release_gate_start connect-race-6 release_phase_connect_race_6
+release_gate_start connect-race-7 release_phase_connect_race_7
+release_gate_start connect-race-8 release_phase_connect_race_8
+release_gate_start connect-race-9 release_phase_connect_race_9
+release_gate_start connect-race-10 release_phase_connect_race_10
+release_gate_start connect-race-11 release_phase_connect_race_11
+release_gate_start connect-race-12 release_phase_connect_race_12
+release_gate_start connect-race-13 release_phase_connect_race_13
+release_gate_start connect-race-14 release_phase_connect_race_14
+release_gate_start connect-race-15 release_phase_connect_race_15
+release_gate_start connect-shuffle-1 release_phase_connect_shuffle_1
+release_gate_start connect-shuffle-2 release_phase_connect_shuffle_2
+release_gate_start connect-shuffle-3 release_phase_connect_shuffle_3
+release_gate_start connect-shuffle-4 release_phase_connect_shuffle_4
+release_gate_start connect-shuffle-5 release_phase_connect_shuffle_5
+release_gate_start connect-shuffle-6 release_phase_connect_shuffle_6
+release_gate_start connect-shuffle-7 release_phase_connect_shuffle_7
+release_gate_start connect-shuffle-8 release_phase_connect_shuffle_8
+release_gate_start connect-shuffle-9 release_phase_connect_shuffle_9
+release_gate_start connect-shuffle-10 release_phase_connect_shuffle_10
+release_gate_start connect-shuffle-11 release_phase_connect_shuffle_11
+release_gate_start connect-shuffle-12 release_phase_connect_shuffle_12
+release_gate_start connect-shuffle-13 release_phase_connect_shuffle_13
+release_gate_start connect-shuffle-14 release_phase_connect_shuffle_14
+release_gate_start connect-shuffle-15 release_phase_connect_shuffle_15
 release_phase_sdk() {
   cd "$workspace/sdk"
   provider_registration_tests='^Test(DeviceLocalProviderRegistration|DeviceLocalProviderConnected)'

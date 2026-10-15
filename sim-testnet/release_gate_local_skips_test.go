@@ -72,9 +72,15 @@ func releaseGateModeSelector(script, variable, mode string) (string, error) {
 
 // Every go test command of the gate that runs tests of ./sim-testnet, in sn,
 // as one mode runs them. A command in the branch of a mode check that the
-// mode does not take is not run; every other command counts as run.
+// mode does not take is not run; every other command counts as run. The
+// simulator's shards of each mode together count as one command, which runs
+// every test but their named skips, with the aggregate skip of the shard
+// owner's one reviewed test run.
 func releaseGateSimulatorCommands(script, mode string) ([]releaseGateSimulatorCommand, error) {
 	const check = `if [[ "$release_gate_dependency_mode" == local ]]; then`
+	if err := verifyReleaseGateShardOwner(script); err != nil {
+		return nil, err
+	}
 	type branch struct{ mode, taken bool }
 	var branches []branch
 	var commands []releaseGateSimulatorCommand
@@ -105,14 +111,36 @@ func releaseGateSimulatorCommands(script, mode string) ([]releaseGateSimulatorCo
 			branches = branches[:len(branches)-1]
 			continue
 		}
+		skipped := slices.ContainsFunc(branches, func(entry branch) bool { return entry.mode && !entry.taken })
+		if line == releaseGateSimulatorNormalShards.ownerCommand() || line == releaseGateSimulatorRaceShards.ownerCommand() {
+			if skipped {
+				continue
+			}
+			skip, err := releaseGateModeSelector(script, "release_gate_aggregate_skip", mode)
+			if err != nil {
+				return nil, err
+			}
+			names, err := releaseGateModeSelector(script, releaseGateSimulatorNormalShards.skipVariable, mode)
+			if err != nil {
+				return nil, err
+			}
+			if names != "" {
+				skip = "(" + skip + ")|^(" + strings.Join(strings.Fields(names), "|") + ")$"
+			}
+			compiled, err := regexp.Compile(skip)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", line, err)
+			}
+			commands = append(commands, releaseGateSimulatorCommand{line: line, skip: compiled})
+			continue
+		}
 		if !strings.HasPrefix(line, "go test ") || strings.Contains(line, " -list ") {
 			continue
 		}
 		fields := strings.Fields(line)
-		if !slices.Contains(fields, "./sim-testnet") && !slices.Contains(fields, "./...") && !slices.Contains(fields, `"${sn_packages[@]}"`) {
+		if !slices.Contains(fields, "./sim-testnet") && !slices.Contains(fields, "./...") {
 			continue
 		}
-		skipped := slices.ContainsFunc(branches, func(entry branch) bool { return entry.mode && !entry.taken })
 		if skipped {
 			continue
 		}
@@ -249,8 +277,8 @@ func TestReleaseGateLocalModePrintsEverySkipFirst(t *testing.T) {
 	}
 }
 
-// No job runs a test that local mode skips, in sn-all-normal, the simulator
-// race owners or anywhere else, while pinned mode still runs each of them.
+// No job runs a test that local mode skips, in the simulator's shards of either
+// mode or anywhere else, while pinned mode still runs each of them.
 func TestReleaseGateLocalModeRunsNoSkippedTestInAnyJob(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
@@ -262,20 +290,16 @@ func TestReleaseGateLocalModeRunsNoSkippedTestInAnyJob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.ContainsFunc(local, func(command releaseGateSimulatorCommand) bool {
-		return command.line == releaseGateSimulatorOrdinaryRaceCommand
-	}) || !slices.ContainsFunc(local, func(command releaseGateSimulatorCommand) bool {
-		return command.line == releaseGateAggregateNormalCommand
-	}) {
-		t.Fatal("the census of sim-testnet commands omits sn-all-normal or sn-simulator-race")
+	for _, shards := range []releaseGateShards{releaseGateSimulatorNormalShards, releaseGateSimulatorRaceShards} {
+		if !slices.ContainsFunc(local, func(command releaseGateSimulatorCommand) bool { return command.line == shards.ownerCommand() }) {
+			t.Fatalf("the census of sim-testnet commands omits the simulator's %s shards", shards.mode)
+		}
 	}
 	for _, change := range []struct{ old, new string }{
-		{"|TestReleaseLockMatchesCheckout|TestRepositoryDiscoveryUsesModuleIdentity)$'", ")$'"},
-		{"|TestRepositoryDiscoveryUsesModuleIdentity)$'", ")$'"},
 		{"|TestRepositoryDiscoveryUsesModuleIdentity$)'", ")'"},
 		{"|TestReleaseLockMatchesCheckout$|TestRepositoryDiscoveryUsesModuleIdentity$)'", ")'"},
-		{releaseGateSimulatorOrdinaryRaceCommand, releaseGateSimulatorRaceCommand},
-		{releaseGateSimulatorHistoryRaceCommand, releaseGateSimulatorHistoryRaceCommand + "\n  go test ./sim-testnet -run '^TestRepositoryDiscovery' -count=1"},
+		{releaseGateShardCommand, strings.Replace(releaseGateShardCommand, ` -skip "$release_gate_aggregate_skip"`, "", 1)},
+		{releaseGateValidatorRaceShards.ownerCommand(), releaseGateValidatorRaceShards.ownerCommand() + "\n  go test ./sim-testnet -run '^TestRepositoryDiscovery' -count=1"},
 		{"  echo \"[release-1.0] TestRepositoryDiscoveryUsesModuleIdentity skipped (local mode): it stats the workspace vault's main/st.yml\"\n", ""},
 	} {
 		if strings.Count(script, change.old) != 1 {

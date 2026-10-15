@@ -182,8 +182,9 @@ func TestReleaseSemanticCensusPinsSettlementClosureRegressions(t *testing.T) {
 	}
 }
 
-// The original focused family is still part of both complete package owners;
-// its own duplicate implicit-deadline pair is not a separate certificate.
+// The original focused family is still part of both complete package owners,
+// the validator's normal and race shards; its own duplicate implicit-deadline
+// pair is not a separate certificate.
 const releaseSettlementClosureOwnerSelector = "^Test(Attempt(Settlement|Cut|Assignment)|ReleaseSettlementRefresh|ReleaseSteeringLoop)"
 
 // Require complete uncached normal/race owners before delegating any focused
@@ -253,8 +254,9 @@ func TestReleaseSemanticCensusRejectsIncompleteSettlementClosureOwners(t *testin
 		t.Fatal("aggregate accepted the original redundant implicit-deadline closure pair")
 	}
 	for _, command := range []string{
-		releaseGateAggregateNormalCommand,
-		"go test -race -parallel=4 -timeout 90m ./validator -count=1",
+		releaseGateValidatorNormalShards.ownerCommand(),
+		releaseGateValidatorRaceShards.ownerCommand(),
+		releaseGateShardCommand,
 	} {
 		if strings.Count(script, command) != 1 {
 			t.Fatal("full closure owner is not unique", command)
@@ -267,19 +269,26 @@ func TestReleaseSemanticCensusRejectsIncompleteSettlementClosureOwners(t *testin
 			strings.Replace(command, " -count=1", "", 1),
 			"if false; then\n" + command + "\nfi",
 		} {
+			if replacement == command {
+				continue
+			}
 			if err := verifyReleaseGateSettlementClosureOwners(strings.Replace(script, command, replacement, 1)); err == nil {
 				t.Fatal("aggregate accepted incomplete closure owner", replacement)
 			}
 		}
 	}
-	const start = "release_gate_start sn-validator-race release_phase_sn_validator_race"
-	for _, replacement := range []string{
-		"# " + start,
-		"if false; then\n" + start + "\nfi",
-		"release_unused_owner() {\n" + start + "\n}",
+	for _, start := range []string{
+		"release_gate_start sn-validator-normal-1 release_phase_sn_validator_normal_1",
+		"release_gate_start sn-validator-race-1 release_phase_sn_validator_race_1",
 	} {
-		if err := verifyReleaseGateSettlementClosureOwners(strings.Replace(script, start, replacement, 1)); err == nil {
-			t.Fatal("aggregate accepted disconnected closure owner", replacement)
+		for _, replacement := range []string{
+			"# " + start,
+			"if false; then\n" + start + "\nfi",
+			"release_unused_owner() {\n" + start + "\n}",
+		} {
+			if err := verifyReleaseGateSettlementClosureOwners(strings.Replace(script, start, replacement, 1)); err == nil {
+				t.Fatal("aggregate accepted disconnected closure owner", replacement)
+			}
 		}
 	}
 }
