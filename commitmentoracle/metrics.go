@@ -32,10 +32,10 @@ type metrics struct {
 	expired         int
 	conflicting     int
 	inconsistent    int
-	// Fleet-format commitments that are not a fleet's: a validator-permit or
-	// unregistered hotkey, or no standalone fleet set_commitment.
-	excluded int
-	pending  int
+	// One-field Sha256 commitments: a fleet published before the fleet tag
+	// (it must republish) or a validator's source commitment. Never mirrored.
+	legacy  int
+	pending int
 	// Blocks until the nearest pending commitment ages past
 	// commitmentMaxAgeBlocks; meaningful only while pending > 0.
 	minBlocksToExpiry uint64
@@ -88,7 +88,7 @@ func (self *metrics) setCommitments(total int, fleet int, counts map[skipReason]
 	self.expired = counts[skipExpired]
 	self.conflicting = counts[skipConflict] + counts[skipNewerMirrored]
 	self.inconsistent = counts[skipInconsistent]
-	self.excluded = counts[skipValidator] + counts[skipUnregistered] + counts[skipNoFleetEvidence]
+	self.legacy = counts[skipLegacyFormat]
 }
 
 func (self *metrics) setPending(pending int, head uint64, expiries []uint64) {
@@ -143,12 +143,12 @@ func (self *metrics) render(now time.Time) string {
 		gauge("native_finalized_block", "The native finalized head of the last cycle.", float64(self.nativeFinalized))
 		gauge("native_lag_blocks", "Native finalized blocks not yet covered by a complete cycle.", float64(self.lagBlocks))
 		gauge("commitments", "CommitmentOf entries of the netuid at the finalized head.", float64(self.commitments))
-		gauge("fleet_commitments", "Entries in the one-field Sha256 fleet format.", float64(self.fleet))
+		gauge("fleet_commitments", "Entries in the tagged fleet format (one Raw40 field, \"urfleet1\" then the hash).", float64(self.fleet))
 		gauge("fleet_commitments_mirrored", "Fleet commitments already mirrored at the EVM finalized block.", float64(self.mirrored))
 		gauge("fleet_commitments_expired", "Unmirrored fleet commitments older than commitmentMaxAgeBlocks.", float64(self.expired))
 		gauge("fleet_commitments_conflicting", "Fleet commitments the coordinator holds a different or newer record for.", float64(self.conflicting))
 		gauge("fleet_commitments_inconsistent", "Fleet commitments whose finalized evidence did not verify or agree across endpoints.", float64(self.inconsistent))
-		gauge("fleet_format_excluded", "One-field Sha256 commitments never mirrored because the hotkey holds a validator permit, is unregistered, or has no standalone fleet set_commitment.", float64(self.excluded))
+		gauge("legacy_sha256_commitments", "One-field Sha256 commitments, never mirrored: untagged fleets that must republish, and validator source commitments.", float64(self.legacy))
 		gauge("pending_unmirrored", "Fresh fleet commitments not yet mirrored.", float64(self.pending))
 		if self.pending > 0 {
 			gauge("pending_min_blocks_to_expiry", "Blocks until the nearest pending commitment can no longer be bound.", float64(self.minBlocksToExpiry))

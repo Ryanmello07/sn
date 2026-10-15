@@ -13,15 +13,18 @@ import (
 // mainnet state in factury support/plans/sn25-commitment-mirror-runbook.md:
 // Commitments.CommitmentOf(25, hotkey) holds one Sha256 field at block
 // 9,259,873, whose Substrate hash is goldenBlockHash. These are public chain
-// values, not keys.
+// values, not keys. That real registration is the legacy untagged format,
+// which the oracle no longer mirrors (format_test.go
+// legacyGoldenRegistrationHex); the
+// golden fixture is the same commitment as the miner republishes it, tagged.
 const (
 	goldenHotkeyHex     = "ca2b48b25720aef399910675153afb697370e8983a45856fb220bb8a83a08d1d"
 	goldenCommitmentHex = "f8cfc29663a79e23c8a41fe6a2ca21b7bc7f8a0463526607140ce2aa5766defb"
 	goldenBlock         = uint64(9259873)
 	goldenBlockHashHex  = "f692c0b5a15e4b9c6d232c4ed5dc516c9985a91a98d0f334f20974061f87c80b"
 	// deposit u64 0, block u32 little-endian (0x008d4b61), vec length 1,
-	// Sha256 variant 0x83, hash.
-	goldenRegistrationHex = "0000000000000000" + "614b8d00" + "04" + "83" + goldenCommitmentHex
+	// Raw40 variant 0x29, the tag, hash.
+	goldenRegistrationHex = "0000000000000000" + "614b8d00" + "04" + "29" + fleetTagHex + goldenCommitmentHex
 	goldenLastHex         = "614b8d00"
 	// The finalized head of the runbook's reads.
 	goldenFinalized = uint64(9286066)
@@ -53,8 +56,6 @@ func goldenNative(t *testing.T) *fakeNative {
 	native := newFakeNative(nativeHead{number: goldenFinalized, hash: goldenHeadHash()})
 	native.block(goldenBlock, mustHash(t, goldenBlockHashHex))
 	native.put(goldenHeadHash(), mustHash(t, goldenHotkeyHex), mustHex(t, goldenRegistrationHex), mustHex(t, goldenLastHex))
-	native.roles[mustHash(t, goldenHotkeyHex)] = neuronRole{registered: true, uid: goldenUid}
-	native.bodies[mustHash(t, goldenBlockHashHex)] = [][]byte{mustHex(t, goldenTimestampExtrinsicHex), mustHex(t, goldenFleetExtrinsicHex)}
 	return native
 }
 
@@ -76,17 +77,24 @@ func TestParseFleetCommitmentFormats(t *testing.T) {
 		ok     bool
 		block  uint64
 	}{
-		{name: "golden one-field sha256", raw: goldenRegistrationHex, hotkey: mustHash(t, goldenHotkeyHex), ok: true, block: goldenBlock},
-		{name: "one-field sha256", raw: "0500000000000000" + "0a000000" + "04" + "83" + hash, hotkey: hotkey, ok: true, block: 10},
-		{name: "two fields ending in sha256", raw: "0000000000000000" + "0a000000" + "08" + "83" + hash + "83" + hash, hotkey: hotkey},
-		{name: "raw data field", raw: "0000000000000000" + "0a000000" + "04" + "a1" + hash, hotkey: hotkey},
+		{name: "golden tagged", raw: goldenRegistrationHex, hotkey: mustHash(t, goldenHotkeyHex), ok: true, block: goldenBlock},
+		{name: "tagged", raw: "0500000000000000" + "0a000000" + "04" + "29" + fleetTagHex + hash, hotkey: hotkey, ok: true, block: 10},
+		{name: "golden legacy one-field sha256", raw: legacyGoldenRegistrationHex, hotkey: mustHash(t, goldenHotkeyHex)},
+		{name: "legacy one-field sha256", raw: "0500000000000000" + "0a000000" + "04" + "83" + hash, hotkey: hotkey},
+		{name: "two fields ending in tagged", raw: "0000000000000000" + "0a000000" + "08" + "83" + hash + "29" + fleetTagHex + hash, hotkey: hotkey},
+		{name: "two tagged fields", raw: "0000000000000000" + "0a000000" + "08" + "29" + fleetTagHex + hash + "29" + fleetTagHex + hash, hotkey: hotkey},
+		{name: "raw32 hash without tag", raw: "0000000000000000" + "0a000000" + "04" + "21" + hash, hotkey: hotkey},
+		{name: "raw40 other tag", raw: "0000000000000000" + "0a000000" + "04" + "29" + "7572666c65657432" + hash, hotkey: hotkey},
+		{name: "raw40 upper-case tag", raw: "0000000000000000" + "0a000000" + "04" + "29" + "5552464c45455431" + hash, hotkey: hotkey},
+		{name: "raw41 tag and hash and byte", raw: "0000000000000000" + "0a000000" + "04" + "2a" + fleetTagHex + hash + "00", hotkey: hotkey},
+		{name: "raw39 tag and short hash", raw: "0000000000000000" + "0a000000" + "04" + "28" + fleetTagHex + hash[:62], hotkey: hotkey},
 		{name: "old multi-byte raw entry", raw: "0000000000000000" + "40420f00" + "04" + "0b" + "68656c6c6f776f726c64", hotkey: hotkey},
-		{name: "zero hash", raw: "0000000000000000" + "0a000000" + "04" + "83" + strings.Repeat("00", 32), hotkey: hotkey},
-		{name: "zero block", raw: "0000000000000000" + "00000000" + "04" + "83" + hash, hotkey: hotkey},
-		{name: "trailing byte", raw: "0000000000000000" + "0a000000" + "04" + "83" + hash + "00", hotkey: hotkey},
-		{name: "truncated", raw: "0000000000000000" + "0a000000" + "04" + "83" + hash[:62], hotkey: hotkey},
+		{name: "zero hash", raw: "0000000000000000" + "0a000000" + "04" + "29" + fleetTagHex + strings.Repeat("00", 32), hotkey: hotkey},
+		{name: "zero block", raw: "0000000000000000" + "00000000" + "04" + "29" + fleetTagHex + hash, hotkey: hotkey},
+		{name: "trailing byte", raw: "0000000000000000" + "0a000000" + "04" + "29" + fleetTagHex + hash + "00", hotkey: hotkey},
+		{name: "truncated", raw: "0000000000000000" + "0a000000" + "04" + "29" + fleetTagHex + hash[:62], hotkey: hotkey},
 		{name: "empty field list", raw: "0000000000000000" + "0a000000" + "00", hotkey: hotkey},
-		{name: "zero hotkey", raw: "0000000000000000" + "0a000000" + "04" + "83" + hash, hotkey: [32]byte{}},
+		{name: "zero hotkey", raw: "0000000000000000" + "0a000000" + "04" + "29" + fleetTagHex + hash, hotkey: [32]byte{}},
 	}
 	for _, c := range cases {
 		commitment, err := parseFleetCommitment(rawCommitment{hotkey: c.hotkey, raw: mustHex(t, c.raw)})

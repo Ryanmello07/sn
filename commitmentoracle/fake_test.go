@@ -40,11 +40,6 @@ type fakeNative struct {
 	headers       map[[32]byte]uint64
 	stateReads    [][32]byte
 	headErr       error
-	// Roles by hotkey at any block; an absent hotkey is unregistered.
-	roles   map[[32]byte]neuronRole
-	roleErr error
-	// Block bodies by block hash; an absent block fails the read.
-	bodies map[[32]byte][][]byte
 }
 
 func newFakeNative(finalized nativeHead) *fakeNative {
@@ -54,24 +49,17 @@ func newFakeNative(finalized nativeHead) *fakeNative {
 		lasts:         map[[32]byte]map[[32]byte][]byte{},
 		hashes:        map[uint64][32]byte{finalized.number: finalized.hash},
 		headers:       map[[32]byte]uint64{finalized.hash: finalized.number},
-		roles:         map[[32]byte]neuronRole{},
-		bodies:        map[[32]byte][][]byte{},
 	}
 }
 
-// Registers hotkey as a fleet: a UID without a validator permit and a
-// standalone set_commitment of hash signed by hotkey in the block at blockHash.
-func (self *fakeNative) fleet(hotkey [32]byte, uid uint16, blockHash [32]byte, hash [32]byte) {
-	self.roles[hotkey] = neuronRole{registered: true, uid: uid}
-	self.bodies[blockHash] = append(self.bodies[blockHash], synthSignedExtrinsic(hotkey, fakeFleetCall(25, hash)))
-}
-
-// The SN25 mainnet encoding of Commitments.set_commitment(netuid,
-// [Sha256(hash)]): pallet 18, call 0, as in the golden extrinsics.
-func fakeFleetCall(netuid uint16, hash [32]byte) []byte {
-	call := []byte{18, 0, byte(netuid), byte(netuid >> 8), 0x04, 0x83}
-	return append(call, hash[:]...)
-}
+// Chain state the oracle must not depend on. Before the fleet tag the oracle
+// read each hotkey's validator permit and its commitment block's body
+// (f8a7c15e); it now identifies a fleet by format alone and reads neither, so
+// these record the scenario for the reader and change nothing. The pre-fix
+// verification of format_test.go maps them onto the f8a7c15e fake instead.
+func (self *fakeNative) setRole(hotkey [32]byte, uid uint16, validatorPermit bool) {}
+func (self *fakeNative) setBody(blockHash [32]byte, extrinsics ...[]byte)          {}
+func (self *fakeNative) failRoles(err error)                                       {}
 
 // A signed v4 extrinsic from signer carrying call, with a zero sr25519
 // signature, an immortal era, nonce 0, tip 0 and metadata hash mode 0.
@@ -141,26 +129,6 @@ func (self *fakeNative) headerNumber(ctx context.Context, blockHash [32]byte) (u
 		return 0, errors.New("no header")
 	}
 	return number, nil
-}
-
-func (self *fakeNative) role(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash [32]byte) (neuronRole, error) {
-	self.stateReads = append(self.stateReads, blockHash)
-	if self.roleErr != nil {
-		return neuronRole{}, self.roleErr
-	}
-	return self.roles[hotkey], nil
-}
-
-func (self *fakeNative) blockExtrinsics(ctx context.Context, blockHash [32]byte) ([][]byte, error) {
-	body, ok := self.bodies[blockHash]
-	if !ok {
-		return nil, fmt.Errorf("no body for block 0x%x", blockHash)
-	}
-	return body, nil
-}
-
-func (self *fakeNative) fleetCommitmentCall(netuid uint16, hash [32]byte) ([]byte, error) {
-	return fakeFleetCall(netuid, hash), nil
 }
 
 func (self *fakeNative) close() {}

@@ -4,17 +4,20 @@
 // (evm/src/STCoordinator.sol mirrorCommitment, bindFleetMember).
 //
 // The only input is finalized chain state. Native commitments are read from
-// Commitments.CommitmentOf(netuid, *) at the subtensor finalized head; only the
-// release fleet format (exactly one Sha256 field, crv4.DecodeFleetCommitment*)
-// is considered, and the format alone is not enough: a validator's source
-// commitment has the same format, so role.go also requires a registered hotkey
-// without a validator permit and a standalone fleet set_commitment in the
-// commitment block. The arguments are the hotkey, the commitment hash, the
-// registration's commitment block and that block's Substrate hash, which is
-// what sim-testnet/fleet.go mirrorFleetCommitment sends on the closed testnet.
-// Coordinator state (active oracle, mirrored records, policy) is read at the
-// EVM finalized block, and a mirror counts as done only once its receipt is
-// finalized.
+// Commitments.CommitmentOf(netuid, *) at the subtensor finalized head. A fleet
+// commitment is identified positively by its format alone: exactly one
+// Data::Raw40 field holding the ASCII tag "urfleet1" and the 32-byte
+// commitment hash (crv4.EncodeFleetCommitmentInfo, written by the miner's
+// `provider fleet publish`). Nothing else is ever mirrored. In particular the
+// validator's source commitment is one Sha256 field (crv4/source_commitment.go)
+// and can never be mistaken for a fleet (SN25 validator mirror incident,
+// 2026-10-15), and an untagged one-field Sha256 fleet commitment from before
+// the tag is not mirrored either; such a fleet must republish. The arguments
+// are the hotkey, the commitment hash, the registration's commitment block and
+// that block's Substrate hash, which is what sim-testnet/fleet.go
+// mirrorFleetCommitment sends on the closed testnet. Coordinator state (active
+// oracle, mirrored records, policy) is read at the EVM finalized block, and a
+// mirror counts as done only once its receipt is finalized.
 package commitmentoracle
 
 import (
@@ -24,9 +27,10 @@ import (
 	"github.com/urfoundation/sn/crv4"
 )
 
-// The exact byte length of a one-field Sha256 registration: u64 deposit, u32
-// block, compact vec length 1, the Sha256 variant and the 32-byte hash.
-const fleetRegistrationBytes = 8 + 4 + 1 + 1 + 32
+// The exact byte length of a tagged fleet registration: u64 deposit, u32
+// block, compact vec length 1, the Raw40 variant, the 8-byte tag and the
+// 32-byte hash.
+const fleetRegistrationBytes = 8 + 4 + 1 + 1 + crv4.FleetCommitmentFieldBytes
 
 // Why a native commitment is not mirrored. The values are stable metric and
 // log labels.
@@ -35,18 +39,14 @@ type skipReason string
 const (
 	skipNone           skipReason = ""
 	skipNotFleetFormat skipReason = "not_fleet_format"
-	skipExpired        skipReason = "expired"
-	skipMirrored       skipReason = "mirrored"
-	skipNewerMirrored  skipReason = "newer_mirrored"
-	skipConflict       skipReason = "conflict"
-	skipInconsistent   skipReason = "inconsistent"
-	// The hotkey holds a validator permit (role.go).
-	skipValidator skipReason = "validator"
-	// The hotkey is not registered on the netuid.
-	skipUnregistered skipReason = "unregistered"
-	// The commitment block has no standalone fleet set_commitment from the
-	// hotkey, e.g. a validator source commitment's batch.
-	skipNoFleetEvidence skipReason = "no_fleet_evidence"
+	// A one-field Sha256 commitment: an untagged (pre-tag) fleet or a
+	// validator source commitment. Never mirrored.
+	skipLegacyFormat  skipReason = "legacy_sha256"
+	skipExpired       skipReason = "expired"
+	skipMirrored      skipReason = "mirrored"
+	skipNewerMirrored skipReason = "newer_mirrored"
+	skipConflict      skipReason = "conflict"
+	skipInconsistent  skipReason = "inconsistent"
 )
 
 // One raw CommitmentOf(netuid, hotkey) storage value read at a finalized head.
@@ -55,7 +55,7 @@ type rawCommitment struct {
 	raw    []byte
 }
 
-// A native commitment in the release fleet format.
+// A native commitment in the tagged fleet format.
 type fleetCommitment struct {
 	hotkey          [32]byte
 	commitmentHash  [32]byte
@@ -78,19 +78,20 @@ type mirroredRecord struct {
 	finalizedBlock     uint64
 }
 
-// Decodes one storage value. Anything other than the exact one-field Sha256
-// registration (old multi-field entries, Raw data, a trailing Sha256 after other
-// fields, a zero hash or block) is not fleet format and is never mirrored.
+// Decodes one storage value. Anything other than the exact tagged one-field
+// Raw40 registration (a one-field Sha256 legacy fleet or validator source
+// commitment, another Raw length or tag, multi-field entries, a zero hash or
+// block) is not fleet format and is never mirrored.
 func parseFleetCommitment(entry rawCommitment) (fleetCommitment, error) {
 	if entry.hotkey == ([32]byte{}) {
 		return fleetCommitment{}, errors.New("commitment hotkey is zero")
 	}
-	if len(entry.raw) != fleetRegistrationBytes {
-		return fleetCommitment{}, fmt.Errorf("registration has %d bytes, want %d", len(entry.raw), fleetRegistrationBytes)
-	}
 	commitmentHash, commitmentBlock, err := crv4.DecodeFleetCommitmentRegistrationWithBlockV454(entry.raw)
 	if err != nil {
 		return fleetCommitment{}, err
+	}
+	if len(entry.raw) != fleetRegistrationBytes {
+		return fleetCommitment{}, fmt.Errorf("registration has %d bytes, want %d", len(entry.raw), fleetRegistrationBytes)
 	}
 	return fleetCommitment{hotkey: entry.hotkey, commitmentHash: commitmentHash, commitmentBlock: commitmentBlock}, nil
 }

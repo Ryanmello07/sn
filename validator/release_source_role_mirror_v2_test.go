@@ -160,7 +160,7 @@ func sourceRoleMirrorChainV2(t *testing.T, hotkey [32]byte, snapshot *ReleaseSna
 // The later head's slot: exactly one Sha256 field written at block.
 func (self *sourceRoleMirrorTestV2) setHeadSlot(t *testing.T, hash [32]byte, block uint64) {
 	t.Helper()
-	info, err := crv4.EncodeFleetCommitmentInfo(hash)
+	info, err := crv4.EncodeSourceCommitmentInfo(hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +377,7 @@ func TestReleaseSourceRoleMirrorV2OldMirrorSurvivesNewerSourceWrites(t *testing.
 			case method == "chain_getHeader" && len(args) == 1 && args[0] == block.hash.Hex():
 				return setReleaseHistoricalTestResult(result, releaseReceiptTestHeaderWire(block.header))
 			case method == "state_getStorage" && len(args) == 2 && args[1] == block.hash.Hex() && args[0] == commitmentKey.Hex():
-				info, err := crv4.EncodeFleetCommitmentInfo(block.source)
+				info, err := crv4.EncodeSourceCommitmentInfo(block.source)
 				if err != nil {
 					return err
 				}
