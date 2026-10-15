@@ -1491,9 +1491,20 @@ gates hold:
 
 **Schedule.** E_s is the first epoch that starts at least two days after the
 last gate passes. Each epoch of delay leaves about 1,450 α of pool
-allocation to the at most 2,000 stopgap providers. Epoch 3 (block 9,348,028,
-about 2026-10-23) is not reachable: gates 2, 4 and 5 need work that is not
-finished.
+allocation to the at most 2,000 stopgap providers.
+
+- **E_s is epoch 3,** by the owner's decision (VERSION2-LAUNCH.md O18). It
+  starts at block 9,348,028, about 2026-10-23 18:10 UTC.
+- **Every gate must pass by block 9,333,628,** 14,400 blocks before that,
+  so the rule above holds.
+- **The registration window** of §12.1 step 5 is blocks 9,333,628 to
+  9,340,828, two days to one day before E_s.
+- **A gate that passes later** is a departure from the rule, which the owner
+  accepts anew, or E_s moves to epoch 4, which starts at block 9,398,428. A
+  missed window moves E_s to epoch 4 (VERSION2-LAUNCH.md sections 9.3 and
+  9.4).
+- **Gate 1's independent review** was confirmed resolved by the owner on
+  2026-10-13 (VERSION2-LAUNCH.md O26).
 
 ## 15. Test plan
 

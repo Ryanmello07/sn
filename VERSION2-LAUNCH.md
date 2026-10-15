@@ -55,8 +55,8 @@ merge, push, pull, repeat."
 
 The orchestration log is [VERSION2-STATE.md](VERSION2-STATE.md), cited as
 STATE.md. It is a snapshot of 2026-10-13 20:15 UTC; its lines 1 to 286 keep
-the log's numbers. Nothing here has been run against mainnet. Unprefixed paths
-are in this repository.
+the log's numbers. Step 5 has been run in production, on 2026-10-14
+(step 5). Unprefixed paths are in this repository.
 
 Conventions:
 
@@ -437,7 +437,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | O4 | The v2 deployer: its EVM address, next nonce and signer | neither the Safe nor an auditor; funded per section 2.6 | 8 | BOOTSTRAP-CONTRACTS.md:652-655,752-753 |
 | O5 | The escrow hotkey | 32 bytes, nonzero, with no UID on SN25 at the send; not the pool hotkey | 8 | BOOTSTRAP-CONTRACTS.md:730-737, and "Back-to-back escrow registration (A7)" |
 | O6 | The escrow registration cap `maximumBurnRao` | nonzero; the value is the cap × 10^9 wei | 8 | BOOTSTRAP-CONTRACTS.md:660,743-745 |
-| O7 | The phase envelope: each action's gas limit and fees, `maximum_total_wei`, `maximum_attempts`, the native start checkpoint and send window, the source-lock, cutover and custody-fence evidence hashes, the custody identifier and the run directory | gas starts from BOOTSTRAP-CONTRACTS.md:715-718; `maximum_attempts` at most 8 across all actions, the back-to-back escrow send included; the start checkpoint taken just before the approval is signed, and the window at most 7,200 blocks (step 8.3). The three evidence pins are only format-checked: the binary signs them into the plan, and nothing compares them with a file. The fill recipe suggests the frozen checkout's `sn-mainnet source-lock` output for the source lock and step 8.2's fence file for the custody fence; it names none for the cutover evidence | 8 | BOOTSTRAP-CONTRACTS.md:208-213,683-687; `mainnet/evm_phase.go:59-62,180`; `mainnet/SETTLEMENT-V2-FILL.md`, section 2 |
+| O7 | The phase envelope: each action's gas limit and fees, `maximum_total_wei`, `maximum_attempts`, the native start checkpoint and send window, the source-lock, cutover and custody-fence evidence hashes, the custody identifier and the run directory | gas starts from BOOTSTRAP-CONTRACTS.md:715-718; `maximum_attempts` at most 8 across all actions, the back-to-back escrow send included; the start checkpoint taken just before the approval is signed, and the window at most 7,200 blocks (step 8.3). The three evidence pins are only format-checked: the binary signs them into the plan, and nothing compares them with a file. The fill recipe suggests the frozen checkout's `sn-mainnet source-lock` output for the source lock and step 8.2's fence file for the custody fence; it names none for the cutover evidence. Nothing is frozen: by the owner's decision of 2026-10-14 the gate runs in its local mode against the `main` heads, with no freeze and no release-lock refresh (the preamble; step 4), so the recipe's frozen checkout is sn's O1 checkout | 8 | BOOTSTRAP-CONTRACTS.md:208-213,683-687; `mainnet/evm_phase.go:59-62,180`; `mainnet/SETTLEMENT-V2-FILL.md`, section 2 |
 | O8 | The `STSettlement2` owner and its signers | the governance Safe `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` at the v1 launch; confirm | 8, 15 | LAUNCH.md:47-48,164-166; VERSION2-FINAL.md §7.2 |
 | O9 | The v1 coordinator for `initialize` | the proxy `0xC18925925E2B7bb9059b7d696b8c92762AE86406`; confirm | 8 | LAUNCH.md:42 |
 | O10 | The auditor key and its EVM address | one address, quorum 1 at launch; the same key runs with `--ledger_auditor_key_file` | 8, 10 | BOOTSTRAP-CONTRACTS.md:750-754; VERSION2-FINAL.md §2.1 decision 2 |
@@ -723,47 +723,53 @@ first exist.
 
   Run the app suites of section 2.2 beside it.
 - **What local mode skips.** Exactly the checks that seal a run
-  (`sim-testnet/README.md`:848-856):
+  (`sim-testnet/README.md`:848-856), each printed with its reason before
+  anything runs (`scripts/test-release-1.0-local.sh`:16-24):
   - the source freeze's provenance checks: clean, origin, upstream, fetch and
     at-origin at the start, and the final snapshot with its comparison
     (`scripts/check-release-source-freeze.sh`:203-209,238-243);
-  - `TestReleaseLockMatchesCheckout`, in `sn-all-normal` and as the final
-    fence (`scripts/test-release-1.0-local.sh`:144-151,686-687). So the
-    release lock needs no refresh;
+  - `TestReleaseLockMatchesCheckout`, by name in every job that would run
+    it, and as the final fence
+    (`scripts/test-release-1.0-local.sh`:173-183,1144-1153). So the release
+    lock needs no refresh: the owner's decision of 2026-10-14 is that the
+    gate runs in this mode against the `main` heads, with no freeze and no
+    lock refresh (the preamble);
+  - `TestRepositoryDiscoveryUsesModuleIdentity`, by name in the same jobs,
+    because it stats the workspace vault's `main/st.yml`
+    (`sim-testnet/config_test.go:608-618`);
   - the runtime 454 source and runtime-metadata attestations, which read
-    GitHub and the testnet archive node rather than the checkouts (:62-66).
+    GitHub and the testnet archive node rather than the checkouts
+    (`scripts/test-release-1.0-local.sh`:81-91).
 
   It keeps the module inventory and tidy checks, the sourceguard and
   binding-toolchain preflights, patch hygiene, every test job and the
-  diagnostic mode.
+  diagnostic mode. `sim-testnet/release_gate_local_skips_test.go` holds the
+  printed skips and the named tests to this list (:3-5).
 - **It never touches a vault.** The source freeze and patch hygiene skip the
   vault checkout, its Git metadata included
   (`scripts/check-release-source-freeze.sh`:132-145;
-  `scripts/test-release-1.0-local.sh`:676-684). Two tests still do what
-  local mode drops, until sn `v2/gate-mainnet-shards` (`ec3f3d80`) merges
-  (VERSION2-HANDOFF.md, section 2):
-  - `TestReleaseLockMatchesCheckout` still runs in `sn-simulator-race`
-    (:172-175);
-  - `TestRepositoryDiscoveryUsesModuleIdentity`, in `sn-all-normal` and
-    `sn-simulator-race`, stats the workspace vault's `main/st.yml`
-    (`sim-testnet/config_test.go:608-618`). Without it the test fails:
-    "cannot discover vault repository; use --vault-repo"
-    (`sim-testnet/config.go:1440-1458`).
+  `scripts/test-release-1.0-local.sh`:1134-1142), and no test that would
+  read it runs (above). The two named skips reach every job since sn
+  `v2/gate-mainnet-shards` merged (`a47111d6`). Before that,
+  `TestReleaseLockMatchesCheckout` still ran in `sn-simulator-race`, and
+  `TestRepositoryDiscoveryUsesModuleIdentity` failed without the vault:
+  "cannot discover vault repository; use --vault-repo"
+  (`sim-testnet/config.go:1440-1458`).
 - **What it prints.** Its mode first: "[release-1.0] dependency mode local:
-  the working checkouts as they are, not sealed"
-  (`scripts/test-release-1.0-local.sh`:14). Then "source freeze: local mode
-  checks the module inventory and tidiness of the working checkouts, not
-  their provenance" (`scripts/check-release-source-freeze.sh`:208), and
-  "[release-1.0] runtime source and metadata artifact attestations skipped
-  (local mode)" and "[release-1.0] final release-lock and source-freeze
-  checkouts skipped (local mode)" (`scripts/test-release-1.0-local.sh`:65,687).
+  the working checkouts as they are, not sealed", and then each skip with
+  its reason (`scripts/test-release-1.0-local.sh`:16-24). Then "source
+  freeze: local mode checks the module inventory and tidiness of the working
+  checkouts, not their provenance"
+  (`scripts/check-release-source-freeze.sh`:208), and "[release-1.0] runtime
+  source and metadata artifact attestations skipped (local mode)" and
+  "[release-1.0] final release-lock and source-freeze checkouts skipped
+  (local mode)" (`scripts/test-release-1.0-local.sh`:84,1145).
 - **The workspace:** sn, server, connect, sdk, glog, goidenticons, proxy,
   userwireguard, warp, gvisor, xops and config, each a Git checkout beside
-  sn (`scripts/test-release-1.0-local.sh`:30;
-  `scripts/check-release-source-freeze.sh`:132-145). The vault is not
-  needed once `v2/gate-mainnet-shards` merges (above). The `xops` job runs
-  that repository's infrastructure tests
-  (`scripts/test-release-1.0-local.sh`:645-656).
+  sn (`scripts/test-release-1.0-local.sh`:49;
+  `scripts/check-release-source-freeze.sh`:132-145). Local mode needs no
+  vault (above). The `xops` job runs that repository's infrastructure tests
+  (`scripts/test-release-1.0-local.sh`:1103-1114).
 - **The generated files at mode 644**: the fifteen ABI and binding files of
   step 8.1. Check public sources out under umask 022, and keep the server's
   `local/postgres/initdb` directory and its script at 755
@@ -819,6 +825,14 @@ first exist.
 ### Phase B. Release, approve and deploy
 
 **Step 5. Re-sign the operator gas policy and the native-fee policy.**
+
+**Done** since 2026-10-14 19:20 UTC. Operator gas policy revision 1,
+`policy_sha256`
+`1ef468cea2810f72eff1e04f63298eccbe13080fb4339627c148f67c149cc073`, is
+installed: the config authority (config `f647123`) and the vault's st.yml,
+with api, alt and the taskworker restarted. The native-fee policy has
+nothing to re-sign (below). VERSION2-HANDOFF.md, section 3, items 2 and 3,
+has the detail.
 
 *The operator gas policy.* It binds the v1 coordinator, the policy hash and
 the two accounts, not call targets
@@ -949,8 +963,10 @@ makes one, under a signed denomination policy
   (`server/model/st_native_fee_settlement_model.go:124-125`). One signed for
   477's code settles nothing that 478 executed, from block 9,276,926
   (`docs/spec/runtime-478-audit.md`, "Hard-coded figures" and "Exact
-  provenance"). Re-sign it for 478 (VERSION2-HANDOFF.md, section 3, item 3).
-  Whether a policy is installed today is not recorded in the repositories.
+  provenance"). None was ever installed: native-fee settlement was never
+  provisioned on mainnet, so there is nothing to re-sign for 478, and the
+  rest of this sub-step does not apply to this launch (VERSION2-HANDOFF.md,
+  section 3, item 3).
 - **Who.** Owner signs with the denomination approver key; operator
   installs.
 - **Do.**
