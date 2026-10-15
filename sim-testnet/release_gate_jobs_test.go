@@ -21,13 +21,33 @@ import (
 type releaseGateJobsFixture struct {
 	root       string
 	command    *exec.Cmd
-	output     bytes.Buffer
+	started    time.Time
+	output     releaseGateJobsOutput
 	files      map[string]*os.File
 	lines      map[string]chan string
 	readers    sync.WaitGroup
 	readerStop chan struct{}
 	finished   chan struct{}
 	err        error
+}
+
+// The queue's combined stdout and stderr, which a missed deadline reads while
+// the queue may still be writing it.
+type releaseGateJobsOutput struct {
+	mu     sync.Mutex
+	output bytes.Buffer
+}
+
+func (self *releaseGateJobsOutput) Write(data []byte) (int, error) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	return self.output.Write(data)
+}
+
+func (self *releaseGateJobsOutput) String() string {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	return self.output.String()
 }
 
 // Uses the actual queue and subreaper with only machine capacity and the
@@ -105,12 +125,17 @@ func newReleaseGateJobsFixture(t *testing.T, body string) *releaseGateJobsFixtur
 source "$1"
 sn_repo="$2"; workspace="$3"
 release_gate_effective_resources() { RELEASE_GATE_CPUS=24; RELEASE_GATE_MEMORY=34359738368; }
+# Hold until the test writes the named control FIFO. Bash runs the trap of a
+# signal that lands before read(2) blocks only once read returns, so a hold
+# that a test signals rereads every second.
+release_gate_test_hold() { local line; until read -r -t 1 line < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/$1"; do :; done; }
 release_gate_jobs_init
 `+body, "release-jobs-test", helper, sn, workspace)
 	self.command.Env = append(os.Environ(), "TMPDIR="+self.root, "RELEASE_GATE_QUEUE_FIXTURE_ROOT="+self.root, "RELEASE_GATE_JOBS=2", "RELEASE_GATE_CONCURRENT_GATES=2", "SIM_TESTNET_LIVE_DEPENDENCIES=0")
 	self.command.Cancel = func() error { return self.command.Process.Signal(syscall.SIGTERM) }
 	self.command.WaitDelay = 20 * time.Second
 	self.command.Stdout, self.command.Stderr = &self.output, &self.output
+	self.started = time.Now()
 	if err := self.command.Start(); err != nil {
 		cancel()
 		t.Fatal(err)
@@ -149,7 +174,7 @@ func (self *releaseGateJobsFixture) line(t *testing.T, name string) string {
 	case <-self.finished:
 		t.Fatalf("queue exited before %s barrier: %v\n%s", name, self.err, self.output.String())
 	case <-time.After(20 * time.Second):
-		t.Fatalf("queue did not reach %s barrier", name)
+		t.Fatalf("queue did not reach %s barrier\n%s", name, self.state())
 	}
 	return ""
 }
@@ -166,11 +191,52 @@ func (self *releaseGateJobsFixture) join(t *testing.T, status int) {
 	select {
 	case <-self.finished:
 	case <-time.After(20 * time.Second):
-		t.Fatal("queue did not join")
+		t.Fatalf("queue did not join\n%s", self.state())
 	}
 	if self.command.ProcessState.ExitCode() != status {
 		t.Fatalf("queue exit=%d want=%d error=%v\n%s", self.command.ProcessState.ExitCode(), status, self.err, self.output.String())
 	}
+}
+
+// For a missed deadline: what the queue and each of its descendants is doing,
+// with the wait channel and system call that show where a stalled one waits,
+// and the queue's output so far. An exited queue shows as an unreadable stat.
+func (self *releaseGateJobsFixture) state() string {
+	var report strings.Builder
+	pid := self.command.Process.Pid
+	fmt.Fprintf(&report, "queue pid %d started %v ago\n", pid, time.Since(self.started).Round(time.Millisecond))
+	children := map[int][]int{}
+	entries, _ := os.ReadDir("/proc")
+	for _, entry := range entries {
+		child, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+		stat, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "stat"))
+		if err != nil {
+			continue
+		}
+		// The parent follows the state, after the parenthesized command name.
+		if fields := strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:])); len(fields) > 1 {
+			if parent, err := strconv.Atoi(fields[1]); err == nil {
+				children[parent] = append(children[parent], child)
+			}
+		}
+	}
+	for pending := []int{pid}; len(pending) > 0; pending = pending[1:] {
+		process := filepath.Join("/proc", strconv.Itoa(pending[0]))
+		read := func(name string) string {
+			value, err := os.ReadFile(filepath.Join(process, name))
+			if err != nil {
+				return err.Error()
+			}
+			return strings.TrimSpace(strings.ReplaceAll(string(value), "\x00", " "))
+		}
+		fmt.Fprintf(&report, "process %d: stat=%q wchan=%q syscall=%q cmdline=%q\n", pending[0], read("stat"), read("wchan"), read("syscall"), read("cmdline"))
+		pending = append(pending, children[pending[0]]...)
+	}
+	fmt.Fprintf(&report, "output:\n%s", self.output.String())
+	return report.String()
 }
 
 func TestReleaseGateJobsRunReadyPhasesConcurrentlyAndJoinFailures(t *testing.T) {
@@ -239,7 +305,7 @@ func TestReleaseGateJobsCancellationReapsNewSessionBeforeServiceCleanup(t *testi
 	self := newReleaseGateJobsFixture(t, `
 phase_tree() { python3 "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/descendant.py" "$RELEASE_GATE_QUEUE_FIXTURE_ROOT" session; }
 release_gate_start tree phase_tree
-read -r hold < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"
+release_gate_test_hold control-a
 `)
 	pid := self.line(t, "events")
 	if err := os.WriteFile(filepath.Join(self.root, "descendant-pid"), []byte(pid), 0o600); err != nil {
@@ -1199,7 +1265,7 @@ phase_hold() {
   read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"
 }
 release_gate_start hold phase_hold
-read -r hold < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-b"
+release_gate_test_hold control-b
 `)
 	exports := exit.line(t, "events")
 	if err := exit.command.Process.Signal(syscall.SIGTERM); err != nil {
@@ -1220,4 +1286,52 @@ exit "$status"
 	locked := filepath.Join(failed.line(t, "events"), "locked")
 	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
 	failed.join(t, 1)
+}
+
+// A held queue that a test signals still runs its TERM trap when the signal
+// lands before read(2) blocks, which bash only notices once read returns.
+// Signaled as soon as it announces its hold, an untimed read misses most of
+// these signals and holds until the FIFO is written.
+func TestReleaseGateJobsHoldRunsATrapSignaledBeforeItBlocks(t *testing.T) {
+	for range 3 {
+		self := newReleaseGateJobsFixture(t, `
+printf 'holding\n' > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+release_gate_test_hold control-a
+`)
+		if got := self.line(t, "events"); got != "holding" {
+			t.Fatalf("hold barrier=%q", got)
+		}
+		if err := self.command.Process.Signal(syscall.SIGTERM); err != nil {
+			t.Fatal(err)
+		}
+		self.join(t, 143)
+	}
+}
+
+// A missed fixture deadline reports what the queue, the job's owner and its
+// worker are each doing, and the queue's output so far, so that a gate log
+// alone shows where a queue waited.
+func TestReleaseGateJobsMissedDeadlineReportsTheQueueAndItsJobs(t *testing.T) {
+	self := newReleaseGateJobsFixture(t, `
+phase_hold() { printf 'held\n' > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"; read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"; }
+release_gate_start hold phase_hold
+release_gate_complete
+`)
+	if got := self.line(t, "events"); got != "held" {
+		t.Fatalf("held job barrier=%q", got)
+	}
+	state := self.state()
+	pid := self.command.Process.Pid
+	for _, want := range []string{
+		fmt.Sprintf("process %d: stat=\"%d (bash) ", pid, pid),
+		"release-gate-child.py",
+		"release-phase phase_hold",
+		"[release gate] private state ",
+	} {
+		if !strings.Contains(state, want) {
+			t.Fatalf("the deadline report omits %q:\n%s", want, state)
+		}
+	}
+	self.write(t, "control-a", "release")
+	self.join(t, 0)
 }
