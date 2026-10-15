@@ -109,6 +109,19 @@ func DecodeFleetCommitmentRegistrationV454(raw []byte) ([32]byte, error) {
 	return commitmentHash, err
 }
 
+// DecodeFleetCommitmentRegistrationWithBlockV454 is
+// DecodeFleetCommitmentRegistrationV454 that also returns the registration's
+// fixed-width u32 commitment block. The commitment oracle mirrors that block.
+func DecodeFleetCommitmentRegistrationWithBlockV454(raw []byte) ([32]byte, uint64, error) {
+	return decodeFleetCommitmentRegistrationFixedU32(raw)
+}
+
+// DecodeFleetCommitmentLastBlock decodes LastCommitment's exact fixed-width u32
+// storage value, which must equal the registration's block.
+func DecodeFleetCommitmentLastBlock(raw []byte) (uint64, error) {
+	return decodeFleetCommitmentBlockFixedU32(raw)
+}
+
 // DecodeFleetCommitmentRegistrationV453 preserves the preceding release API
 // after the v454 source audit proved the storage shape unchanged.
 func DecodeFleetCommitmentRegistrationV453(raw []byte) ([32]byte, error) {
