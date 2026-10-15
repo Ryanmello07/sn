@@ -280,7 +280,11 @@ func (self *ReleaseSteerer) checkSourceRoleV2(ctx context.Context, snapshot *Rel
 		return errors.New(releaseSourceRoleMirrorV2Rejection)
 	}
 	if !slices.Equal(raw, make([]byte, 96)) {
-		if err := self.checkSourceRoleMirrorV2(ctx, raw); err != nil {
+		rule := self.checkSourceRoleMirrorV2
+		if self.sourceRoleMirrorRuleV2 != nil {
+			rule = self.sourceRoleMirrorRuleV2
+		}
+		if err := rule(ctx, raw); err != nil {
 			return err
 		}
 	}

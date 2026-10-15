@@ -866,3 +866,123 @@ func TestNativeGapBridgeStartupReplayAcceptsCrossedHistory(t *testing.T) {
 		t.Fatal("ordinary startup admitted a settlement window skip")
 	}
 }
+
+// The incident's shape: the last applied intent is native epoch 25730, the
+// crash loop let 25731 pass with no intent, and the validator resumes at
+// 25732 or later. Without an edge every poll is the same hard error until the
+// failure limit, and a restart reads the same head EMA state, so the halt is
+// permanent. One edge from 25730 to 25732, the smallest gap a bridge names,
+// admits 25732 and any later epoch, here 25736, at the idle check, the head
+// EMA, the intent successor and the artifact lineage, and still refuses a
+// second gap.
+func TestNativeGapBridgeResumesAfterOneMissedNativeEpoch(t *testing.T) {
+	t.Parallel()
+	const L, F = uint64(25730), uint64(25732)
+	bridge := nativeGapBridgeTest()
+	bridge.LastNativeEpoch, bridge.LastArtifactHash, bridge.FirstNativeEpoch = L, nativeGapBridgeTestArtifactHash(L), F
+	for _, first := range []uint64{L + 1, F} {
+		edge := bridge
+		edge.FirstNativeEpoch = first
+		body := encodeNativeGapBridgeTest(t, edge)
+		if _, err := DecodeReleaseNativeGapBridge(body, ReleaseMeasurementContentHash(body)); (err == nil) != (first == F) {
+			t.Fatalf("bridge %d -> %d decoded with %v", L, first, err)
+		}
+	}
+	predecessor := nativeGapBridgeTestIntent(L, "applied")
+	owner, err := bridge.matchHistory(t.Context(), []*SteeringIntent{nativeGapBridgeTestIntent(L-1, "applied"), predecessor})
+	if err != nil || owner == nil || owner.crossed {
+		t.Fatalf("retained history ending at %d did not match the pending edge: %v", L, err)
+	}
+	limits := headEMAStoreV2TestLimits()
+	budget := releaseHeadV2Budget{limit: limits.MaxControlBytes}
+	alpha := protocol.Rational{Numerator: 1, Denominator: 2}
+	key := FleetScoreKey{FleetID: [32]byte{1}, Hotkey: [32]byte{2}, Generation: 1, UID: 7}
+	raw := map[FleetScoreKey]*big.Rat{key: big.NewRat(2, 1)}
+	open := func(stateDir string) *HeadEMAStore {
+		t.Helper()
+		store, err := NewHeadEMAStoreV2(t.Context(), stateDir, limits)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return store
+	}
+	// The head EMA's last fold is the applied intent's epoch.
+	applied := func() *HeadEMAStore {
+		t.Helper()
+		store := open(newReleaseHeadV2TestStateDir(t))
+		if _, _, err := store.FoldForEpochV2(t.Context(), L, map[FleetScoreKey]*big.Rat{key: big.NewRat(4, 1)}, alpha); err != nil {
+			t.Fatal(err)
+		}
+		return store
+	}
+	// Production loop polls in submitOnceV2's order: the bridge's idle check,
+	// then compact head admission. It returns each poll's error.
+	loop := func(store *HeadEMAStore, bridged *releaseNativeGapBridgeV2, epoch uint64) ([]error, error) {
+		var errs []error
+		err := runReleaseProductionSteeringLoopWithWait(t.Context(), func() error {
+			err := bridged.requireFirstEpoch(predecessor, epoch)
+			if err == nil {
+				store.v2.nativeGapBridge = bridged
+				err = store.admitReleaseHeadV2Known(t.Context(), epoch, alpha, limits.MaxEntries, budget)
+			}
+			errs = append(errs, err)
+			return err
+		}, func() bool { return len(errs) < releaseSteeringFailureLimit+3 }, nil)
+		return errs, err
+	}
+	halted := func(store *HeadEMAStore, epoch uint64) {
+		t.Helper()
+		errs, err := loop(store, nil, epoch)
+		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("failed %d consecutive attempts", releaseSteeringFailureLimit)) || len(errs) != releaseSteeringFailureLimit {
+			t.Fatalf("unbridged epoch %d did not stop at the failure limit: %d polls: %v", epoch, len(errs), err)
+		}
+		for index, err := range errs {
+			if err == nil || !strings.Contains(err.Error(), "compact head EMA epoch jumped") {
+				t.Fatalf("unbridged epoch %d poll %d: %v", epoch, index+1, err)
+			}
+		}
+	}
+	stopped := applied()
+	for _, epoch := range []uint64{F, F + 4} {
+		halted(stopped, epoch)
+	}
+	restarted := open(filepath.Dir(stopped.path))
+	if restarted.lastSubnetEpoch == nil || *restarted.lastSubnetEpoch != L {
+		t.Fatal("restart did not reload the applied epoch's head EMA")
+	}
+	halted(restarted, F)
+	// While the missed epoch is still current, the bridge idles instead.
+	errs, err := loop(applied(), owner, L+1)
+	if err != nil || len(errs) != releaseSteeringFailureLimit+3 || !releaseOnlyErrors(errors.Join(errs...), ErrSteeringAlreadyFinal) {
+		t.Fatalf("bridge did not idle in the missed epoch: %d polls: %v", len(errs), err)
+	}
+	for _, epoch := range []uint64{F, F + 4} {
+		store := applied()
+		errs, err := loop(store, owner, epoch)
+		if err != nil || len(errs) != releaseSteeringFailureLimit+3 || errors.Join(errs...) != nil {
+			t.Fatalf("bridged epoch %d was refused: %d polls: %v %v", epoch, len(errs), err, errors.Join(errs...))
+		}
+		if _, _, err := store.FoldForEpochV2(t.Context(), epoch, raw, alpha); err != nil {
+			t.Fatalf("bridged epoch %d did not fold: %v", epoch, err)
+		}
+		if err := store.admitReleaseHeadV2Known(t.Context(), epoch+2, alpha, limits.MaxEntries, budget); err == nil || !strings.Contains(err.Error(), "compact head EMA epoch jumped") {
+			t.Fatalf("bridge admitted a second gap after %d: %v", epoch, err)
+		}
+		if err := store.admitReleaseHeadV2Known(t.Context(), epoch+1, alpha, limits.MaxEntries, budget); err != nil {
+			t.Fatalf("consecutive epoch after the bridged %d was refused: %v", epoch, err)
+		}
+		current := nativeGapBridgeTestIntent(epoch, "pending")
+		if err := validateSteeringIntentSuccessorWithGapsV2(predecessor, current, (&releaseIntentV2Owner{nativeGapBridge: owner}).allowsIntentGap(predecessor, current)); err != nil {
+			t.Fatalf("bridged intent %d -> %d was refused: %v", L, epoch, err)
+		}
+		if err := validateSteeringIntentSuccessorWithGapsV2(predecessor, current, false); err == nil {
+			t.Fatalf("unbridged intent %d -> %d was admitted", L, epoch)
+		}
+		if !owner.allowsArtifactEdge(bridge.LastArtifactHash, &ReleaseMeasurementArtifact{SubnetEpoch: L}, &ReleaseMeasurementArtifact{SubnetEpoch: epoch, PreviousArtifactHash: bridge.LastArtifactHash}) {
+			t.Fatalf("bridged artifact %d -> %d was refused", L, epoch)
+		}
+		if crossed, err := bridge.matchHistory(t.Context(), []*SteeringIntent{predecessor, nativeGapBridgeTestIntent(epoch, "applied")}); err != nil || !crossed.crossed {
+			t.Fatalf("restart refused the history crossed at %d: %v", epoch, err)
+		}
+	}
+}

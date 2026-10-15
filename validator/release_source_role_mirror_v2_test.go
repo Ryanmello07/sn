@@ -325,3 +325,96 @@ func TestReleaseSourceRoleMirrorV2AcceptsExactWriteOfRetainedHistory(t *testing.
 		}
 	}
 }
+
+// The validator keeps writing after the oracle mirrored its receipt's write:
+// two newer source commitments land at the next two blocks and the slot moves
+// to the latest. The old mirror still names exactly what its own block held,
+// so it passes against every later slot, as does a mirror of either newer
+// write. A record naming anything else in this hotkey's archive still fails,
+// and an accepted mirror never excuses a slot no retained proof owns.
+func TestReleaseSourceRoleMirrorV2OldMirrorSurvivesNewerSourceWrites(t *testing.T) {
+	m := newSourceRoleMirrorTestV2(t)
+	receipt, cfg, native := m.f.receipt, &m.f.historical.config, m.steerer.native
+	netuid, hotkey := binary.LittleEndian.AppendUint16(nil, cfg.Netuid), m.f.hotkey.PublicKey()
+	commitmentKey, err := types.CreateStorageKey(native.Meta, "Commitments", "CommitmentOf", netuid, hotkey[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	lastKey, err := types.CreateStorageKey(native.Meta, "Commitments", "LastCommitment", netuid, hotkey[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One canonical block after the receipt per index: the validator writes
+	// at the first two, and the third is the finalized head.
+	type archivedBlock struct {
+		number, written uint64
+		hash            types.Hash
+		header          types.Header
+		source          [32]byte
+	}
+	newer := [][32]byte{{0x6b, 0x11}, {0x6b, 0x12}}
+	var blocks []archivedBlock
+	parent, source, written := receipt.hash, m.hash, receipt.number
+	for index := range 3 {
+		number := receipt.number + 1 + uint64(index)
+		if index < len(newer) {
+			source, written = newer[index], number
+		}
+		header, hash := releaseReceiptTestHeader(t, parent, number)
+		blocks = append(blocks, archivedBlock{number: number, written: written, hash: hash, header: header, source: source})
+		parent = hash
+	}
+	head := blocks[len(blocks)-1]
+	prior := native.API.Client
+	native.API.Client = &validatorRuntimeIdentityTestClient{callContext: func(ctx context.Context, result any, method string, args ...any) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		for _, block := range blocks {
+			switch {
+			case method == "chain_getBlockHash" && len(args) == 1 && fmt.Sprint(args[0]) == fmt.Sprint(block.number):
+				return setReleaseHistoricalTestResult(result, block.hash.Hex())
+			case method == "chain_getHeader" && len(args) == 1 && args[0] == block.hash.Hex():
+				return setReleaseHistoricalTestResult(result, releaseReceiptTestHeaderWire(block.header))
+			case method == "state_getStorage" && len(args) == 2 && args[1] == block.hash.Hex() && args[0] == commitmentKey.Hex():
+				info, err := crv4.EncodeFleetCommitmentInfo(block.source)
+				if err != nil {
+					return err
+				}
+				return setReleaseHistoricalTestResult(result, hexutil.Encode(append(binary.LittleEndian.AppendUint32(binary.LittleEndian.AppendUint64(nil, 1), uint32(block.written)), info...)))
+			case method == "state_getStorage" && len(args) == 2 && args[1] == block.hash.Hex() && args[0] == lastKey.Hex():
+				return setReleaseHistoricalTestResult(result, hexutil.Encode(binary.LittleEndian.AppendUint32(nil, uint32(block.written))))
+			}
+		}
+		return prior.CallContext(ctx, result, method, args...)
+	}}
+	latest := &SteeringIntent{Status: "applied", FinalizedBlock: blocks[1].number, FinalizedBlockHash: blocks[1].hash.Hex(),
+		Prepared: &crv4.PreparedSubmission{SourceCommitment: &crv4.PreparedSourceCommitment{Hash: releaseHex32(newer[1])}}}
+	m.steerer.sourceRolePredecessorV2 = nil
+	for name, raw := range map[string][]byte{
+		"the receipt's write":    sourceRoleMirrorV2Raw(m.hash, receipt.hash, receipt.number),
+		"the first newer write":  sourceRoleMirrorV2Raw(newer[0], blocks[0].hash, blocks[0].number),
+		"the second newer write": sourceRoleMirrorV2Raw(newer[1], blocks[1].hash, blocks[1].number),
+	} {
+		if err := m.check(t, raw, head.hash, latest); err != nil {
+			t.Fatalf("mirror of %s failed after the newer writes: %v", name, err)
+		}
+	}
+	foreign := m.hash
+	foreign[31] ^= 1
+	for name, raw := range map[string][]byte{
+		"foreign hash at the receipt":         sourceRoleMirrorV2Raw(foreign, receipt.hash, receipt.number),
+		"newer hash at the receipt":           sourceRoleMirrorV2Raw(newer[0], receipt.hash, receipt.number),
+		"old hash after the slot moved":       sourceRoleMirrorV2Raw(m.hash, blocks[0].hash, blocks[0].number),
+		"old hash at the head":                sourceRoleMirrorV2Raw(m.hash, head.hash, head.number),
+		"latest write read at the head":       sourceRoleMirrorV2Raw(newer[1], head.hash, blocks[1].number),
+		"another hotkey's write at its block": sourceRoleMirrorV2Raw([32]byte{0x7c, 0x01}, blocks[1].hash, blocks[1].number),
+	} {
+		if err := m.check(t, raw, head.hash, latest); err == nil || !strings.Contains(err.Error(), releaseSourceRoleMirrorV2Rejection) {
+			t.Fatalf("%s mirror was not rejected as a fleet mirror: %v", name, err)
+		}
+	}
+	if err := m.check(t, sourceRoleMirrorV2Raw(m.hash, receipt.hash, receipt.number), head.hash, nil); err == nil || !strings.Contains(err.Error(), "unretained write") {
+		t.Fatalf("an accepted old mirror excused the moved slot: %v", err)
+	}
+}
