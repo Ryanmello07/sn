@@ -76,10 +76,11 @@ func newRecycleMeasurementFixtureWithCensus(t *testing.T, providers, completed i
 // trails bring each to exactly the release policy's minimum of eight.
 const recycleQualityTestProviders, recycleQualityTestCompleted = 8, 8
 
-// Both operators' genuine M8 sources and compact cuts depend only on the
-// network, policy, completed census and activation hotkey, so each is built
-// once per test process and shared read-only. Every test seals and signs its
-// own copy of the artifact, and its cleanup confirms the sources are as built.
+// Both operators' genuine M8 trails depend only on the network, policy and
+// census, and their compact cuts also on the activation hotkey, so each is
+// built once per test process and shared read-only. Every test seals and
+// signs its own copy of the artifact, and its cleanup confirms the sources
+// are as built.
 type recycleMeasurementTestSources struct {
 	provider    *releaseMeasurementV2TestFixture
 	headKVs     map[uint64]AttemptLedgerHead
@@ -95,10 +96,12 @@ type recycleMeasurementTestSourcesKey struct {
 
 var recycleMeasurementTestSourcesCache struct {
 	stateLock sync.Mutex
+	trailKVs  map[recycleMeasurementTestSourcesKey]map[uint64]*attemptCutV2SealTestFixture
 	sourceKVs map[recycleMeasurementTestSourcesKey]*recycleMeasurementTestSources
 }
 
-// The first test to need sources builds them under the process's owner.
+// The first test to need sources builds them under the process's owner. The
+// hotkey is named only after the trails, so every hotkey shares one census.
 func sharedRecycleMeasurementTestProvider(t *testing.T, admission *recycleAdmissionFixture, providers, completed int, hotkey [32]byte) *releaseMeasurementV2TestFixture {
 	t.Helper()
 	key := recycleMeasurementTestSourcesKey{genesis: admission.cfg.GenesisHash, policy: admission.cfg.PolicyHash, providers: providers, completed: completed, hotkey: hotkey}
@@ -107,7 +110,23 @@ func sharedRecycleMeasurementTestProvider(t *testing.T, admission *recycleAdmiss
 	defer cache.stateLock.Unlock()
 	sources := cache.sourceKVs[key]
 	if sources == nil {
-		provider := newRecycleMeasurementTestProvider(sharedTestFixtureOwner{T: t}, admission, providers, completed, hotkey)
+		owner, census := sharedTestFixtureOwner{T: t}, key
+		census.hotkey = [32]byte{}
+		trails := cache.trailKVs[census]
+		if trails == nil {
+			trails = map[uint64]*attemptCutV2SealTestFixture{}
+		}
+		identity := recycleMeasurementTestIdentity(admission)
+		provider := newReleaseMeasurementV2TestFixtureWithActivation(owner, completed, func(noId uint64) *attemptCutV2SealTestFixture {
+			if trails[noId] == nil {
+				selected := identity
+				selected.NoID = noId
+				trails[noId] = newAttemptCutV2SealTestFixtureForCensus(owner, 8, providers, completed, 1, false, admission.cfg.Policy, selected, attemptLedgerDiskTestLimits())
+			}
+			seal := *trails[noId]
+			seal.expected.Activation.Hotkey = hotkey
+			return &seal
+		}, nil)
 		sources = &recycleMeasurementTestSources{provider: provider, headKVs: map[uint64]AttemptLedgerHead{}, snapshotKVs: map[uint64]statsSnapshot{}, expectedKVs: map[uint64]AttemptCutV2Context{}}
 		for noID, operator := range provider.operators {
 			head, err := operator.seal.ledger.Head()
@@ -117,9 +136,10 @@ func sharedRecycleMeasurementTestProvider(t *testing.T, admission *recycleAdmiss
 			sources.headKVs[noID], sources.snapshotKVs[noID], sources.expectedKVs[noID] = head, operator.seal.engine.stats.snapshotStats(), operator.seal.expected
 		}
 		if cache.sourceKVs == nil {
+			cache.trailKVs = map[recycleMeasurementTestSourcesKey]map[uint64]*attemptCutV2SealTestFixture{}
 			cache.sourceKVs = map[recycleMeasurementTestSourcesKey]*recycleMeasurementTestSources{}
 		}
-		cache.sourceKVs[key] = sources
+		cache.trailKVs[census], cache.sourceKVs[key] = trails, sources
 	}
 	t.Cleanup(func() { sources.check(t, key) })
 	return copyReleaseMeasurementTestProvider(t, sources.provider)
@@ -137,8 +157,14 @@ func (self *recycleMeasurementTestSources) check(t *testing.T, key recycleMeasur
 		t.Errorf("test changed operator %d's shared measurement sources: %v", noID, err)
 		cache := &recycleMeasurementTestSourcesCache
 		cache.stateLock.Lock()
-		if cache.sourceKVs[key] == self {
-			delete(cache.sourceKVs, key)
+		// Every hotkey's cuts of this census share its changed trails.
+		census := key
+		census.hotkey = [32]byte{}
+		delete(cache.trailKVs, census)
+		for other := range cache.sourceKVs {
+			if other.genesis == key.genesis && other.policy == key.policy && other.providers == key.providers && other.completed == key.completed {
+				delete(cache.sourceKVs, other)
+			}
 		}
 		cache.stateLock.Unlock()
 		return
