@@ -147,7 +147,7 @@ type mockVerifyServer struct {
 	cacheHits               int
 }
 
-func newMockVerifyServer(t *testing.T, providerCount int) (*mockVerifyServer, ed25519.PrivateKey, connect.Id) {
+func newMockVerifyServer(t testing.TB, providerCount int) (*mockVerifyServer, ed25519.PrivateKey, connect.Id) {
 	t.Helper()
 	_, serverKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

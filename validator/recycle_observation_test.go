@@ -25,7 +25,7 @@ import (
 
 // Uses the reviewed map hashers and SCALE type shapes, with portable ids that
 // have no relationship to any captured production metadata.
-func recycleAdmissionTestMetadata(t *testing.T, mutate func(*types.Metadata)) (string, string, *types.Metadata) {
+func recycleAdmissionTestMetadata(t testing.TB, mutate func(*types.Metadata)) (string, string, *types.Metadata) {
 	t.Helper()
 	id := types.NewSi1LookupTypeIDFromUInt
 	primitive := func(kind types.Si0TypeDefPrimitive) types.Si1TypeDef {
@@ -114,7 +114,7 @@ type recycleAdmissionFixture struct {
 }
 
 // Signs only generated fixture authority and writes private bounded inputs.
-func newRecycleAdmissionFixture(t *testing.T, mutate func(*types.Metadata)) *recycleAdmissionFixture {
+func newRecycleAdmissionFixture(t testing.TB, mutate func(*types.Metadata)) *recycleAdmissionFixture {
 	t.Helper()
 	metadataHex, metadataHash, metadata := recycleAdmissionTestMetadata(t, mutate)
 	input := recycleTestInput(t)
@@ -278,7 +278,7 @@ func (self *recycleAdmissionRouteClient) URL() string {
 }
 
 // External signing is explicit in fixtures; production never owns this key.
-func (self *recycleAdmissionFixture) sign(t *testing.T) {
+func (self *recycleAdmissionFixture) sign(t testing.TB) {
 	t.Helper()
 	message, err := self.approval.SigningMessage()
 	if err != nil {
@@ -298,7 +298,7 @@ func (self *recycleAdmissionFixture) sign(t *testing.T) {
 }
 
 // A real immutable writer must complete before any finalized RPC observation.
-func (self *recycleAdmissionFixture) retain(t *testing.T) {
+func (self *recycleAdmissionFixture) retain(t testing.TB) {
 	t.Helper()
 	if _, err := RetainOwnerRecycleApproval(t.Context(), self.cfg); err != nil {
 		t.Fatal(err)

@@ -21,7 +21,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func prepareAttemptLedgerCustodyTest(t *testing.T, ctx context.Context, root string, identity AttemptLedgerIdentity, key ed25519.PrivateKey) {
+func prepareAttemptLedgerCustodyTest(t testing.TB, ctx context.Context, root string, identity AttemptLedgerIdentity, key ed25519.PrivateKey) {
 	t.Helper()
 	public := key.Public().(ed25519.PublicKey)
 	identity.ValidatorVPK = attemptHex32(*(*[32]byte)(public))
