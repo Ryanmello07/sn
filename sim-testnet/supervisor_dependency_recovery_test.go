@@ -288,8 +288,9 @@ func TestSupervisorDependencyDockerHelper(t *testing.T) {
 // This exercises the real supervisor entry point, Docker adapter and manifest
 // so deleting its recovery wiring deterministically loses the expected start.
 // No child, data, setup, or funding action participates in the repair, and no
-// Docker helper outlives its parent. Under -race at load 22 the run took up
-// to 39 seconds, so its private owner allows several times that.
+// Docker helper outlives its parent. Under -race, on a CPU without AVX2 or SHA
+// extensions, the supervisor hashes its executable for 16 seconds before its
+// first Docker command, so recovery has two minutes and the private owner five.
 func TestSupervisorRecoversDependencyWhileKeepingGeneration(t *testing.T) {
 	runSupervisorDescendantOwnerTest(t, 0, 5*time.Minute, assertSupervisorRecoversDependencyWhileKeepingGenerationTest)
 }
@@ -353,7 +354,7 @@ func assertSupervisorRecoversDependencyWhileKeepingGenerationTest(t *testing.T) 
 		}
 	case err := <-done:
 		t.Fatalf("supervisor exited before dependency recovery: %v", err)
-	case <-time.After(20 * time.Second):
+	case <-time.After(2 * time.Minute):
 		cancel()
 		<-done
 		t.Fatal("supervisor did not recover its stopped dependency")
