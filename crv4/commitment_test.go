@@ -150,3 +150,24 @@ func TestFleetCommitmentWriteRejectsAdjacentMalformedProofs(t *testing.T) {
 		}
 	}
 }
+
+// The commitment oracle's decoders return the registration's fixed-width u32
+// block and LastCommitment's block, including a block whose low bits would
+// select a compact SCALE mode.
+func TestDecodeFleetCommitmentRegistrationWithBlock(t *testing.T) {
+	hash := [32]byte{0xf8, 0xcf, 0x01}
+	raw := append([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0x61, 0x4b, 0x8d, 0x00, 0x04, 0x83}, hash[:]...)
+	decoded, block, err := DecodeFleetCommitmentRegistrationWithBlockV454(raw)
+	if err != nil || decoded != hash || block != 9259873 {
+		t.Fatalf("decoded 0x%x block %d: %v", decoded, block, err)
+	}
+	if last, err := DecodeFleetCommitmentLastBlock([]byte{0x61, 0x4b, 0x8d, 0x00}); err != nil || last != 9259873 {
+		t.Fatalf("last %d: %v", last, err)
+	}
+	if _, err := DecodeFleetCommitmentLastBlock([]byte{0x61, 0x4b, 0x8d}); err == nil {
+		t.Fatal("accepted a three-byte LastCommitment")
+	}
+	if _, _, err := DecodeFleetCommitmentRegistrationWithBlockV454(append(raw, 0)); err == nil {
+		t.Fatal("accepted a trailing byte")
+	}
+}
