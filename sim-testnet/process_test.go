@@ -1844,7 +1844,7 @@ func TestSupervisorShutdownRejectsUnobservableLiveIdentity(t *testing.T) {
 // Reproduces a transaction-like subprocess that survives its group leader.
 // The supervisor must detect the old group and refuse an overlapping restart.
 func TestSupervisorDetectsDescendantAfterLeaderExit(t *testing.T) {
-	runSupervisorDescendantOwnerTest(t, assertSupervisorDescendantAfterLeaderExitTest)
+	runSupervisorDescendantOwnerTest(t, 1, 25*time.Second, assertSupervisorDescendantAfterLeaderExitTest)
 }
 
 // The leader really exits before its surviving group member is observed.
