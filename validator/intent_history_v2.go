@@ -247,8 +247,15 @@ func (self *IntentStore) sealHistoryV2(ctx context.Context, read *releaseIntentV
 		return err
 	}
 	pin := SteeringIntentSegment{SHA256: ReleaseMeasurementContentHash(encoded), Bytes: uint64(len(encoded)), Count: uint64(sealed), Head: attemptHex32(read.digests[earlier+sealed-1])}
-	if err := persistSteeringIntentSegment(filepath.Join(self.stateDir, filepath.FromSlash(steeringIntentSegmentName(pin.SHA256))), encoded); err != nil {
+	path := filepath.Join(self.stateDir, filepath.FromSlash(steeringIntentSegmentName(pin.SHA256)))
+	if err := persistSteeringIntentSegment(ctx, path, encoded); err != nil {
 		return err
+	}
+	// Newly referenced bytes have the same custody obligation as every older
+	// segment. Keep their native owner through the live-file exchange.
+	owned, err := read.custody.read(ctx, path, pin.Bytes, false)
+	if err != nil || !bytes.Equal(owned, encoded) {
+		return errors.Join(errors.New("V2 newly sealed intent segment changed before custody"), err)
 	}
 	read.file.Schema = SteeringIntentSealedSchema
 	read.file.Segments = append(slices.Clone(read.file.Segments), pin)
@@ -260,57 +267,20 @@ func (self *IntentStore) sealHistoryV2(ctx context.Context, read *releaseIntentV
 // the content-addressed name, so that name never holds a partial file. An
 // existing name must already hold exactly these bytes in this account's
 // private regular file, as after a crash before a live file pinned it.
-func persistSteeringIntentSegment(path string, encoded []byte) (resultErr error) {
-	directory := filepath.Dir(path)
-	if err := ensurePrivateStateDir(directory); err != nil {
-		return err
-	}
-	// The name and its directory entry are durable before any live file pins it.
-	syncDirectory := func() error {
-		parent, err := os.Open(directory)
-		if err != nil {
-			return err
-		}
-		return errors.Join(parent.Sync(), parent.Close())
-	}
-	existing := func() error {
-		info, err := os.Lstat(path)
-		if err != nil {
-			return err
-		}
-		prior, err := os.ReadFile(path)
-		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || !bytes.Equal(prior, encoded) {
-			return errors.Join(errors.New("V2 intent segment name holds other bytes"), err)
-		}
-		return syncDirectory()
-	}
-	if _, err := os.Lstat(path); err == nil {
-		return existing()
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	file, err := os.CreateTemp(directory, ".segment-")
+func persistSteeringIntentSegment(ctx context.Context, path string, encoded []byte) (resultErr error) {
+	// Share the existing descriptor-owned immutable publisher: all parent
+	// creation, no-replace linking, cleanup and durability use retained owners.
+	owner, err := acquireReleaseMeasurementInputV2Owner(ctx, path, uint64(len(encoded)), releaseMeasurementInputV2ReadHooks{}, true)
+	defer func() { resultErr = errors.Join(resultErr, owner.finish()) }()
 	if err != nil {
 		return err
 	}
-	temporary := file.Name()
-	defer func() {
-		if err := os.Remove(temporary); err != nil && !errors.Is(err, os.ErrNotExist) {
-			resultErr = errors.Join(resultErr, err)
-		}
-	}()
-	written, err := file.Write(encoded)
-	if err == nil && written != len(encoded) {
-		err = errors.New("V2 intent segment write was short")
+	if owner.directory.anchor.mode&0o077 != 0 || owner.directory.anchor.uid != uint32(os.Geteuid()) {
+		return errors.New("V2 intent segment directory is not private and owned; existing directories are not repaired")
 	}
-	if err := errors.Join(err, file.Chmod(0o600), file.Sync(), file.Close()); err != nil {
+	_, err = owner.read()
+	if err != nil && !(owner.initialMissing && releaseMeasurementInputV2OnlyMissing(err)) {
 		return err
 	}
-	if err := os.Link(temporary, path); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return existing()
-		}
-		return err
-	}
-	return syncDirectory()
+	return owner.write(encoded)
 }
