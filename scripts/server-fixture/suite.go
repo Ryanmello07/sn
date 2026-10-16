@@ -359,7 +359,7 @@ func createSuiteFixture(parent, server, postgres, redis string) (report fixtureR
 		"vault/services.yml":     []byte("{}\n"),
 		"vault/st.yml":           []byte("enabled: false\n"),
 		"vault/stripe.yml":       []byte("api:\n  token: ''\n  publishable_key: ''\nwebhook:\n  signing_secret: ''\n"),
-		"vault/x402.yml":         []byte("enabled: false\nskus: []\n"),
+		"vault/x402.yml":         []byte("enabled: false\nskus: {}\n"),
 		"vault/verify.yml":       []byte(fmt.Sprintf("profile: testnet\nkeys:\n  - server_key_id: 0\n    seed: %q\negress_hash_key: %q\nsettings:\n  step_timeout_seconds: 5\n  step_timeout_grace_seconds: 1\n  trail_ttl_grace_seconds: 60\n  egress_ttl_seconds: 600\n  egress_refresh_seconds: 60\n  reliability_a_min: 1\n  stats_period_seconds: 60\n  egress_ipv4_prefix: 29\n  egress_ipv6_prefix: 48\n  egress_hash_key_id: fixture-egress\n  soft_guardrails_enabled: false\n  hard_seed_per_minute_per_source: 40\n  hard_extend_per_minute_per_source: 400\n  hard_active_trails_per_source: 32\n", base64.StdEncoding.EncodeToString(secrets[3]), base64.StdEncoding.EncodeToString(secrets[4]))),
 		"config/apple_roots.pem": certificatePem,
 		"config/brevo.yml":       []byte("brevo:\n  list_ids:\n    new_networks: 1\n    network_users: 2\n"),
