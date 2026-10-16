@@ -336,7 +336,7 @@ func (self *ReleaseSteerer) checkSourceRoleMirrorV2(ctx context.Context, raw []b
 	if commitmentHash == ([32]byte{}) || blockHash == (types.Hash{}) || block == 0 {
 		return errors.New(releaseSourceRoleMirrorV2Rejection)
 	}
-	observed, err := self.native.FleetCommitmentAtContext(ctx, self.cfg.Netuid, self.hotkey.PublicKey(), blockHash)
+	observed, err := self.native.SourceCommitmentAtContext(ctx, self.cfg.Netuid, self.hotkey.PublicKey(), blockHash)
 	if err != nil {
 		return fmt.Errorf("%s: read the mirrored native write at block %d: %w", releaseSourceRoleMirrorV2Rejection, block, err)
 	}
