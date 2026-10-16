@@ -45,6 +45,13 @@ type releaseIntentV2VerifiedHistory struct {
 	options   map[int]ReleaseMeasurementV2Options
 }
 
+// The custody identities of a reused entry's artifact and envelope when this
+// process last read and hashed both in full.
+type releaseIntentV2RetainedFiles struct {
+	artifact attemptPrivateFileState
+	envelope attemptPrivateFileState
+}
+
 func (self *releaseIntentV2Owner) verifiedAuthority() releaseIntentV2VerifiedAuthority {
 	authority := releaseIntentV2VerifiedAuthority{runtime: self.runtime, provisionalEpochGaps: self.provisionalEpochGaps,
 		adoption: self.historyAdoption, bridge: self.nativeGapBridge}

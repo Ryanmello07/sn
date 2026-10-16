@@ -35,6 +35,9 @@ type releaseIntentV2Owner struct {
 	referenceReadHooks releaseMeasurementInputV2ReadHooks
 	// The retained prefix this process has already completely verified.
 	verified *releaseIntentV2VerifiedHistory
+	// Each reused entry's file identities, by entry digest, as the last
+	// complete read hashed them.
+	retainedFiles map[[32]byte]releaseIntentV2RetainedFiles
 }
 
 type releaseIntentV2Read struct {
@@ -157,46 +160,83 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 }
 
 // An entry this process already verified completely keeps its native, source,
-// envelope and replay verdict. Its retained files are still read through the
+// envelope and replay verdict. Its retained files are still owned through the
 // same custody and must still match the hashes its unchanged bytes pin, and
 // its local source commitment and hotkey are checked again. The artifact is
 // decoded only when the caller needs its fields: the hash already pins the
 // exact bytes that decoded before, and decoding every retained artifact on
 // every steering poll costs time that grows with the whole history. For the
 // same reason the entry checks only the custody it acquires.
-func (self *IntentStore) readVerifiedMeasurementV2(ctx context.Context, custody *releaseEvidenceV2StartupReferences, intent *SteeringIntent, decode bool) (*ReleaseMeasurementArtifact, []byte, error) {
+//
+// For the same reason again, when the caller needs neither the artifact nor
+// its bytes, files whose custody identities equal those of the last read that
+// hashed them in full (retained, for this entry digest) are owned without their
+// bytes. The identity covers device, inode, links, mode, owner, size and the
+// change and modification times, so a write, replacement or relink changes
+// it and the files are read and hashed again, and every later custody check
+// refuses any change to the identity owned here. The source commitment hashes
+// those unchanged bytes with the entry's own proof, which the digest binds.
+// The identities read in full are returned when custody owns both files.
+func (self *IntentStore) readVerifiedMeasurementV2(ctx context.Context, custody *releaseEvidenceV2StartupReferences, intent *SteeringIntent, retained *releaseIntentV2RetainedFiles, decode, keepMeasurement bool) (*ReleaseMeasurementArtifact, []byte, *releaseIntentV2RetainedFiles, error) {
 	runtime, bounds := self.v2.runtime, self.v2.runtime.cfg.EvidenceV2.Bounds
 	entryOwnerIndex := len(custody.owners)
+	finish := func() error {
+		if intent.Prepared == nil || intent.Prepared.HotkeyHex != releaseHex32(runtime.hotkey.PublicKey()) {
+			return errors.New("V2 prepared hotkey differs from independently owned validator identity")
+		}
+		if err := errors.Join(custody.checkSince(entryOwnerIndex), ctx.Err()); err != nil {
+			return err
+		}
+		return self.retainOwnerRecyclePreparedAuthorization(intent)
+	}
+	if retained != nil && !decode && !keepMeasurement {
+		artifactState, err := runtime.history.observeContentReference(ctx, custody, intent.MeasurementArtifactPath, intent.MeasurementArtifactHash, intent.MeasurementArtifactSize, bounds.MaxArtifactBytes, false)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		envelopeState, err := runtime.history.observeContentReference(ctx, custody, intent.MeasurementEnvelopePath, intent.MeasurementEnvelopeHash, intent.MeasurementEnvelopeSize, bounds.MaxControlBytes, true)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if (releaseIntentV2RetainedFiles{artifact: artifactState, envelope: envelopeState}) == *retained {
+			if err := finish(); err != nil {
+				return nil, nil, nil, err
+			}
+			return nil, nil, retained, nil
+		}
+		// The full read below charges both files once more, so each file is
+		// charged once against the history allowance, as without this reuse.
+		custody.remaining += uint64(artifactState.size) + uint64(envelopeState.size)
+	}
+	fileOwnerIndex := len(custody.owners)
 	measurement, err := runtime.history.readContentReference(ctx, custody, intent.MeasurementArtifactPath, intent.MeasurementArtifactHash, intent.MeasurementArtifactSize, bounds.MaxArtifactBytes, false)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if _, err := runtime.history.readContentReference(ctx, custody, intent.MeasurementEnvelopePath, intent.MeasurementEnvelopeHash, intent.MeasurementEnvelopeSize, bounds.MaxControlBytes, true); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var artifact *ReleaseMeasurementArtifact
 	if decode {
 		if artifact, err = decodeReleaseMeasurementV2Bytes(ctx, measurement, bounds.MaxArtifactBytes, bounds.MaxOperators); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	sourceHash, err := releaseIntentNativeSourceHash(ctx, measurement, intent)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if intent.Prepared == nil || intent.Prepared.SourceCommitment == nil || intent.Prepared.SourceCommitment.Hash != releaseHex32(sourceHash) {
-		return nil, nil, errors.New("V2 intent lacks its exact pre-Prepared native source commitment")
+		return nil, nil, nil, errors.New("V2 intent lacks its exact pre-Prepared native source commitment")
 	}
-	if intent.Prepared.HotkeyHex != releaseHex32(runtime.hotkey.PublicKey()) {
-		return nil, nil, errors.New("V2 prepared hotkey differs from independently owned validator identity")
+	if err := finish(); err != nil {
+		return nil, nil, nil, err
 	}
-	if err := errors.Join(custody.checkSince(entryOwnerIndex), ctx.Err()); err != nil {
-		return nil, nil, err
+	var hashed *releaseIntentV2RetainedFiles
+	if owners := custody.owners[fileOwnerIndex:]; len(owners) == 2 && owners[0].witness != nil && owners[1].witness != nil {
+		hashed = &releaseIntentV2RetainedFiles{artifact: *owners[0].witness, envelope: *owners[1].witness}
 	}
-	if err := self.retainOwnerRecyclePreparedAuthorization(intent); err != nil {
-		return nil, nil, err
-	}
-	return artifact, measurement, nil
+	return artifact, measurement, hashed, nil
 }
 
 func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Read, resultErr error) {
@@ -228,7 +268,7 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 	}
 	result.encoded = encoded
 	if encoded == nil {
-		self.v2.verified = nil
+		self.v2.verified, self.v2.retainedFiles = nil, nil
 		if self.v2.historyAdoption != nil {
 			if _, err := self.v2.historyAdoption.request.matchPrefix(ctx, result.file, nil, bounds.IntentFileLimit()); err != nil {
 				return result, err
@@ -282,6 +322,8 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 		}
 	}()
 	verifiedOptions := make(map[int]ReleaseMeasurementV2Options, min(len(all), releaseIntentV2VerifiedTail))
+	// Replaces the retained file identities only once the whole read passes.
+	retainedFiles := make(map[[32]byte]releaseIntentV2RetainedFiles, reusable)
 	seen := make(map[string]bool, len(all))
 	var previous *SteeringIntent
 	for index, intent := range all {
@@ -308,8 +350,16 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 		optionsKnown := true
 		if index < reusable {
 			// Only the first entry's artifact is consulted below, for its
-			// absent predecessor; reused lineage needs just the bytes.
-			artifact, measurement, err = self.readVerifiedMeasurementV2(ctx, result.custody, intent, index == 0 || index == anchor)
+			// absent predecessor; reused lineage needs just the bytes, and only
+			// the last reused entry's, as the next entry's predecessor.
+			var retained, hashed *releaseIntentV2RetainedFiles
+			if files, found := self.v2.retainedFiles[digests[index]]; found {
+				retained = &files
+			}
+			artifact, measurement, hashed, err = self.readVerifiedMeasurementV2(ctx, result.custody, intent, retained, index == 0 || index == anchor, index == reusable-1)
+			if err == nil && hashed != nil {
+				retainedFiles[digests[index]] = *hashed
+			}
 			if err == nil && index == anchor {
 				options, err = self.v2.runtime.measurementOptionsForIntent(ctx, intent, artifact)
 			} else {
@@ -356,6 +406,7 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 		self.v2.rememberVerifiedHistory(authority, digests, verifiedOptions)
 		startup.rememberIntents(digests, true)
 	}
+	self.v2.retainedFiles = retainedFiles
 	return result, nil
 }
 

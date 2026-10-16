@@ -273,7 +273,7 @@ func TestIntentV2VerifiedMeasurementDecodesOnlyOnRequest(t *testing.T) {
 	read := func(decode bool) (*ReleaseMeasurementArtifact, []byte, error) {
 		t.Helper()
 		custody := &releaseEvidenceV2StartupReferences{remaining: fixture.runtime.cfg.EvidenceV2.Bounds.MaxHistoryBytes}
-		artifact, measurement, err := store.readVerifiedMeasurementV2(t.Context(), custody, intent, decode)
+		artifact, measurement, _, err := store.readVerifiedMeasurementV2(t.Context(), custody, intent, nil, decode, false)
 		return artifact, measurement, errors.Join(err, custody.close())
 	}
 	decoded, decodedBytes, err := read(true)
@@ -290,7 +290,7 @@ func TestIntentV2VerifiedMeasurementDecodesOnlyOnRequest(t *testing.T) {
 	prepared.HotkeyHex = releaseHex32([32]byte{1})
 	changed.Prepared = &prepared
 	custody := &releaseEvidenceV2StartupReferences{remaining: fixture.runtime.cfg.EvidenceV2.Bounds.MaxHistoryBytes}
-	_, _, err = store.readVerifiedMeasurementV2(t.Context(), custody, &changed, false)
+	_, _, _, err = store.readVerifiedMeasurementV2(t.Context(), custody, &changed, nil, false, false)
 	if err = errors.Join(err, custody.close()); err == nil {
 		t.Fatal("undecoded verified read accepted a different prepared hotkey")
 	}
@@ -345,7 +345,7 @@ func TestIntentV2EntryReadChecksOnlyItsOwnCustody(t *testing.T) {
 		entry func(*releaseEvidenceV2StartupReferences) error
 	}{
 		{name: "reused", entry: func(custody *releaseEvidenceV2StartupReferences) error {
-			_, _, err := store.readVerifiedMeasurementV2(t.Context(), custody, intent, false)
+			_, _, _, err := store.readVerifiedMeasurementV2(t.Context(), custody, intent, nil, false, false)
 			return err
 		}},
 		{name: "complete", entry: func(custody *releaseEvidenceV2StartupReferences) error {

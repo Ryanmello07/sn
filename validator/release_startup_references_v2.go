@@ -78,6 +78,26 @@ func (self *releaseEvidenceV2StartupReferences) read(ctx context.Context, path s
 	return encoded, owner.check()
 }
 
+// Owns an existing file's identity without reading its bytes, under the same
+// acquisition and allowance as read. Every later check refuses any change to
+// that identity. Archive custody has no physical identity to observe.
+func (self *releaseEvidenceV2StartupReferences) observe(ctx context.Context, path string, limit uint64) (attemptPrivateFileState, error) {
+	if self.closed || self.archive != nil || limit == 0 || self.remaining == 0 {
+		return attemptPrivateFileState{}, errors.New("startup reference identity owner is exhausted, closed or archived")
+	}
+	owner, err := acquireReleaseMeasurementInputV2Owner(ctx, path, min(limit, self.remaining), self.readHooks, false)
+	self.owners = append(self.owners, owner)
+	if err != nil {
+		return attemptPrivateFileState{}, err
+	}
+	state, err := owner.observeLeaf()
+	if err != nil {
+		return attemptPrivateFileState{}, err
+	}
+	self.remaining -= uint64(state.size)
+	return state, owner.check()
+}
+
 // No callback is allowed to turn a shortened or retargeted file into the same
 // authenticated reference set. Late errors survive all owner releases.
 func (self *releaseEvidenceV2StartupReferences) check() error {
@@ -298,8 +318,34 @@ func verifyStartupArtifactSuccessorV2(previous *SteeringIntent, priorArtifact, a
 // Hash-derived namespace grammar precedes the first parent lookup; a declared
 // size can narrow but never enlarge either the per-file or aggregate bound.
 func (self *releaseEvidenceV2StartupHistory) readContentReference(ctx context.Context, owned *releaseEvidenceV2StartupReferences, path, hash string, size, limit uint64, envelope bool) ([]byte, error) {
-	if _, err := parseReleaseContentHash(hash); err != nil {
+	absolute, err := self.contentReferencePath(owned, path, hash, size, limit, envelope)
+	if err != nil {
 		return nil, err
+	}
+	encoded, err := owned.read(ctx, absolute, size, false)
+	if err != nil || uint64(len(encoded)) != size || ReleaseMeasurementContentHash(encoded) != hash {
+		return nil, errors.Join(errors.New("startup content reference bytes differ from the signed content address"), err)
+	}
+	return encoded, nil
+}
+
+// The identity of a content reference whose bytes this process has already
+// read and hashed, admitted exactly as readContentReference admits it.
+func (self *releaseEvidenceV2StartupHistory) observeContentReference(ctx context.Context, owned *releaseEvidenceV2StartupReferences, path, hash string, size, limit uint64, envelope bool) (attemptPrivateFileState, error) {
+	absolute, err := self.contentReferencePath(owned, path, hash, size, limit, envelope)
+	if err != nil {
+		return attemptPrivateFileState{}, err
+	}
+	state, err := owned.observe(ctx, absolute, size)
+	if err == nil && uint64(state.size) != size {
+		err = errors.New("startup content reference size differs from its signed content address")
+	}
+	return state, err
+}
+
+func (self *releaseEvidenceV2StartupHistory) contentReferencePath(owned *releaseEvidenceV2StartupReferences, path, hash string, size, limit uint64, envelope bool) (string, error) {
+	if _, err := parseReleaseContentHash(hash); err != nil {
+		return "", err
 	}
 	parts := []string{"measurements"}
 	if envelope {
@@ -309,13 +355,9 @@ func (self *releaseEvidenceV2StartupHistory) readContentReference(ctx context.Co
 	parts = append(parts, strings.TrimPrefix(hash, "sha256:")+".json")
 	want := filepath.ToSlash(filepath.Join(parts...))
 	if path != want || size == 0 || size > limit || size > owned.remaining {
-		return nil, errors.New("startup content reference path or finite size differs")
+		return "", errors.New("startup content reference path or finite size differs")
 	}
-	encoded, err := owned.read(ctx, filepath.Join(self.cfg.StateDir, filepath.FromSlash(want)), size, false)
-	if err != nil || uint64(len(encoded)) != size || ReleaseMeasurementContentHash(encoded) != hash {
-		return nil, errors.Join(errors.New("startup content reference bytes differ from the signed content address"), err)
-	}
-	return encoded, nil
+	return filepath.Join(self.cfg.StateDir, filepath.FromSlash(want)), nil
 }
 
 // Signature verification was performed by the explicit envelope decoder.
