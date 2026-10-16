@@ -1541,8 +1541,8 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"go test -race ./controller -run \"$controller_db_tests\"",
 		"go test -race ./model -run \"$model_db_tests\"",
 		"go test -timeout 40m ./proxy -count=1",
-		`go test ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
-		`go test -race ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
+		`go test . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
+		`go test -race . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
 	} {
 		if !strings.Contains(script, required) {
 			t.Errorf("local release gate omits operator regression %s", required)
@@ -1568,8 +1568,8 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"StTransactionAttemptCandidatesConvergeOnOneWinner",
 		"go test -timeout 90m ./monitor -count=1",
 		"go test -race -timeout 180m ./monitor -count=1",
-		`go test ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
-		`go test -race ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
+		`go test . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
+		`go test -race . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
 	} {
 		if testIndex := strings.Index(script, databaseTest); databaseIndex < 0 || testIndex <= databaseIndex {
 			t.Errorf("database-backed operator regression %s is outside the isolated database gate", databaseTest)

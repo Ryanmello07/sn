@@ -926,10 +926,12 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     export release_gate_services_error
     release_gate_preflight_refusal "$release_gate_services_error"
   fi
-  # The server's public native-fee settlement tests settle the fixtures that
-  # sn-mainnet-exports exports, with the mainnet.test image that exported
-  # them, which they pin by path and SHA-256. Like a ./mainnet shard, they
-  # need that job's exit zero and run with its environment, last in server-db.
+  # The server's native-fee settlement tests: its denomination policy and
+  # schema, stnativefees, the controller and the durable model. The public
+  # ones settle the fixtures that sn-mainnet-exports exports, with the
+  # mainnet.test image that exported them, which they pin by path and
+  # SHA-256. Like a ./mainnet shard, they need that job's exit zero and run
+  # with its environment, last in server-db.
   release_gate_server_native_fee() {
     if [[ "${release_gate_mainnet_exports_exit:-}" != 0 ]]; then
       printf 'release gate: server-db has no native-fee exports: sn-mainnet-exports exit %s\n' "${release_gate_mainnet_exports_exit:-unknown}" >&2
@@ -937,9 +939,9 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     fi
     source "$release_gate_mainnet_exports/environment.sh"
     cd "$workspace/server"
-    native_fee_settlement_tests='^Test(NativeFeeControllerPublic(ProofSettlesWithoutSignerConfiguration|UnknownRefundKeepsOriginalCeiling)|StNativeFeeSettlementPublic(OwnedProofRetainsAllOriginals|MissingRefundKeepsFullCeiling|ProofRecoversLostSignerResult|FractionalConflictRevokesCredit))$'
-    go test ./controller ./model -run "$native_fee_settlement_tests" -count=1
-    go test -race ./controller ./model -run "$native_fee_settlement_tests" -count=1
+    native_fee_settlement_tests='^Test(StNativeFee|NativeFeeCli|NativeFeeController)'
+    go test . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1
+    go test -race . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1
   }
   export -f release_gate_server_native_fee
   release_phase_server_db() {

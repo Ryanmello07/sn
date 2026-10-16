@@ -1,11 +1,12 @@
 package main
 
-// server-db's native-fee owner: the server's public native-fee settlement
-// tests settle the fixtures that sn-mainnet-exports exports, with the
-// mainnet.test image that exported them, which they pin by path and SHA-256.
-// Like a ./mainnet shard's owner, it needs that job's exit zero, reads that
-// job's environment and runs its tests in both modes, and server-db, which the
-// gate admits after it joins the exports job, runs it last.
+// server-db's native-fee owner runs every server native-fee settlement test,
+// in the root package, stnativefees, ./controller and ./model. The public ones
+// settle the fixtures that sn-mainnet-exports exports, with the mainnet.test
+// image that exported them, which they pin by path and SHA-256. Like a
+// ./mainnet shard's owner, it needs that job's exit zero, reads that job's
+// environment and runs its tests in both modes, and server-db, which the gate
+// admits after it joins the exports job, runs it last.
 
 import (
 	"errors"
@@ -19,8 +20,8 @@ import (
 	"testing"
 )
 
-// The server's public native-fee settlement tests, by exact name.
-const releaseGateServerNativeFeeSelector = "^Test(NativeFeeControllerPublic(ProofSettlesWithoutSignerConfiguration|UnknownRefundKeepsOriginalCeiling)|StNativeFeeSettlementPublic(OwnedProofRetainsAllOriginals|MissingRefundKeepsFullCeiling|ProofRecoversLostSignerResult|FractionalConflictRevokesCredit))$"
+// The server's native-fee settlement test families.
+const releaseGateServerNativeFeeSelector = "^Test(StNativeFee|NativeFeeCli|NativeFeeController)"
 
 // The owner's whole body, trimmed.
 var releaseGateServerNativeFeeBody = []string{
@@ -31,12 +32,12 @@ var releaseGateServerNativeFeeBody = []string{
 	`source "$release_gate_mainnet_exports/environment.sh"`,
 	`cd "$workspace/server"`,
 	"native_fee_settlement_tests='" + releaseGateServerNativeFeeSelector + "'",
-	`go test ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
-	`go test -race ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
+	`go test . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
+	`go test -race . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
 }
 
-// The server test sources whose every test the owner runs.
-var releaseGateServerNativeFeeSources = []string{"../../server/controller/st_native_fee_settlement_public_test.go", "../../server/model/st_native_fee_settlement_public_test.go"}
+// The server's native-fee test sources, whose every test the owner runs.
+var releaseGateServerNativeFeeSources = []string{"../../server/st_native_fee_*_test.go", "../../server/cli/stnativefees/*_test.go", "../../server/controller/st_native_fee_*_test.go", "../../server/model/st_native_fee_*_test.go"}
 
 // The owner's body in the script, exported, and called once, as server-db's
 // last command; the owner runs every test of its sources.
@@ -118,18 +119,30 @@ func runReleaseGateServerNativeFeeOwner(t *testing.T, exit string) (string, stri
 }
 
 // The gate's native-fee owner is its one reviewed body, which server-db
-// exports and runs last, and it runs every test of the server's public
-// native-fee settlement sources; a changed body or a lost call is refused.
-func TestReleaseGateServerNativeFeeOwnerRunsEveryPublicTest(t *testing.T) {
+// exports and runs last, and it runs every test of the server's native-fee
+// settlement sources, the public ones among them; a changed body or a lost
+// call is refused.
+func TestReleaseGateServerNativeFeeOwnerRunsEveryNativeFeeTest(t *testing.T) {
 	t.Parallel()
 	script := readReleaseGateLocalScript(t)
 	var sources []string
-	for _, path := range releaseGateServerNativeFeeSources {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
+	for _, pattern := range releaseGateServerNativeFeeSources {
+		paths, err := filepath.Glob(pattern)
+		if err != nil || len(paths) == 0 {
+			t.Fatalf("native-fee sources %s: %d files, %v", pattern, len(paths), err)
 		}
-		sources = append(sources, string(raw))
+		for _, path := range paths {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sources = append(sources, string(raw))
+		}
+	}
+	for _, public := range []string{"TestNativeFeeControllerPublicProofSettlesWithoutSignerConfiguration", "TestNativeFeeControllerPublicUnknownRefundKeepsOriginalCeiling", "TestStNativeFeeSettlementPublicOwnedProofRetainsAllOriginals", "TestStNativeFeeSettlementPublicMissingRefundKeepsFullCeiling", "TestStNativeFeeSettlementPublicProofRecoversLostSignerResult", "TestStNativeFeeSettlementPublicFractionalConflictRevokesCredit"} {
+		if declared, err := releaseSelectedTestDeclarations("^"+public+"$", sources); err != nil || len(declared) != 1 {
+			t.Fatalf("the native-fee sources do not declare %s: %v", public, err)
+		}
 	}
 	if err := verifyReleaseGateServerNativeFeeOwner(script, sources); err != nil {
 		t.Fatal(err)
@@ -139,8 +152,8 @@ func TestReleaseGateServerNativeFeeOwnerRunsEveryPublicTest(t *testing.T) {
 		{"\n    release_gate_server_native_fee\n  }\n", "\n    release_gate_server_native_fee || true\n  }\n"},
 		{"\n  export -f release_gate_server_native_fee\n", "\n"},
 		{"\n    source \"$release_gate_mainnet_exports/environment.sh\"\n    cd \"$workspace/server\"\n", "\n    cd \"$workspace/server\"\n"},
-		{"\n    go test -race ./controller ./model -run \"$native_fee_settlement_tests\" -count=1\n", "\n"},
-		{"|FractionalConflictRevokesCredit))$'", "))$'"},
+		{"\n    go test -race . ./cli/stnativefees ./controller ./model -run \"$native_fee_settlement_tests\" -count=1\n", "\n"},
+		{"native_fee_settlement_tests='^Test(StNativeFee|NativeFeeCli|NativeFeeController)'", "native_fee_settlement_tests='^Test(StNativeFee|NativeFeeController)'"},
 	} {
 		if strings.Count(script, change.old) != 1 {
 			t.Fatalf("the mutation names no unique text: %q", change.old)
@@ -149,14 +162,14 @@ func TestReleaseGateServerNativeFeeOwnerRunsEveryPublicTest(t *testing.T) {
 			t.Fatalf("the native-fee owner accepted %q", change.new)
 		}
 	}
-	if verifyReleaseGateServerNativeFeeOwner(script, append(slices.Clone(sources), "package model\nfunc TestStNativeFeeSettlementPublicUnselected(t *testing.T) {}\n")) == nil {
-		t.Fatal("the native-fee owner accepted a public test it does not run")
+	if verifyReleaseGateServerNativeFeeOwner(script, append(slices.Clone(sources), "package model\nfunc TestNativeFeeSettlementUnselected(t *testing.T) {}\n")) == nil {
+		t.Fatal("the native-fee owner accepted a native-fee test it does not run")
 	}
 }
 
-// With the exports job's exit zero, the owner runs the public native-fee
-// settlement tests normal and race in the server's checkout, with exactly the
-// exports' native-fee settlement variables.
+// With the exports job's exit zero, the owner runs the native-fee settlement
+// tests normal and race in the server's checkout, with exactly the exports'
+// native-fee settlement variables.
 func TestReleaseGateServerNativeFeeOwnerRunsWithTheExports(t *testing.T) {
 	t.Parallel()
 	root, output, calls, err := runReleaseGateServerNativeFeeOwner(t, "release_gate_mainnet_exports_exit=0")
@@ -168,8 +181,8 @@ func TestReleaseGateServerNativeFeeOwnerRunsWithTheExports(t *testing.T) {
 		" URNETWORK_NATIVE_FEE_SETTLEMENT_VERIFIER_SHA256=sha256:" + strings.Repeat("ab", 32) + " "
 	server := filepath.Join(root, "workspace", "server")
 	want := []string{
-		"test ./controller ./model -run " + releaseGateServerNativeFeeSelector + " -count=1|" + server + "|" + environment,
-		"test -race ./controller ./model -run " + releaseGateServerNativeFeeSelector + " -count=1|" + server + "|" + environment,
+		"test . ./cli/stnativefees ./controller ./model -run " + releaseGateServerNativeFeeSelector + " -count=1|" + server + "|" + environment,
+		"test -race . ./cli/stnativefees ./controller ./model -run " + releaseGateServerNativeFeeSelector + " -count=1|" + server + "|" + environment,
 	}
 	if !slices.Equal(calls, want) {
 		t.Fatalf("the owner ran\n%s\nwant\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))
