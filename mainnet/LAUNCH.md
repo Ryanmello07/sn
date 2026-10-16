@@ -869,7 +869,9 @@ validator permit or without a standalone fleet `set_commitment`; that was
 heuristic (a permit can lapse, it dropped valid fleets, and one unreadable role
 stopped all mirroring). Fleet commitments now have their own format: **exactly
 one `Data::Raw40` field holding `urfleet1` followed by the 32-byte hash**
-(`crv4.EncodeFleetCommitmentInfo`, 42 bytes of `CommitmentInfo`). The oracle
+(`crv4.EncodeFleetCommitmentInfo`, 42 bytes of `CommitmentInfo`; `Raw40` is
+`Data` variant 41 and `Sha256` is 131 in the runtime-478 metadata, and
+`pallet_commitments` `types.rs` is unchanged in runtime 479). The oracle
 mirrors **only** that format and extracts the hash; the contract is unchanged.
 It never mirrors a one-field `Sha256` commitment, whether a validator's source
 commitment or a fleet published before the tag, and it reads no role, permit or
@@ -883,8 +885,13 @@ until its mirrored commitment ages past `commitmentMaxAgeBlocks` (the three
 fleets already mirrored stay valid until about block 9,360,673), because
 `bindFleetMember` reads only the coordinator's mirrored record. Before then,
 each miner runs `provider fleet publish` with a release that writes the tagged
-format; the oracle mirrors that new commitment. `provider fleet status` reports
-an untagged native commitment as needing a republish.
+format; the oracle mirrors that new commitment. On the mainnet path a tagged
+publish is a new recovery intent, so an earlier finalized untagged publish
+does not make it report "already finalized". An unresolved untagged publish is
+first finished from its original signed bytes, verified with the legacy
+decoder and closed with a "republish in the tagged format" outcome, so it no
+longer blocks publish, bind or revoke. `provider fleet status` reports an
+untagged native commitment as needing a republish.
 
 ### What it does
 
@@ -902,7 +909,9 @@ Every `--poll_interval` (30 s) it runs one cycle:
    one-field `Sha256` entries (validator sources and untagged fleets), other
    tags or lengths and multi-field entries are ignored. The format alone
    identifies a fleet: it reads no role or permit. `bindFleetMember` itself
-   checks the hotkey's live UID. It skips a commitment that `mirroredCommitments(hotkey)`
+   checks the hotkey's live UID. So a tagged commitment from a deregistered
+   hotkey can now be mirrored; that costs only gas, at most `--max_sends`
+   mirrors per cycle, and the mirror can never be bound. It skips a commitment that `mirroredCommitments(hotkey)`
    at the EVM finalized block already holds (or holds newer), and one older than
    `policyAt(currentEpoch()).commitmentMaxAgeBlocks`, which could no longer be
    bound.

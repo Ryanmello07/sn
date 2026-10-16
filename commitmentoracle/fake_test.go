@@ -20,8 +20,6 @@ import (
 	"testing"
 	"time"
 
-	gsrpctypes "github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -40,6 +38,8 @@ type fakeNative struct {
 	headers       map[[32]byte]uint64
 	stateReads    [][32]byte
 	headErr       error
+	// Every native read by method name.
+	reads map[string]int
 }
 
 func newFakeNative(finalized nativeHead) *fakeNative {
@@ -52,28 +52,13 @@ func newFakeNative(finalized nativeHead) *fakeNative {
 	}
 }
 
-// Chain state the oracle must not depend on. Before the fleet tag the oracle
-// read each hotkey's validator permit and its commitment block's body
-// (f8a7c15e); it now identifies a fleet by format alone and reads neither, so
-// these record the scenario for the reader and change nothing. The pre-fix
-// verification of format_test.go maps them onto the f8a7c15e fake instead.
-func (self *fakeNative) setRole(hotkey [32]byte, uid uint16, validatorPermit bool) {}
-func (self *fakeNative) setBody(blockHash [32]byte, extrinsics ...[]byte)          {}
-func (self *fakeNative) failRoles(err error)                                       {}
-
-// A signed v4 extrinsic from signer carrying call, with a zero sr25519
-// signature, an immortal era, nonce 0, tip 0 and metadata hash mode 0.
-func synthSignedExtrinsic(signer [32]byte, call []byte) []byte {
-	body := append([]byte{0x84, 0x00}, signer[:]...)
-	body = append(body, 0x01)
-	body = append(body, make([]byte, 64)...)
-	body = append(body, 0x00, 0x00, 0x00, 0x00)
-	body = append(body, call...)
-	length, err := codec.Encode(gsrpctypes.NewUCompactFromUInt(uint64(len(body))))
-	if err != nil {
-		panic(err)
+// Records one read by kind. nativeReader is the oracle's only native access,
+// so reads is every native read a cycle made.
+func (self *fakeNative) read(kind string) {
+	if self.reads == nil {
+		self.reads = map[string]int{}
 	}
-	return append(length, body...)
+	self.reads[kind] += 1
 }
 
 // Puts a registration at state blockHash, with a matching LastCommitment.
@@ -92,10 +77,12 @@ func (self *fakeNative) block(number uint64, hash [32]byte) {
 }
 
 func (self *fakeNative) finalizedHead(ctx context.Context) (nativeHead, error) {
+	self.read("finalizedHead")
 	return self.finalized, self.headErr
 }
 
 func (self *fakeNative) commitments(ctx context.Context, netuid uint16, blockHash [32]byte) ([]rawCommitment, error) {
+	self.read("commitments")
 	self.stateReads = append(self.stateReads, blockHash)
 	entries := []rawCommitment{}
 	for hotkey, raw := range self.registrations[blockHash] {
@@ -106,16 +93,19 @@ func (self *fakeNative) commitments(ctx context.Context, netuid uint16, blockHas
 }
 
 func (self *fakeNative) commitment(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash [32]byte) ([]byte, error) {
+	self.read("commitment")
 	self.stateReads = append(self.stateReads, blockHash)
 	return self.registrations[blockHash][hotkey], nil
 }
 
 func (self *fakeNative) lastCommitment(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash [32]byte) ([]byte, error) {
+	self.read("lastCommitment")
 	self.stateReads = append(self.stateReads, blockHash)
 	return self.lasts[blockHash][hotkey], nil
 }
 
 func (self *fakeNative) blockHash(ctx context.Context, number uint64) ([32]byte, error) {
+	self.read("blockHash")
 	hash, ok := self.hashes[number]
 	if !ok {
 		return [32]byte{}, fmt.Errorf("no block %d", number)
@@ -124,6 +114,7 @@ func (self *fakeNative) blockHash(ctx context.Context, number uint64) ([32]byte,
 }
 
 func (self *fakeNative) headerNumber(ctx context.Context, blockHash [32]byte) (uint64, error) {
+	self.read("headerNumber")
 	number, ok := self.headers[blockHash]
 	if !ok {
 		return 0, errors.New("no header")

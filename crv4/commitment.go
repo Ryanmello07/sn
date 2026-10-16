@@ -9,6 +9,10 @@ package crv4
 //   Data::Raw40([u8; 40])   = 0x29 || 40 bytes (Raw<n> is variant n+1)
 //   Data::Sha256([u8; 32])  = 0x83 || hash
 //
+// TestCommitmentDataVariantsRuntime478 pins both indices against the
+// runtime-478 metadata; pallet_commitments types.rs is unchanged in runtime
+// 479 (release-479, e66c7eed).
+//
 // Two writers share one CommitmentOf(netuid, hotkey) slot format family, and
 // they must never be confused (SN25 validator mirror incident, 2026-10-15):
 //
@@ -212,13 +216,15 @@ func decodeCommitmentRegistrationFixedU32(raw []byte, decodeInfo func([]byte) ([
 	if len(raw) <= registrationFixedU32PrefixBytes {
 		return [32]byte{}, 0, fmt.Errorf("crv4: commitment registration has %d bytes", len(raw))
 	}
-	commitmentBlock := uint64(binary.LittleEndian.Uint32(raw[8:registrationFixedU32PrefixBytes]))
-	if commitmentBlock == 0 {
-		return [32]byte{}, 0, fmt.Errorf("crv4: commitment registration block is zero")
-	}
+	// The info first, so a one-field Sha256 is ErrLegacyFleetCommitment
+	// whatever its block.
 	commitmentHash, err := decodeInfo(raw[registrationFixedU32PrefixBytes:])
 	if err != nil {
 		return [32]byte{}, 0, err
+	}
+	commitmentBlock := uint64(binary.LittleEndian.Uint32(raw[8:registrationFixedU32PrefixBytes]))
+	if commitmentBlock == 0 {
+		return [32]byte{}, 0, fmt.Errorf("crv4: commitment registration block is zero")
 	}
 	return commitmentHash, commitmentBlock, nil
 }
@@ -418,6 +424,13 @@ func (c *Chain) FleetCommitmentAtContext(ctx context.Context, netuid uint16, hot
 // SourceCommitmentAtContext verifies a validator source commitment's exact
 // one-field Sha256 registration, as FleetCommitmentAtContext does a fleet's.
 func (c *Chain) SourceCommitmentAtContext(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash types.Hash) (*FinalizedCommitment, error) {
+	return c.commitmentAtContext(ctx, netuid, hotkey, blockHash, 0, decodeSourceCommitmentRegistrationFixedU32)
+}
+
+// LegacyFleetCommitmentAtContext reads a pre-tag fleet commitment (one
+// Sha256 field). It exists only so a miner can close an old publication
+// record; nothing may mirror or bind what it returns.
+func (c *Chain) LegacyFleetCommitmentAtContext(ctx context.Context, netuid uint16, hotkey [32]byte, blockHash types.Hash) (*FinalizedCommitment, error) {
 	return c.commitmentAtContext(ctx, netuid, hotkey, blockHash, 0, decodeSourceCommitmentRegistrationFixedU32)
 }
 

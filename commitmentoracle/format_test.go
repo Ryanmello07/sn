@@ -5,14 +5,14 @@ package commitmentoracle
 // identify a fleet commitment positively by its own format, one Raw40 field of
 // "urfleet1" and the hash, and mirror nothing else. The decision must not
 // depend on a validator permit, the shape of the writing extrinsic, or any
-// read that can fail. setRole, setBody and failRoles describe chain state the
-// oracle must not depend on (fake_test.go).
+// read that can fail: the oracle reads only commitment storage and headers,
+// which assertFormatReadsOnly checks against the fake's log of every read.
 
 import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -48,18 +48,23 @@ func formatPut(t *testing.T, native *fakeNative, hotkey [32]byte, block uint64, 
 	native.put(goldenHeadHash(), hotkey, mustHex(t, registration), mustHex(t, last))
 }
 
-// Commitments.set_commitment(25, info) as the SN25 runtime encodes it.
-func formatSetCommitmentCall(t *testing.T, infoHex string) []byte {
-	return append([]byte{18, 0, 25, 0}, mustHex(t, infoHex)...)
+// The oracle's whole native input: commitment storage, block hashes and
+// headers. No role, permit, registration or block body is ever read.
+func assertFormatReadsOnly(t *testing.T, native *fakeNative) {
+	t.Helper()
+	allowed := map[string]bool{"finalizedHead": true, "commitments": true, "commitment": true, "lastCommitment": true, "blockHash": true, "headerNumber": true}
+	for kind := range native.reads {
+		if !allowed[kind] {
+			t.Fatalf("the oracle read %s", kind)
+		}
+	}
 }
 
-// Utility.batch_all([calls...]).
-func formatBatchAll(calls ...[]byte) []byte {
-	batch := []byte{11, 2, byte(len(calls) << 2)}
-	for _, call := range calls {
-		batch = append(batch, call...)
+func assertLegacy(t *testing.T, harness *testHarness, count int) {
+	t.Helper()
+	if harness.oracle.metrics.legacy != count || !strings.Contains(harness.oracle.metrics.render(harness.clock.now), metricsPrefix+"legacy_sha256_commitments "+strconv.Itoa(count)+"\n") {
+		t.Fatalf("legacy %d, want %d", harness.oracle.metrics.legacy, count)
 	}
-	return batch
 }
 
 func assertNothingMirrored(t *testing.T, harness *testHarness) {
@@ -80,67 +85,66 @@ func assertMirrored(t *testing.T, harness *testHarness, hotkey [32]byte, hash st
 	}
 }
 
-// The incident: the validator's source commitment (one Sha256 field, written
-// by Utility.batch_all with its CRv4 commit) is never mirrored, with or
-// without a validator permit.
+// The incident: the validator's source commitment (one Sha256 field, which
+// it wrote by Utility.batch_all with its CRv4 commit) is never mirrored. No
+// permit or extrinsic is an input, so this holds with the permit held or
+// lapsed.
 func TestFormatNeverMirrorsIncidentValidatorSourceCommitment(t *testing.T) {
-	for _, permit := range []bool{true, false} {
-		native := formatChain()
-		validator := mustHash(t, validatorHotkeyHex)
-		native.block(validatorBlock, mustHash(t, validatorBlockHashHex))
-		native.put(goldenHeadHash(), validator, mustHex(t, validatorRegistrationHex), mustHex(t, validatorLastHex))
-		native.setRole(validator, validatorUid, permit)
-		native.setBody(mustHash(t, validatorBlockHashHex), mustHex(t, validatorTimestampExtrinsicHex), mustHex(t, validatorSourceExtrinsicHex))
-		harness := newIncidentHarness(t, native, false)
-		if err := harness.oracle.cycle(context.Background()); err != nil {
-			t.Fatalf("permit %v: %v", permit, err)
-		}
-		assertNothingMirrored(t, harness)
-	}
-}
-
-// The lapse case: the permit is absent (lapsed, or the owner UID steering
-// without one) and the one-field Sha256 commitment was written standalone,
-// so no permit or extrinsic-shape heuristic can exclude it. The format alone
-// keeps it out.
-func TestFormatNeverMirrorsSha256CommitmentWithoutPermit(t *testing.T) {
 	native := formatChain()
 	validator := mustHash(t, validatorHotkeyHex)
-	blockHash := mustHash(t, validatorBlockHashHex)
-	formatPut(t, native, validator, validatorBlock, blockHash, "04"+"83"+validatorCommitmentHex)
-	native.setRole(validator, validatorUid, false)
-	native.setBody(blockHash, mustHex(t, validatorTimestampExtrinsicHex), synthSignedExtrinsic(validator, formatSetCommitmentCall(t, "04"+"83"+validatorCommitmentHex)))
+	native.block(validatorBlock, mustHash(t, validatorBlockHashHex))
+	native.put(goldenHeadHash(), validator, mustHex(t, validatorRegistrationHex), mustHex(t, validatorLastHex))
 	harness := newIncidentHarness(t, native, false)
 	if err := harness.oracle.cycle(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	assertNothingMirrored(t, harness)
+	assertLegacy(t, harness, 1)
+	assertFormatReadsOnly(t, native)
+}
+
+// Any one-field Sha256 commitment, at any block, is legacy and never
+// mirrored: the format alone keeps it out, where the f8a7c15e heuristic
+// mirrored one written standalone from a hotkey without a permit.
+func TestFormatNeverMirrorsStandaloneSha256Commitment(t *testing.T) {
+	native := formatChain()
+	validator := mustHash(t, validatorHotkeyHex)
+	formatPut(t, native, validator, validatorBlock, mustHash(t, validatorBlockHashHex), "04"+"83"+validatorCommitmentHex)
+	// A legacy registration with block 0 is still counted as legacy.
+	native.put(goldenHeadHash(), [32]byte{0x66}, mustHex(t, "0000000000000000"+"00000000"+"04"+"83"+validatorCommitmentHex), mustHex(t, "00000000"))
+	harness := newIncidentHarness(t, native, false)
+	if err := harness.oracle.cycle(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	assertNothingMirrored(t, harness)
+	assertLegacy(t, harness, 2)
 	if record := harness.evm.recordAt(validator, harness.evm.latest); record.finalizedBlock != 0 {
 		t.Fatalf("validator record %+v", record)
 	}
 }
 
-// A legacy untagged fleet commitment, the miner's real mainnet bytes with its
-// real standalone write, is not mirrored: the oracle accepts no legacy
-// format, so a Sha256 commitment can never be mirrored. The miner republishes.
+// A legacy untagged fleet commitment, the 7906/7916 miner's real mainnet
+// bytes, is not mirrored: the oracle accepts no legacy format. The miner
+// republishes.
 func TestFormatNeverMirrorsLegacyFleetCommitment(t *testing.T) {
 	native := formatChain()
 	miner := mustHash(t, goldenHotkeyHex)
 	native.block(goldenBlock, mustHash(t, goldenBlockHashHex))
 	native.put(goldenHeadHash(), miner, mustHex(t, legacyGoldenRegistrationHex), mustHex(t, goldenLastHex))
-	native.setRole(miner, goldenUid, false)
-	native.setBody(mustHash(t, goldenBlockHashHex), mustHex(t, goldenTimestampExtrinsicHex), mustHex(t, goldenFleetExtrinsicHex))
 	harness := newIncidentHarness(t, native, false)
 	if err := harness.oracle.cycle(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	assertNothingMirrored(t, harness)
+	assertLegacy(t, harness, 1)
 }
 
-// A tagged fleet commitment is mirrored whoever wrote it and however: from a
-// hotkey that holds a validator permit, from a Utility.batch_all, and from a
-// proxy's extrinsic signed by another account.
-func TestFormatMirrorsTaggedFleetFromPermitHotkeyAndBatchedWrites(t *testing.T) {
+// A tagged fleet commitment is mirrored whichever hotkey wrote it, including
+// the validator's own hotkey (UID 1, which holds a permit): the oracle reads
+// commitment storage and headers only, so neither a permit nor how the write
+// was batched or proxied, nor a failing role read, can keep a tagged fleet
+// out.
+func TestFormatMirrorsTaggedFleetsReadingOnlyCommitmentState(t *testing.T) {
 	native := formatChain()
 	type fleet struct {
 		hotkey    [32]byte
@@ -148,47 +152,29 @@ func TestFormatMirrorsTaggedFleetFromPermitHotkeyAndBatchedWrites(t *testing.T) 
 		block     uint64
 		blockHash [32]byte
 	}
-	permitHolder := fleet{hotkey: mustHash(t, validatorHotkeyHex), hash: strings.Repeat("a1", 32), block: 9286001, blockHash: [32]byte{0xb1}}
-	batched := fleet{hotkey: [32]byte{0x62}, hash: strings.Repeat("b2", 32), block: 9286002, blockHash: [32]byte{0xb2}}
-	proxied := fleet{hotkey: [32]byte{0x63}, hash: strings.Repeat("c3", 32), block: 9286003, blockHash: [32]byte{0xb3}}
-	for _, f := range []fleet{permitHolder, batched, proxied} {
+	fleets := []fleet{
+		{hotkey: mustHash(t, validatorHotkeyHex), hash: strings.Repeat("a1", 32), block: 9286001, blockHash: [32]byte{0xb1}},
+		{hotkey: [32]byte{0x62}, hash: strings.Repeat("b2", 32), block: 9286002, blockHash: [32]byte{0xb2}},
+		{hotkey: [32]byte{0x63}, hash: strings.Repeat("c3", 32), block: 9286003, blockHash: [32]byte{0xb3}},
+	}
+	for _, f := range fleets {
 		formatPut(t, native, f.hotkey, f.block, f.blockHash, taggedInfoHex(f.hash))
 	}
-	native.setRole(permitHolder.hotkey, validatorUid, true)
-	native.setBody(permitHolder.blockHash, synthSignedExtrinsic(permitHolder.hotkey, formatSetCommitmentCall(t, taggedInfoHex(permitHolder.hash))))
-	native.setRole(batched.hotkey, 40, false)
-	native.setBody(batched.blockHash, synthSignedExtrinsic(batched.hotkey, formatBatchAll(formatSetCommitmentCall(t, taggedInfoHex(batched.hash)), []byte{0, 7, 0})))
-	native.setRole(proxied.hotkey, 41, false)
-	// Proxy.proxy(real, None, call), signed by the proxy account.
-	proxyCall := append(append([]byte{0x10, 0x00, 0x00}, proxied.hotkey[:]...), 0x00)
-	native.setBody(proxied.blockHash, synthSignedExtrinsic([32]byte{0x99}, append(proxyCall, formatSetCommitmentCall(t, taggedInfoHex(proxied.hash))...)))
 	harness := newIncidentHarness(t, native, false)
 	if err := harness.oracle.cycle(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []fleet{permitHolder, batched, proxied} {
+	for _, f := range fleets {
 		assertMirrored(t, harness, f.hotkey, f.hash, f.block, f.blockHash)
 	}
-	if len(harness.evm.mined) != 3 {
-		t.Fatalf("mined %d", len(harness.evm.mined))
+	if len(harness.evm.mined) != 3 || harness.oracle.metrics.fleet != 3 {
+		t.Fatalf("mined %d fleet %d", len(harness.evm.mined), harness.oracle.metrics.fleet)
 	}
-}
-
-// No per-hotkey read gates mirroring, so a role read that would fail cannot
-// stop the tagged fleets.
-func TestFormatRoleReadFailureDoesNotStopTaggedFleets(t *testing.T) {
-	native := formatChain()
-	hotkey := [32]byte{0x64}
-	hash := strings.Repeat("d4", 32)
-	formatPut(t, native, hotkey, 9286004, [32]byte{0xb4}, taggedInfoHex(hash))
-	native.setRole(hotkey, 42, false)
-	native.setBody([32]byte{0xb4}, synthSignedExtrinsic(hotkey, formatSetCommitmentCall(t, taggedInfoHex(hash))))
-	native.failRoles(errors.New("ValidatorPermit read timed out"))
-	harness := newIncidentHarness(t, native, false)
-	if err := harness.oracle.cycle(context.Background()); err != nil {
-		t.Fatal(err)
+	assertLegacy(t, harness, 0)
+	assertFormatReadsOnly(t, native)
+	if native.reads["commitments"] == 0 || native.reads["lastCommitment"] != 3 {
+		t.Fatalf("reads %v", native.reads)
 	}
-	assertMirrored(t, harness, hotkey, hash, 9286004, [32]byte{0xb4})
 }
 
 // Malformed tags, variants and lengths are never mirrored; the one valid
@@ -216,13 +202,9 @@ func TestFormatRejectsMalformedTagsAndLengths(t *testing.T) {
 		index += 1
 		hotkey := [32]byte{0x70, index}
 		formatPut(t, native, hotkey, 9286100+uint64(index), [32]byte{0xc0, index}, info)
-		native.setRole(hotkey, uint16(100+index), false)
-		native.setBody([32]byte{0xc0, index}, synthSignedExtrinsic(hotkey, formatSetCommitmentCall(t, info)))
 	}
 	valid := [32]byte{0x7f}
 	formatPut(t, native, valid, 9286200, [32]byte{0xcf}, taggedInfoHex(hash))
-	native.setRole(valid, 200, false)
-	native.setBody([32]byte{0xcf}, synthSignedExtrinsic(valid, formatSetCommitmentCall(t, taggedInfoHex(hash))))
 	harness := newIncidentHarness(t, native, false)
 	if err := harness.oracle.cycle(context.Background()); err != nil {
 		t.Fatal(err)
