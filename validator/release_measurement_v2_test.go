@@ -269,7 +269,8 @@ func (self *releaseMeasurementV2TestFixture) options(t testing.TB) ReleaseMeasur
 		operator := self.operators[input.NoID]
 		currentKVs := map[connect.Id]FleetScoreKey{}
 		for _, binding := range artifact.Bindings {
-			if binding.NoID != input.NoID || !binding.Active || !binding.LiveUIDFound || binding.RecordUID != binding.LiveUID {
+			// A binding signed for another key is not the measured client's fleet.
+			if binding.NoID != input.NoID || !binding.Active || !binding.LiveUIDFound || binding.RecordUID != binding.LiveUID || binding.LocalClientKey != binding.ClientKey {
 				continue
 			}
 			clientID, _ := connect.ParseId(binding.ClientID)
