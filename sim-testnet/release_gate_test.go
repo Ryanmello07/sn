@@ -1511,6 +1511,13 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"sdk/build",
 		"go test ./cmd/mobileexports -count=1",
 		"go test -race ./cmd/mobileexports -count=1",
+		"sdk_sibling_contract_tests='^Test(SdkApiUrlsMatchServerRoutes|ApiAdminRoutesMatchTheServer|SdkModulesKeepConnectFingerprintDependencies|LicenseYmlUpToDate)$'",
+		`go test . -run "$sdk_sibling_contract_tests" -count=1`,
+		`go test -race . -run "$sdk_sibling_contract_tests" -count=1`,
+		`cd "$workspace/sdk/js"`,
+		`go run gen_openapi.go -spec "$workspace/connect/api/bringyour.yml" -check`,
+		"go run gen_types.go -check",
+		"go run gen_lag.go -check",
 		"DatabaseTimeMatchesPostgresPrecision",
 		"RouterRetainsDirectH3LoopbackSettings",
 		"RouterDirectH3LoopbackCompletesHandshake",
@@ -1533,7 +1540,7 @@ func TestLocalReleaseGateRechecksCompleteWorkspaceAtEnd(t *testing.T) {
 		"export WARP_SERVICE=test",
 		"go test -race ./controller -run \"$controller_db_tests\"",
 		"go test -race ./model -run \"$model_db_tests\"",
-		"go test -timeout 20m ./proxy -count=1",
+		"go test -timeout 40m ./proxy -count=1",
 	} {
 		if !strings.Contains(script, required) {
 			t.Errorf("local release gate omits operator regression %s", required)

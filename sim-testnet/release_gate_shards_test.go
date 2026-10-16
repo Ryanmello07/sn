@@ -172,13 +172,23 @@ func releaseGateGoTestName(name, prefix string) bool {
 // examples with output.
 func releaseGatePackageTestList(t *testing.T, shards releaseGateShards) []string {
 	t.Helper()
-	paths, err := filepath.Glob(filepath.Join(shards.source, "*_test.go"))
-	if err != nil || len(paths) == 0 {
-		t.Fatalf("%s test census: %d files, %v", shards.path, len(paths), err)
-	}
 	context := build.Default
 	if shards.mode == "race" {
 		context.BuildTags = append(slices.Clone(context.BuildTags), "race")
+	}
+	names, err := releaseGateDeclaredTests(shards.source, context)
+	if err != nil {
+		t.Fatalf("%s %v", shards.path, err)
+	}
+	return names
+}
+
+// The names `go test -list .` prints for the package in directory, built in
+// the context, except benchmarks, read from its test files' sources.
+func releaseGateDeclaredTests(directory string, context build.Context) ([]string, error) {
+	paths, err := filepath.Glob(filepath.Join(directory, "*_test.go"))
+	if err != nil || len(paths) == 0 {
+		return nil, fmt.Errorf("test census: %d files in %s, %v", len(paths), directory, err)
 	}
 	pointerTo := func(field *ast.Field, name string) bool {
 		pointer, ok := field.Type.(*ast.StarExpr)
@@ -192,13 +202,13 @@ func releaseGatePackageTestList(t *testing.T, shards releaseGateShards) []string
 	for _, path := range paths {
 		if matched, err := context.MatchFile(filepath.Dir(path), filepath.Base(path)); err != nil || !matched {
 			if err != nil {
-				t.Fatal(err)
+				return nil, err
 			}
 			continue
 		}
 		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments|parser.SkipObjectResolution)
 		if err != nil {
-			t.Fatal(err)
+			return nil, err
 		}
 		for _, declaration := range file.Decls {
 			function, ok := declaration.(*ast.FuncDecl)
@@ -217,7 +227,7 @@ func releaseGatePackageTestList(t *testing.T, shards releaseGateShards) []string
 		}
 	}
 	slices.Sort(names)
-	return names
+	return names, nil
 }
 
 // Run the shard owners' own definitions in bash after the prelude, which

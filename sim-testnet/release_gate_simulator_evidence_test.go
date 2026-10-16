@@ -22,6 +22,10 @@ const releaseGateSimulatorEvidenceProvisionalRejectSelector = "^TestRuntimeProvi
 const releaseGateSimulatorEvidenceAllRenderSelector = releaseGateSimulatorEvidenceRenderSelector + "|" + releaseGateSimulatorEvidenceProvisionalRenderSelector + "|" + releaseGateSimulatorEvidenceProvisionalRejectSelector
 const releaseGateSimulatorEvidenceOwnerSkip = " -skip '^(TestRuntimeEvidenceLaunchV2TemplateReachesGeneratedSetupAndRender|TestValidatorEvidenceCarryPublicOverrideRequiresCompleteClonedHeads|TestRuntimeEvidenceOwnedReservedStagingRerenderReplacesProvisionalConfig|TestRuntimeProvisionalStagingRenderBindsRetainedAuthority|TestRuntimeProvisionalStagingRejectsChangedSourceAndAuthority)$'"
 
+// The solidity phase's companion packages, ./protocol, ./stabi and
+// ./sim-testnet/gencontracts, declare tests of only these two families.
+const releaseGateCompanionEvidenceSelector = "^Test(ValidatorEvidence|ClientKeyHistory)"
+
 // Follow direct same-package identifier calls through test helpers so a new
 // full-launch wrapper cannot rejoin ordinary work. Dynamic calls are outside this classifier.
 func releaseGateSimulatorEvidenceRenderRoots(files []*ast.File) []string {
@@ -156,7 +160,7 @@ func verifyReleaseGateSimulatorEvidencePartition(script string, roots, renderRoo
 		phase, job, variable, selector, packages, skip string
 		count                                          int
 	}{
-		{phase: "solidity", job: "solidity", variable: "validator_evidence_tests", selector: releaseGateSimulatorEvidenceSelector, packages: "./protocol ./stabi ./sim-testnet/gencontracts"},
+		{phase: "solidity", job: "solidity", variable: "validator_evidence_tests", selector: releaseGateCompanionEvidenceSelector, packages: "./protocol ./stabi ./sim-testnet/gencontracts"},
 		{phase: "evidence_simulator", job: "evidence-simulator", variable: "simulator_evidence_tests", selector: releaseGateSimulatorEvidenceSelector, packages: "./sim-testnet", skip: ` -skip "$simulator_evidence_serial_skip_tests"`},
 		{phase: "evidence_simulator_parallel", job: "evidence-simulator-parallel", variable: "simulator_evidence_parallel_tests", selector: parallelSelector, packages: "./sim-testnet", skip: ""},
 		{phase: "evidence_simulator_slow", job: "evidence-simulator-slow", variable: "simulator_evidence_slow_tests", selector: releaseGateSimulatorEvidenceSlowSelector, packages: "./sim-testnet", count: 2},

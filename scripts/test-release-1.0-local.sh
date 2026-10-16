@@ -857,6 +857,13 @@ release_phase_sdk() {
   sdk_ledger_v2_tests='^Test(SnLedger|BuildTestLedgerTreeMatchesTheVectors|SnChainSettingsVault2Address|Ledger|PackLedger|DecodeLedger|EthCallFrom|TransactionReceiptLogs)'
   go test . ./sn/evm ./sn/merkle -run "$sdk_ledger_v2_tests" -count=1
   go test -race . ./sn/evm ./sn/merkle -run "$sdk_ledger_v2_tests" -count=1
+  # The SDK's contracts with the sibling checkouts, which these tests read:
+  # every api url it builds and its admin route classes against ../server's
+  # route tables, each of its modules' TLS and DTLS fingerprint dependencies
+  # against ../connect's, and license.yml against its modules.
+  sdk_sibling_contract_tests='^Test(SdkApiUrlsMatchServerRoutes|ApiAdminRoutesMatchTheServer|SdkModulesKeepConnectFingerprintDependencies|LicenseYmlUpToDate)$'
+  go test . -run "$sdk_sibling_contract_tests" -count=1
+  go test -race . -run "$sdk_sibling_contract_tests" -count=1
 }
 release_gate_start sdk release_phase_sdk
 release_phase_sdk_build() {
@@ -865,6 +872,15 @@ release_phase_sdk_build() {
   # cannot exercise its fail-closed gomobile export policy.
   go test ./cmd/mobileexports -count=1
   go test -race ./cmd/mobileexports -count=1
+  # So is the JavaScript SDK, whose committed TypeScript must be what its
+  # generators make: the api client from connect's OpenAPI spec of record,
+  # the types from the Go sdk, and lag.dev's tables and vectors from the sdk
+  # and connect. Each generator is a go run program of sdk/js, and -check
+  # compares without writing.
+  cd "$workspace/sdk/js"
+  go run gen_openapi.go -spec "$workspace/connect/api/bringyour.yml" -check
+  go run gen_types.go -check
+  go run gen_lag.go -check
 }
 release_gate_start sdk-build release_phase_sdk_build
 
@@ -986,8 +1002,10 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # measured lower bound above Go's implicit ten-minute package deadline, so
     # the explicit deadline supplies deterministic headroom without changing
     # selection. Every hosted-device and client netstack is synchronously joined
-    # before the following root is admitted.
-    go test -timeout 20m ./proxy -count=1
+    # before the following root is admitted. The package took 438 to 492
+    # seconds at normal load, and 1,008 at load 60 in a pre-check, 84% of its
+    # former 20 minutes, so its deadline is more than twice the slowest.
+    go test -timeout 40m ./proxy -count=1
     # The monitor's whole package, in both modes, one after the other. Its SQL
     # fixtures fail closed without the test environment this phase sources
     # (server monitor/RUN-MAIN.md), so it cannot run among the unit suites.

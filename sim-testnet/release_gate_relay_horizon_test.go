@@ -18,8 +18,7 @@ import (
 func TestProducerGateStateSelectionCoversFundedRelayHorizon(t *testing.T) {
 	t.Parallel()
 	script, groups := releaseEvidenceV2GateFixture(t)
-	selected := []releaseEvidenceV2GateGroup{groups[1], groups[0], groups[2]}
-	selected[0].packages = []string{"./sim-testnet"}
+	selected := []releaseEvidenceV2GateGroup{groups[3], groups[0], groups[2]}
 	selected[0].sources = map[string][]string{"./sim-testnet": releaseEvidenceV2GateSources(t, []string{
 		"evidence_relay_horizon_test.go", "evidence_relay_horizon_runtime_test.go",
 		"evidence_relay_launch_budget_test.go", "evidence_relay_launch_runtime_test.go",
