@@ -40,6 +40,18 @@ steps that the launch replaced.
   `e2de5acf…`, 30 gwei fee cap) and the launch readiness digest `10541276…1924`. `config/main/sn.yml` activation is
   `reviewed`. The operator's enablement and the reserved validator-upload block follow the validator's epoch-1 start.
 
+## Fleet commitments get their own format — October 15
+
+The validator exclusion below was a heuristic: the permit is read at the head and can lapse (the owner UID 1 steers
+without one), it dropped valid fleets from permit hotkeys and batched or proxied writes, and one unreadable role
+stopped all mirroring. Fleet commitments now have their own on-chain format: **exactly one `Raw40` field holding the
+ASCII tag `urfleet1` followed by the 32-byte commitment hash** (`crv4.EncodeFleetCommitmentInfo`). `provider fleet
+publish` writes it, and the `commitment-oracle` mirrors **only** that format, with no role, permit or block-body
+reads; the contract is unchanged. The validator's source commitment keeps its one `Sha256` field, which the oracle
+never mirrors, and its writer refuses the fleet format. Untagged fleet commitments are never mirrored again: the
+three fleets already mirrored keep binding until about block 9,360,673, and each must republish with `provider fleet
+publish` before then. See [LAUNCH.md](LAUNCH.md#commitment-oracle).
+
 ## Commitment oracle excludes validators — October 15
 
 On October 15, a manual one-off mirror sent from the oracle key also mirrored the SN25 validator's own source
@@ -54,8 +66,8 @@ closed: when a role can't be read, it mirrors nothing in that cycle. See
 
 Fleet binding on mainnet was blocked: `bindFleetMember` reverted `StaleCommitment()` for every miner because no
 service ever mirrored finalized native commitments into `mirrorCommitment` (support items 7906 and 7916). The
-`commitment-oracle` service (`cli/commitment-oracle`, `commitmentoracle/`) now exists. It mirrors one-field `Sha256`
-fleet commitments (never a validator's, see October 15) from finalized native state with the active oracle key, and publishes lag, pending, balance and success
+`commitment-oracle` service (`cli/commitment-oracle`, `commitmentoracle/`) now exists. It mirrors fleet commitments
+(since October 15 only the tagged `urfleet1` format, never a validator's) from finalized native state with the active oracle key, and publishes lag, pending, balance and success
 gauges. It is **not deployed**: xops has no unit for it, the oracle `0x56Dd…CF03` is unfunded, and as of
 finalized block 9,286,264 no fleet commitment is mirrored on chain 964. See [LAUNCH.md](LAUNCH.md#commitment-oracle).
 
@@ -2159,7 +2171,7 @@ receipts as explicitly retained observations, not fresh chain audits; these
 | EVM deployer | Limited bootstrap gas/value; no ongoing governance custody. `0xA9D4A6a331F59942BD7389a5402120D69047C090` on Brien's Ledger (Ethereum app). |
 | Coordinator owner | Actual Safe with its approved owners and threshold. The launch Safe is SafeL2 1.4.1 `0x56F4Dad575576CC0B679FEf52899630f9F605418`, 1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` on Brien's Ledger (owner decision, October 7); owners can be added and the threshold raised later by a Safe transaction. The tooling also keeps the 2-of-3, three-owner profile. |
 | Guardian | Separate limited operational authority. `0x450C14EA62F76F11630780e194E01F9f524BAbFd` on Brien's Ledger (Ethereum app). |
-| Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. Its key `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a service key in `vault/main/sn.yml`. The `commitment-oracle` service ([LAUNCH.md](LAUNCH.md#commitment-oracle)) is built but not yet deployed; it refuses to run unless that key is `activeCommitmentOracle()`, and it never mirrors a validator-permit or unregistered hotkey or a commitment without a standalone fleet `set_commitment`. |
+| Commitment oracle | Separate reviewed signer/service with original and any scheduled route authenticated. Its key `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03` is a service key in `vault/main/sn.yml`. The `commitment-oracle` service ([LAUNCH.md](LAUNCH.md#commitment-oracle)) is built but not yet deployed; it refuses to run unless that key is `activeCommitmentOracle()`, and it mirrors only tagged fleet commitments (one `Raw40` field, `urfleet1` and the hash), never a one-field `Sha256` validator source commitment. |
 | Root validator coldkey/hotkey | Existing root hotkey hardware custody and the actual root-owning/staker coldkeys or allowed proxies must be identified independently. The passive observer uses public identity and independent config/host approvals, without a native signer. Reviewed v470 accumulation needs no periodic hotkey signature; registration, claims, stake and basket actions use their specific coldkey/proxy authority. Neither root key role inherits the subnet owners' Ledger or approval. Actual device/API and live participation remain unverified. At launch: the `ur-mainnet` hotkey under the `ur-mainnet` multisig, root seat UID 21, through the passive root service. |
 | UR validator hotkey and stake coldkey | UR scoring; may be the reviewed reserve target when explicitly selected. At launch: the SN25 owner hotkey, UID 1, coldkey `ur-owner`. |
 | Operator demand deposit signer | Each operator keeps its own EVM signing key in its own secrets vault. The coordinator binds that address to its `noId` and deposit hotkey for the active epoch. Owner Ledger and the SN bootstrap never load operator deposit keys; this secrets vault is distinct from the on-chain settlement vault. The [qualified worker custody check](evidence/operator-deposit-custody-qualification-20260930.md) still needs real wallet and coordinator verification. |

@@ -458,9 +458,10 @@ func (self *ValidatorUploadAdmission) invalidate(err error) {
 // revisited next refresh; an ineligible account's event does not revoke an
 // independently verified legitimate owner's admission. A previously admitted
 // activation is checked again even when discovery omits it. If its reads fail,
-// rather than observe ineligibility or a changed anchor, it keeps only the
-// expiry of its last complete verification. A refresh that finishes after its
-// own freshness window publishes nothing and fails with the measured cause.
+// rather than observe ineligibility, deregistration, a later publication of
+// its owner or a changed anchor, it keeps only the expiry of its last complete
+// verification. A refresh that finishes after its own freshness window
+// publishes nothing and fails with the measured cause.
 func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time) (resultErr error) {
 	report := validatorUploadRefreshReport{started: now}
 	defer func() {
@@ -499,6 +500,19 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 	// Digests whose reads failed without observing ineligibility or a changed
 	// anchor. Only an entry already admitted by an earlier refresh survives.
 	unobserved := make(map[[32]byte]bool)
+	// Each owner's latest publication from discovery or an authenticated
+	// record, admitted or not. An older entry of that owner is superseded and
+	// is never retained through its own failed reads.
+	latestPublishedOwnerBlocks := make(map[ValidatorUploadOwner]uint64)
+	// Canonical event order also distinguishes rotations within one block.
+	latestPublishedOwnerEvents := make(map[ValidatorUploadOwner]ValidatorUploadActivationEvent)
+	superseded := func(owner ValidatorUploadOwner, digest [32]byte, published uint64) bool {
+		if latestPublishedOwnerBlocks[owner] > published {
+			return true
+		}
+		event, found := latestPublishedOwnerEvents[owner]
+		return found && event.Block == published && event.Digest != digest
+	}
 	// Current eligibility is read once per stable hotkey in this captured
 	// refresh. Its metadata and resolved UID come from the actual current hash.
 	current := make(map[[32]byte]bool)
@@ -521,6 +535,8 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 		if event != nil && (event.Hotkey != record.Hotkey || event.NoID != record.NoID || event.Epoch != record.Domain.Epoch || event.Block != verified.Publication.PublishedBlock) {
 			return errors.New("validator staging event conflicts with the canonical anchored record")
 		}
+		owner := ValidatorUploadOwner{Hotkey: record.Hotkey, OperatorNoID: record.NoID}
+		latestPublishedOwnerBlocks[owner] = max(latestPublishedOwnerBlocks[owner], verified.Publication.PublishedBlock)
 		eligible, checked := current[record.Hotkey]
 		if !checked {
 			observation, err := crv4.ReadValidatorScheduleAtContext(ctx, self.native, crv4.ValidatorScheduleQuery{GenesisHash: types.Hash(self.config.Deployment.GenesisHash), BlockHash: nativeObserver.Hash,
@@ -536,16 +552,19 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 			current[record.Hotkey] = eligible
 		}
 		if !eligible {
-			if err := currentErrors[record.Hotkey]; err != nil {
+			switch err := currentErrors[record.Hotkey]; {
+			case err == nil:
+				self.recordActivationFailure(digest, errors.New("current native hotkey lacks authenticated stake and permit"))
+			case errors.Is(err, crv4.ErrValidatorScheduleHotkeyUnregistered):
+				// A deregistered hotkey is observed ineligibility, not a failed read.
+				self.recordActivationFailure(digest, fmt.Errorf("current native eligibility: %w", err))
+			default:
 				self.recordActivationFailure(digest, fmt.Errorf("current native eligibility read: %w", err))
 				unobserved[digest] = true
-			} else {
-				self.recordActivationFailure(digest, errors.New("current native hotkey lacks authenticated stake and permit"))
 			}
 			return nil
 		}
 		self.recordActivationFailure(digest, nil)
-		owner := ValidatorUploadOwner{Hotkey: record.Hotkey, OperatorNoID: record.NoID}
 		prior, exists := next[owner]
 		if !exists && uint64(len(next)) >= self.config.MaximumOwners {
 			return errors.New("validator staging owner census exceeds its bound")
@@ -575,6 +594,9 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 		report.ranges++
 		report.events += uint64(len(events))
 		for index := range events {
+			owner := ValidatorUploadOwner{Hotkey: events[index].Hotkey, OperatorNoID: events[index].NoID}
+			latestPublishedOwnerBlocks[owner] = max(latestPublishedOwnerBlocks[owner], events[index].Block)
+			latestPublishedOwnerEvents[owner] = events[index]
 			if err := admit(events[index].Digest, &events[index]); err != nil {
 				return err
 			}
@@ -607,6 +629,18 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 			return err
 		}
 	}
+	// A failed successor proof cannot resurrect the older generation even
+	// when that older proof and its current eligibility still read correctly.
+	for owner, verified := range next {
+		digest, err := verified.Publication.Record.Digest()
+		if err != nil {
+			return err
+		}
+		if superseded(owner, digest, verified.Publication.PublishedBlock) {
+			delete(next, owner)
+			self.recordActivationFailure(digest, errors.New("validator staging activation was superseded by a later publication"))
+		}
+	}
 	if err := errors.Join(ctx.Err(), self.ctx.Err()); err != nil {
 		return err
 	}
@@ -636,8 +670,9 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 			return errors.New("validator staging cache is closed")
 		}
 		// An earlier entry whose reads failed keeps its own expiry unless the
-		// same owner's equal or later activation was admitted now. It replaces
-		// an older activation of its owner that was admitted in its place.
+		// same owner's equal or later activation was admitted now, or a later
+		// one was discovered or authenticated. It replaces an older activation
+		// of its owner that was admitted in its place.
 		published := self.clock()
 		retainedOwnerDigests := make(map[ValidatorUploadOwner][32]byte)
 		for digest, retain := range unobserved {
@@ -646,6 +681,9 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 				continue
 			}
 			owner := ValidatorUploadOwner{Hotkey: entry.record.Hotkey, OperatorNoID: entry.record.NoID}
+			if superseded(owner, digest, entry.published) {
+				continue
+			}
 			if admitted, exists := next[owner]; exists && admitted.Publication.PublishedBlock >= entry.published {
 				continue
 			}

@@ -154,9 +154,9 @@ func TestCycleNeverActsOnUnfinalizedBlocks(t *testing.T) {
 	native := harness.native
 	native.block(goldenFinalized+5, unfinalized)
 	native.block(goldenFinalized+4, [32]byte{0x44})
-	native.put(unfinalized, hotkey, mustHex(t, "0000000000000000"+"b5b08d00"+"04"+"83"+strings.Repeat("cd", 32)), mustHex(t, "b5b08d00"))
+	native.put(unfinalized, hotkey, mustHex(t, "0000000000000000"+"b5b08d00"+"04"+"29"+fleetTagHex+strings.Repeat("cd", 32)), mustHex(t, "b5b08d00"))
 	// The golden hotkey republished at an unfinalized block, too.
-	native.put(unfinalized, mustHash(t, goldenHotkeyHex), mustHex(t, "0000000000000000"+"b5b08d00"+"04"+"83"+strings.Repeat("ef", 32)), mustHex(t, "b5b08d00"))
+	native.put(unfinalized, mustHash(t, goldenHotkeyHex), mustHex(t, "0000000000000000"+"b5b08d00"+"04"+"29"+fleetTagHex+strings.Repeat("ef", 32)), mustHex(t, "b5b08d00"))
 	if err := harness.oracle.cycle(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -179,8 +179,7 @@ func TestCycleWaitsForFinalReceipt(t *testing.T) {
 	harness := newGoldenHarness(t, testSettings(t.TempDir()), false)
 	second := [32]byte{0x52}
 	harness.native.block(goldenBlock+10, [32]byte{0x99})
-	harness.native.put(goldenHeadHash(), second, mustHex(t, "0000000000000000"+"6b4b8d00"+"04"+"83"+strings.Repeat("12", 32)), mustHex(t, "6b4b8d00"))
-	harness.native.fleet(second, 200, [32]byte{0x99}, mustHash(t, strings.Repeat("12", 32)))
+	harness.native.put(goldenHeadHash(), second, mustHex(t, "0000000000000000"+"6b4b8d00"+"04"+"29"+fleetTagHex+strings.Repeat("12", 32)), mustHex(t, "6b4b8d00"))
 	// Mined but never finalized during the cycle.
 	harness.oracle.sleep = func(ctx context.Context, duration time.Duration) error {
 		harness.clock.now = harness.clock.now.Add(duration)

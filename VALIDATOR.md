@@ -976,6 +976,15 @@ Before crediting any score to a UID, the validator independently rechecks the ca
 payload, commitment, active epoch interval and current UID. Any mismatch contributes
 zero head weight; it is never guessed.
 
+The coordinator checks that the binding's client key signed it, not that the key is the
+client's: any registered hotkey can bind any `client_id` under a key it holds, and a
+key rotation leaves a fleet's binding on the old key. So a binding also counts only
+when its `client_key` is the measured client's own key, as the operator's signed key
+history states it at the decision boundary. A binding signed for any other key
+contributes zero head weight and its provider is scored exactly as an unbound one. The
+measurement row keeps the coordinator key beside that signed key, so the exclusion
+replays from retained evidence, and the attempt goes on.
+
 **Binding ⊥ quality.** The binding proves *ownership* only; the trail (§1–§7) proves
 *quality*. They are kept strictly separate — identity says *whose* UID this is, the
 measurement says *how good* it is — and composed, never merged. Invalid bindings never
