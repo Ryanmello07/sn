@@ -728,9 +728,38 @@ func waitSupervisorRestartTestState(t *testing.T, path string, accept func(Proce
 	return SupervisorState{}
 }
 
+// The burst cooldown test's supervised child. Each attempt counts itself and
+// waits until the supervisor has published its PID; the first two then exit
+// 17, and the third idles until stopped. A supervisor stop sends TERM to the
+// whole group, and the trap makes the shell reap the helper it waits on before
+// it exits: a shell that died at once left its sleep or grep to the enclosing
+// subreaper. The third attempt idles rather than exec sleep, so the stop that
+// ends it is the supervisor's own, which signals only the recorded identity.
+func supervisorCooldownTestChild(dir, counterPath, statePath string) ProcessSpec {
+	processDir := filepath.Join(dir, "processes")
+	return ProcessSpec{
+		ID: "cooldown-child", Role: "test", Identity: "cooldown-child", Command: "/bin/sh",
+		Args:    []string{"-c", `trap 'exit 143' TERM; count=0; if [ -r "$SIM_TEST_COUNTER" ]; then IFS= read -r count < "$SIM_TEST_COUNTER"; fi; count=$((count+1)); printf '%s\n' "$count" > "$SIM_TEST_COUNTER"; while ! grep -Fq "\"pid\": $$" "$SIM_TEST_SUPERVISOR_STATE" 2>/dev/null; do sleep 0.01; done; if [ "$count" -lt 3 ]; then exit 17; fi; while :; do sleep 1; done`},
+		WorkDir: dir,
+		Env: map[string]string{
+			"SIM_TEST_COUNTER": counterPath, "SIM_TEST_SUPERVISOR_STATE": statePath,
+		},
+		StdoutPath: filepath.Join(processDir, "child.stdout"), StderrPath: filepath.Join(processDir, "child.stderr"), RestartLimit: 1,
+	}
+}
+
 // Reproduces the live failure: the last rapid crash leaves PID zero, then the
 // same supervisor generation starts exactly one fresh attempt after cooldown.
+// Stopping that attempt leaves no process behind; the release gate's subreaper
+// adopted its poll helper (sn-simulator-race-10 of run 5). Under -race at load
+// 25 the run took 30 seconds alone, so its private owner allows several times
+// that.
 func TestSupervisorRecoversStoppedChildAfterBurstCooldown(t *testing.T) {
+	runSupervisorDescendantOwnerTest(t, 0, 5*time.Minute, assertSupervisorRecoversStoppedChildAfterBurstCooldownTest)
+}
+
+// The final cancel stops the third attempt while it waits on a helper.
+func assertSupervisorRecoversStoppedChildAfterBurstCooldownTest(t *testing.T) {
 	dir := t.TempDir()
 	executable, err := os.Executable()
 	if err != nil {
@@ -740,21 +769,9 @@ func TestSupervisorRecoversStoppedChildAfterBurstCooldown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	processDir := filepath.Join(dir, "processes")
-	if err := os.MkdirAll(processDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
 	counterPath := filepath.Join(dir, "child.counter")
 	statePath := filepath.Join(dir, "supervisor.state.json")
-	spec := ProcessSpec{
-		ID: "cooldown-child", Role: "test", Identity: "cooldown-child", Command: "/bin/sh",
-		Args:    []string{"-c", `count=0; if [ -r "$SIM_TEST_COUNTER" ]; then IFS= read -r count < "$SIM_TEST_COUNTER"; fi; count=$((count+1)); printf '%s\n' "$count" > "$SIM_TEST_COUNTER"; while ! grep -Fq "\"pid\": $$" "$SIM_TEST_SUPERVISOR_STATE" 2>/dev/null; do sleep 0.01; done; if [ "$count" -lt 3 ]; then exit 17; fi; exec /bin/sleep 300`},
-		WorkDir: dir,
-		Env: map[string]string{
-			"SIM_TEST_COUNTER": counterPath, "SIM_TEST_SUPERVISOR_STATE": statePath,
-		},
-		StdoutPath: filepath.Join(processDir, "child.stdout"), StderrPath: filepath.Join(processDir, "child.stderr"), RestartLimit: 1,
-	}
+	spec := supervisorCooldownTestChild(dir, counterPath, statePath)
 	manifest := SupervisorFile{Schema: "urnetwork-sim-supervisor-v1", DeploymentID: "cooldown-test", BinaryHash: binaryHash, Specs: []ProcessSpec{spec}}
 	encoded, err := json.Marshal(manifest)
 	if err != nil {
@@ -878,6 +895,20 @@ func TestSupervisorRecoversStoppedChildAfterBurstCooldown(t *testing.T) {
 		t.Fatal(err)
 	}
 	finished = true
+	// The supervisor returns once its stopped child is no longer alive, and the
+	// child's own waiter then reaps it. Join that reap, so the private owner
+	// counts only processes that outlived their parent.
+	child := recovered.Processes[0]
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if ticks, err := processStartTimeTicks(child.PID); err != nil || ticks != child.StartTimeTicks {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stopped cooldown child %d was not reaped", child.PID)
+		}
+		<-time.After(10 * time.Millisecond)
+	}
 }
 
 // A restart executable can disappear while the child that mapped it is still
