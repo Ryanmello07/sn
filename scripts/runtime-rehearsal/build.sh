@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the runtime-rehearsal node (VERSION2-FINAL.md §14 gate 2): upstream
-# subtensor at the runtime-478 commit with fast blocks, and records the runtime
+# subtensor at the runtime-479 commit with fast blocks, and records the runtime
 # Wasm hash. Usage: build.sh <subtensor-checkout-dir>
 #
 # CARGO_TARGET_DIR selects the build directory (default <checkout>/target) and
@@ -10,15 +10,20 @@ set -euo pipefail
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 repository="https://github.com/opentensor/subtensor.git"
-tag="v478"
-commit="850f2755bb05a3851f948489f0ab27b0645cebce"
+# Mainnet installed runtime 479 before upstream published a tag or a release
+# for it. The reviewed source is the head of PR #3256 (branch release-479),
+# which upstream main merged as f4786f90 with the same tree. A tag v479, once
+# upstream publishes one, must name that tree.
+tag="v479"
+commit="e66c7eed760efaa5a3b1c249b5a3369a9bc693cf"
+tree="b44c231f8dc95ba2f4e6e1bac6e377e387e47677"
 # Upstream's localnet (scripts/localnet.sh, fast_runtime=True) builds the
 # workspace with "pow-faucet metadata-hash fast-runtime". metadata-hash is also
 # in mainnet's release build and fast-runtime gives fast blocks. pow-faucet only
 # adds a proof-of-work faucet call and drops the default subnet-registration
 # rate limit to 0, so it is left out: the runtime keeps mainnet's call set.
 features="metadata-hash fast-runtime"
-manifest="$sn_repo/docs/spec/runtime-v478-source.sha256"
+manifest="$sn_repo/docs/spec/runtime-v479-source.sha256"
 
 source_dir="${1:?usage: build.sh <subtensor-checkout-dir>}"
 jobs="${RUNTIME_REHEARSAL_JOBS:-10}"
@@ -28,21 +33,26 @@ fail() {
   exit 1
 }
 
-resolved="$(git ls-remote --tags "$repository" "refs/tags/$tag" | awk '{ print $1; exit }')"
-[[ "$resolved" == "$commit" ]] || fail "tag $tag resolves to ${resolved:-nothing}, want $commit"
+# The peeled commit of an annotated tag, or a lightweight tag's own target.
+tagged="$(git ls-remote --tags "$repository" "refs/tags/$tag" "refs/tags/$tag^{}" | awk '$2 ~ /\^\{\}$/ { peeled = $1 } { last = $1 } END { print (peeled != "" ? peeled : last) }')"
 
 if [[ ! -e "$source_dir" ]]; then
   git clone --quiet --no-checkout "$repository" "$source_dir"
 fi
 git -C "$source_dir" cat-file -e "$commit^{commit}" 2>/dev/null || git -C "$source_dir" fetch --quiet origin "$commit"
 git -C "$source_dir" checkout --quiet --detach "$commit"
+[[ "$(git -C "$source_dir" rev-parse "$commit^{tree}")" == "$tree" ]] || fail "commit $commit does not have the reviewed tree $tree"
+if [[ -n "$tagged" ]]; then
+  git -C "$source_dir" cat-file -e "$tagged^{commit}" 2>/dev/null || git -C "$source_dir" fetch --quiet origin "refs/tags/$tag"
+  [[ "$(git -C "$source_dir" rev-parse "$tagged^{tree}")" == "$tree" ]] || fail "tag $tag names $tagged, whose tree is not the reviewed $tree"
+fi
 source_dir="$(cd "$source_dir" && pwd)"
 target_dir="${CARGO_TARGET_DIR:-$source_dir/target}"
 mkdir -p "$target_dir"
 target_dir="$(cd "$target_dir" && pwd)"
 [[ "$(git -C "$source_dir" rev-parse HEAD)" == "$commit" ]] || fail "checkout HEAD is not $commit"
 [[ -z "$(git -C "$source_dir" status --porcelain=v1 --untracked-files=all)" ]] || fail "checkout $source_dir is not clean"
-grep -Eq '^[[:space:]]*spec_version: 478,$' "$source_dir/runtime/src/lib.rs" || fail "runtime/src/lib.rs does not declare spec_version 478"
+grep -Eq '^[[:space:]]*spec_version: 479,$' "$source_dir/runtime/src/lib.rs" || fail "runtime/src/lib.rs does not declare spec_version 479"
 (cd "$source_dir" && sha256sum --check --quiet --strict "$manifest") || fail "checkout differs from $manifest"
 command -v "${PROTOC:-protoc}" >/dev/null || fail "protoc is missing: install protobuf-compiler or set PROTOC"
 
@@ -66,6 +76,7 @@ genesis_code="$("$node" build-spec --chain dev --raw --disable-default-bootnode 
 record="$target_dir/release/runtime-rehearsal-build.txt"
 {
   echo "commit=$commit"
+  echo "tree=$tree"
   echo "features=$features"
   echo "node=$node"
   echo "wasm=$wasm"
