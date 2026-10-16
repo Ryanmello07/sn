@@ -20,6 +20,7 @@ import (
 
 	clientconnect "github.com/urnetwork/connect"
 	serverpkg "github.com/urnetwork/server"
+	servercontroller "github.com/urnetwork/server/controller"
 	servermodel "github.com/urnetwork/server/model"
 	serversession "github.com/urnetwork/server/session"
 	"gopkg.in/yaml.v3"
@@ -413,6 +414,27 @@ func TestServerFixtureSuiteProConfigIsSyntheticAndParseable(t *testing.T) {
 	}
 	if config.MaxReferrals != 0 || config.ReferralsCapped(0) || config.SeekerDataMultiplier() != 1 || config.ReferralGrantPeriod() <= 0 {
 		t.Fatal("portable Pro fixture lost the inert referral/task contract")
+	}
+}
+
+// The required physical x402.yml must load under the owning server's x402
+// loader and leave x402 off. The loader panics on a sku catalog that is not a
+// mapping, which takes down every process that reads it, such as a whole
+// controller test binary.
+func TestServerFixtureSuiteX402ConfigIsInertAndParseable(t *testing.T) {
+	parent, server := suiteFixtureTestInputs(t)
+	report, err := createSuiteFixture(parent, server, "127.0.0.1:35431", "127.0.0.1:36371")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WARP_VAULT_HOME", filepath.Join(report.Workspace, "vault"))
+
+	config := servercontroller.X402()
+	if config.Enabled || servercontroller.X402Enabled() {
+		t.Fatal("portable x402 fixture unexpectedly enables x402")
+	}
+	if len(config.Skus) != 0 || len(config.Networks) != 0 || len(config.PayTo) != 0 {
+		t.Fatal("portable x402 fixture unexpectedly offers a sku, a network or a settlement address")
 	}
 }
 
