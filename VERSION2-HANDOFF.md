@@ -629,6 +629,41 @@ gate runs again.
     with `request_preparation` enabled must not be downgraded below that
     release once it has written its checkpoint, including by its own
     storage-prepare (`validator/PROVIDER-REQUEST-CUSTODY.md`:46-56).
+15. **The validator's intent history seals into segments.** The live
+    `steering-intents.json` was append-only and capped at
+    `min(max_control_bytes, max_history_bytes)`, at most 64 MiB, the
+    testnet value. Each entry embeds its owner-recycle proof, about 40 KB in
+    the test fixture and more with a larger census or UID row, so the file
+    filled after about 1,650 such entries, about 83 days at one intent per
+    72-minute native epoch. The begin that passed the cap then failed, and
+    steering stopped. To estimate the production deadline, divide the file's
+    size by its entry count.
+    - Now, when the file a begin would publish passes half its limit, all
+      but its last eight history entries move into one immutable segment,
+      `<state_dir>/intent-segments/<sha256>.json` (schema
+      `urnetwork-validator-steering-intent-segment-v1`). The current intent
+      stays live, and nothing is deleted.
+    - The live file then carries the schema
+      `urnetwork-validator-steering-intents-sealed-v1` and pins every
+      segment, in order, by its content hash, size, entry count and the
+      intent digest chain through its last entry (`validator/intent.go`:90-111,
+      `validator/intent_history_v2.go`:5-40,225-257).
+    - Every reader assembles the same logical history: the steering store,
+      startup, capture, archive, adoption, native and provisional
+      observation, and the sim-testnet tools. So the verify-once memo and
+      the `--startup-verified-progress` record are unchanged, and a missing
+      or changed segment refuses startup like any other retained reference
+      (`validator/intent_history_v2.go`:98-158).
+    - The segment is published create-only and synced before the live file
+      that pins it, through the usual marker and exchange. A crash between
+      the two leaves the previous live file with every entry; the next seal
+      reuses the segment byte for byte.
+    - Once a validator has sealed, do not downgrade it below the release
+      that seals: an older release refuses the sealed schema and fails
+      closed. Back up and restore `intent-segments/` with the live file.
+    - The remaining bound is `max_history_bytes` (16 GiB on testnet), which
+      every start reads within. Its retention is open with the ledger
+      custody's (VERSION2-LAUNCH.md section 8, item 3).
 
 ## 4. Open questions for the owner
 

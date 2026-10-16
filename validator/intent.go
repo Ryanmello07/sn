@@ -87,10 +87,27 @@ type SteeringIntent struct {
 	Error                   string                        `json:"error,omitempty"`
 }
 
+// A sealed live intent file pins its earlier entries in segments, in order,
+// so it carries its own schema: a reader that knows no segments refuses it.
+const SteeringIntentSealedSchema = "urnetwork-validator-steering-intents-sealed-v1"
+
+// SteeringIntentSegment pins one sealed segment of a retained intent history:
+// the content hash and size of its exact bytes, its entry count and the
+// intent digest chain through its last entry.
+type SteeringIntentSegment struct {
+	SHA256 string `json:"sha256"`
+	Bytes  uint64 `json:"bytes"`
+	Count  uint64 `json:"count"`
+	Head   string `json:"head"`
+}
+
+// An unsealed file has no segments and the intent schema; it is unchanged by
+// the segments field.
 type steeringIntentFile struct {
-	Schema  string           `json:"schema"`
-	Current *SteeringIntent  `json:"current,omitempty"`
-	History []SteeringIntent `json:"history"`
+	Schema   string                  `json:"schema"`
+	Segments []SteeringIntentSegment `json:"segments,omitempty"`
+	Current  *SteeringIntent         `json:"current,omitempty"`
+	History  []SteeringIntent        `json:"history"`
 }
 
 type IntentStore struct {

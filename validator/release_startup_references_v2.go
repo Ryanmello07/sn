@@ -163,7 +163,7 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 		return nil, err
 	}
 	if encoded == nil {
-		self.historyAdoption, err = self.cfg.historyAdoptionV2.matchPrefix(ctx, &steeringIntentFile{Schema: steeringIntentSchema}, nil, bounds.IntentFileLimit())
+		self.historyAdoption, err = self.cfg.historyAdoptionV2.matchPrefix(ctx, nil, false, bounds.MaxHistoryBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -173,24 +173,22 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 		}
 		return owned, owned.check()
 	}
-	var file steeringIntentFile
-	if err := decodeAttemptStreamV2JSON(encoded, bounds.IntentFileLimit(), &file); err != nil {
-		return nil, err
-	}
-	canonical, err := marshalAttemptSettlementV2JSON(ctx, &file, bounds.IntentFileLimit(), true, true)
-	if err != nil || file.Schema != steeringIntentSchema || !bytes.Equal(encoded, canonical) {
+	file, err := decodeSteeringIntentFileV2(ctx, encoded, bounds.IntentFileLimit())
+	if err != nil {
 		return nil, errors.Join(errors.New("startup intent reference file is not canonical"), err)
 	}
-	self.historyAdoption, err = self.cfg.historyAdoptionV2.matchPrefix(ctx, &file, encoded, bounds.IntentFileLimit())
+	// A missing or changed sealed segment refuses startup like any other
+	// retained reference.
+	logical, err := readSteeringIntentHistoryV2(ctx, file, bounds.IntentFileLimit(), func(name string, maximum uint64) ([]byte, error) {
+		return owned.read(ctx, filepath.Join(self.cfg.StateDir, filepath.FromSlash(name)), maximum, false)
+	})
 	if err != nil {
 		return nil, err
 	}
-	all := make([]*SteeringIntent, 0, len(file.History)+1)
-	for index := range file.History {
-		all = append(all, &file.History[index])
-	}
-	if file.Current != nil {
-		all = append(all, file.Current)
+	all, retained := logical.all, logical.history
+	self.historyAdoption, err = self.cfg.historyAdoptionV2.matchPrefix(ctx, all, true, bounds.MaxHistoryBytes)
+	if err != nil {
+		return nil, err
 	}
 	self.nativeGapBridge, err = self.cfg.nativeGapBridge.matchHistory(ctx, all)
 	if err != nil {
@@ -200,7 +198,10 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 	var previous *SteeringIntent
 	var priorArtifact *ReleaseMeasurementArtifact
 	verified := releaseStartupVerifiedFrom(ctx)
-	digests, digestible := releaseIntentV2EntryDigests(all)
+	digests, digestible := logical.digests, logical.digests != nil
+	if !digestible {
+		digests, digestible = releaseIntentV2EntryDigests(all)
+	}
 	// A retained provisional testnet startup may legitimately omit native
 	// submissions from epochs that were closed before this process resumed.
 	// The live runtime still authenticates every terminal around the gap; this
@@ -212,7 +213,7 @@ func (self *releaseEvidenceV2StartupHistory) readIntentReferences(ctx context.Co
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if err := validateSteeringIntentLifecycle(intent, index < len(file.History)); err != nil {
+		if err := validateSteeringIntentLifecycle(intent, index < retained); err != nil {
 			return nil, err
 		}
 		if err := intent.VerifyVectorHash(); err != nil {

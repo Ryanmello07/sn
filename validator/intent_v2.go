@@ -7,7 +7,6 @@ package validator
 // no artifact-supplied bindings or caller-built verdict authorizes a write.
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -46,6 +45,10 @@ type releaseIntentV2Read struct {
 	encoded     []byte
 	lastBytes   []byte
 	lastOptions ReleaseMeasurementV2Options
+	// The logical history the read verified, sealed segments first, and its
+	// intent digest chain.
+	all     []*SteeringIntent
+	digests [][32]byte
 }
 
 const releaseIntentV2Marker = ".steering-intents-v2-pending"
@@ -270,35 +273,36 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 	if encoded == nil {
 		self.v2.verified, self.v2.retainedFiles = nil, nil
 		if self.v2.historyAdoption != nil {
-			if _, err := self.v2.historyAdoption.request.matchPrefix(ctx, result.file, nil, bounds.IntentFileLimit()); err != nil {
+			if _, err := self.v2.historyAdoption.request.matchPrefix(ctx, nil, false, bounds.IntentFileLimit()); err != nil {
 				return result, err
 			}
 		}
 		return result, result.custody.check()
 	}
-	if err := decodeAttemptStreamV2JSON(encoded, bounds.IntentFileLimit(), result.file); err != nil {
+	if result.file, err = decodeSteeringIntentFileV2(ctx, encoded, bounds.IntentFileLimit()); err != nil {
 		return result, err
 	}
-	canonical, err := marshalAttemptSettlementV2JSON(ctx, result.file, bounds.IntentFileLimit(), true, true)
-	if err != nil || !bytes.Equal(encoded, canonical) || result.file.Schema != steeringIntentSchema || len(result.file.History) > 16384 {
-		return result, errors.Join(errors.New("V2 intent history bytes or finite census differ"), err)
+	// Sealed segments are owned and charged like every other retained file.
+	logical, err := readSteeringIntentHistoryV2(ctx, result.file, bounds.IntentFileLimit(), func(name string, maximum uint64) ([]byte, error) {
+		return result.custody.read(ctx, filepath.Join(self.stateDir, filepath.FromSlash(name)), maximum, false)
+	})
+	if err != nil {
+		return result, err
 	}
+	all, history := logical.all, logical.history
 	if self.v2.historyAdoption != nil {
-		if _, err := self.v2.historyAdoption.request.matchPrefix(ctx, result.file, encoded, bounds.IntentFileLimit()); err != nil {
+		if _, err := self.v2.historyAdoption.request.matchPrefix(ctx, all, true, bounds.IntentFileLimit()); err != nil {
 			return result, err
 		}
-	}
-	all := make([]*SteeringIntent, 0, len(result.file.History)+1)
-	for index := range result.file.History {
-		all = append(all, &result.file.History[index])
-	}
-	if result.file.Current != nil {
-		all = append(all, result.file.Current)
 	}
 	// Entries before reusable passed complete verification earlier in this
 	// process with these exact bytes, position, predecessors and authority.
 	authority := self.v2.verifiedAuthority()
-	digests, digestible := releaseIntentV2EntryDigests(all)
+	digests, digestible := logical.digests, logical.digests != nil
+	if !digestible {
+		digests, digestible = releaseIntentV2EntryDigests(all)
+	}
+	result.all, result.digests = all, digests
 	reusable, anchor := 0, -1
 	startup := releaseStartupVerifiedFrom(ctx)
 	if digestible {
@@ -334,7 +338,7 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 		if err := requireOwnerRecycleProductionFirstIntent(decisionCfg, previous, intent.SubnetEpoch); err != nil {
 			return result, err
 		}
-		if err := validateSteeringIntentLifecycle(intent, index < len(result.file.History)); err != nil {
+		if err := validateSteeringIntentLifecycle(intent, index < history); err != nil {
 			return result, err
 		}
 		if err := intent.VerifyVectorHash(); err != nil {
@@ -653,6 +657,10 @@ func (self *IntentStore) beginV2(ctx context.Context, intent SteeringIntent) (re
 		return nil, err
 	}
 	read.file.Current = &intent
+	// Only begin grows the history, so only begin seals it.
+	if err := self.sealHistoryV2(ctx, read, self.v2.runtime.cfg.EvidenceV2.Bounds.IntentFileLimit()); err != nil {
+		return nil, err
+	}
 	if err := self.writeV2(ctx, read); err != nil {
 		return nil, err
 	}
