@@ -302,12 +302,14 @@ func (self *releaseEvidenceV2StartupHistory) readIntentDecisionSourcesV2(ctx con
 	for index, source := range keySources {
 		registration, err := verifyReservedReleaseClientKeyCaptureV2(keyCtx, chain, source.encoded, source.maximum, source.domain, source.request, true)
 		position := keyPositions[index]
-		actual := observed.bindings[position]
-		matches := registration.Present && releaseHex32(registration.PublicKey) == actual.ClientKey && artifact.Bindings[position].LocalClientKey == actual.ClientKey
-		if err := releaseRpcObservationError(err, matches, errors.New("historical client key differs from its retained operator-signed capture")); err != nil {
+		// The retained capture, not the coordinator row, is the measured
+		// client's local key. A row signed for another key keeps it, and the
+		// shared eligibility rule excludes that binding as the collector did.
+		local := releaseCapturedLocalClientKeyV2(registration)
+		if err := releaseRpcObservationError(err, artifact.Bindings[position].LocalClientKey == local, errors.New("historical local client key differs from its retained operator-signed capture")); err != nil {
 			return result, err
 		}
-		result.bindings[position].LocalClientKey = actual.ClientKey
+		result.bindings[position].LocalClientKey = local
 		result.bindings[position].ClientKeyObservationHash = artifact.Bindings[position].ClientKeyObservationHash
 	}
 	if err := custody.checkSince(entryOwnerIndex); err != nil {
