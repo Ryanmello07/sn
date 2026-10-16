@@ -625,6 +625,12 @@ type releaseGateMainnetExportsBuild struct {
 	root, workspace, calls string
 }
 
+// The fake cargo's test command pipes its _OUT variables into its loop, and
+// bash waits for every process of a pipeline. Fed from a process substitution,
+// which bash never waits for, the loop's last read ends once the substitution's
+// shell closes the pipe in its exit, and the script could then exit before that
+// shell does: the release gate's subreaper would adopt it. That window lies
+// inside the substitution's own exit, so no test can force it.
 const releaseGateMainnetFakeCargo = `#!/usr/bin/env bash
 printf 'cargo %s|%s|%s|%s|%s\n' "$*" "$PWD" "$CARGO_TARGET_DIR" "${RUSTUP_TOOLCHAIN-unset}" "${RUSTUP_AUTO_INSTALL-unset}" >> "$FAKE_CALLS"
 if [[ "$1" == build ]]; then
@@ -632,14 +638,14 @@ if [[ "$1" == build ]]; then
   for engine in runtime-historical-capture runtime-historical-proof; do printf '%s\n' "$engine" > "$CARGO_TARGET_DIR/debug/$engine"; done
   exit 0
 fi
-while IFS='=' read -r variable directory; do
+env | grep '^URNETWORK_[A-Z_]*_FIXTURE_OUT=' | LC_ALL=C sort | while IFS='=' read -r variable directory; do
   [[ "$variable" == "${FAKE_SKIP:-}" ]] && continue
   case "$variable" in
     URNETWORK_NATIVE_EXECUTION_FIXTURE_OUT) printf '{"job":1}' > "$directory/native-job.json" ;;
     URNETWORK_NATIVE_TREASURY_FIXTURE_OUT) printf '{"credit":1}' > "$directory/treasury-credit.json"; printf '{}' > "$directory/treasury-missing-original.json" ;;
     *) printf '{"%s":1}' "$variable" > "$directory/job.json" ;;
   esac
-done < <(env | grep '^URNETWORK_[A-Z_]*_FIXTURE_OUT=' | LC_ALL=C sort)
+done
 `
 
 const releaseGateMainnetFakeGo = `#!/usr/bin/env bash
