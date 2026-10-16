@@ -59,6 +59,23 @@ existing bounded cache/lease freshness. Original activation consent does not
 replace current eligibility, account authentication, object binding or quota
 checks.
 
+The refresh no longer fails silently in four places:
+
+- A refresh that finishes after its own freshness window fails with the head
+  ages and duration it measured. It does not publish an already expired state.
+- An activation that is not admitted records its cause, and the refused request
+  carries that cause.
+- An activation that an earlier refresh admitted is checked again even when
+  discovery omits it. Its finalized historical proof is reused after a
+  canonical-anchor recheck, so later refreshes need no archive state for it.
+- If only that activation's reads fail, it keeps the expiry of its last complete
+  verification. Observed ineligibility or a changed anchor still retires it at
+  once.
+
+Each refresh prints one line with its outcome, duration, head ages and the
+activations it did not admit. The next refresh starts early enough to publish
+before the current state expires.
+
 Local regressions join the ordinary upload signer, real server-used admission
 constructor/refresh/lease, signed synthetic schema-3 config, real native storage
 decoding and a local EVM HTTP fixture. Three controls restore the former decisions:
