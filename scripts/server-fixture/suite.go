@@ -36,6 +36,11 @@ var suiteFixtureResourceKindNames = map[string][]string{
 	"config":     {"apple_roots.pem", "brevo.yml", "db.yml", "email.yml", "mmdb/places.yml", "pro.yml", "redis.yml", "settings.yml", "subsidy.yml", "tls.yml"},
 }
 
+// The Authorization the fixture's Helius webhook expects. The server refuses
+// every Helius webhook without a configured value, so the fixture carries one,
+// visibly synthetic so it is never mistaken for a deployment's secret.
+const suiteFixtureHeliusWebhookAuthorization = "fixture-synthetic-helius-webhook-authorization"
+
 // The portable suite resolves its documentation and local transport subnets
 // without importing the production-sized location database. Public addresses
 // outside those fixtures retain their separate database resource contract.
@@ -355,7 +360,7 @@ func createSuiteFixture(parent, server, postgres, redis string) (report fixtureR
 		"vault/brevo.yml":        []byte("brevo:\n  api_key: ''\n  webhook_bearers: []\n"),
 		"vault/circle.yml":       []byte("wallet_set_id: ''\ncircle:\n  api_token: ''\n  entity_secret: ''\n  app_id: ''\n  solana_usdc_address: ''\n  polygon_usdc_address: ''\n  solana_wallet_id: ''\n  polygon_wallet_id: ''\n"),
 		"vault/coinbase.yml":     []byte("api:\n  host: disabled.fixture.example\n  key: ''\nwebhook:\n  shared_secret: ''\n"),
-		"vault/helius.yml":       []byte("api_key: ''\nhelius:\n  api_key: ''\n"),
+		"vault/helius.yml":       []byte("api_key: ''\nhelius:\n  api_key: ''\n  webhook_auth_header: " + suiteFixtureHeliusWebhookAuthorization + "\n"),
 		"vault/services.yml":     []byte("{}\n"),
 		"vault/st.yml":           []byte("enabled: false\n"),
 		"vault/stripe.yml":       []byte("api:\n  token: ''\n  publishable_key: ''\nwebhook:\n  signing_secret: ''\n"),
