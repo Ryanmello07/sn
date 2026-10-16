@@ -32,8 +32,8 @@ var releaseGateServerNativeFeeBody = []string{
 	`source "$release_gate_mainnet_exports/environment.sh"`,
 	`cd "$workspace/server"`,
 	"native_fee_settlement_tests='" + releaseGateServerNativeFeeSelector + "'",
-	`go test . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
-	`go test -race . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
+	`go test -timeout 40m . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
+	`go test -race -timeout 40m . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1`,
 }
 
 // The server's native-fee test sources, whose every test the owner runs.
@@ -152,7 +152,7 @@ func TestReleaseGateServerNativeFeeOwnerRunsEveryNativeFeeTest(t *testing.T) {
 		{"\n    release_gate_server_native_fee\n  }\n", "\n    release_gate_server_native_fee || true\n  }\n"},
 		{"\n  export -f release_gate_server_native_fee\n", "\n"},
 		{"\n    source \"$release_gate_mainnet_exports/environment.sh\"\n    cd \"$workspace/server\"\n", "\n    cd \"$workspace/server\"\n"},
-		{"\n    go test -race . ./cli/stnativefees ./controller ./model -run \"$native_fee_settlement_tests\" -count=1\n", "\n"},
+		{"\n    go test -race -timeout 40m . ./cli/stnativefees ./controller ./model -run \"$native_fee_settlement_tests\" -count=1\n", "\n"},
 		{"native_fee_settlement_tests='^Test(StNativeFee|NativeFeeCli|NativeFeeController)'", "native_fee_settlement_tests='^Test(StNativeFee|NativeFeeController)'"},
 	} {
 		if strings.Count(script, change.old) != 1 {
@@ -181,8 +181,8 @@ func TestReleaseGateServerNativeFeeOwnerRunsWithTheExports(t *testing.T) {
 		" URNETWORK_NATIVE_FEE_SETTLEMENT_VERIFIER_SHA256=sha256:" + strings.Repeat("ab", 32) + " "
 	server := filepath.Join(root, "workspace", "server")
 	want := []string{
-		"test . ./cli/stnativefees ./controller ./model -run " + releaseGateServerNativeFeeSelector + " -count=1|" + server + "|" + environment,
-		"test -race . ./cli/stnativefees ./controller ./model -run " + releaseGateServerNativeFeeSelector + " -count=1|" + server + "|" + environment,
+		"test -timeout 40m . ./cli/stnativefees ./controller ./model -run " + releaseGateServerNativeFeeSelector + " -count=1|" + server + "|" + environment,
+		"test -race -timeout 40m . ./cli/stnativefees ./controller ./model -run " + releaseGateServerNativeFeeSelector + " -count=1|" + server + "|" + environment,
 	}
 	if !slices.Equal(calls, want) {
 		t.Fatalf("the owner ran\n%s\nwant\n%s", strings.Join(calls, "\n"), strings.Join(want, "\n"))

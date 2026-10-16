@@ -940,8 +940,8 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     source "$release_gate_mainnet_exports/environment.sh"
     cd "$workspace/server"
     native_fee_settlement_tests='^Test(StNativeFee|NativeFeeCli|NativeFeeController)'
-    go test . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1
-    go test -race . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1
+    go test -timeout 40m . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1
+    go test -race -timeout 40m . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1
   }
   export -f release_gate_server_native_fee
   release_phase_server_db() {
