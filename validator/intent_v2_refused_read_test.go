@@ -61,3 +61,13 @@ func TestIntentV2RefusedReadRemembersNoVerifiedHistory(t *testing.T) {
 		t.Errorf("a refused read remembered a verified prefix: memo %t, startup prefix %d", owner.v2.verified != nil, len(startup.intents))
 	}
 }
+
+// The prepared authorization an entry's verification issues is granted only
+// by a complete read, so it does not outlive a read that its final check
+// refuses.
+func TestIntentV2RefusedReadKeepsNoPreparedAuthorization(t *testing.T) {
+	owner, _, _ := intentV2RefusedReadTest(t)
+	if owner.v2.productionPrepared != nil {
+		t.Error("a refused read kept the prepared authorization its entry issued")
+	}
+}

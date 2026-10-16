@@ -205,6 +205,9 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 	result = &releaseIntentV2Read{file: &steeringIntentFile{Schema: steeringIntentSchema}, custody: &releaseEvidenceV2StartupReferences{remaining: bounds.MaxHistoryBytes, readHooks: self.v2.referenceReadHooks}}
 	defer func() {
 		if resultErr != nil {
+			// Entries grant the prepared authorization as each one verifies; only
+			// a read whose whole custody passes keeps it.
+			self.v2.productionPrepared = nil
 			resultErr = errors.Join(resultErr, result.custody.close())
 			result = nil
 		}
