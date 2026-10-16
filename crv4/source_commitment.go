@@ -97,8 +97,9 @@ func preparedSourceEncoding(prepared *PreparedSubmission) (call, fields, payload
 	call = append(call, encodeNetuid(prepared.Netuid)...)
 	call = append(call, 4, dataSHA256Variant)
 	call = append(call, hash...)
-	// The source anchor must never be a fleet commitment, or the commitment
-	// oracle would mirror the validator's source hotkey.
+	// Defense in depth: the bytes above hard-code the Sha256 variant, so this
+	// cannot fail today. It keeps a future edit from turning the source anchor
+	// into a fleet commitment the oracle would mirror.
 	if err := checkNotFleetCommitment(call[len(call)-34:]); err != nil {
 		return nil, nil, nil, err
 	}

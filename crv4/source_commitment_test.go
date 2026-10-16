@@ -83,8 +83,10 @@ func TestSourceCommitmentExactSignedBatchAndCiphertext(t *testing.T) {
 }
 
 // The validator's source anchor is one Sha256 field and never a fleet
-// commitment, whatever its hash: the commitment oracle mirrors only the
-// tagged fleet format, so it can never mirror a source hotkey (2026-10-15).
+// commitment, whatever its hash, including one that starts with the tag
+// bytes. This pins the hard-coded encoding; checkNotFleetCommitment, which
+// cannot fail on it, is only defense in depth (its rejection of real fleet
+// bytes is TestSourceCommitmentWriterNeverProducesFleetTag).
 func TestSourceCommitmentAnchorIsNeverAFleetCommitment(t *testing.T) {
 	var tagLike [32]byte
 	copy(tagLike[:], FleetCommitmentTag)

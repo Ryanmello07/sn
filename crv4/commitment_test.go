@@ -332,3 +332,50 @@ func TestFleetAndSourceCommitmentCallsRuntime478(t *testing.T) {
 		t.Fatalf("source call %x, want %x", encoded, want)
 	}
 }
+
+// The pallet_commitments Data enum in the runtime-478 metadata: the fleet
+// format's Raw40 is variant 41 holding [u8; 40], and the source format's
+// Sha256 is variant 131. Runtime 479 (release-479, e66c7eed) has the same
+// commitments types.rs.
+func TestCommitmentDataVariantsRuntime478(t *testing.T) {
+	metadata, _ := runtime478TestMetadata(t)
+	found := false
+	for _, entry := range metadata.AsMetadataV14.Lookup.Types {
+		path := entry.Type.Path
+		if len(path) != 3 || path[0] != "pallet_commitments" || path[1] != "types" || path[2] != "Data" {
+			continue
+		}
+		found = true
+		variants := map[string]types.Si1Variant{}
+		for _, variant := range entry.Type.Def.Variant.Variants {
+			variants[string(variant.Name)] = variant
+		}
+		raw40, sha := variants["Raw40"], variants["Sha256"]
+		if uint8(raw40.Index) != dataRaw40Variant || uint8(sha.Index) != dataSHA256Variant {
+			t.Fatalf("Raw40 index %d, Sha256 index %d", raw40.Index, sha.Index)
+		}
+		if len(raw40.Fields) != 1 {
+			t.Fatalf("Raw40 has %d fields", len(raw40.Fields))
+		}
+		field := metadata.AsMetadataV14.EfficientLookup[raw40.Fields[0].Type.Int64()]
+		if field == nil || !field.Def.IsArray || uint32(field.Def.Array.Len) != uint32(FleetCommitmentFieldBytes) {
+			t.Fatalf("Raw40 field is not [u8; %d]", FleetCommitmentFieldBytes)
+		}
+	}
+	if !found {
+		t.Fatal("pallet_commitments::types::Data is absent")
+	}
+}
+
+// A one-field Sha256 registration is legacy whatever its block, including 0.
+func TestLegacyFleetCommitmentDetectedBeforeBlockCheck(t *testing.T) {
+	hash := sha256.Sum256([]byte("legacy"))
+	info, err := EncodeSourceCommitmentInfo(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registration := append(make([]byte, registrationFixedU32PrefixBytes), info...)
+	if _, _, err := DecodeFleetCommitmentRegistrationWithBlockV454(registration); !errors.Is(err, ErrLegacyFleetCommitment) {
+		t.Fatalf("block-0 legacy registration: %v", err)
+	}
+}

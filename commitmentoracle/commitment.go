@@ -27,7 +27,8 @@ import (
 	"github.com/urfoundation/sn/crv4"
 )
 
-// The exact byte length of a tagged fleet registration: u64 deposit, u32
+// The exact byte length of a tagged fleet registration (the crv4 decoder
+// enforces it): u64 deposit, u32
 // block, compact vec length 1, the Raw40 variant, the 8-byte tag and the
 // 32-byte hash.
 const fleetRegistrationBytes = 8 + 4 + 1 + 1 + crv4.FleetCommitmentFieldBytes
@@ -89,9 +90,6 @@ func parseFleetCommitment(entry rawCommitment) (fleetCommitment, error) {
 	commitmentHash, commitmentBlock, err := crv4.DecodeFleetCommitmentRegistrationWithBlockV454(entry.raw)
 	if err != nil {
 		return fleetCommitment{}, err
-	}
-	if len(entry.raw) != fleetRegistrationBytes {
-		return fleetCommitment{}, fmt.Errorf("registration has %d bytes, want %d", len(entry.raw), fleetRegistrationBytes)
 	}
 	return fleetCommitment{hotkey: entry.hotkey, commitmentHash: commitmentHash, commitmentBlock: commitmentBlock}, nil
 }
