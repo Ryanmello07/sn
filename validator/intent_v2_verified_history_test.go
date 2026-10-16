@@ -382,7 +382,8 @@ func TestIntentV2EntryReadChecksOnlyItsOwnCustody(t *testing.T) {
 		if err := custody.check(); err == nil {
 			t.Errorf("%s read owner's final check accepted a replaced earlier file", read.name)
 		}
-		// Closing reports the same replaced earlier file.
-		_ = custody.close()
+		if err := custody.close(); err == nil {
+			t.Errorf("%s read owner's close accepted a replaced earlier file", read.name)
+		}
 	}
 }
