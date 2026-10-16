@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds every qualification export that ./mainnet's tests consume into one new
-# private directory, from this checkout and the sibling server checkout as they
-# are: the two engines and the Rust-exported jobs of
-# tools/runtime-metadata-probe, the provider originals that ./validator and
-# ./payoutartifact export, and the server's chain-964 fee inputs. It runs
+# Builds every qualification export that ./mainnet's tests and the server's
+# public native-fee tests consume into one new private directory, from this
+# checkout and the sibling server checkout as they are: the two engines and
+# the Rust-exported jobs of tools/runtime-metadata-probe, the provider
+# originals that ./validator and ./payoutartifact export, the server's chain-964
+# fee inputs, and ./mainnet's native-fee settlement fixtures with the
+# mainnet.test image that verifies them. It runs
 # offline: Cargo builds --locked --offline and rustup may not install a
 # toolchain, so the toolchain that rust-toolchain.toml pins and every crate of
 # its Cargo.lock must already be installed (about 2 GB in CARGO_HOME; `cargo
 # fetch --locked` once, online), and Go needs its module cache.
 # manifest records each export file's source commit and SHA-256, and
-# environment.sh, written last, exports the variable that names each export.
+# environment.sh, written last, exports the variable that names each export
+# and each digest.
 
 if (( $# != 1 )) || [[ "$1" != /* || -e "$1" ]]; then
   echo 'usage: build-mainnet-exports.sh NEW-ABSOLUTE-DIRECTORY' >&2
@@ -23,7 +26,8 @@ workspace="$(dirname "$sn_repo")"
 
 # On 2026-10-14 the build peaked at 3.3 GiB, nearly all of it the Cargo target,
 # which is removed once the Rust exports are written, leaving 0.5 GiB of
-# exports; require about twice the peak free.
+# exports, 0.6 GiB with the native-fee image on 2026-10-16; require about
+# twice the peak free.
 required_kib=$((7 * 1024 * 1024))
 available_kib="$(df -Pk -- "$(dirname "$output")" | awk 'NR == 2 { print $4 }')"
 if ! [[ "$available_kib" =~ ^[0-9]+$ ]] || (( available_kib < required_kib )); then
@@ -31,6 +35,9 @@ if ! [[ "$available_kib" =~ ^[0-9]+$ ]] || (( available_kib < required_kib )); t
   exit 1
 fi
 mkdir -m 700 -- "$output"
+# The verifier's path must be the one its own process sees, which has no
+# symbolic link.
+output="$(cd -- "$output" && pwd -P)"
 
 # Each export: the variable that names it, its path in the directory, and the
 # checkout it is built from.
@@ -51,7 +58,13 @@ URNETWORK_NATIVE_YUMA_POPULATED_FIXTURE_DIR yuma-populated sn
 URNETWORK_NATIVE_TREASURY_FIXTURE treasury/treasury-credit.json sn
 URNETWORK_PROVIDER_ATTEMPT_COMPLETED_FIXTURE_DIR provider-attempt sn
 URNETWORK_PROVIDER_WORK_FIXTURE_DIR provider-work sn
-URNETWORK_ECONOMIC_FEE_FIXTURE_DIR economic-fee server'
+URNETWORK_ECONOMIC_FEE_FIXTURE_DIR economic-fee server
+URNETWORK_NATIVE_FEE_SETTLEMENT_FIXTURE_DIRECTORY native-fee sn
+URNETWORK_NATIVE_FEE_SETTLEMENT_VERIFIER native-fee-verifier/mainnet.test sn'
+
+# Each export that is the SHA-256 of an export file: the variable that names
+# it, the file's path in the directory, and the checkout it is built from.
+digests='URNETWORK_NATIVE_FEE_SETTLEMENT_VERIFIER_SHA256 native-fee-verifier/mainnet.test sn'
 
 # Each Rust export's directory: the variable that gives it to the libtest root
 # that writes it, the directory, and the root, under
@@ -102,6 +115,21 @@ mkdir -m 700 -- "$output/provider-attempt" "$output/provider-work" "$output/econ
   URNETWORK_ECONOMIC_FEE_EXPORT_DIR="$output/economic-fee" go test ./strecovery -run '^TestExportEconomicConservationFeeInputs$' -count=1
 )
 
+# The native-fee settlement fixtures, which the server's public native-fee
+# tests settle with the mainnet.test image that exported them and pin by path
+# and SHA-256. go test runs a test from a temporary image, so the image is
+# built where it stays, read-only, and runs from there in ./mainnet, the
+# package directory whose testdata the export reads.
+mkdir -m 700 -- "$output/native-fee" "$output/native-fee-verifier"
+verifier="$output/native-fee-verifier/mainnet.test"
+(
+  cd "$sn_repo"
+  go test -c -o "$verifier" ./mainnet
+  chmod 0500 -- "$verifier"
+  cd "$sn_repo/mainnet"
+  URNETWORK_NATIVE_FEE_EXPORT_DIRECTORY="$output/native-fee" "$verifier" -test.run '^TestNativeFeeOutcomeExportSettlementFixtures$' -test.timeout 10m
+)
+
 # A root that matches no test passes without writing: every export must be a
 # nonempty file or a directory with a file.
 while read -r variable path repository; do
@@ -130,8 +158,14 @@ done
   done <<< "$exports"
 ) > "$output/manifest"
 cat -- "$output/manifest"
-while read -r variable path repository; do
-  printf 'export %s=%q\n' "$variable" "$output/$path"
-done <<< "$exports" > "$output/environment.sh.pending"
+{
+  while read -r variable path repository; do
+    printf 'export %s=%q\n' "$variable" "$output/$path"
+  done <<< "$exports"
+  while read -r variable path repository; do
+    digest="$(sha256sum -- "$output/$path")"
+    printf 'export %s=sha256:%s\n' "$variable" "${digest%% *}"
+  done <<< "$digests"
+} > "$output/environment.sh.pending"
 mv -- "$output/environment.sh.pending" "$output/environment.sh"
 printf 'mainnet exports: %s\n' "$output/environment.sh"
