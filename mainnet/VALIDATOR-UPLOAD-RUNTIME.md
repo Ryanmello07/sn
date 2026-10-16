@@ -69,8 +69,9 @@ The refresh no longer fails silently in four places:
   discovery omits it. Its finalized historical proof is reused after a
   canonical-anchor recheck, so later refreshes need no archive state for it.
 - If only that activation's reads fail, it keeps the expiry of its last complete
-  verification. Observed ineligibility or a changed anchor still retires it at
-  once.
+  verification. Observed ineligibility, including a hotkey with no current
+  registration, a later activation of the same owner, whether authenticated or
+  only discovered, or a changed anchor still retires it at once.
 
 Each refresh prints one line with its outcome, duration, head ages and the
 activations it did not admit. The next refresh starts early enough to publish
