@@ -401,6 +401,11 @@ func openFinalSemanticArchive(ctx context.Context, cfg *ResolvedConfig, stateDir
 		if err := addDirect(validator.IntentStore); err != nil {
 			return nil, err
 		}
+		for _, segment := range validator.IntentSegments {
+			if err := addDirect(segment); err != nil {
+				return nil, err
+			}
+		}
 		if validator.DishonestDepositIntent != nil {
 			for _, locator := range []FinalArtifactLocator{validator.DishonestDepositIntent.Artifact, validator.DishonestDepositIntent.Measurement, validator.DishonestDepositIntent.Envelope} {
 				if err := addDirect(locator); err != nil {

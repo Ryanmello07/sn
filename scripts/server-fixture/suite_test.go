@@ -8,7 +8,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"os"
 	"os/exec"
@@ -435,6 +437,38 @@ func TestServerFixtureSuiteX402ConfigIsInertAndParseable(t *testing.T) {
 	}
 	if len(config.Skus) != 0 || len(config.Networks) != 0 || len(config.PayTo) != 0 {
 		t.Fatal("portable x402 fixture unexpectedly offers a sku, a network or a settlement address")
+	}
+}
+
+// The required physical helius.yml must carry a Helius webhook secret that the
+// owning server verifies. The server refuses every Helius webhook without one,
+// and before it failed closed, the missing key panicked on each webhook.
+func TestServerFixtureSuiteHeliusWebhookVerifiesSyntheticSecret(t *testing.T) {
+	parent, server := suiteFixtureTestInputs(t)
+	report, err := createSuiteFixture(parent, server, "127.0.0.1:35431", "127.0.0.1:36371")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WARP_VAULT_HOME", filepath.Join(report.Workspace, "vault"))
+
+	verify := func(authorization string) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panicked: %v", r)
+			}
+		}()
+		req := httptest.NewRequest(http.MethodPost, "/pay/solana", strings.NewReader("[]"))
+		if authorization != "" {
+			req.Header.Set("Authorization", authorization)
+		}
+		_, err = servercontroller.VerifyHeliusBody(nil, req)
+		return err
+	}
+	if err := verify(suiteFixtureHeliusWebhookAuthorization); err != nil {
+		t.Fatalf("the fixture's synthetic Helius secret did not verify: %v", err)
+	}
+	if err := verify(""); err == nil {
+		t.Fatal("a Helius webhook without the fixture's secret was accepted")
 	}
 }
 

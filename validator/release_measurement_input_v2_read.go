@@ -330,6 +330,26 @@ func (self *releaseMeasurementInputV2Owner) read() (encoded []byte, resultErr er
 	return encoded, self.check()
 }
 
+// The leaf's identity under the held parent, admitted as read admits a leaf
+// but without its bytes. Every later check refuses a change to this witness.
+func (self *releaseMeasurementInputV2Owner) observeLeaf() (attemptPrivateFileState, error) {
+	if err := validateReleaseMeasurementInputV2Limit(self.limit); err != nil {
+		return attemptPrivateFileState{}, err
+	}
+	if err := self.check(); err != nil {
+		return attemptPrivateFileState{}, err
+	}
+	state, err := self.directory.stat(self.name)
+	if err != nil {
+		return attemptPrivateFileState{}, err
+	}
+	self.observed, self.witness = true, &state
+	if !state.regular() || state.mode&0o077 != 0 || state.size < 0 || uint64(state.size) > self.limit {
+		return attemptPrivateFileState{}, errors.New("compact input journal is not a bounded private regular file")
+	}
+	return state, self.check()
+}
+
 // Initial absence is granted only after the actual parent Close, its final
 // native witness, and cancellation all succeed. Late ENOENT stays a hard error.
 func readReleaseMeasurementInputV2Context(ctx context.Context, path string, limit uint64, hooks releaseMeasurementInputV2ReadHooks) (encoded []byte, resultErr error) {
