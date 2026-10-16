@@ -1002,8 +1002,10 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # measured lower bound above Go's implicit ten-minute package deadline, so
     # the explicit deadline supplies deterministic headroom without changing
     # selection. Every hosted-device and client netstack is synchronously joined
-    # before the following root is admitted.
-    go test -timeout 20m ./proxy -count=1
+    # before the following root is admitted. The package took 438 to 492
+    # seconds at normal load, and 1,008 at load 60 in a pre-check, 84% of its
+    # former 20 minutes, so its deadline is more than twice the slowest.
+    go test -timeout 40m ./proxy -count=1
     # The monitor's whole package, in both modes, one after the other. Its SQL
     # fixtures fail closed without the test environment this phase sources
     # (server monitor/RUN-MAIN.md), so it cannot run among the unit suites.

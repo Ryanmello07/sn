@@ -754,7 +754,7 @@ first exist.
     are (`scripts/test-release-1.0-local.sh`:4-18; `sim-testnet/README.md`:839-846).
   - `RUN_SERVER_DB_TESTS=1` runs the database suites, the scale shard's
     database half and the E suite, on the gate's private disposable
-    PostgreSQL and Redis (`scripts/test-release-1.0-local.sh`:910-1117).
+    PostgreSQL and Redis (`scripts/test-release-1.0-local.sh`:910-1119).
   - `RELEASE_GATE_CONCURRENT_GATES=1` gives this one gate the host's whole
     CPU and memory share, where the default reserves half of it for a second
     gate (`scripts/release-gate-jobs.sh`:34-36,99-101).
@@ -768,7 +768,7 @@ first exist.
     (`scripts/check-release-source-freeze.sh`:203-209,238-243);
   - `TestReleaseLockMatchesCheckout`, by name in every job that would run
     it, and as the final fence
-    (`scripts/test-release-1.0-local.sh`:173-183,1160-1169). So the release
+    (`scripts/test-release-1.0-local.sh`:173-183,1162-1171). So the release
     lock needs no refresh: the owner's decision of 2026-10-14 is that the
     gate runs in this mode against the `main` heads, with no freeze and no
     lock refresh (the preamble);
@@ -786,7 +786,7 @@ first exist.
 - **It never touches a vault.** The source freeze and patch hygiene skip the
   vault checkout, its Git metadata included
   (`scripts/check-release-source-freeze.sh`:132-145;
-  `scripts/test-release-1.0-local.sh`:1150-1158), and no test that would
+  `scripts/test-release-1.0-local.sh`:1152-1160), and no test that would
   read it runs (above). The two named skips reach every job since sn
   `v2/gate-mainnet-shards` merged (`a47111d6`). Before that,
   `TestReleaseLockMatchesCheckout` still ran in `sn-simulator-race`, and
@@ -801,13 +801,13 @@ first exist.
   (`scripts/check-release-source-freeze.sh`:208), and "[release-1.0] runtime
   source and metadata artifact attestations skipped (local mode)" and
   "[release-1.0] final release-lock and source-freeze checkouts skipped
-  (local mode)" (`scripts/test-release-1.0-local.sh`:84,1161).
+  (local mode)" (`scripts/test-release-1.0-local.sh`:84,1163).
 - **The workspace:** sn, server, connect, sdk, glog, goidenticons, proxy,
   userwireguard, warp, gvisor, xops and config, each a Git checkout beside
   sn (`scripts/test-release-1.0-local.sh`:49;
   `scripts/check-release-source-freeze.sh`:132-145). Local mode needs no
   vault (above). The `xops` job runs that repository's infrastructure tests
-  (`scripts/test-release-1.0-local.sh`:1119-1130).
+  (`scripts/test-release-1.0-local.sh`:1121-1132).
 - **The generated files at mode 644**: the fifteen ABI and binding files of
   step 8.1. Check public sources out under umask 022, and keep the server's
   `local/postgres/initdb` directory and its script at 755
@@ -876,12 +876,12 @@ first exist.
   5).
 - **Expect.** The last line is `[release-1.0] local release gate passed
   (local mode: working checkouts, not sealed)`
-  (`scripts/test-release-1.0-local.sh`:1195-1196). It qualifies those
+  (`scripts/test-release-1.0-local.sh`:1197-1198). It qualifies those
   checkouts, not a sealed release (`sim-testnet/README.md`:856-858). The
   settlement v2 jobs:
   - `sn-v2`, gate 3's own verdict (`scripts/test-release-1.0-local.sh`:535-553);
-  - `sn-scale` and `server-scale`, GL-10 and SV-6 (:555-573,1048-1066);
-  - `sn-e2e`, gate 4 (:1067-1096);
+  - `sn-scale` and `server-scale`, GL-10 and SV-6 (:555-573,1050-1068);
+  - `sn-e2e`, gate 4 (:1069-1098);
   - `solidity`: format, release build with sizes, tests, the `v2_invariant`
     campaign, and the catalog and binding checks (:581-605);
   - `solidity-coverage`, gate 1's bar (:607-622), and `solidity-static`
@@ -893,7 +893,7 @@ first exist.
     `sim-testnet/release_gate_settlement_v2_test.go` run in the
     `./sim-testnet` shards.
 - **Stop if** the script prints `[release-1.0] DB suites deferred`
-  (`scripts/test-release-1.0-local.sh`:1116): the database suites, the scale
+  (`scripts/test-release-1.0-local.sh`:1118): the database suites, the scale
   shard's database half and the E suite then did not run. Any failed job is
   not a stop: fix it, commit, merge, push and pull, and run the gate again
   (O28).
