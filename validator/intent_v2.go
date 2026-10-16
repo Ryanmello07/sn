@@ -66,11 +66,14 @@ func (self *IntentStore) acquireV2(ctx context.Context) (func(), error) {
 	return release, nil
 }
 
+// The entry checks the custody it acquires; its caller checks the whole set
+// before using the verdict, so a history read stays linear in its entries.
 func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *releaseEvidenceV2StartupReferences, intent *SteeringIntent) (*ReleaseMeasurementArtifact, *VerifiedReleaseMeasurement, []byte, ReleaseMeasurementV2Options, error) {
 	runtime, bounds := self.v2.runtime, self.v2.runtime.cfg.EvidenceV2.Bounds
 	nativeCopy := *runtime.native
 	native := &nativeCopy
 	var options ReleaseMeasurementV2Options
+	entryOwnerIndex := len(custody.owners)
 	decisionCfg, err := productionConfigForIntent(&runtime.cfg, intent)
 	if err != nil {
 		return nil, nil, nil, options, err
@@ -144,7 +147,7 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 	if err := native.ValidatePreparedSourceWeightsContext(ctx, intent.Prepared, verified.Decision.UIDs, verified.Decision.Scores, releaseSubmitOptions(decisionCfg)); err != nil {
 		return nil, nil, nil, options, err
 	}
-	if err := errors.Join(custody.check(), ctx.Err()); err != nil {
+	if err := errors.Join(custody.checkSince(entryOwnerIndex), ctx.Err()); err != nil {
 		return nil, nil, nil, options, err
 	}
 	if err := self.retainOwnerRecyclePreparedAuthorization(intent); err != nil {
@@ -159,9 +162,11 @@ func (self *IntentStore) readMeasurementV2(ctx context.Context, custody *release
 // its local source commitment and hotkey are checked again. The artifact is
 // decoded only when the caller needs its fields: the hash already pins the
 // exact bytes that decoded before, and decoding every retained artifact on
-// every steering poll costs time that grows with the whole history.
+// every steering poll costs time that grows with the whole history. For the
+// same reason the entry checks only the custody it acquires.
 func (self *IntentStore) readVerifiedMeasurementV2(ctx context.Context, custody *releaseEvidenceV2StartupReferences, intent *SteeringIntent, decode bool) (*ReleaseMeasurementArtifact, []byte, error) {
 	runtime, bounds := self.v2.runtime, self.v2.runtime.cfg.EvidenceV2.Bounds
+	entryOwnerIndex := len(custody.owners)
 	measurement, err := runtime.history.readContentReference(ctx, custody, intent.MeasurementArtifactPath, intent.MeasurementArtifactHash, intent.MeasurementArtifactSize, bounds.MaxArtifactBytes, false)
 	if err != nil {
 		return nil, nil, err
@@ -185,7 +190,7 @@ func (self *IntentStore) readVerifiedMeasurementV2(ctx context.Context, custody 
 	if intent.Prepared.HotkeyHex != releaseHex32(runtime.hotkey.PublicKey()) {
 		return nil, nil, errors.New("V2 prepared hotkey differs from independently owned validator identity")
 	}
-	if err := errors.Join(custody.check(), ctx.Err()); err != nil {
+	if err := errors.Join(custody.checkSince(entryOwnerIndex), ctx.Err()); err != nil {
 		return nil, nil, err
 	}
 	if err := self.retainOwnerRecyclePreparedAuthorization(intent); err != nil {
@@ -200,6 +205,9 @@ func (self *IntentStore) readV2(ctx context.Context) (result *releaseIntentV2Rea
 	result = &releaseIntentV2Read{file: &steeringIntentFile{Schema: steeringIntentSchema}, custody: &releaseEvidenceV2StartupReferences{remaining: bounds.MaxHistoryBytes, readHooks: self.v2.referenceReadHooks}}
 	defer func() {
 		if resultErr != nil {
+			// Entries grant the prepared authorization as each one verifies; only
+			// a read whose whole custody passes keeps it.
+			self.v2.productionPrepared = nil
 			resultErr = errors.Join(resultErr, result.custody.close())
 			result = nil
 		}

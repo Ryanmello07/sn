@@ -81,6 +81,13 @@ func (self *releaseEvidenceV2StartupReferences) read(ctx context.Context, path s
 // No callback is allowed to turn a shortened or retargeted file into the same
 // authenticated reference set. Late errors survive all owner releases.
 func (self *releaseEvidenceV2StartupReferences) check() error {
+	return self.checkSince(0)
+}
+
+// Only the owners acquired at or after index, so a loop that checks each
+// entry's own files checks every owner once instead of all earlier ones again.
+// The loop's owner still checks the whole set before it uses any verdict.
+func (self *releaseEvidenceV2StartupReferences) checkSince(index int) error {
 	if self == nil || self.closed {
 		return errors.New("startup reference owner is closed")
 	}
@@ -88,7 +95,7 @@ func (self *releaseEvidenceV2StartupReferences) check() error {
 		return self.archive.check(self.archive.ctx)
 	}
 	var err error
-	for _, owner := range self.owners {
+	for _, owner := range self.owners[index:] {
 		err = errors.Join(err, owner.check())
 	}
 	return err
