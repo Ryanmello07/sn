@@ -34,15 +34,16 @@ export WARP_TEST_ENV_FAIL_FAST=1
 # server/stmonitor/testfixture's admin URL comes only from this gate's private
 # PostgreSQL, in sn-e2e, never from the caller's environment or local stack.
 unset STMONITOR_TEST_ADMIN_URL
-# So do ./mainnet's qualification exports, from sn-mainnet-exports, in the
-# ./mainnet shards.
+# So do the qualification exports, from sn-mainnet-exports, in the ./mainnet
+# shards and server-db's native-fee tests.
 unset URNETWORK_NATIVE_CAPTURE_ENGINE URNETWORK_NATIVE_EXECUTION_ENGINE URNETWORK_NATIVE_EXECUTION_FIXTURE \
   URNETWORK_NATIVE_PRODUCER_FIXTURE URNETWORK_NATIVE_CONSERVATION_FIXTURE URNETWORK_NATIVE_PRINCIPAL_FIXTURE_DIR \
   URNETWORK_NATIVE_PRINCIPAL_EFFECTS_FIXTURE_DIR URNETWORK_NATIVE_VAULT_CAPTURE_FIXTURE_DIR \
   URNETWORK_NATIVE_VAULT_CAPTURE_SEQUENCE_FIXTURE_DIR URNETWORK_NATIVE_RUNTIME_RENEWAL_FIXTURE \
   URNETWORK_NATIVE_WHOLE_FEE_FIXTURE_DIR URNETWORK_NATIVE_YUMA_FIXTURE_DIR URNETWORK_NATIVE_YUMA_CAPACITY_FIXTURE_DIR \
   URNETWORK_NATIVE_YUMA_POPULATED_FIXTURE_DIR URNETWORK_NATIVE_TREASURY_FIXTURE \
-  URNETWORK_PROVIDER_ATTEMPT_COMPLETED_FIXTURE_DIR URNETWORK_PROVIDER_WORK_FIXTURE_DIR URNETWORK_ECONOMIC_FEE_FIXTURE_DIR
+  URNETWORK_PROVIDER_ATTEMPT_COMPLETED_FIXTURE_DIR URNETWORK_PROVIDER_WORK_FIXTURE_DIR URNETWORK_ECONOMIC_FEE_FIXTURE_DIR \
+  URNETWORK_NATIVE_FEE_SETTLEMENT_FIXTURE_DIRECTORY URNETWORK_NATIVE_FEE_SETTLEMENT_VERIFIER URNETWORK_NATIVE_FEE_SETTLEMENT_VERIFIER_SHA256
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workspace="$(dirname "$sn_repo")"
@@ -925,6 +926,24 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     export release_gate_services_error
     release_gate_preflight_refusal "$release_gate_services_error"
   fi
+  # The server's native-fee settlement tests: its denomination policy and
+  # schema, stnativefees, the controller and the durable model. The public
+  # ones settle the fixtures that sn-mainnet-exports exports, with the
+  # mainnet.test image that exported them, which they pin by path and
+  # SHA-256. Like a ./mainnet shard, they need that job's exit zero and run
+  # with its environment, last in server-db.
+  release_gate_server_native_fee() {
+    if [[ "${release_gate_mainnet_exports_exit:-}" != 0 ]]; then
+      printf 'release gate: server-db has no native-fee exports: sn-mainnet-exports exit %s\n' "${release_gate_mainnet_exports_exit:-unknown}" >&2
+      return 1
+    fi
+    source "$release_gate_mainnet_exports/environment.sh"
+    cd "$workspace/server"
+    native_fee_settlement_tests='^Test(StNativeFee|NativeFeeCli|NativeFeeController)'
+    go test -timeout 40m . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1
+    go test -race -timeout 40m . ./cli/stnativefees ./controller ./model -run "$native_fee_settlement_tests" -count=1
+  }
+  export -f release_gate_server_native_fee
   release_phase_server_db() {
     cd "$workspace/server"
     # Tests create and drop only this gate's private disposable databases.
@@ -1015,6 +1034,7 @@ if [[ "${RUN_SERVER_DB_TESTS:-0}" == "1" ]]; then
     # package deadline, so these deadlines bound the fixtures too.
     go test -timeout 90m ./monitor -count=1
     go test -race -timeout 180m ./monitor -count=1
+    release_gate_server_native_fee
   }
   # Each full history population has its own process and ten-minute modes.
   # TestEnv owns a unique Pg database and an exclusive renewable Redis lease;

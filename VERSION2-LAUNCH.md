@@ -754,7 +754,7 @@ first exist.
     are (`scripts/test-release-1.0-local.sh`:4-18; `sim-testnet/README.md`:839-846).
   - `RUN_SERVER_DB_TESTS=1` runs the database suites, the scale shard's
     database half and the E suite, on the gate's private disposable
-    PostgreSQL and Redis (`scripts/test-release-1.0-local.sh`:910-1119).
+    PostgreSQL and Redis (`scripts/test-release-1.0-local.sh`:911-1139).
   - `RELEASE_GATE_CONCURRENT_GATES=1` gives this one gate the host's whole
     CPU and memory share, where the default reserves half of it for a second
     gate (`scripts/release-gate-jobs.sh`:34-36,99-101).
@@ -768,7 +768,7 @@ first exist.
     (`scripts/check-release-source-freeze.sh`:203-209,238-243);
   - `TestReleaseLockMatchesCheckout`, by name in every job that would run
     it, and as the final fence
-    (`scripts/test-release-1.0-local.sh`:173-183,1162-1171). So the release
+    (`scripts/test-release-1.0-local.sh`:174-184,1182-1191). So the release
     lock needs no refresh: the owner's decision of 2026-10-14 is that the
     gate runs in this mode against the `main` heads, with no freeze and no
     lock refresh (the preamble);
@@ -777,7 +777,7 @@ first exist.
     (`sim-testnet/config_test.go:608-618`);
   - the runtime 454 source and runtime-metadata attestations, which read
     GitHub and the testnet archive node rather than the checkouts
-    (`scripts/test-release-1.0-local.sh`:81-91).
+    (`scripts/test-release-1.0-local.sh`:82-92).
 
   It keeps the module inventory and tidy checks, the sourceguard and
   binding-toolchain preflights, patch hygiene, every test job and the
@@ -786,7 +786,7 @@ first exist.
 - **It never touches a vault.** The source freeze and patch hygiene skip the
   vault checkout, its Git metadata included
   (`scripts/check-release-source-freeze.sh`:132-145;
-  `scripts/test-release-1.0-local.sh`:1152-1160), and no test that would
+  `scripts/test-release-1.0-local.sh`:1172-1180), and no test that would
   read it runs (above). The two named skips reach every job since sn
   `v2/gate-mainnet-shards` merged (`a47111d6`). Before that,
   `TestReleaseLockMatchesCheckout` still ran in `sn-simulator-race`, and
@@ -801,13 +801,13 @@ first exist.
   (`scripts/check-release-source-freeze.sh`:208), and "[release-1.0] runtime
   source and metadata artifact attestations skipped (local mode)" and
   "[release-1.0] final release-lock and source-freeze checkouts skipped
-  (local mode)" (`scripts/test-release-1.0-local.sh`:84,1163).
+  (local mode)" (`scripts/test-release-1.0-local.sh`:85,1183).
 - **The workspace:** sn, server, connect, sdk, glog, goidenticons, proxy,
   userwireguard, warp, gvisor, xops and config, each a Git checkout beside
-  sn (`scripts/test-release-1.0-local.sh`:49;
+  sn (`scripts/test-release-1.0-local.sh`:50;
   `scripts/check-release-source-freeze.sh`:132-145). Local mode needs no
   vault (above). The `xops` job runs that repository's infrastructure tests
-  (`scripts/test-release-1.0-local.sh`:1121-1132).
+  (`scripts/test-release-1.0-local.sh`:1141-1152).
 - **The generated files at mode 644**: the fifteen ABI and binding files of
   step 8.1. Check public sources out under umask 022, and keep the server's
   `local/postgres/initdb` directory and its script at 755
@@ -817,14 +817,15 @@ first exist.
   (`scripts/test-release-1.0-local.sh`:4-12).
 - **The jobs.** The long packages run in hash shards, each shard a job that
   runs the tests whose names hash to it
-  (`scripts/test-release-1.0-local.sh`:206-333): `./mainnet` in eight,
+  (`scripts/test-release-1.0-local.sh`:207-334): `./mainnet` in eight,
   `sn-mainnet-1` to `sn-mainnet-8`; `./validator` in 2 normal and 12 race;
   `./sim-testnet` in 5 normal and 17 race; and connect's race run in 15,
   `connect-race-1` to `connect-race-15`, beside 15 seeded-shuffle race runs
-  (:484-533,811-840). `sn-mainnet-exports` builds the `./mainnet`
-  qualification exports offline from the working checkouts, and every
-  `./mainnet` shard waits for it: a failed build fails every shard
-  (:104-113,484-496).
+  (:485-534,812-841). `sn-mainnet-exports` builds the qualification exports
+  of `./mainnet` and of the server's public native-fee tests offline from the
+  working checkouts, and every `./mainnet` shard and server-db's native-fee
+  tests wait for it: a failed build fails every shard and server-db
+  (:105-114,485-497,929-946).
 - **Repaired on `main`**, so these no longer fail:
   - the source freeze's module classification and tidiness (sn
     `v2/gate-preflight`);
@@ -841,7 +842,7 @@ first exist.
   - the gate's selection (sn `f3cc4492`): its `server-unit` job runs
     `go test ./local/sn25golive`, and its database suites select SV-4's v1
     close floor tests beside SV-7's
-    (`scripts/test-release-1.0-local.sh`:633,984-994);
+    (`scripts/test-release-1.0-local.sh`:634,1003-1013);
   - the local mode itself (sn `53491e14`), and the further repairs that
     VERSION2-HANDOFF.md, section 1, lists. Among them sn `692022ac` fixes
     the three `TestProduceFinalSemanticOutputs*` tests;
@@ -853,15 +854,15 @@ first exist.
     (`scripts/release-gate-jobs.sh`:70-83,377-384);
   - the H3 and alt admission tests of server `0d98bde5b`, which
     `server-connect` and `server-db` run in normal and race mode (sn
-    `58faf413`; `scripts/test-release-1.0-local.sh`:895-903,972-981);
+    `58faf413`; `scripts/test-release-1.0-local.sh`:896-904,991-1000);
   - the second to fourth official runs' failures: the supervisor test's
     leak, the receipt test, the SMTP 587 test, the isolation pin's TUN
     subnets and the job runner's held fixture; and the pre-check's
     taskworker race and proxy test isolation (VERSION2-HANDOFF.md, section
     1);
   - the HF-1 replay tests, which the `server-unit` job's `./model` selector
-    never matched (sn `e5908acf`; :652), and `server-db`'s selection of the
-    deposit key's fix's tests (sn `ca5e318e`; :984-994).
+    never matched (sn `e5908acf`; :653), and `server-db`'s selection of the
+    deposit key's fix's tests (sn `ca5e318e`; :1003-1013).
 - **Status.** Four official runs ended without a pass; the fifth is in
   progress (VERSION2-HANDOFF.md, section 3, item 7). The second, from
   2026-10-15 02:14 UTC on sn `819f00c5`, ended with 92 jobs passed, 4 failed
@@ -876,24 +877,24 @@ first exist.
   5).
 - **Expect.** The last line is `[release-1.0] local release gate passed
   (local mode: working checkouts, not sealed)`
-  (`scripts/test-release-1.0-local.sh`:1197-1198). It qualifies those
+  (`scripts/test-release-1.0-local.sh`:1217-1218). It qualifies those
   checkouts, not a sealed release (`sim-testnet/README.md`:856-858). The
   settlement v2 jobs:
-  - `sn-v2`, gate 3's own verdict (`scripts/test-release-1.0-local.sh`:535-553);
-  - `sn-scale` and `server-scale`, GL-10 and SV-6 (:555-573,1050-1068);
-  - `sn-e2e`, gate 4 (:1069-1098);
+  - `sn-v2`, gate 3's own verdict (`scripts/test-release-1.0-local.sh`:536-554);
+  - `sn-scale` and `server-scale`, GL-10 and SV-6 (:556-574,1070-1088);
+  - `sn-e2e`, gate 4 (:1089-1118);
   - `solidity`: format, release build with sizes, tests, the `v2_invariant`
-    campaign, and the catalog and binding checks (:581-605);
-  - `solidity-coverage`, gate 1's bar (:607-622), and `solidity-static`
-    (:575-579);
-  - `sdk`, CL-2 and CL-4 (:854-859), and the server's v2 suites, the
+    campaign, and the catalog and binding checks (:582-606);
+  - `solidity-coverage`, gate 1's bar (:608-623), and `solidity-static`
+    (:576-580);
+  - `sdk`, CL-2 and CL-4 (:855-860), and the server's v2 suites, the
     activation record's (SV-9) and the v1 close floor's (SV-4) among them,
-    with migrations 821, 822 and 832 (:984-1000).
+    with migrations 821, 822 and 832 (:1003-1019).
   - The wiring tests `TestReleaseGateSettlementV2*` of
     `sim-testnet/release_gate_settlement_v2_test.go` run in the
     `./sim-testnet` shards.
 - **Stop if** the script prints `[release-1.0] DB suites deferred`
-  (`scripts/test-release-1.0-local.sh`:1118): the database suites, the scale
+  (`scripts/test-release-1.0-local.sh`:1138): the database suites, the scale
   shard's database half and the E suite then did not run. Any failed job is
   not a stop: fix it, commit, merge, push and pull, and run the gate again
   (O28).
@@ -1636,7 +1637,7 @@ release of every app.
      `TestSnChainSettingsVault2Address` (`sdk/sn_ledger_claim_test.go:1763-1765`)
      and `TestSnChainSettingsWasmVault2Address` (`sdk/js/sn_wasm_test.go:107-109`).
   3. Run the SDK's v2 suites, the `sdk` job selector of the release gate
-     (`scripts/test-release-1.0-local.sh`:854-859).
+     (`scripts/test-release-1.0-local.sh`:855-860).
   4. Rebuild and release every app against that SDK: the Android AAR, the
      Apple framework, the Windows DLL, the Linux library and the ur.io wasm.
 - **Expect.** Each app shows the v2 tile and offers Claim when an account has
@@ -2605,7 +2606,7 @@ Open owner decisions and work that the repositories leave open:
    directory as the v2 deployment record.
 4. **The gate 3 CI job.** SV-8's `TestEvmV2*` runs only in the `./mainnet`
    hash shards, not in `sn-v2`, gate 3's own job (STATE.md:129;
-   `scripts/test-release-1.0-local.sh`:177-178,535-553). The `mainnet`
+   `scripts/test-release-1.0-local.sh`:178-179,536-554). The `mainnet`
    package, which exceeded the 90-minute budget on the build machine
    (STATE.md:133), now runs in eight shards (step 4). No CI runs any of this
    (section 2.2).

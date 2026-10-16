@@ -31,24 +31,29 @@ var releaseGateUncensusedRuns = []struct{ run, command, reason string }{
 	{run: `"$selector"`, command: releaseGateShardCommand, reason: "computed at run time: each shard's CRC-32 share of its package's go test -list, which release_gate_shard_selector refuses when it is empty or skips a name that is no test"},
 }
 
-// The flags of the scripts' -run commands that take a value, and those that
-// take none; the census refuses any other.
+// The flags of the scripts' go test commands that take a value, and those
+// that take none, and the same of their test binaries' runs; the census
+// refuses any other.
 var (
-	releaseGateGoTestValueFlags = []string{"-run", "-skip", "-timeout", "-tags", "-p", "-parallel", "-count"}
-	releaseGateGoTestBoolFlags  = []string{"-race", "-v"}
+	releaseGateGoTestValueFlags     = []string{"-run", "-skip", "-timeout", "-tags", "-p", "-parallel", "-count", "-o"}
+	releaseGateGoTestBoolFlags      = []string{"-race", "-v", "-c"}
+	releaseGateTestBinaryValueFlags = []string{"-test.run", "-test.skip", "-test.timeout", "-test.count", "-test.parallel"}
+	releaseGateTestBinaryBoolFlags  = []string{"-test.v"}
 )
 
 // The variables a -run command may not set before go test, since they change
 // the build or the selection that the census reads.
 var releaseGateGoTestBuildVariables = []string{"GOFLAGS", "GOOS", "GOARCH", "CGO_ENABLED", "GOEXPERIMENT"}
 
-// One go test command of a script that selects its tests with -run, as
-// written: its line, the directory it runs in, beside sim-testnet, its
-// packages, the build tags of its mode and -tags, and its -run value.
+// One command of a script that selects tests, as written: its line, the
+// directory its packages are in, beside sim-testnet, its packages, the build
+// tags of its mode and -tags, and its -run value. A go test -c command that
+// builds a test binary instead names the binary it writes, and the binary's
+// run selects from the packages of that build.
 type releaseGateRunCommand struct {
-	line                 int
-	text, directory, run string
-	packages, tags       []string
+	line                         int
+	text, directory, run, binary string
+	packages, tags               []string
 }
 
 // The names a package in the directory, beside sim-testnet, declares for -run
@@ -81,10 +86,17 @@ func releaseGateSourceTestCensus() releaseGateTestCensus {
 	}
 }
 
-// A script line that runs go test with -run, which the census must read.
+// A script line that selects tests, which the census must read: go test
+// with -run, or a test binary's run with -test.run.
 func releaseGateRunLine(line string) bool {
 	line = strings.TrimSpace(line)
-	return !strings.HasPrefix(line, "#") && strings.Contains(line, "go test") && strings.Contains(line, "-run")
+	return !strings.HasPrefix(line, "#") && (strings.Contains(line, "go test") && strings.Contains(line, "-run") || strings.Contains(line, "-test.run"))
+}
+
+// A script line that builds a test binary with go test -c.
+func releaseGateTestBinaryLine(line string) bool {
+	line = strings.TrimSpace(line)
+	return !strings.HasPrefix(line, "#") && strings.Contains(line, "go test") && slices.Contains(strings.Fields(line), "-c")
 }
 
 // The scripts under root that run go test with -run, in lexical order.
@@ -120,10 +132,12 @@ func releaseGateCdDirectory(argument string) string {
 	return ""
 }
 
-// One go test line's packages, build tags and -run value as written, after
-// its environment assignments and up to its first control operator.
-func releaseGateParseRunCommand(line string) (releaseGateRunCommand, error) {
-	command := releaseGateRunCommand{text: line}
+// One go test line's packages, build tags, -run value and built binary as
+// written, or one run of a test binary that binaryKVs names by the path the
+// script built it at, after the line's environment assignments and up to its
+// first control operator. A go test command's packages are in directory.
+func releaseGateParseRunCommand(line, directory string, binaryKVs map[string]releaseGateRunCommand) (releaseGateRunCommand, error) {
+	command := releaseGateRunCommand{text: line, directory: directory}
 	fields := strings.Fields(line)
 	for index, field := range fields {
 		if field == "||" || field == "&&" || field == "|" || field == ";" {
@@ -138,64 +152,97 @@ func releaseGateParseRunCommand(line string) (releaseGateRunCommand, error) {
 		}
 		fields = fields[1:]
 	}
-	if len(fields) < 2 || fields[0] != "go" || fields[1] != "test" || strings.HasSuffix(line, `\`) {
+	valueFlags, boolFlags, build := releaseGateGoTestValueFlags, releaseGateGoTestBoolFlags, false
+	switch {
+	case strings.HasSuffix(line, `\`):
+		return command, errors.New("the census cannot read this -run command")
+	case len(fields) >= 2 && fields[0] == "go" && fields[1] == "test":
+		fields = fields[2:]
+	case len(fields) >= 1 && binaryKVs[fields[0]].binary != "":
+		binary := binaryKVs[fields[0]]
+		command.directory, command.packages, command.tags = binary.directory, binary.packages, binary.tags
+		valueFlags, boolFlags, fields = releaseGateTestBinaryValueFlags, releaseGateTestBinaryBoolFlags, fields[1:]
+	default:
 		return command, errors.New("the census cannot read this -run command")
 	}
-	for index := 2; index < len(fields); index++ {
+	binaryRun := len(command.packages) != 0
+	for index := 0; index < len(fields); index++ {
 		name, value, inline := strings.Cut(fields[index], "=")
 		switch {
+		case !strings.HasPrefix(name, "-") && binaryRun:
+			return command, fmt.Errorf("its test binary takes the argument %s", fields[index])
 		case !strings.HasPrefix(name, "-"):
 			command.packages = append(command.packages, fields[index])
-		case slices.Contains(releaseGateGoTestBoolFlags, name) && !inline:
+		case slices.Contains(boolFlags, name) && !inline:
 			if name == "-race" {
 				command.tags = append(command.tags, "race")
 			}
-		case slices.Contains(releaseGateGoTestValueFlags, name):
+			build = build || name == "-c"
+		case slices.Contains(valueFlags, name):
 			if !inline {
 				if index++; index == len(fields) {
 					return command, fmt.Errorf("its %s has no value", name)
 				}
 				value = fields[index]
 			}
-			if name == "-run" && command.run != "" {
-				return command, errors.New("it repeats -run")
+			if (name == "-run" || name == "-test.run") && command.run != "" {
+				return command, fmt.Errorf("it repeats %s", name)
 			}
-			if name == "-run" {
+			switch name {
+			case "-run", "-test.run":
 				command.run = value
-			} else if name == "-tags" {
+			case "-tags":
 				command.tags = append(command.tags, strings.Split(value, ",")...)
+			case "-o":
+				command.binary = value
 			}
 		default:
 			return command, fmt.Errorf("it has the unreviewed go test flag %s", fields[index])
 		}
 	}
-	if command.run == "" {
+	slices.Sort(command.tags)
+	switch {
+	case build && command.binary == "":
+		return command, errors.New("it builds a test binary without -o")
+	case build && command.run != "":
+		return command, errors.New("it builds a test binary, which runs no test, with -run")
+	case build && len(command.packages) != 1:
+		return command, fmt.Errorf("it builds one test binary of %d packages", len(command.packages))
+	case !build && command.run == "":
 		return command, errors.New("it has no -run value")
 	}
-	slices.Sort(command.tags)
+	if !build {
+		command.binary = ""
+	}
 	return command, nil
 }
 
-// The go test commands of a script that select their tests with -run, each
-// with the directory that the last cd of its own function, group or subshell
-// enters; a function's is its caller's, so it starts unknown. Every line that
-// runs go test with -run is read first, so a line the census cannot read is
-// refused rather than left out.
+// The commands of a script that select tests, each with the directory that
+// the last cd of its own function, group or subshell enters; a function's is
+// its caller's, so it starts unknown. A test binary's run selects from the
+// packages of the go test -c that built it, earlier in the script. Every line
+// that selects tests or builds a test binary is read first, so a line the
+// census cannot read is refused rather than left out.
 func releaseGateRunCommands(script string) ([]releaseGateRunCommand, error) {
 	function := regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*\(\) \{$`)
 	directories := []string{""}
 	var commands []releaseGateRunCommand
+	binaryKVs := map[string]releaseGateRunCommand{}
 	for index, line := range strings.Split(script, "\n") {
 		line = strings.TrimSpace(line)
 		switch {
 		case line == "" || strings.HasPrefix(line, "#"):
-		case releaseGateRunLine(line):
-			command, err := releaseGateParseRunCommand(line)
+		case releaseGateTestBinaryLine(line) || releaseGateRunLine(line):
+			command, err := releaseGateParseRunCommand(line, directories[len(directories)-1], binaryKVs)
 			if err != nil {
 				return nil, fmt.Errorf("line %d: %s: %w", index+1, line, err)
 			}
-			command.line, command.directory = index+1, directories[len(directories)-1]
-			commands = append(commands, command)
+			command.line = index + 1
+			if command.binary != "" {
+				binaryKVs[command.binary] = command
+			} else {
+				commands = append(commands, command)
+			}
 		case function.MatchString(line):
 			directories = append(directories, "")
 		case line == "(" || line == "{":
@@ -538,9 +585,10 @@ func TestReleaseGateSelectorCensusRefusesThePreFixCompanionEvidenceSelector(t *t
 	}
 }
 
-// A renamed regression fails the census through its own alternative, nested
-// or held by a variable: one of the two names of the local gate's HF-1 group,
-// and a family of a producer gate variable.
+// A renamed regression fails the census through its own alternative, nested,
+// held by a variable or passed to a test binary: one of the two names of the
+// local gate's HF-1 group, a family of a producer gate variable, and the
+// exports builder's native-fee export.
 func TestReleaseGateSelectorCensusRefusesARenamedAlternative(t *testing.T) {
 	t.Parallel()
 	local := readReleaseGateLocalScript(t)
@@ -548,9 +596,14 @@ func TestReleaseGateSelectorCensusRefusesARenamedAlternative(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	builder, err := os.ReadFile("../scripts/build-mainnet-exports.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, change := range []struct{ script, old, new, stale string }{
 		{script: local, old: "StHeadBoundCkeysFromEvents(WindowOverlap|UnbindDodge)", new: "StHeadBoundCkeysFromEvents(WindowOverlap|UnbindDodgeRenamed)", stale: "^TestStHeadBoundCkeysFromEventsUnbindDodgeRenamed$ selects no test of ../../server/model"},
 		{script: string(producer), old: "|ProductionLoader)'", new: "|ProductionLoaderRenamed)'", stale: "^TestProductionLoaderRenamed selects no test of ../validator"},
+		{script: string(builder), old: "'^TestNativeFeeOutcomeExportSettlementFixtures$'", new: "'^TestNativeFeeOutcomeExportSettlementFixturesRenamed$'", stale: "^TestNativeFeeOutcomeExportSettlementFixturesRenamed$ selects no test of ../mainnet"},
 	} {
 		if strings.Count(change.script, change.old) != 1 {
 			t.Fatalf("the mutation names no unique text: %q", change.old)
@@ -653,11 +706,13 @@ func TestReleaseGateSelectorCensusRefusesAnAlternativeThatCannotStandAlone(t *te
 
 // Each command reads its own phase's checkout and the union of its packages,
 // built with the tags of its mode and -tags, after any environment it sets;
-// a selector that several commands share reads all their packages, and only
+// a selector that several commands share reads all their packages, a test
+// binary's run reads the package of the go test -c that built it, and only
 // the reviewed runtime selectors are left out.
 func TestReleaseGateSelectorCensusResolvesEachCommand(t *testing.T) {
 	t.Parallel()
 	other := "release_phase_other() {\n  cd \"$workspace/sdk/build\"\n  go test ./cmd/export -run '^TestExportRoot$' -count=1\n}\n"
+	binary := "release_phase_binary() {\n  cd \"$sn_repo\"\n  go test -c -o \"$output/ledger.test\" ./ledger\n  cd \"$sn_repo/ledger\"\n  FIXTURE_DIRECTORY=\"$output/fixture\" \"$output/ledger.test\" -test.run '^TestLedgerRoot$' -test.timeout 10m\n}\n"
 	read, uncensused, err := verifyReleaseGateRunSelectors(releaseGateCensusFixtureScript(
 		`go test ./model ./controller -run '^Test(ModelRoot|ControllerRoot)$' -count=1`,
 		`shared_tests='^Test(ModelRoot|ControllerRoot)$'`,
@@ -673,8 +728,8 @@ func TestReleaseGateSelectorCensusResolvesEachCommand(t *testing.T) {
 		") || status=1",
 		`go test ./model -run '^TestModelRoot$' -count=1`,
 		`go test ./... -run '^$'`,
-	)+other, releaseGateFixtureTestCensus(releaseGateFixtureDeclaredTestKVs))
-	if err != nil || read != 9 || uncensused[`'^$'`] != 1 || len(uncensused) != 1 {
+	)+other+binary, releaseGateFixtureTestCensus(releaseGateFixtureDeclaredTestKVs))
+	if err != nil || read != 10 || uncensused[`'^$'`] != 1 || len(uncensused) != 1 {
 		t.Fatalf("the census read %d and left out %v: %v", read, uncensused, err)
 	}
 }
@@ -714,6 +769,15 @@ func TestReleaseGateSelectorCensusRefusesAnUnreadableCommand(t *testing.T) {
 		{script: releaseGateCensusFixtureScript(`go test ./model -run "$selector" -count=1`), refusal: "only " + releaseGateShardCommand + ` has -run "$selector"`},
 		{script: releaseGateCensusFixtureScript("}", `go test ./model -run '^TestModelRoot$' -count=1`), refusal: "closes no function, group or subshell"},
 		{script: "release_phase_fixture() {\n  cd \"$workspace/server\"\n", refusal: "leaves a function, group or subshell open"},
+		{script: releaseGateCensusFixtureScript(`go test -c -o "$output/model.test" ./model`, `"$output/model.test" -test.run '^TestModelRenamed$' -test.timeout 10m`), refusal: "its alternative ^TestModelRenamed$ selects no test of ../../server/model"},
+		{script: releaseGateCensusFixtureScript(`"$output/model.test" -test.run '^TestModelRoot$'`), refusal: "the census cannot read this -run command"},
+		{script: releaseGateCensusFixtureScript(`go test -c ./model`), refusal: "it builds a test binary without -o"},
+		{script: releaseGateCensusFixtureScript(`go test -c -o "$output/model.test" ./model -run '^TestModelRoot$'`), refusal: "it builds a test binary, which runs no test, with -run"},
+		{script: releaseGateCensusFixtureScript(`go test -c -o "$output/two.test" ./model ./controller`), refusal: "it builds one test binary of 2 packages"},
+		{script: releaseGateCensusFixtureScript(`go test -c -o "$output/model.test" ./model`, `"$output/model.test" extra -test.run '^TestModelRoot$'`), refusal: "its test binary takes the argument extra"},
+		{script: releaseGateCensusFixtureScript(`go test -c -o "$output/model.test" ./model`, `"$output/model.test" -test.run '^TestModelRoot$' -test.cpu 2`), refusal: "the unreviewed go test flag -test.cpu"},
+		{script: releaseGateCensusFixtureScript(`go test -c -o "$output/model.test" ./model`, `"$output/model.test" -test.run '^TestModelRoot$' -test.run '^TestModelRoot$'`), refusal: "it repeats -test.run"},
+		{script: "release_phase_fixture() {\n  go test -c -o \"$output/model.test\" ./model\n  cd \"$workspace/server\"\n  \"$output/model.test\" -test.run '^TestModelRoot$'\n}\n", refusal: "no cd of its own function or subshell enters a checkout"},
 	} {
 		if _, _, err := verifyReleaseGateRunSelectors(testCase.script, census); err == nil || !strings.Contains(err.Error(), testCase.refusal) {
 			t.Fatalf("the census accepted %q: %v, want %q", testCase.script, err, testCase.refusal)

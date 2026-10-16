@@ -210,7 +210,7 @@ Release gate repairs:
   whose names hash to it: `./mainnet` in eight (sn `15825bc9`); `./validator`
   in 2 normal and 12 race shards, `./sim-testnet` in 5 normal and 17 race,
   and connect's race run in 15, beside 15 seeded-shuffle race runs (sn
-  `6b007ed1`; `scripts/test-release-1.0-local.sh`:206-333);
+  `6b007ed1`; `scripts/test-release-1.0-local.sh`:207-334);
 - the `./mainnet` qualification exports, built offline from the working
   checkouts by a job of their own, `sn-mainnet-exports`, that every
   `./mainnet` shard waits for (sn `5038df78`); further fixes, some to product
