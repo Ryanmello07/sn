@@ -2050,17 +2050,30 @@ func TestInterruptedProvisioningRecoveryStopsOnlyTheRecordedKernelIdentity(t *te
 	}
 }
 
+// The recovery leaves the mismatched sleep alone, and the cleanup that kills it
+// joins its reap, which the private owner proves.
 func TestInterruptedProvisioningRecoveryNeverSignalsAReusedPID(t *testing.T) {
+	runSupervisorDescendantOwnerTest(t, 0, 25*time.Second, assertInterruptedProvisioningRecoveryNeverSignalsAReusedPidTest)
+}
+
+func assertInterruptedProvisioningRecoveryNeverSignalsAReusedPidTest(t *testing.T) {
 	dir := t.TempDir()
 	spec := ProcessSpec{
 		ID: "temporary-test", Role: "operator-api", Identity: "no:1", Command: "/bin/sleep", Args: []string{"300"}, WorkDir: dir,
 		StdoutPath: filepath.Join(dir, "temporary.stdout"), StderrPath: filepath.Join(dir, "temporary.stderr"),
 	}
-	command, err := startSpec(context.Background(), spec)
+	command, exited, err := startSpecWithExit(context.Background(), spec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL) })
+	// A cleanup that only killed the sleep let the test process exit before
+	// the sleep's waiter reaped it, leaving it to the release gate's subreaper.
+	// That waiter and the private owner race for the reap, so no test can
+	// force the leak; joining the waiter here makes the owner's count exact.
+	t.Cleanup(func() {
+		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		<-exited
+	})
 	identity, err := temporaryProcessIdentity(spec, command.Process.Pid)
 	if err != nil {
 		t.Fatal(err)
