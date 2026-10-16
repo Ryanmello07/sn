@@ -13,34 +13,42 @@ head and merges, section 2, and items 2, 3, 7 and 8 of section 3 follow the
 merges since, step 5's completion and the schedule of record. Updated again
 at about 06:45 UTC: section 1's heads and fixes, section 2, items 2, 7 and 10
 to 14 of section 3, and section 4's open questions follow the merges of the
-last day and the gate's second official run.
+last day and the gate's second official run. Updated again at about 17:45
+UTC: section 1's heads, gate repairs and other sessions' merges, section 2,
+and items 7, 12 and 13 of section 3 follow the merges since, the gate's
+third and fourth official runs and the deposit key's fix. Updated again at
+about 21:30 UTC: section 1's heads, migrations and gate repairs, section 2,
+and items 7 and 12 of section 3 follow the merges since and the fifth
+official run, and section 5 lists the open product issues.
 [VERSION2-LAUNCH.md](VERSION2-LAUNCH.md) is the runbook and
 [VERSION2-FINAL.md](VERSION2-FINAL.md) the plan of record; both win over this
-note. This note says what is on `main`, what is still landing, and the facts
-found during the last day that the deployer must act on.
+note. This note says what is on `main`, what is still landing, the facts
+found during the last day that the deployer must act on, and the open
+product issues.
 [VERSION2-STATE.md](VERSION2-STATE.md) is the earlier orchestration log.
 
 ## 1. What is on main
 
-Heads on 2026-10-15, each read from its `origin/main` as fetched between
-about 05:50 and 06:10 UTC (gvisor: its `go` branch):
+Heads on 2026-10-15, each read from its `origin/main` between about 21:04
+and 21:18 UTC (gvisor: its `go` branch). Run 5's heads are in section 3,
+item 7:
 
 | repo | main |
 | --- | --- |
-| sn | the commit that updates this note, on `f2d73669` |
-| server | `ab207cbf9` |
-| sdk | `61e89201` |
-| connect | `b31ec82d` |
+| sn | the commit that updates this note, on `ea5e8fc1` |
+| server | `06004bd42` |
+| sdk | `f6612ffe` |
+| connect | `5e6f5d0c` |
 | proxy | `ada3aac` |
-| localizations | `980b741` |
-| apple | `edcd545e` |
-| android | `f33713bb9` |
-| windows | `db7d7f51` |
-| linux | `c958e7d` |
-| mmm (ur.io) | `6aff76b63` |
-| web | `5e0c9cea` |
-| warp | `13c00e6` |
-| xops | `ff8cf4d` |
+| localizations | `a46ed2f` |
+| apple | `7acd37ca` |
+| android | `9e68db8e7` |
+| windows | `79de3d14` |
+| linux | `e45f3b7` |
+| mmm (ur.io) | `cbd313f86` |
+| web | `3a06fcc7` |
+| warp | `9305902` |
+| xops | `1d09a0a` |
 | gvisor | `c0783dba` |
 
 Settlement v2 itself:
@@ -102,11 +110,12 @@ the pool's registration, the st subsystem refuses to run without the
 recorded v2 address pair. `st v2-activation` shows the record, and
 `st v2-activation-clear` clears one that names the wrong pair.
 
-The production database is at migration 836, server `main`'s newest.
-Upstream added 833 to 836 after the activation record's 832; 836 holds the
-FP2 modern provider gate's evidence (server `ebc1f95a9`). `bringyourctl db
-migrate` (runbook step 6) applies any migration that server `main` adds
-after 836.
+The production database is at migration 836. Upstream added 833 to 836
+after the activation record's 832; 836 holds the FP2 modern provider gate's
+evidence (server `ebc1f95a9`). Server `main` has since added 837 and 838,
+the ARIN dual-database canary's (merged as `06004bd42`), which the
+runbook's O29 has step 6 apply. `bringyourctl db migrate` (runbook step 6)
+applies any migration that server `main` adds after 836.
 
 The root-key stranding fix (server `8d63033c9`, merged as `4e5759875`):
 under a gas policy a new nonce is reserved only together with its first
@@ -136,9 +145,13 @@ and the key's later sends go out.
   takes no new signature or liability: it reverts and frees the nonce, where
   before a lost broadcast left the account blocked (server `bac7e5770`,
   merged as `bfdc067ca`).
-- Known limitation: on the deposit key, a deposit reserved but not signed
-  before its deadline stays refused, and no operator step frees it (section
-  3, item 12).
+- On the deposit key, a deposit whose execution was reserved, but not yet
+  signed when its deadline finalized, is signed as reserved: the coordinator
+  reverts it (`DeadlineExpired`) before it moves any stake, and the revert
+  frees the key (server `ed453384d` to `adc257c06`, merged as `d43dd4af1`).
+  Two cases still block a key (section 3, item 12): a deposit's staging
+  transfer reserved but not signed before its epoch rolled, and an intent of
+  a replaced deployment that holds an unsigned execution reservation.
 
 The dual-stack validator hops, in all four repositories: server `72699c819`,
 connect `8d22832d`, sdk `1ee41b40` and sn `00e383fe`. The launch's builds
@@ -222,7 +235,55 @@ Release gate repairs:
   U+FFFD (sn `3891b58f`);
 - the semantic verifier's gaps (sn `d8297d2b`);
 - the server's proxy tests' synctest crash: the proxy and its peers are now
-  made outside the bubble (server `53361bcf4`).
+  made outside the bubble (server `53361bcf4`);
+- the second official run's failures (section 3, item 7): the supervisor
+  test's leaked descendant, in two sim-testnet shards, whose fake Docker
+  helper is now the supervisor's child (sn `b6512691` and `db90c64b`, merged
+  as `9974350b`); the receipt outage test's timing, in validator-race-12 (sn
+  `95c31dc7`, merged as `5a6aaa08`); and connect's SMTP 587 fixture, in
+  connect-race-12 (connect `1a089a60`, merged as `0e3ded62`);
+- cheaper long tests with the same assertions: the policy rollover's round
+  seven (sn `ac6a73ed`, with two sim-testnet product changes, `6cbf5efd` and
+  `2584ff0a`, which authenticate a plan archive's exact bytes once and
+  compute a fleet renewal's actions once), the final semantic supplement (sn
+  `31668ca9`, merged as `aea400a9`), the validator's production fixtures
+  (sn `e6c5d9fe`), and connect's window path tests under `-race`, at about
+  29% of their old time (connect `4f4e728d`, merged as `1aa99b73`);
+- the third run's failure, the isolation job's pin of the server fixture's
+  settings: sn `f4f1fd45` added connect's local TUN allocator subnets, and
+  the server test still pinned the old four (server `1502e131`, merged as
+  `3738da153`);
+- the server-unit job's `./model` selector. Its alternative
+  `StHeadBoundCkeysFromEvents`, under the selector's trailing `$`, matched
+  no test, so no gate ran the two HF-1 replay tests; it now names
+  `StHeadBoundCkeysFromEvents(WindowOverlap|UnbindDodge)` (sn `e5908acf`,
+  merged as `3acfaaac`);
+- server-db's selection of the deposit key's fix's tests (sn `ca5e318e`,
+  merged as `59ef6bbd`), and the removal of eight sn selector alternatives
+  that named no test, which leaves every selector's tests as they were (sn
+  `7b5362db`, merged as `34e2219e`);
+- the fourth run's failure, a lost SIGTERM in the job runner's held fixture
+  queue: bash runs a trap signaled just before an untimed `read` blocks only
+  once the read returns, so the fixture now waits in a `read -t 1` loop (sn
+  `050a212e9`, merged as `64664738f`). The gate script itself is not
+  exposed: its only blocking read times out every second;
+- two pre-check findings in server-db's commands: a data race in the test
+  `TestCapabilityProbeChainReturnsAfterAStaleTaskworkerEndsIt`, which
+  restored the st config while the taskworker runtime's stats collector,
+  never joined, still read it (server `342c56b94`, merged as `a8cc5103c`);
+  and the proxy, mcp and providertunnel harnesses, which bound connect's
+  exchange on the fixed port 7300 (7310 for mcp) with `SO_REUSEPORT`, so
+  another process on that port took a share of their connections. Each
+  harness now has an OS-assigned loopback listener (server `b99436b8f`,
+  merged as `e22d50d09`);
+- two drifts between repositories: connect's hosted tun gap test now
+  mirrors the proxy's 32 MiB device target (connect `6b92c6d3`), and the API
+  spec documents the api's `GET /robots.txt`, with the sdk's TypeScript
+  client regenerated (connect `9e35cab4`, sdk `e8e24889`); merged as connect
+  `2b71b989` and sdk `d2114f9c`;
+- five connect test fixes that keep the tests' traffic on the machine
+  (public DNS, SYNs, STUN and multicast DNS) and let `go vet` pass (merged as
+  connect `23849763`).
 
 The task runner's session race, a production bug that repeated task
 execution, is fixed on server `main` (`6aa947605`, merged as `9b6368637`).
@@ -280,6 +341,31 @@ fixes on sn `main`:
 
 Its storage profile is section 3, item 11.
 
+Other sessions' product merges since the previous heads:
+
+- the server's capability probe, switched off (server `6a9f1d448`, with its
+  enable gates, `404eea5f4`, and the chart of its chain's restarts,
+  `bc8ec1ab0`). A taskworker task measures each provider that the egress
+  rules admit to Quality or Speed in a capability tunnel of its own, and
+  records its end-to-end post-quantum and window evidence in
+  `provider_modern_evidence`, migration 836. `enabled: true` in
+  `capability_probe.yml`, a config release and a restart of every taskworker
+  turn it on;
+- the FP2 modern provider gate, which turns on by itself at 2026-10-21 00:00
+  UTC (server `8a24b1a24`, merged as `ed7010813`; follow-ups `e9182275e`,
+  `72bea8754` and `be5283931`). While `provider.yml` leaves
+  `quality_speed_requires_modern_provider` out, every provider the probe has
+  not shown to be modern then leaves Quality and Speed, as `not_modern`, and
+  stays Online. `false` keeps the gate off, and `true` turns it on at once;
+- lag.dev changes: server `c84ffe5d6`, sdk `95d8f528`, `6f6b8bd0` and
+  `a9205dfe`, connect `7c3dec52`;
+- the SN25 commitment oracle service, which mirrors fleet commitments (sn
+  `78a6fd60`), and its fix: it never mirrors a validator's source commitment
+  (sn `9753977e`, merged as `f8a7c15e`);
+- in the validator, a replay that fetches up to four chunks ahead of the one
+  it verifies (sn `ef2f0486`), and a production intent read with one attempt
+  for nearly its whole budget (sn `233be03a`), merged as `facb000b`.
+
 Release builder: an explicit `dependency_mode`.
 
 - `local` uses the working checkouts. This launch uses it.
@@ -305,13 +391,21 @@ on a branch. Each item has merged, and section 1 lists it:
    review, `v2/semantic-gaps-review` (`763fd96e`), is not on `main`;
    whether it should be is to confirm.
 
-Still on a branch: item 7's review, and the fix, in progress, for a deposit
-reserved but not signed before its deadline, on server
-`v2/deposit-pending-reservation` (section 3, item 12).
+Each branch that this section listed on 2026-10-15 at about 17:45 UTC has
+merged, and section 1 lists it, except item 7's review and connect
+`v2/rollover-stall` (section 5):
 
-The gate's second official run is in progress, on heads older than section
-1's (section 3, item 7). A failure is still fixed on a branch, merged,
-pushed and pulled, and the gate runs again.
+- server `v2/deposit-pending-reservation`, the deposit key's fix,
+  `ed453384d` to `adc257c06`: merged as `d43dd4af1` (section 3, item 12);
+- server `v2/precheck-taskworker-race`, `342c56b94`: merged as `a8cc5103c`;
+- server `v2/precheck-proxy-isolation`, `b99436b8f`: merged as `e22d50d09`;
+- sn `v2/gate-jobs-join-flake`, `050a212e9`: merged as `64664738f`;
+- connect `v2/windowpath-race-cost`, `4f4e728d`: merged as `1aa99b73`.
+
+Still on a branch: item 7's review, and the work on section 5's open
+product issues. The fifth official run is in progress (section 3, item 7).
+A failure is still fixed on a branch, merged, pushed and pulled, and the
+gate runs again.
 
 ## 3. Facts the deployer must act on
 
@@ -382,13 +476,46 @@ pushed and pulled, and the gate runs again.
      failure is fixed on a branch, merged, pushed and pulled, and the gate
      runs again until it passes (section 2). The heads it passes on are the
      launch revisions.
-   - **Status.** The second official run started on 2026-10-15 at 02:14 UTC,
-     in local mode, on sn `819f00c5`, server `6d6c6774`, connect `b31ec82d`,
-     sdk `9c8a2237`, warp `1fedc0d` and xops `2e6f0f1`. Its result: in
-     progress. Its first attempt, from 01:23 UTC on sn `6b007ed1`, lost the
-     `./mainnet` exports to the job runner's bug and was stopped (section 1,
-     sn `819f00c5`). sn, server, sdk, warp and xops `main` have moved past
-     those heads since (section 1).
+   - **Status.** Four official runs ended without a pass; the fifth is in
+     progress:
+     1. 2026-10-14 15:24 UTC to 2026-10-15 00:01 UTC, on sn `dc776819`: 21
+        jobs passed and 16 failed, all for known causes since fixed: jobs
+        past their deadlines, now hash shards; the `./mainnet` exports, now
+        a job of their own; zsh, since installed; worktrees made under umask
+        002; and stale tests (section 1).
+     2. From 02:14 UTC, on sn `819f00c5`, server `6d6c6774`, connect
+        `b31ec82d` and sdk `9c8a2237`: 92 jobs passed, 4 failed and 2 were
+        stopped. The failures, each fixed since (section 1): the supervisor
+        test's leak in sn-simulator-normal-3 and sn-simulator-race-15, the
+        receipt test in sn-validator-race-12 and the SMTP 587 test in
+        connect-race-12. It was stopped at 14:08 UTC, with connect-shuffle-15
+        and server-db still running, so that the third run could start on
+        newer heads. Its first attempt, from 01:23 UTC on sn `6b007ed1`, lost
+        the `./mainnet` exports to the job runner's bug and was stopped
+        (section 1, sn `819f00c5`).
+     3. From 14:19 UTC, on sn `aea400a9` and server `c84ffe5d`:
+        isolation-regressions failed on a drift between two repositories. sn
+        `f4f1fd45` had added two TUN allocator subnets to the server
+        fixture's settings, and the server test still pinned four ("private
+        settings override count=6, want 4"). Stopped at 14:34 UTC; server
+        `1502e131` fixes it (section 1).
+     4. From 15:35 UTC, on sn `3acfaaac`, server `ed701081`, connect
+        `c0ef37ff` and sdk `a9205dfe`: isolation-regressions failed on an
+        intermittent job runner test,
+        `TestReleaseGateJobsRemoveTheMainnetExportsAfterTheFinalJoin` under
+        `-race` ("queue did not join" after 20.66 s, against a 20-second join
+        deadline). The run went on for information until it was stopped at
+        18:17:16 UTC; sn `050a212e9`, merged as `64664738f`, fixes the test
+        (section 1).
+     5. From 18:47:36 UTC, on sn `64664738`, server `e22d50d09`, connect
+        `23849763`, sdk `1b92af87`, xops `e8a4e86`, config `ef86aee` and warp
+        `5c4e9ef`: in progress. Its isolation-regressions job, which ended the
+        third and fourth runs, passed at 19:01 UTC.
+   - A pass qualifies the heads recorded at its run's start. Several sessions
+     merge into `main` every hour, so `main` moves on during a run, and what
+     merges after the start is not covered. The runbook's O29 lets step 6's
+     taskworker and api carry, beyond run 5's heads, exactly four reviewed
+     FP2 routing fixes and the ARIN dual-database canary.
    - Local mode skips exactly the checks that seal a run: the source freeze's
      provenance checks; `TestReleaseLockMatchesCheckout` and
      `TestRepositoryDiscoveryUsesModuleIdentity`, by name in every job; the
@@ -460,18 +587,35 @@ pushed and pulled, and the gate runs again.
     - an estimate can size a send above its floor, up to `maximum_gas`, so
       one send can need at most 0.105 TAO at the planned `maximum_gas` of
       3,500,000. Revision 1's 3.6M (item 2) makes that 0.108 TAO;
-    - known limitation: a deposit reserved but not signed before its deadline
-      stays refused on the deposit key ("pending original signing outcome
-      cannot become a different request"), and no operator step frees it
-      (ibid., "Recognizing a stranded intent"). It is dormant while deposits
-      are at zero price, since the deposit task then sends nothing. A fix is
-      in progress on server branch `v2/deposit-pending-reservation`. Land it
-      before deposits are priced.
-13. **The ur.xyz site** is not deployed with its corrected copy. web `main`
-    holds it since `95e4ff50` (`3e0d0f68`, `dcc84845`): the site, the
-    litepaper and the operator and miner guides follow sn `WHITEPAPER.md`'s
-    weights and settlement. No build tag contains it; the newest,
-    `v2026.10.14-1071632750`, is at `9526a97b`, before it.
+    - an expired deposit no longer blocks the key: a deposit whose execution
+      was reserved but not signed before its deadline is signed as reserved
+      once the deadline has finalized. The coordinator reverts it
+      (`DeadlineExpired`) before it moves any stake or takes its deposit
+      nonce, and the revert, whose gas stays within the reservation's
+      liability, frees the key. Before, it stayed refused ("pending original
+      signing outcome cannot become a different request"), and the key's
+      later sends stopped at it (server `ed453384d` to `adc257c06`, merged as
+      `d43dd4af1`, which run 5's server head `e22d50d09` contains; ibid.,
+      "Recognizing a stranded intent");
+    - still open: a deposit's staging transfer (`transferStake`) reserved but
+      not signed before its epoch rolled stays refused ("st: retained deposit
+      intent belongs to another immutable operation"), and the key's later
+      sends stop at it. Signing it would move stake, so the engine does not.
+      No operator step frees it; it needs a change to the engine (ibid.). It
+      is dormant while deposits are at zero price, since the deposit task
+      then sends nothing;
+    - pre-existing and adjacent: an intent of a replaced deployment that
+      holds an unsigned execution reservation blocks its key too. Its
+      cancellation is refused while the reservation stands, and only an
+      expired close or deposit or a spent v2 operation of the current
+      deployment is signed as reserved (`controller/st_controller.go`,
+      `reconcileAccountIntents`).
+13. **The ur.xyz site's corrected copy** is in a build tag; whether that build
+    is deployed is to confirm. web `main` holds it since `95e4ff50`
+    (`3e0d0f68`, `dcc84845`): the site, the litepaper and the operator and
+    miner guides follow sn `WHITEPAPER.md`'s weights and settlement. The
+    first tag that contains it is `v2026.10.15-1072765730`, at `702e1e2b`;
+    the one before, `v2026.10.14-1071632750`, is at `9526a97b`.
     - Five locales, de, es, ru, zh and ar, carry machine translations of the
       15 changed strings. They need a human translator. `3e0d0f68` recorded
       them with `i18n-staleness --accept`, so the staleness check no longer
@@ -515,3 +659,53 @@ been changed: each difference waits for the owner's decision.
    `validator/recycle_planner.go`:377-385;
    `validator/treasury_policy.go`:115-118). Every other configuration
    refuses to submit.
+
+## 5. Open product issues
+
+Found on 2026-10-15 by the release pre-check and the agents working from it.
+Each item says what is verified, in the code or in runs, and what is
+inferred. Code citations are at run 5's heads: server `e22d50d09`, connect
+`23849763` and sn `64664738`.
+
+1. **A proxy stall at a contract rollover, pre-existing.** Server
+   `TestProxyContractChurnLoadFreePayerCap`
+   (`proxy/proxy_contract_load_test.go`) sometimes stalls for its whole
+   90-second retry window. Verified in runs, one test at a time: 2 failures
+   in 50 runs on the old server code (`0d98bde5` with the harness fix) and 4
+   in 34 on the latest, so its mechanism predates the day's merges. The gate
+   runs it in server-db's `./proxy`, so it can fail a gate run. Two
+   signatures:
+   - A: the provider's resident closes at or near the first contract
+     rollover, then every flow stalls. Verified in the code: when a
+     destination's forward shard queue, 256 slots by default (4,096 over 16
+     shards), is full, the resident drops the frame and retires its whole
+     generation, logging `[rf]retire ingress full` only at V(1) (server
+     `connect/resident.go`:4364-4372, since `34b953a62`, 2026-08-25).
+     Inferred: that this is A's trigger. A did not recur in 40 runs with
+     full logging.
+   - B: a proxy upload's reset, EOF or timeout with no resident exit, while
+     the transfer layer keeps carrying packets and acknowledgements. Verified
+     in logs: in 3 of the 4 failures with full logging, connect's
+     multi-client flow table drops the provider's inbound packets for a flow
+     left with no client and no race (`[multi]receive no race and no
+     client`, connect `ip_remote_multi_client.go`:8553), and none of 17
+     passing runs logs it. Inferred from a code read, and under
+     investigation: the dial-failure re-race (:8804), which clears the
+     flow's client and leaves a fresh race to its next outbound retransmit.
+     connect `v2/rollover-stall`, not merged, has tests that such a flow
+     recovers on its next SYN retransmit or is reset, never silently hangs,
+     and that Transfer recovers from a relay generation loss within 2.5 s,
+     so B's mechanism is not established.
+2. **The speed-test echo closes H1.** Verified in the code: during a speed
+   test the H1 transport echoes each frame through its control queue, 32
+   slots by default (`TransportBufferSize`), and when that queue is full it
+   closes the websocket generation, which reconnects (connect
+   `transport.go`:2836-2840,1349-1365). Its fix is to come on connect
+   `v2/transport-echo-whodis`, which has no commit yet.
+3. **The server suite fixture has no GeoLite2 database.** Verified: sn's
+   `scripts/server-fixture` writes `mmdb/places.yml` but no
+   `mmdb/geolite2.mmdb` (`suite.go`:36), which server `local/testdata` ships
+   as a synthetic database. So `./mcp`'s `TestProvidersList` fails
+   ("resource not found in config (mmdb/geolite2.mmdb)"). No gate job runs
+   `./mcp`'s tests. Its fix is to come on sn and server
+   `v2/fixture-geolite`, which have no commit yet.

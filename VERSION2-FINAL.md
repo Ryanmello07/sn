@@ -20,9 +20,10 @@ chain 964, which mainnet has run since block 9,276,925 and which the code
 targets (`scripts/runtime-rehearsal/build.sh`;
 `docs/spec/runtime-478-audit.md`). The plan was first written against runtime
 475 (`d1718c99`). Unprefixed paths are in this repository. The version 2
-implementation is on branch `snv2` in every repository (this repository at
-`2f406bac`), to be merged to `main` later. Apart from the runtime facts and
-gas figures measured on the rehearsal node
+implementation was written on branch `snv2` in every repository (this
+repository at `2f406bac`), and it is on `main` in each: this repository
+merged it as `ff186b4c` (VERSION2-HANDOFF.md, section 1). Apart from the
+runtime facts and gas figures measured on the rehearsal node
 (`scripts/runtime-rehearsal/README.md`; §7.3, §8.1), nothing in this plan
 was run against a chain.
 
@@ -1408,8 +1409,9 @@ earnings area:
 | CS-10 | Every platform and locale has the strings, and the generator reproduces each app's catalog |
 | CS-11 | The wallet session refuses a consent message for a login session, a login challenge for a consent session, a message without the prefix, another coldkey and an expired challenge |
 
-The work is on branch `v2/consent-signing` in sdk, the apps, localizations and
-this repository.
+The work, done on branch `v2/consent-signing` in sdk, the apps, ur.io,
+localizations and this repository, is on `main` in each (VERSION2-HANDOFF.md,
+section 1).
 
 ## 12. Migration
 

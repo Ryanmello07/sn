@@ -50,13 +50,31 @@ Merged on 2026-10-14 and 2026-10-15, after the Pins were read
 - the validator's provider request checkpoint as a fixed v2 record that fits
   ext4 (sn `27e786d97` and `c3628860f`), and its rule: no validator downgrade
   after any v2 checkpoint write (step 7; section 6.1, row 7);
-- the connect restore re-apply fix (connect `e6af5701c`).
+- the connect restore re-apply fix (connect `e6af5701c`);
+- the release gate's repairs since its second official run (step 4): the
+  supervisor test's leak (sn `9974350b`), the receipt test (sn `5a6aaa08`),
+  the SMTP 587 test (connect `0e3ded62`), the isolation pin's TUN subnets
+  (server `3738da153`) and the job runner's held fixture (sn `64664738`),
+  which failed the second to fourth runs; the taskworker race and the proxy
+  tests' isolation, which the pre-check found (server `a8cc5103c` and
+  `e22d50d09`); cheaper long tests (sn `ac6a73ed`, `aea400a9` and
+  `e6c5d9fe`, connect `1aa99b73`); connect's test hygiene (`23849763`); two
+  drifts between repositories (connect `2b71b989`, sdk `d2114f9c`); and the
+  selection of the HF-1 replay tests and of the deposit key's fix's tests
+  (sn `3acfaaac` and `59ef6bbd`);
+- the deposit key's fix, which signs a reserved deposit whose deadline has
+  passed, so that it reverts and frees the key (server `ed453384d` to
+  `adc257c06`, merged as `d43dd4af1`; section 7);
+- other sessions' product merges: the server's capability probe, switched
+  off, and the FP2 modern provider gate, which turns on by itself at
+  2026-10-21 00:00 UTC; lag.dev changes; the SN25 commitment oracle and its
+  validator exclusion; and the validator's replay prefetch and intent read
+  budget (VERSION2-HANDOFF.md, section 1).
 
-Still landing on `main`: the fix for a deposit reserved but not signed before
-its deadline, on server branch `v2/deposit-pending-reservation` (section 7).
-Every gate fix that VERSION2-HANDOFF.md, section 2, listed has merged. The
-deposit key's gas floors and the apps' 0.02 TAO v1 gas top-up hint have
-landed (VERSION2-HANDOFF.md, section 1).
+Every branch that VERSION2-HANDOFF.md, section 2, listed has merged except
+a review and the work on the open product issues, which its section 5
+lists. The deposit key's gas floors and the apps' 0.02 TAO v1 gas top-up
+hint have landed (VERSION2-HANDOFF.md, section 1).
 
 The server's written recovery of a root key that an older build stranded has
 landed: `docs/operator/st-stranded-nonce.md`, server `912859cd`, merged by
@@ -478,7 +496,7 @@ steps 5, 8, 10 and 15 (VERSION2-FINAL.md §13, §17).
 | O26 | Gate 1's independent review: confirmation that it is resolved | the owner confirmed it resolved, 2026-10-13 | 4 | VERSION2-FINAL.md §14; STATE.md:91,99,103,176,189,198 |
 | O27 | The native-fee denomination policy for runtime 478: its `native_authority`, `last_native_block`, wei-per-rao ratio and signature, and its authority file | `runtime_code_sha256` 478's and `first_native_block` 9,276,926; once a settlement has recorded an approver key for the scope, only that key can sign (step 5) | 5 | `server/st_native_fee_denomination.go:27-54`; `server/model/st_native_fee_settlement_model.go:124-125,189-197` |
 | O28 | How the release gate's failures are handled | decided: none is accepted. Each is fixed, committed, merged, pushed and pulled, and the gate runs again until it passes (owner decision, 2026-10-14) | 1, 4 | the preamble; VERSION2-HANDOFF.md, section 2 |
-| O29 | Whether step 6's taskworker and api may carry commits the gate did not run | decided: yes, narrowly. They build from run 5's gated heads plus exactly four reviewed FP2 routing fixes: in the taskworker, native evidence that no longer expires between exports and stale city targets that stop serving departed providers; in the api, the no-live-connection exclusion with Quality borrowing only within Quality's cutoffs, and fixed-IP named redials that skip only the Quality ARIN check. Each comes in by `cherry-pick -x`, or by merge when it is based on an ancestor of run 5's server head, with no rebase and nothing else from `main`. Their commits are recorded here once merged. Extended the same day by the owner ("yes include arin. We need to get the arin changes out"): the ARIN dual-database canary (`feat/arindb-dual-canary` `a9459ec31` with its reviewed conflict resolution) rides step 6's api and taskworker and the step-6 connect build, after migrations 837 and 838 are applied, with its paired config release right after step 6. A departure from O1 and O28, accepted by the owner, 2026-10-15 | 6 | O1; O28 |
+| O29 | Whether step 6's taskworker and api may carry commits the gate did not run | decided: yes, narrowly. They build from run 5's gated heads plus exactly four reviewed FP2 routing fixes: in the taskworker, native evidence that no longer expires between exports and stale city targets that stop serving departed providers; in the api, the no-live-connection exclusion with Quality borrowing only within Quality's cutoffs, and fixed-IP named redials that skip only the Quality ARIN check. Each comes in by `cherry-pick -x`, or by merge when it is based on an ancestor of run 5's server head, with no rebase and nothing else from `main`. Their commits are recorded here once merged. Extended the same day by the owner ("yes include arin. We need to get the arin changes out"): the ARIN dual-database canary (`feat/arindb-dual-canary` `a9459ec31` with its reviewed conflict resolution) rides step 6's api and taskworker and the step-6 connect build, after migrations 837 and 838 are applied, with its paired config release right after step 6. Extended again ("yes deploy sooner"): the reviewed upload-admission fix (`fix/upload-admission-silent-drop`, after the api's 20:04-20:40Z silent refusals) ships first in an api hotfix with `blocks_per_range` 10000 and at least 120 s between `maximum_refresh_seconds` and `maximum_head_age_seconds`, and rides step 6's sn head so step 6 does not roll it back. A departure from O1 and O28, accepted by the owner, 2026-10-15 | 6 | O1; O28 |
 
 ## 4. Runbook
 
@@ -835,10 +853,27 @@ first exist.
     (`scripts/release-gate-jobs.sh`:70-83,377-384);
   - the H3 and alt admission tests of server `0d98bde5b`, which
     `server-connect` and `server-db` run in normal and race mode (sn
-    `58faf413`; `scripts/test-release-1.0-local.sh`:895-903,972-981).
-- **Status.** The second official run started on 2026-10-15 at 02:14 UTC on
-  sn `819f00c5`. Its result: in progress (VERSION2-HANDOFF.md, section 3,
-  item 7).
+    `58faf413`; `scripts/test-release-1.0-local.sh`:895-903,972-981);
+  - the second to fourth official runs' failures: the supervisor test's
+    leak, the receipt test, the SMTP 587 test, the isolation pin's TUN
+    subnets and the job runner's held fixture; and the pre-check's
+    taskworker race and proxy test isolation (VERSION2-HANDOFF.md, section
+    1);
+  - the HF-1 replay tests, which the `server-unit` job's `./model` selector
+    never matched (sn `e5908acf`; :652), and `server-db`'s selection of the
+    deposit key's fix's tests (sn `ca5e318e`; :984-994).
+- **Status.** Four official runs ended without a pass; the fifth is in
+  progress (VERSION2-HANDOFF.md, section 3, item 7). The second, from
+  2026-10-15 02:14 UTC on sn `819f00c5`, ended with 92 jobs passed, 4 failed
+  and 2 stopped, and each failure is fixed. The third failed on a drift
+  between sn's server fixture and a server test, fixed by server
+  `1502e131`; the fourth on an intermittent job runner test, since fixed by
+  sn `64664738`, and it was stopped at 18:17:16 UTC. The fifth started at
+  18:47:36 UTC on sn `64664738`, server `e22d50d09`, connect `23849763` and
+  sdk `1b92af87`. A pass qualifies the heads recorded at its run's start,
+  and several sessions merge into `main` every hour. The server-db job's
+  `./proxy` can fail on a pre-existing stall (VERSION2-HANDOFF.md, section
+  5).
 - **Expect.** The last line is `[release-1.0] local release gate passed
   (local mode: working checkouts, not sealed)`
   (`scripts/test-release-1.0-local.sh`:1195-1196). It qualifies those
@@ -2550,7 +2585,8 @@ Found while writing this runbook:
 | The repair and activation controllers refuse the adopted validator, and the rendered unit starts the pre-adoption config without the auditor key | Restart the unit with its drop-in. Around a controller run, remove the drop-in and reinstall it (step 10) |
 | `preview` cannot tell a wrong but well-formed owner input, and it checks `native_chain` and `specName` only for being non-empty | The comparison step of `mainnet/SETTLEMENT-V2-FILL.md`, read against the owner inputs, and the by-eye review of step 8.3 |
 | The claim daemon's state directory is not a prepared durable root | The `provider-claim-queue` preparation of step 13 |
-| A deposit reserved but not signed before its deadline stays refused on the deposit key ("pending original signing outcome cannot become a different request"), and no operator step frees it | Dormant while deposits are at zero price, since the deposit task then sends nothing. The fix is in progress on server branch `v2/deposit-pending-reservation`; land it before deposits are priced (VERSION2-HANDOFF.md, section 3, item 12) |
+| A deposit's staging transfer reserved but not signed before its epoch rolled stays refused on the deposit key ("st: retained deposit intent belongs to another immutable operation"), and the key's later sends stop at it. Signing it would move stake, so the engine does not. No operator step frees it; it needs a change to the engine | Dormant while deposits are at zero price, since the deposit task then sends nothing. An expired deposit reserved but not signed no longer blocks the key: server `ed453384d` to `adc257c06`, merged as `d43dd4af1`, which run 5's server head contains (VERSION2-HANDOFF.md, section 3, item 12) |
+| An intent of a replaced deployment that holds an unsigned execution reservation blocks its key: its cancellation is refused while the reservation stands | Pre-existing; the expired-deposit fix does not cover it (VERSION2-HANDOFF.md, section 3, item 12) |
 | A validator downgraded below the launch's release after that release wrote its v2 request checkpoint refuses the record and fails closed | Never downgrade it below that release (section 6.1, row 7) |
 
 ## 8. Follow-ups after launch
@@ -2581,8 +2617,8 @@ Open owner decisions and work that the repositories leave open:
    unpaid until the epoch after it signs.
 7. **The Windows v2 Claim colour**, blue or lime (STATE.md:200).
 8. **Tooling gaps** marked above:
-   - still landing: the fix for a deposit reserved but not signed before
-     its deadline, on server `v2/deposit-pending-reservation` (section 7);
+   - an engine change that frees a deposit's staging transfer reserved but
+     not signed before its epoch rolled (section 7);
    - a tool that writes and signs the native-fee denomination policy, and
      a decision on its native authority for 478 (step 5);
    - a rendered validator unit that names the adopted config and the auditor
@@ -2622,7 +2658,12 @@ Open owner decisions and work that the repositories leave open:
      stranded, `docs/operator/st-stranded-nonce.md` (server `912859cd`;
      section 6.5);
    - the release gate's failing tests, each fixed and merged
-     (VERSION2-HANDOFF.md, sections 1 and 2).
+     (VERSION2-HANDOFF.md, sections 1 and 2);
+   - the deposit key's fix for a deposit reserved but not signed before its
+     deadline (server `d43dd4af1`; section 7).
+9. **The open product issues** of VERSION2-HANDOFF.md, section 5: the proxy
+   stall at a contract rollover, the speed-test echo that closes H1, and the
+   server suite fixture's missing GeoLite2 database.
 
 ## 9. Schedule for E_s = 3
 
