@@ -111,7 +111,7 @@ func newSourceRoleMirrorLoopTestV2(t *testing.T) *sourceRoleMirrorLoopTestV2 {
 				}
 				value := binary.LittleEndian.AppendUint32(nil, uint32(block))
 				if args[0] == commitmentKey.Hex() {
-					info, err := crv4.EncodeFleetCommitmentInfo(hash)
+					info, err := crv4.EncodeSourceCommitmentInfo(hash)
 					if err != nil {
 						return err
 					}

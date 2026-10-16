@@ -843,8 +843,9 @@ journal entries, the `take status` output and the service's progress file.
 `bindFleetMember` accepts a fleet binding only against the hotkey's commitment as
 mirrored into the coordinator by `mirrorCommitment`, and only the active
 commitment oracle may call that (`evm/src/STCoordinator.sol`). Miners publish
-their fleet commitment natively (`Commitments.set_commitment`, one `Sha256`
-field); something must copy each finalized commitment to chain 964. That is the
+their fleet commitment natively (`Commitments.set_commitment` with one
+`Raw40` field: the ASCII tag `urfleet1` then the 32-byte manifest commitment
+hash); something must copy each finalized commitment to chain 964. That is the
 `commitment-oracle` service (`cli/commitment-oracle`, library
 `commitmentoracle/`).
 
@@ -857,17 +858,40 @@ fleet-format SN25 commitments of factury's
 `support/plans/sn25-commitment-mirror-runbook.md` with exactly its arguments,
 at a gas estimate of about 107,500.
 
-**Validator exclusion, 2026-10-15.** The one-field `Sha256` format does not
-identify a fleet. The validator's source commitment
-(`crv4/source_commitment.go`) writes the same field from the validator hotkey,
+**Fleet commitment format, 2026-10-15.** A one-field `Sha256` commitment does
+not say whose it is. The validator's source commitment
+(`crv4/source_commitment.go`) writes exactly that from the validator hotkey,
 and the validator refuses any coordinator mirror of its source hotkey
 (`validator/release_submit_v2.go` `checkSourceRoleV2`). On 2026-10-15 a manual
 mirror of the SN25 validator's source commitment (UID 1, tx
-`0x4bb7941d…222b5`) halted its steering. The oracle therefore **never mirrors a
-hotkey that holds a validator permit, is unregistered, or has no standalone fleet
-`set_commitment` in its commitment block**, and it fails closed: if a role
-cannot be read, it mirrors nothing in that cycle. Steps 3 and 4 below say how.
-Don't mirror by hand around these rules.
+`0x4bb7941d…222b5`) halted its steering. The interim fix excluded hotkeys with a
+validator permit or without a standalone fleet `set_commitment`; that was
+heuristic (a permit can lapse, it dropped valid fleets, and one unreadable role
+stopped all mirroring). Fleet commitments now have their own format: **exactly
+one `Data::Raw40` field holding `urfleet1` followed by the 32-byte hash**
+(`crv4.EncodeFleetCommitmentInfo`, 42 bytes of `CommitmentInfo`; `Raw40` is
+`Data` variant 41 and `Sha256` is 131 in the runtime-478 metadata, and
+`pallet_commitments` `types.rs` is unchanged in runtime 479). The oracle
+mirrors **only** that format and extracts the hash; the contract is unchanged.
+It never mirrors a one-field `Sha256` commitment, whether a validator's source
+commitment or a fleet published before the tag, and it reads no role, permit or
+block body, so no such read can stop it. The validator source format is
+unchanged, and its writer refuses to produce the fleet format. Don't mirror by
+hand.
+
+**Republish untagged fleets.** A fleet published before the tag is not mirrored
+again. A fleet already mirrored keeps binding through `provider fleet bind`
+until its mirrored commitment ages past `commitmentMaxAgeBlocks` (the three
+fleets already mirrored stay valid until about block 9,360,673), because
+`bindFleetMember` reads only the coordinator's mirrored record. Before then,
+each miner runs `provider fleet publish` with a release that writes the tagged
+format; the oracle mirrors that new commitment. On the mainnet path a tagged
+publish is a new recovery intent, so an earlier finalized untagged publish
+does not make it report "already finalized". An unresolved untagged publish is
+first finished from its original signed bytes, verified with the legacy
+decoder and closed with a "republish in the tagged format" outcome, so it no
+longer blocks publish, bind or revoke. `provider fleet status` reports an
+untagged native commitment as needing a republish.
 
 ### What it does
 
@@ -880,14 +904,14 @@ Every `--poll_interval` (30 s) it runs one cycle:
 2. It reconciles its own unfinished transaction, if any, and signs nothing new
    while one is in flight.
 3. At the native finalized head it lists `Commitments.CommitmentOf(netuid, *)`
-   and keeps entries that are exactly one `Sha256` field
-   (`crv4.DecodeFleetCommitmentRegistrationWithBlockV454`); the old multi-field
-   entries are ignored. The format alone is not enough. At the same finalized
-   head, on every `--substrate` endpoint, it reads `SubnetworkN`,
-   `Uids(netuid, hotkey)`, `Keys(netuid, uid)` and `ValidatorPermit(netuid)`.
-   It never mirrors a hotkey that holds a validator permit on any endpoint, or
-   one that is not registered. If any of these reads fails or is malformed, or
-   the endpoints disagree on the UID, the cycle fails and nothing is sent. It skips a commitment that `mirroredCommitments(hotkey)`
+   and keeps only entries that are exactly one `Raw40` field of `urfleet1` and
+   a nonzero hash (`crv4.DecodeFleetCommitmentRegistrationWithBlockV454`);
+   one-field `Sha256` entries (validator sources and untagged fleets), other
+   tags or lengths and multi-field entries are ignored. The format alone
+   identifies a fleet: it reads no role or permit. `bindFleetMember` itself
+   checks the hotkey's live UID. So a tagged commitment from a deregistered
+   hotkey can now be mirrored; that costs only gas, at most `--max_sends`
+   mirrors per cycle, and the mirror can never be bound. It skips a commitment that `mirroredCommitments(hotkey)`
    at the EVM finalized block already holds (or holds newer), and one older than
    `policyAt(currentEpoch()).commitmentMaxAgeBlocks`, which could no longer be
    bound.
@@ -896,16 +920,7 @@ Every `--poll_interval` (30 s) it runs one cycle:
    state: `LastCommitment` must name the registration's block, and
    `chain_getBlockHash(commitmentBlock)` must be a header of that height. Every
    additional `--substrate` endpoint must return the same commitment bytes and
-   block hash. The block hash is the Substrate hash, never an EVM hash. It also
-   requires positive fleet evidence in that block's body, read with
-   `chain_getBlock` and authenticated against the block hash and extrinsics root
-   (`crv4.Chain.BlockExtrinsicsAtContext`) on every endpoint. The hotkey must
-   have signed exactly one extrinsic there, and its call must be exactly the
-   standalone `Commitments.set_commitment(netuid, [Sha256(hash)])` that
-   `provider fleet publish` sends. A validator source write
-   (`Utility.batch_all` of `set_commitment` and its CRv4 weight commit), a proxy
-   call, a different hash or an extrinsic it can't parse is not evidence, and
-   the commitment is not mirrored (`commitmentoracle/role.go`).
+   block hash. The block hash is the Substrate hash, never an EVM hash.
 5. It mirrors nearest expiry first, at most `--max_sends` per cycle, one
    transaction at a time: an `eth_call` preflight from the oracle address, an
    estimate plus 20% no higher than `--max_gas_limit` (250,000), a legacy gas
@@ -951,9 +966,9 @@ health gauges use. Every name starts with `urnetwork_sn_commitment_oracle_`:
 blocks not yet covered by a complete cycle), `commitments`, `fleet_commitments`,
 `fleet_commitments_mirrored`, `fleet_commitments_expired`,
 `fleet_commitments_conflicting`, `fleet_commitments_inconsistent`,
-`fleet_format_excluded` (one-field `Sha256` commitments never mirrored because
-the hotkey holds a validator permit, is unregistered or has no standalone fleet
-`set_commitment`), `pending_unmirrored`, `pending_min_blocks_to_expiry`, `in_flight`,
+`legacy_sha256_commitments` (one-field `Sha256` commitments, never mirrored:
+validator source commitments and untagged fleets that must republish),
+`pending_unmirrored`, `pending_min_blocks_to_expiry`, `in_flight`,
 `in_flight_age_seconds`, `oracle_balance_wei`, `oracle_balance_low` (1 below
 `--low_balance_wei`, default 0.01 TAO, or when unknown),
 `low_balance_threshold_wei`, `mirrors_sent`, `last_success_timestamp_seconds`,

@@ -1,7 +1,8 @@
 package commitmentoracle
 
-// The operator docs must state the validator exclusion, so nobody mirrors a
-// validator's source commitment by hand again (2026-10-15).
+// The operator docs must state the fleet commitment format and that nothing
+// else is mirrored, so nobody mirrors a validator's source commitment by hand
+// again (2026-10-15).
 
 import (
 	"os"
@@ -30,23 +31,31 @@ func markdownSection(t *testing.T, path string, heading string) string {
 	return strings.Join(strings.Fields(section), " ")
 }
 
-func TestDocsStateValidatorExclusion(t *testing.T) {
+func TestDocsStateFleetCommitmentFormat(t *testing.T) {
 	launch := markdownSection(t, filepath.Join("..", "mainnet", "LAUNCH.md"), "## Commitment oracle")
 	for _, phrase := range []string{
-		"never mirrors a hotkey that holds a validator permit, is unregistered, or has no standalone fleet `set_commitment`",
-		"if a role cannot be read, it mirrors nothing in that cycle",
-		"`ValidatorPermit(netuid)`",
-		"positive fleet evidence",
-		"`fleet_format_excluded`",
+		"exactly one `Data::Raw40` field holding `urfleet1` followed by the 32-byte hash",
+		"mirrors **only** that format",
+		"never mirrors a one-field `Sha256` commitment",
+		"it reads no role, permit or block body",
+		"`provider fleet publish`",
+		"9,360,673",
+		"`legacy_sha256_commitments`",
 	} {
 		if !strings.Contains(launch, phrase) {
 			t.Errorf("LAUNCH.md Commitment oracle does not say %q", phrase)
 		}
 	}
-	mainnet := markdownSection(t, filepath.Join("..", "mainnet", "MAINNET.md"), "## Commitment oracle excludes validators — October 15")
+	for _, stale := range []string{"`fleet_format_excluded`", "`ValidatorPermit(netuid)`"} {
+		if strings.Contains(launch, stale) {
+			t.Errorf("LAUNCH.md Commitment oracle still says %q", stale)
+		}
+	}
+	mainnet := markdownSection(t, filepath.Join("..", "mainnet", "MAINNET.md"), "## Fleet commitments get their own format — October 15")
 	for _, phrase := range []string{
-		"never mirrors a hotkey that holds a validator permit, is unregistered, or has no standalone fleet `set_commitment`",
-		"mirrors nothing in that cycle",
+		"exactly one `Raw40` field holding the ASCII tag `urfleet1` followed by the 32-byte commitment hash",
+		"mirrors **only** that format",
+		"must republish",
 	} {
 		if !strings.Contains(mainnet, phrase) {
 			t.Errorf("MAINNET.md October 15 does not say %q", phrase)
