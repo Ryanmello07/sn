@@ -651,14 +651,28 @@ func assertSupervisorRestartsOncePublishesReadyAndStopsChildrenTest(t *testing.T
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
+	admitted := make(chan struct{})
 	go func() {
 		done <- superviseWithContractCleanup(ctx, dir, manifestPath, func(context.Context, string, []ProcessSpec, time.Time) error {
+			close(admitted)
 			return nil
 		})
 	}()
 	processLogs, err := initializeProcessLogGate(dir, manifest)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Authenticate the executable before the readiness clock starts, as the
+	// burst cooldown test does: under load a race binary can take longer to
+	// hash than the readiness budget, and no child starts before this
+	// pre-start callback.
+	select {
+	case <-admitted:
+	case err := <-done:
+		t.Fatalf("supervisor exited before authenticated admission: %v", err)
+	case <-time.After(time.Minute):
+		cancel()
+		t.Fatalf("supervisor did not reach authenticated admission; supervisor: %v", <-done)
 	}
 	if _, err := waitSupervisorReady(ctx, dir, manifest, processLogs, 30*time.Second); err != nil {
 		cancel()
