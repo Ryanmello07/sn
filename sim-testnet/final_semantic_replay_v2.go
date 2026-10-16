@@ -283,7 +283,9 @@ func openFinalValidatorReplayV2(ctx context.Context, evidence *FinalSemanticEvid
 	if err != nil {
 		return nil, err
 	}
-	owner.intents, err = decodeValidatorIntentBytes(store, int(entry.ValidatorID))
+	owner.intents, err = decodeValidatorIntentBytes(store, int(entry.ValidatorID), func(name string, maximum uint64) ([]byte, error) {
+		return readNamed("private", name, maximum)
+	})
 	if err != nil {
 		return nil, err
 	}
