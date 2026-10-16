@@ -223,7 +223,11 @@ discovered_modules="$({
 expected_modules="$(printf '%s\n' "${live_modules[@]}" "${non_release_modules[@]}" "${fork_modules[@]}" | LC_ALL=C sort -u)"
 if [[ "$discovered_modules" != "$expected_modules" ]]; then
   echo "release Go module inventory differs from its reviewed classification" >&2
-  diff -u <(printf '%s\n' "$expected_modules") <(printf '%s\n' "$discovered_modules") >&2 || true
+  # Here-strings, which bash writes itself, not process substitutions, which
+  # it never waits for: a substitution whose shell is still exiting at the
+  # exit below would be adopted by a release gate's subreaper. That window
+  # lies inside the substitution's own exit, so no test can force it.
+  diff -u /dev/fd/3 /dev/fd/4 3<<<"$expected_modules" 4<<<"$discovered_modules" >&2 || true
   exit 1
 fi
 
@@ -244,7 +248,8 @@ fi
 final_release_snapshot="$(snapshot_release_repositories false)"
 if [[ "$final_release_snapshot" != "$initial_release_snapshot" ]]; then
   echo "release repository snapshot changed during source-freeze validation" >&2
-  diff -u <(printf '%s\n' "$initial_release_snapshot") <(printf '%s\n' "$final_release_snapshot") >&2 || true
+  # Here-strings, as for the module inventory above.
+  diff -u /dev/fd/3 /dev/fd/4 3<<<"$initial_release_snapshot" 4<<<"$final_release_snapshot" >&2 || true
   exit 1
 fi
 printf '%s\n' "$final_release_snapshot"

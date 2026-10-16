@@ -628,7 +628,9 @@ if ! final_release_source_snapshot="$(release_gate_record_preflight final-source
 fi
 if [[ "$final_release_source_snapshot" != "$release_source_snapshot" ]]; then
   echo "release source revisions changed while the gate was running" >&2
-  diff -u <(printf '%s\n' "$release_source_snapshot") <(printf '%s\n' "$final_release_source_snapshot") >&2 || true
+  # Here-strings, which bash writes itself, not process substitutions,
+  # which it never waits for, so the gate leaves no child of its own.
+  diff -u /dev/fd/3 /dev/fd/4 3<<<"$release_source_snapshot" 4<<<"$final_release_source_snapshot" >&2 || true
   release_gate_fence_status=1
 fi
 printf '%s\n' "$final_release_source_snapshot"

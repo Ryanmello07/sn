@@ -50,6 +50,17 @@ func (self *releaseGateJobsOutput) String() string {
 	return self.output.String()
 }
 
+// A canceled queue's backstops. Its TERM trap runs once its current bounded
+// read returns, and its EXIT trap then joins its owners for up to 20 seconds
+// (release_gate_jobs_exit in scripts/release-gate-jobs.sh). The WaitDelay
+// outlasts that join, so Go's kill never lands mid-join, where it would leave
+// the queue's live owners to the release gate's subreaper, and the fixture's
+// own join deadline outlasts the WaitDelay.
+const (
+	releaseGateQueueFixtureWaitDelay    = 30 * time.Second
+	releaseGateQueueFixtureJoinDeadline = 40 * time.Second
+)
+
 // Uses the actual queue and subreaper with only machine capacity and the
 // external service cleanup callback supplied as deterministic boundaries.
 func newReleaseGateJobsFixture(t *testing.T, body string) *releaseGateJobsFixture {
@@ -133,7 +144,7 @@ release_gate_jobs_init
 `+body, "release-jobs-test", helper, sn, workspace)
 	self.command.Env = append(os.Environ(), "TMPDIR="+self.root, "RELEASE_GATE_QUEUE_FIXTURE_ROOT="+self.root, "RELEASE_GATE_JOBS=2", "RELEASE_GATE_CONCURRENT_GATES=2", "SIM_TESTNET_LIVE_DEPENDENCIES=0")
 	self.command.Cancel = func() error { return self.command.Process.Signal(syscall.SIGTERM) }
-	self.command.WaitDelay = 20 * time.Second
+	self.command.WaitDelay = releaseGateQueueFixtureWaitDelay
 	self.command.Stdout, self.command.Stderr = &self.output, &self.output
 	self.started = time.Now()
 	if err := self.command.Start(); err != nil {
@@ -148,7 +159,7 @@ release_gate_jobs_init
 		}
 		select {
 		case <-self.finished:
-		case <-time.After(25 * time.Second):
+		case <-time.After(releaseGateQueueFixtureJoinDeadline):
 			t.Error("foreground queue did not join after cancellation")
 			_ = self.command.Process.Kill()
 			<-self.finished
@@ -1334,4 +1345,32 @@ release_gate_complete
 	}
 	self.write(t, "control-a", "release")
 	self.join(t, 0)
+}
+
+// A canceled queue's fixture backstops outlast its EXIT join. At equal bounds,
+// as both were at 20 seconds, Go's kill at the WaitDelay could land as the
+// join ended and leave the queue's live owners to the release gate's
+// subreaper. The join's bound is read from the script it describes.
+func TestReleaseGateJobsFixtureBackstopsOutlastTheExitJoin(t *testing.T) {
+	data, err := os.ReadFile("../scripts/release-gate-jobs.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	match := regexp.MustCompile(`(?m)^release_gate_jobs_exit\(\) \{\n  local status="\$1" index joined=1 owned deadline=\$\(\(SECONDS \+ ([0-9]+)\)\)$`).FindSubmatch(data)
+	if match == nil {
+		t.Fatal("release_gate_jobs_exit declares no exit join deadline")
+	}
+	seconds, err := strconv.Atoi(string(match[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The TERM trap waits for one read of up to a second before the join
+	// starts, and SECONDS counts whole seconds.
+	join := time.Duration(seconds)*time.Second + 2*time.Second
+	if releaseGateQueueFixtureWaitDelay <= join {
+		t.Errorf("fixture WaitDelay %s does not outlast the queue's %s exit join", releaseGateQueueFixtureWaitDelay, join)
+	}
+	if releaseGateQueueFixtureJoinDeadline <= releaseGateQueueFixtureWaitDelay {
+		t.Errorf("fixture join deadline %s does not outlast its WaitDelay %s", releaseGateQueueFixtureJoinDeadline, releaseGateQueueFixtureWaitDelay)
+	}
 }
