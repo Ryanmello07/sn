@@ -19,6 +19,7 @@ var treasuryRuntimeSuccessorTestSources = []struct {
 	{source: crv4.NativeOwnerSource475, spec: 475},
 	{source: crv4.NativeOwnerSource477, spec: 477},
 	{source: crv4.NativeOwnerSource478, spec: 478},
+	{source: crv4.NativeOwnerSource479, spec: 479},
 }
 
 // The treasury proposal keeps its allocation and cap on a reviewed source.

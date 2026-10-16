@@ -3,13 +3,13 @@
 Activation gate 2 (`VERSION2-FINAL.md` §14) runs the exact release bytecode of
 the settlement contracts against the real Subtensor precompiles. Anvil cannot
 run them, the testnet campaign closed and there is no localnet, so this
-directory builds a node from the upstream source of runtime 478, the runtime
-mainnet (EVM chain 964) runs, and starts a one-node dev chain on it. The Go
-harness and its tests are in `rehearsal/`. The gate first ran on runtime 475;
-its measurements below are of that run, and [Runtime 477](#runtime-477) and
-[Runtime 478](#runtime-478) record the reruns. Runtime 478 changes the gas
-limit a stake move needs, so its section supersedes the limits measured
-before it.
+directory builds a node from the upstream source of runtime 479, which
+mainnet (EVM chain 964) has run since block 9,286,202, and starts a one-node
+dev chain on it. The Go harness and its tests are in `rehearsal/`. The gate first
+ran on runtime 475; its measurements below are of that run, and
+[Runtime 477](#runtime-477) and [Runtime 478](#runtime-478) record the reruns.
+Runtime 478 changes the gas limit a stake move needs, so its section
+supersedes the limits measured before it.
 
 ## Build
 
@@ -19,10 +19,15 @@ PROTOC=/path/to/protoc CARGO_TARGET_DIR=/path/to/target \
 ```
 
 `build.sh` clones `https://github.com/opentensor/subtensor.git` into the
-checkout directory if it does not exist, and checks that the tag `v478` names
-`850f2755bb05a3851f948489f0ab27b0645cebce`. It checks out that commit, requires
-a clean tree, `spec_version: 478` in `runtime/src/lib.rs` and every digest of
-`docs/spec/runtime-v478-source.sha256`, then builds:
+checkout directory if it does not exist and checks out
+`e66c7eed760efaa5a3b1c249b5a3369a9bc693cf`, the head of upstream PR #3256
+(branch `release-479`), which upstream main merged as `f4786f90` with the same
+tree. Mainnet installed runtime 479 before upstream published a tag or a
+release for it, so the script checks the commit's tree,
+`b44c231f8dc95ba2f4e6e1bac6e377e387e47677`, and, once upstream publishes a tag
+`v479`, that the tag names that tree. It then requires a clean tree,
+`spec_version: 479` in `runtime/src/lib.rs` and every digest of
+`docs/spec/runtime-v479-source.sha256`, and builds:
 
 ```sh
 cargo build --locked --profile release -p node-subtensor \

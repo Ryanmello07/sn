@@ -40,6 +40,8 @@ const (
 	takeTestRuntime477MetadataHash   = "0x5a268863a7f24c626e362103afa4f2856a589ee157ab915d91c289b1b5a6f11e"
 	takeTestRuntime478Metadata       = "../crv4/testdata/runtime478-metadata.scale.gz.base64"
 	takeTestRuntime478MetadataHash   = "0x4f96a9cb954ebe3ae0e364fe7e34ec8a0e902239832f68dfe90aaa1e4511c747"
+	takeTestRuntime479Metadata       = "../crv4/testdata/runtime479-metadata.scale.gz.base64"
+	takeTestRuntime479MetadataHash   = "0x3ef17424a54b53d3630c2fde92ebff918364a2f4730c9c23e22ebdd7c21575d1"
 )
 
 func TestTakePercentRoundsDownToPartsOf65535(t *testing.T) {
@@ -162,8 +164,8 @@ func TestChildkeyTakeDecisionFollowsTheRuntimeRules(t *testing.T) {
 }
 
 // Pallet 7 with calls 65, 66 and 75 is the reviewed layout from runtime 455
-// through the runtime 470 projection and the exact runtime 475, 477 and 478
-// metadata.
+// through the runtime 470 projection and the exact runtime 475, 477, 478 and
+// 479 metadata.
 func TestTakeCallsMatchReviewedRuntimeLayouts(t *testing.T) {
 	hotkey := [32]byte{7, 7, 7}
 	for _, fixture := range []struct{ path, hash string }{
@@ -172,6 +174,7 @@ func TestTakeCallsMatchReviewedRuntimeLayouts(t *testing.T) {
 		{path: takeTestRuntime475Metadata, hash: takeTestRuntime475MetadataHash},
 		{path: takeTestRuntime477Metadata, hash: takeTestRuntime477MetadataHash},
 		{path: takeTestRuntime478Metadata, hash: takeTestRuntime478MetadataHash},
+		{path: takeTestRuntime479Metadata, hash: takeTestRuntime479MetadataHash},
 	} {
 		metadata, _ := provisionalValidatorMetadataTest(t, fixture.path, fixture.hash)
 		for _, testCase := range []struct {
@@ -210,7 +213,7 @@ func TestTakeCallsMatchReviewedRuntimeLayouts(t *testing.T) {
 }
 
 // The delegate-take rate key keeps its variant when 475 and 477 append
-// hyperparameters, and in 478, which appends none.
+// hyperparameters, and in 478 and 479, which append none.
 func TestTakeDelegateRateKeyMatchesReviewedRuntimes(t *testing.T) {
 	hotkey := [32]byte{7, 7, 7}
 	want := append([]byte{5}, hotkey[:]...)
@@ -219,6 +222,7 @@ func TestTakeDelegateRateKeyMatchesReviewedRuntimes(t *testing.T) {
 		{path: takeTestRuntime475Metadata, hash: takeTestRuntime475MetadataHash},
 		{path: takeTestRuntime477Metadata, hash: takeTestRuntime477MetadataHash},
 		{path: takeTestRuntime478Metadata, hash: takeTestRuntime478MetadataHash},
+		{path: takeTestRuntime479Metadata, hash: takeTestRuntime479MetadataHash},
 	} {
 		metadata, _ := provisionalValidatorMetadataTest(t, fixture.path, fixture.hash)
 		key, err := delegateTakeRateKey(metadata, hotkey)
