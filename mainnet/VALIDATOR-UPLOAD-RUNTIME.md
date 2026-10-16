@@ -77,6 +77,9 @@ Publication order includes the canonical event index for rotations within one
 block. A discovered successor retires the prior generation even when the prior
 generation reauthenticates successfully and the successor's history is
 temporarily unavailable; only the successor's complete proof can admit it.
+An absent hotkey mapping retires an entry only after the native genesis, pinned
+header, canonical hash, finalized coverage and repeated absence agree. A failed
+or contradictory chain read is not an authenticated deregistration.
 
 Each refresh prints one line with its outcome, duration, head ages and the
 activations it did not admit. The next refresh starts early enough to publish

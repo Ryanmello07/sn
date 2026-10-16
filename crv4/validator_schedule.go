@@ -116,6 +116,35 @@ func readValidatorScheduleAttempt(ctx context.Context, chain *Chain, query Valid
 	}
 	netuid := encodeNetuid(query.Netuid)
 	uid, err := read("Uids", 2, ErrValidatorScheduleHotkeyUnregistered, netuid, query.Hotkey[:])
+	if errors.Is(err, ErrValidatorScheduleHotkeyUnregistered) {
+		// Absence revokes prior eligibility, so authenticate its chain and
+		// finalized block even though there is no UID for the stake reader.
+		genesis, checkErr := validatorIdentityBlockHashAtContext(ctx, chain, 0)
+		if checkErr != nil {
+			return result, checkErr
+		}
+		if genesis != query.GenesisHash {
+			return result, errors.New("validator schedule RPC genesis differs from the independent pin")
+		}
+		number, _, checkErr := chain.ReceiptHeaderAtContext(ctx, query.BlockHash)
+		if checkErr != nil {
+			return result, checkErr
+		}
+		if number != query.BlockNumber {
+			return result, errors.New("validator schedule header number differs from the independent pin")
+		}
+		_, checkErr = read("Uids", 2, ErrValidatorScheduleHotkeyUnregistered, netuid, query.Hotkey[:])
+		if checkErr == nil {
+			return result, errors.New("validator schedule absent registration changed during observation")
+		}
+		if !errors.Is(checkErr, ErrValidatorScheduleHotkeyUnregistered) {
+			return result, checkErr
+		}
+		selected := finalityReadWitness{hash: query.BlockHash, number: query.BlockNumber}
+		if checkErr := closeValidatorReadFinalityContext(ctx, chain, selected, selected); checkErr != nil {
+			return result, checkErr
+		}
+	}
 	if err != nil {
 		return result, err
 	}
