@@ -504,6 +504,15 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 	// record, admitted or not. An older entry of that owner is superseded and
 	// is never retained through its own failed reads.
 	latestPublishedOwnerBlocks := make(map[ValidatorUploadOwner]uint64)
+	// Canonical event order also distinguishes rotations within one block.
+	latestPublishedOwnerEvents := make(map[ValidatorUploadOwner]ValidatorUploadActivationEvent)
+	superseded := func(owner ValidatorUploadOwner, digest [32]byte, published uint64) bool {
+		if latestPublishedOwnerBlocks[owner] > published {
+			return true
+		}
+		event, found := latestPublishedOwnerEvents[owner]
+		return found && event.Block == published && event.Digest != digest
+	}
 	// Current eligibility is read once per stable hotkey in this captured
 	// refresh. Its metadata and resolved UID come from the actual current hash.
 	current := make(map[[32]byte]bool)
@@ -587,6 +596,7 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 		for index := range events {
 			owner := ValidatorUploadOwner{Hotkey: events[index].Hotkey, OperatorNoID: events[index].NoID}
 			latestPublishedOwnerBlocks[owner] = max(latestPublishedOwnerBlocks[owner], events[index].Block)
+			latestPublishedOwnerEvents[owner] = events[index]
 			if err := admit(events[index].Digest, &events[index]); err != nil {
 				return err
 			}
@@ -617,6 +627,18 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 	for _, digest := range previousDigests {
 		if err := admit(digest, nil); err != nil {
 			return err
+		}
+	}
+	// A failed successor proof cannot resurrect the older generation even
+	// when that older proof and its current eligibility still read correctly.
+	for owner, verified := range next {
+		digest, err := verified.Publication.Record.Digest()
+		if err != nil {
+			return err
+		}
+		if superseded(owner, digest, verified.Publication.PublishedBlock) {
+			delete(next, owner)
+			self.recordActivationFailure(digest, errors.New("validator staging activation was superseded by a later publication"))
 		}
 	}
 	if err := errors.Join(ctx.Err(), self.ctx.Err()); err != nil {
@@ -659,7 +681,7 @@ func (self *ValidatorUploadAdmission) refresh(ctx context.Context, now time.Time
 				continue
 			}
 			owner := ValidatorUploadOwner{Hotkey: entry.record.Hotkey, OperatorNoID: entry.record.NoID}
-			if latestPublishedOwnerBlocks[owner] > entry.published {
+			if superseded(owner, digest, entry.published) {
 				continue
 			}
 			if admitted, exists := next[owner]; exists && admitted.Publication.PublishedBlock >= entry.published {

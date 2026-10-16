@@ -73,6 +73,11 @@ The refresh no longer fails silently in four places:
   registration, a later activation of the same owner, whether authenticated or
   only discovered, or a changed anchor still retires it at once.
 
+Publication order includes the canonical event index for rotations within one
+block. A discovered successor retires the prior generation even when the prior
+generation reauthenticates successfully and the successor's history is
+temporarily unavailable; only the successor's complete proof can admit it.
+
 Each refresh prints one line with its outcome, duration, head ages and the
 activations it did not admit. The next refresh starts early enough to publish
 before the current state expires.
