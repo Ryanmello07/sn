@@ -1287,16 +1287,44 @@ release_gate_test_hold control-b
 		t.Fatalf("the EXIT kept the exports: %v", err)
 	}
 	failed := newReleaseGateJobsFixture(t, `
-mkdir -p "$release_gate_mainnet_exports/locked"
-printf 'export\n' > "$release_gate_mainnet_exports/locked/file"
-chmod 500 "$release_gate_mainnet_exports/locked"
-printf '%s\n' "$release_gate_mainnet_exports" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+# Mode bits cannot force an unlink failure when the gate runs as root. Keep
+# this failure boundary in the owner shell, for only its exact removal call;
+# the real phase and child owner still run and join normally.
+rm() {
+  if [[ "$#" == 3 && "$1" == -rf && "$2" == -- && "$3" == "$release_gate_mainnet_exports" ]]; then
+    printf '%s\n' "$release_gate_active" >> "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/remove-attempts"
+    return 73
+  fi
+  command rm "$@"
+}
+phase_build() {
+  mkdir "$release_gate_mainnet_exports"
+  printf 'export\n' > "$release_gate_mainnet_exports/witness"
+  printf '%s\n' "$release_gate_mainnet_exports" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/events"
+  read -r release < "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/control-a"
+}
+release_gate_start build phase_build
 status=0; release_gate_complete || status=$?
+printf '%s\n' "$status" > "$RELEASE_GATE_QUEUE_FIXTURE_ROOT/complete-status"
 exit "$status"
 `)
-	locked := filepath.Join(failed.line(t, "events"), "locked")
-	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	failedExports := failed.line(t, "events")
+	failed.write(t, "control-a", "release")
 	failed.join(t, 1)
+	// Completion must fail itself: a second refusal in EXIT must not hide a
+	// swallowed first error. Both attempts must follow the real final join.
+	for name, want := range map[string]string{
+		"complete-status": "1\n",
+		"remove-attempts": "0\n0\n",
+	} {
+		got, err := os.ReadFile(filepath.Join(failed.root, name))
+		if err != nil || string(got) != want {
+			t.Fatalf("%s=%q want=%q: %v", name, got, want, err)
+		}
+	}
+	if got, err := os.ReadFile(filepath.Join(failedExports, "witness")); err != nil || string(got) != "export\n" {
+		t.Fatalf("failed removal did not retain the export witness: %q, %v", got, err)
+	}
 }
 
 // A held queue that a test signals still runs its TERM trap when the signal
