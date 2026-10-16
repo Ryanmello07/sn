@@ -765,7 +765,7 @@ first exist.
   anything runs (`scripts/test-release-1.0-local.sh`:16-24):
   - the source freeze's provenance checks: clean, origin, upstream, fetch and
     at-origin at the start, and the final snapshot with its comparison
-    (`scripts/check-release-source-freeze.sh`:203-209,238-243);
+    (`scripts/check-release-source-freeze.sh`:203-209,242-247);
   - `TestReleaseLockMatchesCheckout`, by name in every job that would run
     it, and as the final fence
     (`scripts/test-release-1.0-local.sh`:173-183,1162-1171). So the release
@@ -876,7 +876,7 @@ first exist.
   5).
 - **Expect.** The last line is `[release-1.0] local release gate passed
   (local mode: working checkouts, not sealed)`
-  (`scripts/test-release-1.0-local.sh`:1197-1198). It qualifies those
+  (`scripts/test-release-1.0-local.sh`:1199-1200). It qualifies those
   checkouts, not a sealed release (`sim-testnet/README.md`:856-858). The
   settlement v2 jobs:
   - `sn-v2`, gate 3's own verdict (`scripts/test-release-1.0-local.sh`:535-553);
