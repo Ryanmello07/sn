@@ -25,7 +25,7 @@ func releaseFeedbackIndexGateGroup(t *testing.T) releaseEvidenceV2GateGroup {
 	}
 }
 
-func TestLocalGateRunsFeedbackIndexMigrationAndReadPlans(t *testing.T) {
+func TestProducerGateStateSelectionLocalFeedbackIndexMigrationAndReadPlans(t *testing.T) {
 	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestLocalGateRunsFeedbackIndexMigrationAndReadPlans(t *testing.T) {
 	}
 }
 
-func TestLocalGateRejectsOmittedFeedbackIndexQualification(t *testing.T) {
+func TestProducerGateStateSelectionLocalFeedbackIndexRejectsOmissions(t *testing.T) {
 	encoded, err := os.ReadFile("../scripts/test-release-1.0-local.sh")
 	if err != nil {
 		t.Fatal(err)
