@@ -281,7 +281,10 @@ func TestStoragePreparationRestoreRawNominationRequiresExactDelta(t *testing.T) 
 		raw := bytes.TrimSuffix(request.Owners[0].Inputs, []byte("}"))
 		request.Owners[0].Inputs = append(append(raw, []byte(`,"pending_raw_member":`)...), append(witness, '}')...)
 	})
-	storagePreparationRefuseRawPlan(t, f, "ambiguous repeated raw nomination")
+	// Connect's strict request decoder refuses the repeated key before any
+	// owner reads its inputs; chain's TestNativeRestoreScopeRefusesRepeatedRawNomination
+	// keeps the scope's own refusal.
+	storagePreparationRefuseRawPlan(t, f, "durable JSON contains a duplicate key")
 }
 
 // Malformed reviewed metadata cannot rename, alias or multiply the nominated

@@ -273,7 +273,7 @@ func TestIntentV2VerifiedMeasurementDecodesOnlyOnRequest(t *testing.T) {
 	read := func(decode bool) (*ReleaseMeasurementArtifact, []byte, error) {
 		t.Helper()
 		custody := &releaseEvidenceV2StartupReferences{remaining: fixture.runtime.cfg.EvidenceV2.Bounds.MaxHistoryBytes}
-		artifact, measurement, err := store.readVerifiedMeasurementV2(t.Context(), custody, intent, decode)
+		artifact, measurement, _, err := store.readVerifiedMeasurementV2(t.Context(), custody, intent, nil, decode, false)
 		return artifact, measurement, errors.Join(err, custody.close())
 	}
 	decoded, decodedBytes, err := read(true)
@@ -290,7 +290,7 @@ func TestIntentV2VerifiedMeasurementDecodesOnlyOnRequest(t *testing.T) {
 	prepared.HotkeyHex = releaseHex32([32]byte{1})
 	changed.Prepared = &prepared
 	custody := &releaseEvidenceV2StartupReferences{remaining: fixture.runtime.cfg.EvidenceV2.Bounds.MaxHistoryBytes}
-	_, _, err = store.readVerifiedMeasurementV2(t.Context(), custody, &changed, false)
+	_, _, _, err = store.readVerifiedMeasurementV2(t.Context(), custody, &changed, nil, false, false)
 	if err = errors.Join(err, custody.close()); err == nil {
 		t.Fatal("undecoded verified read accepted a different prepared hotkey")
 	}
@@ -309,5 +309,81 @@ func TestIntentV2VerifiedMeasurementDecodesOnlyOnRequest(t *testing.T) {
 	}
 	if _, _, err := read(false); err == nil {
 		t.Fatal("undecoded verified read accepted a changed retained measurement")
+	}
+}
+
+// An entry of a history read checks only the custody it acquired: the intent
+// store's reused and complete reads, and startup's decision sources, which
+// share one custody across every retained intent. Identical bytes under a new
+// inode at an earlier entry's path are visible only to that earlier owner's
+// check. The next entry's read no longer walks every earlier owner again,
+// which made each history read quadratic in its entries, and the read owner's
+// final check still refuses the replaced file.
+func TestIntentV2EntryReadChecksOnlyItsOwnCustody(t *testing.T) {
+	fixture := newProductionContinuationTestFixture(t)
+	store := fixture.steerer.intents
+	intent, err := store.beginV2(t.Context(), *fixture.intent)
+	if err != nil {
+		t.Fatalf("actual nonempty V2 begin: %v", err)
+	}
+	path := intent.MeasurementArtifactPath
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(fixture.runtime.cfg.StateDir, path)
+	}
+	bounds := fixture.runtime.cfg.EvidenceV2.Bounds
+	measurement, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := decodeReleaseMeasurementV2Bytes(t.Context(), measurement, bounds.MaxArtifactBytes, bounds.MaxOperators)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history := fixture.runtime.history
+	for _, read := range []struct {
+		name  string
+		entry func(*releaseEvidenceV2StartupReferences) error
+	}{
+		{name: "reused", entry: func(custody *releaseEvidenceV2StartupReferences) error {
+			_, _, _, err := store.readVerifiedMeasurementV2(t.Context(), custody, intent, nil, false, false)
+			return err
+		}},
+		{name: "complete", entry: func(custody *releaseEvidenceV2StartupReferences) error {
+			_, _, _, _, err := store.readMeasurementV2(t.Context(), custody, intent)
+			return err
+		}},
+		{name: "startup decision sources", entry: func(custody *releaseEvidenceV2StartupReferences) error {
+			// Startup reads each intent's files into the shared custody first.
+			if _, err := history.readContentReference(t.Context(), custody, intent.MeasurementArtifactPath, intent.MeasurementArtifactHash, intent.MeasurementArtifactSize, bounds.MaxArtifactBytes, false); err != nil {
+				return err
+			}
+			_, err := history.readIntentDecisionSourcesV2(t.Context(), fixture.runtime.chain, fixture.runtime.native, releaseRuntimeIdentityV2(&fixture.runtime.cfg), intent, artifact, custody)
+			return err
+		}},
+	} {
+		custody := &releaseEvidenceV2StartupReferences{remaining: bounds.MaxHistoryBytes}
+		if err := read.entry(custody); err != nil {
+			t.Fatalf("%s earlier entry read: %v", read.name, err)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		replacement := path + ".synthetic-replacement"
+		if err := os.WriteFile(replacement, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(replacement, path); err != nil {
+			t.Fatal(err)
+		}
+		if err := read.entry(custody); err != nil {
+			t.Errorf("%s next entry read checked the earlier entry's custody again: %v", read.name, err)
+		}
+		if err := custody.check(); err == nil {
+			t.Errorf("%s read owner's final check accepted a replaced earlier file", read.name)
+		}
+		if err := custody.close(); err == nil {
+			t.Errorf("%s read owner's close accepted a replaced earlier file", read.name)
+		}
 	}
 }

@@ -322,8 +322,21 @@ func TestStoragePreparationRestoreMemberRetainsOriginalExecutionRootGate(t *test
 		t.Fatal(err)
 	}
 	owner, err := openBootstrapSuccessorExecutionDirectory(ctx, f.storage.target.root, f.original, f.claim, nil)
-	if owner != nil || err == nil || !strings.Contains(err.Error(), "physical directory changed") {
+	if err == nil || !strings.Contains(err.Error(), "physical directory changed") {
 		t.Fatal("storage rebind silently rewrote signed original root authority", err)
+	}
+	// Final checkpoint refusal may return the already closed object. No
+	// retained descriptor or publication capability may escape that error.
+	if owner != nil {
+		if owner.file != nil || owner.members != nil && owner.members.head != nil {
+			t.Fatal("refused old root retained active descriptor custody")
+		}
+		if err := owner.publish("safe-inner-refused.json", "nonce", []byte("synthetic refused payload")); err == nil {
+			t.Fatal("refused old root retained publication authority")
+		}
+	}
+	if _, err := os.Stat(filepath.Join(f.storage.target.root, "safe-inner-refused.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("refused old root published another nonce member", err)
 	}
 	after, err := os.ReadFile(filepath.Join(f.storage.target.root, f.spec.Name))
 	if err != nil || !bytes.Equal(before, after) {

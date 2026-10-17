@@ -7,7 +7,6 @@
 package validator
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -220,12 +219,9 @@ func readProductionBootstrapUnsealed(ctx context.Context, cfg *ReleaseConfig, ar
 		return nil, nil, err
 	}
 	if intent != nil {
-		var file steeringIntentFile
-		if err := decodeAttemptStreamV2JSON(intent, cfg.EvidenceV2.Bounds.IntentFileLimit(), &file); err != nil {
-			return nil, nil, err
-		}
-		canonical, err := marshalAttemptSettlementV2JSON(ctx, &file, cfg.EvidenceV2.Bounds.IntentFileLimit(), true, true)
-		if err != nil || file.Schema != steeringIntentSchema || !bytes.Equal(intent, canonical) || file.Current != nil || len(file.History) != 0 {
+		// A sealed file is never empty, so its segments need not be read.
+		file, err := decodeSteeringIntentFileV2(ctx, intent, cfg.EvidenceV2.Bounds.IntentFileLimit())
+		if err != nil || file.Current != nil || len(file.History) != 0 || len(file.Segments) != 0 {
 			return nil, nil, errors.Join(errors.New("nonempty or noncanonical steering intent liability requires complete authenticated graph replay"), err)
 		}
 		result.IntentFilePresent, result.IntentFileHash = true, ReleaseMeasurementContentHash(intent)

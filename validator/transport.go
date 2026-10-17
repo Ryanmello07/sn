@@ -425,9 +425,16 @@ func hopDialNetwork(network string, family hopIpFamily) string {
 }
 
 // connIpFamily is the family of the address a tunnel connection reached, or
-// 0 when it cannot tell.
+// 0 when it cannot tell. A netstack connection whose endpoint is no longer
+// connected, reset right after its handshake, has no remote address: gvisor's
+// gonet.TCPConn.RemoteAddr returns nil then, and this runs on net/http's dial
+// goroutine, where a panic would end the validator.
 func connIpFamily(conn net.Conn) int {
-	addrPort, err := netip.ParseAddrPort(conn.RemoteAddr().String())
+	remote := conn.RemoteAddr()
+	if remote == nil {
+		return 0
+	}
+	addrPort, err := netip.ParseAddrPort(remote.String())
 	if err != nil {
 		return 0
 	}

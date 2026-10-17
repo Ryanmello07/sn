@@ -525,24 +525,24 @@ func TestMonitorStorageOperatorLostAckRetainsIncident(t *testing.T) {
 		return nil
 	}}
 	cancel, done, sink, resume := startMonitorOperatorTest(t, fixture, url, hooks)
-	first := <-sink.events
+	first := monitorTestEvent(t, done, sink.events)
 	if first.Publication != "retrying" || first.State == nil || first.State.Transactions.Latest == nil || !first.State.PublicationLastSuccessAt.IsZero() {
 		t.Fatal("uncertain operator snapshot fabricated acknowledgement", first)
 	}
-	if role := <-sink.validators; role != "alpha" {
+	if role := monitorTestEvent(t, done, sink.validators); role != "alpha" {
 		t.Fatal("operator checkpoint failure stopped validator peer", role)
 	}
 	incident := first.State.Transactions.Latest.Id
 	if err := os.Remove(fixture.policy.Operators[0].DatabaseFile); err != nil {
 		t.Fatal(err)
 	}
-	resume <- struct{}{}
-	second := <-sink.events
+	resumeMonitorTestWorker(t, done, resume)
+	second := monitorTestEvent(t, done, sink.events)
 	if second.Publication != "published" || second.State.ReadStatus != "unavailable" || second.State.Transactions.Latest == nil || second.State.Transactions.Latest.Id != incident || closes.Load() != 1 {
 		t.Fatal("operator continuation lost retained incident", second, closes.Load())
 	}
 	cancel()
-	if exit := <-done; exit != 0 {
+	if exit := monitorTestEvent(t, nil, done); exit != 0 {
 		t.Fatal("continued operator failed joined cancellation", exit)
 	}
 }

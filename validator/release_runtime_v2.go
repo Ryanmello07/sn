@@ -204,7 +204,7 @@ func (self *releaseRuntimeV2) operator(ctx context.Context, expected AttemptCutV
 	return AttemptSettlementV2OperatorOptions{Expected: expected, Policy: replayPolicy, Bounds: bounds.Cut, Measurement: AttemptCutV2MeasurementOptions{
 		ExpectedConfig: ReleaseStatsConfig{AMin: self.cfg.Policy.Verify.ReliabilityAMin, AlphaNumerator: releasePoolAlphaNumerator, AlphaDenominator: releasePoolAlphaDenominator, LatRefMillis: releasePoolLatRefMillis},
 		MaxProviders:   bounds.MaxProviders, MaxEgressHashes: bounds.MaxEgressHashes, MaxFleetPrefixes: bounds.MaxFleetPrefixes,
-		Replay: AttemptCutV2ReplayOptions{Bounds: bounds.Replay, ScratchDirectory: path, ServerKeys: self.history.keys[expected.Identity.NoID], ReadMetadata: reader.ReadMetadata, OpenData: reader.OpenData}}}, nil
+		Replay: AttemptCutV2ReplayOptions{Bounds: bounds.Replay, ScratchDirectory: path, ServerKeys: self.history.keys[expected.Identity.NoID], ReadMetadata: reader.ReadMetadata, OpenData: reader.OpenData, origin: reader.endpoint.String(), prefetch: attemptStreamV2PrefetchDepth}}}, nil
 }
 
 func (self *releaseRuntimeV2) authority(ctx context.Context, contexts map[uint64]AttemptCutV2Context, purpose string) (AttemptSettlementV2Options, error) {
@@ -668,5 +668,8 @@ func (self *releaseRuntimeV2) refreshServerKeys(ctx context.Context) error {
 			self.history.keys[noId][version] = bytes.Clone(key)
 		}
 	}
+	// Cuts verified under an added version reach the startup verified
+	// progress record, so the record names that version before them.
+	releaseStartupVerifiedFrom(ctx).observeServerKeys(self.history.keys)
 	return nil
 }

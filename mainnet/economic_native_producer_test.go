@@ -78,6 +78,44 @@ func nativeProducerTestHeader(t *testing.T, encoded string, expected historicalR
 	return result, uint64(header.Number)
 }
 
+// The Rust original appends pallet 7/event 250. Independently round-trip
+// matching metadata so the public path decodes its actual event bytes too.
+func nativeProducerTestMetadata(t *testing.T) (*types.Metadata, string, string) {
+	t.Helper()
+	return economicEmissionTestMetadata(t, func(value *types.Metadata) {
+		used := map[types.U8]bool{}
+		for _, pallet := range value.AsMetadataV14.Pallets {
+			used[pallet.Index] = true
+		}
+		var replacement types.U8
+		for index := 0; index < 256; index++ {
+			if !used[types.U8(index)] {
+				replacement = types.U8(index)
+				break
+			}
+		}
+		for index := range value.AsMetadataV14.Pallets {
+			pallet := &value.AsMetadataV14.Pallets[index]
+			if pallet.Name != "SubtensorModule" {
+				if pallet.Index == 7 {
+					pallet.Index = replacement
+				}
+				continue
+			}
+			pallet.Index = 7
+			events := value.AsMetadataV14.EfficientLookup[pallet.Events.Type.Int64()]
+			for variant := range events.Def.Variant.Variants {
+				item := &events.Def.Variant.Variants[variant]
+				if item.Name == "IncentiveAlphaEmittedToMiners" {
+					item.Index = 250
+				} else if item.Index == 250 {
+					t.Fatal("fixture event 250 is already occupied")
+				}
+			}
+		}
+	})
+}
+
 type nativeProducerPublicFixture struct {
 	ctx                  context.Context
 	source               *economicEmissionFixture
@@ -163,40 +201,7 @@ func nativeProducerPublicFixtureWithTreasury(t *testing.T, continuous bool, feeP
 	source := newEconomicEmissionFixture(t)
 	source.policy.Network.NativeChain = "fixture-mainnet"
 	source.chain.action.Scope.NativeChain = "fixture-mainnet"
-	// The Rust original appends pallet 7/event 250. Independently round-trip
-	// matching metadata so the public path decodes its actual event bytes too.
-	metadata, metadataHex, metadataHash := economicEmissionTestMetadata(t, func(value *types.Metadata) {
-		used := map[types.U8]bool{}
-		for _, pallet := range value.AsMetadataV14.Pallets {
-			used[pallet.Index] = true
-		}
-		var replacement types.U8
-		for index := 0; index < 256; index++ {
-			if !used[types.U8(index)] {
-				replacement = types.U8(index)
-				break
-			}
-		}
-		for index := range value.AsMetadataV14.Pallets {
-			pallet := &value.AsMetadataV14.Pallets[index]
-			if pallet.Name != "SubtensorModule" {
-				if pallet.Index == 7 {
-					pallet.Index = replacement
-				}
-				continue
-			}
-			pallet.Index = 7
-			events := value.AsMetadataV14.EfficientLookup[pallet.Events.Type.Int64()]
-			for variant := range events.Def.Variant.Variants {
-				item := &events.Def.Variant.Variants[variant]
-				if item.Name == "IncentiveAlphaEmittedToMiners" {
-					item.Index = 250
-				} else if item.Index == 250 {
-					t.Fatal("fixture event 250 is already occupied")
-				}
-			}
-		}
-	})
+	metadata, metadataHex, metadataHash := nativeProducerTestMetadata(t)
 	source.chain.metadata, source.chain.metadataHex = metadata, metadataHex
 	source.policy.Runtime.RuntimeMetadataHash = metadataHash
 	source.policy.Runtime.RuntimeSourceCommit = nativeExecutionRuntimeSource(treasury)
@@ -241,6 +246,11 @@ func nativeProducerPublicFixtureWithTreasury(t *testing.T, continuous bool, feeP
 	source.incentive(t, 101, 25, amounts...)
 	if allocationCount > 2 {
 		source.policy.MaximumUids = uint16(allocationCount)
+		// The incentive event's vector has one slot per registered UID, so
+		// the RPC context registers the census the original epoch emits.
+		for _, number := range []uint64{parentNumber, childNumber} {
+			source.set(t, number, "SubnetworkN", binary.LittleEndian.AppendUint16(nil, uint16(allocationCount)))
+		}
 	}
 	source.chain.storageKVs[runtimeCodeStorageKey] = job.RuntimeCodeHex
 	ctx, filePolicy, files := nativeProducerTestFiles(t, nil)

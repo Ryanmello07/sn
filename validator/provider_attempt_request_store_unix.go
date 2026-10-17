@@ -6,10 +6,36 @@ package validator
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 
+	"github.com/urfoundation/sn/protocol"
 	"github.com/urnetwork/connect/durablesys"
+	"github.com/urnetwork/connect/durablevolume"
 )
+
+// The request budget counts exactly four owner attributes on the ledger root.
+// A fresh native journal, SDK work outbox or successor-members owner may share
+// that root and attach its own there, outside the budget, so a request owner
+// refuses a root carrying any other attribute in the owner namespace.
+func checkProviderAttemptRequestRootAttributes(root *os.File) error {
+	raw := make([]byte, 64*1024)
+	n, err := durablesys.ListAttributes(int(root.Fd()), raw)
+	if err != nil {
+		return err
+	}
+	for _, name := range strings.Split(string(raw[:n]), "\x00") {
+		switch name {
+		case attemptLedgerCustodyAttribute, durablevolume.PreparationAttribute, durablevolume.RootGenerationAttribute, ProviderAttemptRequestAttribute:
+			continue
+		}
+		if strings.HasPrefix(name, "user.urnetwork.") {
+			return errors.Join(protocol.ErrProviderAttemptsCapacity, fmt.Errorf("provider request root also carries %s outside its attribute budget", name))
+		}
+	}
+	return nil
+}
 
 func readProviderAttemptRequestAttribute(file *os.File) ([]byte, bool, error) {
 	raw := make([]byte, 4096)

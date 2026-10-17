@@ -2,6 +2,26 @@
 set -euo pipefail
 
 sn_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# pinned, the default, checks every checkout's provenance before and after the
+# module checks. local, the aggregate gate's local dependency mode, keeps the
+# module inventory and tidy checks over the working checkouts as they are, and
+# never reads the vault checkout.
+dependency_mode=pinned
+if [[ "${1:-}" == --dependency-mode ]]; then
+  if (( $# < 2 )); then
+    echo 'source freeze --dependency-mode needs pinned or local' >&2
+    exit 2
+  fi
+  dependency_mode="$2"
+  shift 2
+fi
+case "$dependency_mode" in
+  pinned | local) ;;
+  *)
+    echo "source freeze dependency mode must be pinned or local: $dependency_mode" >&2
+    exit 2
+    ;;
+esac
 workspace="${1:-$(dirname "$sn_repo")}"
 
 release_repos=(sn server connect sdk glog goidenticons proxy userwireguard warp gvisor vault xops config)
@@ -26,7 +46,6 @@ live_modules=(
   userwireguard
   warp
   xops/echo
-  xops/router
 )
 
 # These modules are outside SN release qualification: no release build links
@@ -110,7 +129,15 @@ normalize_github_origin() {
   printf 'github.com/%s\n' "$slug"
 }
 
+checkout_repos=()
 for repo in "${release_repos[@]}"; do
+  if [[ "$dependency_mode" == local && "$repo" == vault ]]; then
+    continue
+  fi
+  checkout_repos+=("$repo")
+done
+
+for repo in "${checkout_repos[@]}"; do
   if [[ ! -e "$workspace/$repo/.git" ]]; then
     echo "release repository is missing or not a Git checkout: $workspace/$repo" >&2
     exit 1
@@ -175,10 +202,14 @@ snapshot_release_repositories() {
 
 # Establish clean, canonical, freshly fetched sources before executing any
 # Go toolchain input.
-initial_release_snapshot="$(snapshot_release_repositories true)"
+if [[ "$dependency_mode" == pinned ]]; then
+  initial_release_snapshot="$(snapshot_release_repositories true)"
+else
+  echo 'source freeze: local mode checks the module inventory and tidiness of the working checkouts, not their provenance' >&2
+fi
 
 discovered_modules="$({
-  for repo in "${release_repos[@]}"; do
+  for repo in "${checkout_repos[@]}"; do
     tracked_files="$(git -C "$workspace/$repo" ls-files --cached)"
     while IFS= read -r tracked_file; do
       if [[ "$tracked_file" == go.mod ]]; then
@@ -192,7 +223,11 @@ discovered_modules="$({
 expected_modules="$(printf '%s\n' "${live_modules[@]}" "${non_release_modules[@]}" "${fork_modules[@]}" | LC_ALL=C sort -u)"
 if [[ "$discovered_modules" != "$expected_modules" ]]; then
   echo "release Go module inventory differs from its reviewed classification" >&2
-  diff -u <(printf '%s\n' "$expected_modules") <(printf '%s\n' "$discovered_modules") >&2 || true
+  # Here-strings, which bash writes itself, not process substitutions, which
+  # it never waits for: a substitution whose shell is still exiting at the
+  # exit below would be adopted by a release gate's subreaper. That window
+  # lies inside the substitution's own exit, so no test can force it.
+  diff -u /dev/fd/3 /dev/fd/4 3<<<"$expected_modules" 4<<<"$discovered_modules" >&2 || true
   exit 1
 fi
 
@@ -206,11 +241,15 @@ done
 
 # Emit one canonical snapshot on stdout. The second validation detects source
 # changes caused by the toolchain while the enclosing gate repeats the
-# fetched check after all long-running tests.
+# fetched check after all long-running tests. Local mode emits none.
+if [[ "$dependency_mode" == local ]]; then
+  exit 0
+fi
 final_release_snapshot="$(snapshot_release_repositories false)"
 if [[ "$final_release_snapshot" != "$initial_release_snapshot" ]]; then
   echo "release repository snapshot changed during source-freeze validation" >&2
-  diff -u <(printf '%s\n' "$initial_release_snapshot") <(printf '%s\n' "$final_release_snapshot") >&2 || true
+  # Here-strings, as for the module inventory above.
+  diff -u /dev/fd/3 /dev/fd/4 3<<<"$initial_release_snapshot" 4<<<"$final_release_snapshot" >&2 || true
   exit 1
 fi
 printf '%s\n' "$final_release_snapshot"

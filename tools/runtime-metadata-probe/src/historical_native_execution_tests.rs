@@ -468,7 +468,7 @@ fn fixture_with_treasury(
     } else if upgrade.is_some() {
         wasm_with_heap(&declarations, &body, 128000)
     } else if fees.is_some() {
-        wasm_with_heap(&declarations, &body, 60000)
+        wasm_with_heap(&declarations, &body, fee_census_tests::HEAP)
     } else {
         wasm(&declarations, &body)
     };

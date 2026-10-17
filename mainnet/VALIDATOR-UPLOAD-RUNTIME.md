@@ -59,6 +59,32 @@ existing bounded cache/lease freshness. Original activation consent does not
 replace current eligibility, account authentication, object binding or quota
 checks.
 
+The refresh no longer fails silently in four places:
+
+- A refresh that finishes after its own freshness window fails with the head
+  ages and duration it measured. It does not publish an already expired state.
+- An activation that is not admitted records its cause, and the refused request
+  carries that cause.
+- An activation that an earlier refresh admitted is checked again even when
+  discovery omits it. Its finalized historical proof is reused after a
+  canonical-anchor recheck, so later refreshes need no archive state for it.
+- If only that activation's reads fail, it keeps the expiry of its last complete
+  verification. Observed ineligibility, including a hotkey with no current
+  registration, a later activation of the same owner, whether authenticated or
+  only discovered, or a changed anchor still retires it at once.
+
+Publication order includes the canonical event index for rotations within one
+block. A discovered successor retires the prior generation even when the prior
+generation reauthenticates successfully and the successor's history is
+temporarily unavailable; only the successor's complete proof can admit it.
+An absent hotkey mapping retires an entry only after the native genesis, pinned
+header, canonical hash, finalized coverage and repeated absence agree. A failed
+or contradictory chain read is not an authenticated deregistration.
+
+Each refresh prints one line with its outcome, duration, head ages and the
+activations it did not admit. The next refresh starts early enough to publish
+before the current state expires.
+
 Local regressions join the ordinary upload signer, real server-used admission
 constructor/refresh/lease, signed synthetic schema-3 config, real native storage
 decoding and a local EVM HTTP fixture. Three controls restore the former decisions:

@@ -165,7 +165,9 @@ Collect these inputs before requesting signatures:
     1-of-1, owner `0x16C372dbBb24cd8473345ab13971E40814C8658F` on the same Ledger
     (owner decision, October 7);
   - commitment oracle `0x56Ddfb8f3E267E98EfDa690110645f31365BCF03`, a service key
-    in `vault/main/sn.yml`. No mainnet oracle service exists yet.
+    in `vault/main/sn.yml`. Its service, `commitment-oracle`, is built but not yet
+    deployed ([commitment oracle](#commitment-oracle)); until it runs, nothing
+    mirrors fleet commitments and every `bindFleetMember` reverts `StaleCommitment()`.
 - Each operator's distinct EVM `depositSigner` and `rootSigner`, native validator
   identities, signed producer configurations and durable service locations.
 - Dedicated native treasury recipient hotkeys and observed UID generations.
@@ -835,6 +837,151 @@ durable-volumes declaration, all on snow's root filesystem
 
 For the readiness receipt, retain the finalized root registration, the take
 journal entries, the `take status` output and the service's progress file.
+
+## Commitment oracle
+
+`bindFleetMember` accepts a fleet binding only against the hotkey's commitment as
+mirrored into the coordinator by `mirrorCommitment`, and only the active
+commitment oracle may call that (`evm/src/STCoordinator.sol`). Miners publish
+their fleet commitment natively (`Commitments.set_commitment` with one
+`Raw40` field: the ASCII tag `urfleet1` then the 32-byte manifest commitment
+hash); something must copy each finalized commitment to chain 964. That is the
+`commitment-oracle` service (`cli/commitment-oracle`, library
+`commitmentoracle/`).
+
+**Status, 2026-10-14: built, not deployed.** No xops unit, warp alert or config
+key exists for it yet, the oracle `0x56Dd…CF03` holds no TAO, and at finalized
+block 9,286,264 no commitment was mirrored on mainnet (support items 7906 and
+7916). A read-only
+`--dry-run --once` against the public lite and archive endpoints found the four
+fleet-format SN25 commitments of factury's
+`support/plans/sn25-commitment-mirror-runbook.md` with exactly its arguments,
+at a gas estimate of about 107,500.
+
+**Fleet commitment format, 2026-10-15.** A one-field `Sha256` commitment does
+not say whose it is. The validator's source commitment
+(`crv4/source_commitment.go`) writes exactly that from the validator hotkey,
+and the validator refuses any coordinator mirror of its source hotkey
+(`validator/release_submit_v2.go` `checkSourceRoleV2`). On 2026-10-15 a manual
+mirror of the SN25 validator's source commitment (UID 1, tx
+`0x4bb7941d…222b5`) halted its steering. The interim fix excluded hotkeys with a
+validator permit or without a standalone fleet `set_commitment`; that was
+heuristic (a permit can lapse, it dropped valid fleets, and one unreadable role
+stopped all mirroring). Fleet commitments now have their own format: **exactly
+one `Data::Raw40` field holding `urfleet1` followed by the 32-byte hash**
+(`crv4.EncodeFleetCommitmentInfo`, 42 bytes of `CommitmentInfo`; `Raw40` is
+`Data` variant 41 and `Sha256` is 131 in the runtime-478 metadata, and
+`pallet_commitments` `types.rs` is unchanged in runtime 479). The oracle
+mirrors **only** that format and extracts the hash; the contract is unchanged.
+It never mirrors a one-field `Sha256` commitment, whether a validator's source
+commitment or a fleet published before the tag, and it reads no role, permit or
+block body, so no such read can stop it. The validator source format is
+unchanged, and its writer refuses to produce the fleet format. Don't mirror by
+hand.
+
+**Republish untagged fleets.** A fleet published before the tag is not mirrored
+again. A fleet already mirrored keeps binding through `provider fleet bind`
+until its mirrored commitment ages past `commitmentMaxAgeBlocks` (the three
+fleets already mirrored stay valid until about block 9,360,673), because
+`bindFleetMember` reads only the coordinator's mirrored record. Before then,
+each miner runs `provider fleet publish` with a release that writes the tagged
+format; the oracle mirrors that new commitment. On the mainnet path a tagged
+publish is a new recovery intent, so an earlier finalized untagged publish
+does not make it report "already finalized". An unresolved untagged publish is
+first finished from its original signed bytes, verified with the legacy
+decoder and closed with a "republish in the tagged format" outcome, so it no
+longer blocks publish, bind or revoke. `provider fleet status` reports an
+untagged native commitment as needing a republish.
+
+### What it does
+
+Every `--poll_interval` (30 s) it runs one cycle:
+
+1. At the EVM finalized block it reads `activeCommitmentOracle()`. If that is not
+   the key's address it sends nothing. At startup it also checks the RPC's chain
+   id and the coordinator's `netuid()`, and refuses to start on any mismatch,
+   including in a dry run.
+2. It reconciles its own unfinished transaction, if any, and signs nothing new
+   while one is in flight.
+3. At the native finalized head it lists `Commitments.CommitmentOf(netuid, *)`
+   and keeps only entries that are exactly one `Raw40` field of `urfleet1` and
+   a nonzero hash (`crv4.DecodeFleetCommitmentRegistrationWithBlockV454`);
+   one-field `Sha256` entries (validator sources and untagged fleets), other
+   tags or lengths and multi-field entries are ignored. The format alone
+   identifies a fleet: it reads no role or permit. `bindFleetMember` itself
+   checks the hotkey's live UID. So a tagged commitment from a deregistered
+   hotkey can now be mirrored; that costs only gas, at most `--max_sends`
+   mirrors per cycle, and the mirror can never be bound. It skips a commitment that `mirroredCommitments(hotkey)`
+   at the EVM finalized block already holds (or holds newer), and one older than
+   `policyAt(currentEpoch()).commitmentMaxAgeBlocks`, which could no longer be
+   bound.
+4. For the rest it derives `mirrorCommitment(hotkey, commitmentHash,
+   commitmentBlock, substrateHash(commitmentBlock))` from that same finalized
+   state: `LastCommitment` must name the registration's block, and
+   `chain_getBlockHash(commitmentBlock)` must be a header of that height. Every
+   additional `--substrate` endpoint must return the same commitment bytes and
+   block hash. The block hash is the Substrate hash, never an EVM hash.
+5. It mirrors nearest expiry first, at most `--max_sends` per cycle, one
+   transaction at a time: an `eth_call` preflight from the oracle address, an
+   estimate plus 20% no higher than `--max_gas_limit` (250,000), a legacy gas
+   price no higher than `--max_gas_price_gwei` (20), a balance check, and a nonce
+   taken only when the finalized, latest and pending nonces agree, so a
+   transaction it did not send (such as a manual `cast send`) makes it wait. The
+   signed transaction is written to `<state_dir>/mirror-sends/<hotkey>-<block>.json`
+   before its first broadcast. A mirror is done only when its receipt is
+   finalized and canonical and `mirroredCommitments` matches. A restart
+   rebroadcasts the recorded bytes rather than signing again; a recorded
+   transaction whose nonce another transaction consumed, or that reverted, is set
+   aside as `.dropped-<nonce>` and the commitment is re-evaluated from chain state.
+   A preflight `StaleCommitment` (already mirrored at latest) is skipped.
+6. Failed cycles back off exponentially to `--max_backoff` (10 min) and redial
+   after three in a row.
+
+It never takes a value from anywhere but finalized chain state, and never logs
+key material: the key file must be a regular, owner-only file, and errors name
+only its path.
+
+### Command
+
+```text
+commitment-oracle run --netuid=25 --chain_id=964 \
+  --coordinator=0xC18925925E2B7bb9059b7d696b8c92762AE86406 \
+  --state_dir=<path> --substrate=<ws url> [--substrate=<ws url>]... \
+  --rpc=<rpc url>... --oracle_key_file=<path> --metrics_file=<path>
+```
+
+`--dry-run` reads, preflights and estimates every pending mirror and logs the
+exact call and calldata it would send, without signing; with
+`--oracle_address=0x56Dd…CF03` instead of the key file it needs no key. `--once`
+runs a single cycle and exits non-zero if it failed.
+
+### Health gauges
+
+After each cycle it writes `--metrics_file` atomically (mode 0644), a
+Prometheus textfile for the same Fluent Bit textfile input the validator's
+health gauges use. Every name starts with `urnetwork_sn_commitment_oracle_`:
+`sample_timestamp_seconds`, `process_start_timestamp_seconds`, `dry_run`,
+`oracle_active`, `coordinator_paused`, `last_cycle_ok`, `cycle_failures`,
+`evm_finalized_block`, `native_finalized_block`, `native_lag_blocks` (finalized
+blocks not yet covered by a complete cycle), `commitments`, `fleet_commitments`,
+`fleet_commitments_mirrored`, `fleet_commitments_expired`,
+`fleet_commitments_conflicting`, `fleet_commitments_inconsistent`,
+`legacy_sha256_commitments` (one-field `Sha256` commitments, never mirrored:
+validator source commitments and untagged fleets that must republish),
+`pending_unmirrored`, `pending_min_blocks_to_expiry`, `in_flight`,
+`in_flight_age_seconds`, `oracle_balance_wei`, `oracle_balance_low` (1 below
+`--low_balance_wei`, default 0.01 TAO, or when unknown),
+`low_balance_threshold_wei`, `mirrors_sent`, `last_success_timestamp_seconds`,
+`last_mirror_timestamp_seconds` and `last_error_timestamp_seconds`.
+
+### Deploying it
+
+Deployment belongs in xops, on snow next to the validator, with the key from
+`vault/main/sn.yml` (`commitment_oracle.address`, `commitment_oracle.private_key`)
+provisioned as an owner-only host file. The exact unit, settings and alerts ops
+must add are in factury's `support/plans/sn25-commitment-mirror-runbook.md`
+(step 6). Fund the oracle first: at 5 gwei a mirror costs at most about
+0.00065 TAO with the 20% headroom.
 
 ## Assemble and review the readiness receipt
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -305,9 +304,10 @@ func startMonitorOperatorTest(t *testing.T, fixture *monitorServicesFixture, url
 		<-ctx.Done()
 		return false
 	}
+	stderr := monitorTestWorkerStderr(t)
 	go func() {
 		defer close(done)
-		done <- runMainWithMonitorHooks(ctx, args, sink, io.Discard, fixture.clock.now, hooks)
+		done <- runMainWithMonitorHooks(ctx, args, sink, stderr, fixture.clock.now, hooks)
 	}()
 	t.Cleanup(func() { joinMonitorTestWorker(t, cancel, done) })
 	return cancel, done, sink, resume
@@ -339,14 +339,12 @@ func TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage(t *testin
 	database.Intent(t, 1, "uncertain", 1, database.Now.Add(-time.Hour))
 	url, entered, left := monitorServicesBlockedChain(t)
 	cancel, done, sink, resume := startMonitorOperatorTest(t, fixture, url, monitorServiceHooks{})
-	<-entered
-	event := <-sink.events
+	monitorTestEvent(t, done, entered)
+	event := monitorTestEvent(t, done, sink.events)
 	if event.State == nil || event.State.ReadStatus != "observed" || event.State.Record.UncertainIntents != 1 || event.State.Transactions.Latest == nil {
-		cancel()
-		<-done
 		t.Fatal("public command did not observe actual operator journal", event)
 	}
-	if role := <-sink.validators; role != "alpha" {
+	if role := monitorTestEvent(t, done, sink.validators); role != "alpha" {
 		t.Fatal("operator read suppressed validator peer", role)
 	}
 	txId := event.State.Transactions.Latest.Id
@@ -355,24 +353,24 @@ func TestMonitorOperatorCommandReadsProductionJournalAndRestartsOutage(t *testin
 		t.Fatal(err)
 	}
 	fixture.clock.seconds.Add(1)
-	resume <- struct{}{}
-	event = <-sink.events
+	resumeMonitorTestWorker(t, done, resume)
+	event = monitorTestEvent(t, done, sink.events)
 	if event.State.ReadStatus != "unavailable" || event.State.Read.Latest == nil || event.State.Transactions.Latest.Id != txId || !event.State.Transactions.Latest.RecoveredAt.IsZero() {
 		t.Fatal("source outage erased pending incident", event)
 	}
 	readId := event.State.Read.Latest.Id
 	cancel()
-	if exit := <-done; exit != 0 {
+	if exit := monitorTestEvent(t, nil, done); exit != 0 {
 		t.Fatal("command cancellation failed", exit)
 	}
-	<-left
+	monitorTestEvent(t, nil, left)
 	cancel, done, sink, _ = startMonitorOperatorTest(t, fixture, url, monitorServiceHooks{})
-	event = <-sink.events
+	event = monitorTestEvent(t, done, sink.events)
 	if event.State.Read.Latest.Id != readId || event.State.Read.Latest.Observations != 2 || event.State.Transactions.Latest.Id != txId {
 		t.Fatal("public command restart erased incident continuity", event)
 	}
 	cancel()
-	if exit := <-done; exit != 0 {
+	if exit := monitorTestEvent(t, nil, done); exit != 0 {
 		t.Fatal("restarted command did not join", exit)
 	}
 }
@@ -400,18 +398,18 @@ func TestMonitorOperatorCredentialFenceAndPublicationAmbiguity(t *testing.T) {
 		return err
 	}}
 	cancel, done, sink, resume := startMonitorOperatorTest(t, fixture, url, hooks)
-	first := <-sink.events
+	first := monitorTestEvent(t, done, sink.events)
 	if first.Publication != "retrying" || !first.State.PublicationLastSuccessAt.IsZero() {
 		t.Fatal("ambiguous metrics write claimed publication", first)
 	}
 	fixture.clock.seconds.Add(1)
-	resume <- struct{}{}
-	second := <-sink.events
+	resumeMonitorTestWorker(t, done, resume)
+	second := monitorTestEvent(t, done, sink.events)
 	if second.Publication != "published" || second.State.PublicationLastSuccessAt.IsZero() {
 		t.Fatal("owner failed to retry complete publication", second)
 	}
 	cancel()
-	if exit := <-done; exit != 0 {
+	if exit := monitorTestEvent(t, nil, done); exit != 0 {
 		t.Fatal("publication command did not join", exit)
 	}
 }

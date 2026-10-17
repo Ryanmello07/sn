@@ -38,6 +38,7 @@ fi
 
 expected_go_ethereum_version="v1.17.0"
 expected_abigen_output="abigen version 1.17.0-stable"
+expected_abigen_release_output="abigen version 1.17.0-stable-0cf3d3ba"
 go_ethereum_version=""
 while read -r first second third _; do
     if [[ "$first" == "github.com/ethereum/go-ethereum" ]]; then
@@ -82,8 +83,8 @@ if ! actual_abigen_output="$("$abigen" --version 2>&1)"; then
     echo "could not read abigen version from $abigen: $actual_abigen_output" >&2
     exit 1
 fi
-if [[ "$actual_abigen_output" != "$expected_abigen_output" ]]; then
-    echo "wrong abigen version at $abigen: got '$actual_abigen_output', want '$expected_abigen_output'" >&2
+if [[ "$actual_abigen_output" != "$expected_abigen_output" && "$actual_abigen_output" != "$expected_abigen_release_output" ]]; then
+    echo "wrong abigen version at $abigen: got '$actual_abigen_output', want '$expected_abigen_output' or '$expected_abigen_release_output'" >&2
     echo "install it with: go install github.com/ethereum/go-ethereum/cmd/abigen@$expected_go_ethereum_version" >&2
     exit 1
 fi

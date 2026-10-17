@@ -895,10 +895,11 @@ func newClaimV2ManyDueTest(t *testing.T, due int) (*claimV2TestChain, *claimV2Te
 // queue, whose durable head holds 16 MiB; at depth 29 about 62 claims fill
 // it, and a batch of all of them could never be checkpointed, so each pass
 // would prepare it again and nothing would be sent. The daemon batches at
-// most onchain.ClaimBatchMaxClaims due units, in due order: 120 due accounts
-// go out as batches of 32, 32, 32 and 24, and every one is paid.
+// most onchain.ClaimBatchMaxClaims due units, in due order: 66 due accounts
+// go out as two full batches of 32 and then the other 2, and every one is
+// paid.
 func TestClaimV2BatchHoldsAtMostTheCap(t *testing.T) {
-	const due = 120
+	const due = 66
 	chain, daemon := newClaimV2ManyDueTest(t, due)
 	// Due units of equal deadlines are in key order, which orders their
 	// indexes as text.
@@ -907,7 +908,7 @@ func TestClaimV2BatchHoldsAtMostTheCap(t *testing.T) {
 		order[i] = fmt.Sprint(i + 1)
 	}
 	sort.Strings(order)
-	for pass, size := range []int{32, 32, 32, 24} {
+	for pass, size := range []int{32, 32, 2} {
 		daemon.step(false)
 		sends := chain.sent()
 		if len(sends) != pass+1 {

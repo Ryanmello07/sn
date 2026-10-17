@@ -347,14 +347,29 @@ func TestMonitorNativeArchivePublicRefusesOmittedAndForgedPrefix(t *testing.T) {
 			t.Fatal(err)
 		}
 		before := mainnetNamespaceTest(t, filepath.Dir(f.checkpoint))
-		run := f.native.start(t, monitorServiceHooks{wait: func(context.Context, string, time.Duration) bool { return false }})
+		refused := make(chan int, 1)
+		run := f.native.start(t, monitorServiceHooks{wait: func(context.Context, string, time.Duration) bool { return false }, afterWorker: func(role string, exit int) {
+			if role == f.native.policy.Role {
+				refused <- exit
+			}
+		}})
+		// The refused owner joins on its own. The command also joins the chain
+		// role, whose first sample syncs durable write probes: a sample's bound.
 		select {
-		case <-run.done:
-			if run.exit != 3 || !strings.Contains(run.diagnostic.String(), "monitor native economic admission") {
-				t.Fatal("public reopen admitted unproved archive prefix", fault, run.exit, run.diagnostic.String())
+		case exit := <-refused:
+			if exit != 3 {
+				t.Fatal("public reopen admitted unproved archive prefix", fault, exit)
 			}
 		case <-time.After(10 * time.Second):
 			t.Fatal("refused archive owner did not join", fault)
+		}
+		select {
+		case <-run.done:
+			if run.exit != 3 || !strings.Contains(run.diagnostic.String(), "monitor "+f.native.policy.Role+" admission:") {
+				t.Fatal("public reopen admitted unproved archive prefix", fault, run.exit, run.diagnostic.String())
+			}
+		case <-time.After(60 * time.Second):
+			t.Fatal("public command did not join after its independent chain sample", fault)
 		}
 		run.stop(t)
 		if len(run.sink.economics) != 0 {

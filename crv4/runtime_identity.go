@@ -59,7 +59,16 @@ type AuthenticatedRuntimeArtifact struct {
 // A block-view callback cannot manufacture or transfer caller-approved
 // authentication by filling exported artifact fields or swapping metadata.
 func ValidateRuntimeArtifactOwnerContext(ctx context.Context, chain *Chain, artifact AuthenticatedRuntimeArtifact) error {
-	if ctx == nil || chain == nil || chain.API == nil || chain.API.Client == nil || chain.ProvisionalRuntimeCompatibilityEnabled() || artifact.BlockHash == (types.Hash{}) || artifact.CompatibilityProfile != "" || !artifact.authenticationProof.matchesIdentity(chain, artifact) {
+	if chain.ProvisionalRuntimeCompatibilityEnabled() {
+		return errors.New("runtime view needs this owner's exact authenticated block artifact")
+	}
+	return validateRuntimeArtifactReadOwnerContext(ctx, chain, artifact)
+}
+
+// Reads keep a strict proof's exact owner, block and transport on a
+// provisional chain too: an approved successor never revokes reviewed history.
+func validateRuntimeArtifactReadOwnerContext(ctx context.Context, chain *Chain, artifact AuthenticatedRuntimeArtifact) error {
+	if ctx == nil || chain == nil || chain.API == nil || chain.API.Client == nil || artifact.BlockHash == (types.Hash{}) || artifact.CompatibilityProfile != "" || !artifact.authenticationProof.matchesIdentity(chain, artifact) {
 		return errors.New("runtime view needs this owner's exact authenticated block artifact")
 	}
 	if err := ctx.Err(); err != nil {

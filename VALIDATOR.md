@@ -976,6 +976,15 @@ Before crediting any score to a UID, the validator independently rechecks the ca
 payload, commitment, active epoch interval and current UID. Any mismatch contributes
 zero head weight; it is never guessed.
 
+The coordinator checks that the binding's client key signed it, not that the key is the
+client's: any registered hotkey can bind any `client_id` under a key it holds, and a
+key rotation leaves a fleet's binding on the old key. So a binding also counts only
+when its `client_key` is the measured client's own key, as the operator's signed key
+history states it at the decision boundary. A binding signed for any other key
+contributes zero head weight and its provider is scored exactly as an unbound one. The
+measurement row keeps the coordinator key beside that signed key, so the exclusion
+replays from retained evidence, and the attempt goes on.
+
 **Binding ⊥ quality.** The binding proves *ownership* only; the trail (§1–§7) proves
 *quality*. They are kept strictly separate — identity says *whose* UID this is, the
 measurement says *how good* it is — and composed, never merged. Invalid bindings never
@@ -1035,9 +1044,11 @@ and cumulative conviction by **summing finalized `Deposit` and `ConvictionAdded`
 NO's signed payout artifact for the previous epoch (`total_usage_bytes`, `total_users`), and
 reads the two‑component `rate(tier_n)` from the **signed policy's tier→rate schedule**
 (`WHITEPAPER.md` §7.3). The deposit must equal the artifact's usage priced at the NO's own
-tier; the weight prices the same usage at the conviction‑zero tier, so a NO that staked into
-a lower tier posts less α for the same usage and earns the same weight (the stake is a
-discount). Under the zero‑price launch mode (`zero_rate_action: equal_demand`, every rate 0)
+tier; the weight prices the same usage at the conviction‑zero tier, so below the per‑epoch cap a
+NO that staked into a lower tier posts less α for the same usage and earns the same weight (the
+stake is a discount). A capped NO's demand is truncated to `cap × rate(0) / rate(tier_n)` with one
+priced component, so at the cap a lower tier raises its weight. Under the zero‑price launch
+mode (`zero_rate_action: equal_demand`, every rate 0)
 no deposit is required or audited: each active NO's audit is recorded as `zero_price` /
 `zero_price_no_deposit_required` from chain state alone, every pool's implied demand is
 exactly 1, and `Q_n` alone steers the tail; the head, θ and the cede rule are unchanged.

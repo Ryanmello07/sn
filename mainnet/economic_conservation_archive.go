@@ -295,6 +295,26 @@ func economicConservationReceiptArchivable(receipt economicConservationReceipt) 
 	return receipt.ClaimId != "" && monitorClaimPaymentKnown(&receipt.Observation)
 }
 
+// A successor archive carries every cold head of its predecessor, which the
+// retire steps then extend. Compaction recomputes only the resources, cursors
+// and Claim heads, and retireFinality and retireWholeFees rebuild their heads
+// from the original's cold index.
+func (self *economicConservationArchive) carry(prior *economicConservationArchive) {
+	self.PrincipalRetained = prior.PrincipalRetained
+	self.PrincipalRetentions = slices.Clone(prior.PrincipalRetentions)
+	self.NativeApprovalHead = prior.NativeApprovalHead
+	self.PrincipalEffects = prior.PrincipalEffects
+	self.Yuma = prior.Yuma
+	self.FeeRevisionHead = prior.FeeRevisionHead
+	self.FeeRetirements, self.NativeFees = slices.Clone(prior.FeeRetirements), prior.NativeFees
+	self.Segments = slices.Clone(prior.Segments)
+	self.Counts, self.Amounts = prior.Counts, prior.Amounts
+	self.LastRenewalHash, self.LastRenewalOrdinal = prior.LastRenewalHash, prior.LastRenewalOrdinal
+	for pool, boundary := range prior.PoolBoundaries {
+		self.PoolBoundaries[pool] = boundary
+	}
+}
+
 // Pure compaction retains all active liabilities and exact source references.
 // Component summaries refer to this combined snapshot; their earlier prefix
 // is retained by the outer complete chain rather than a second owner catalog.
@@ -336,18 +356,7 @@ func compactEconomicConservationWithPrincipalRetention(ctx context.Context, poli
 	}
 	archive := &economicConservationArchive{Resources: resources, LastRenewalHash: policy.identityHash(), Native: original.Native.Cursor, Vault: original.Vault.Cursor, PoolBoundaries: map[string]economicEmissionBoundary{}, Amounts: economicConservationArchivedAmounts{Direct: "0", Tail: "0", Unrouted: "0", Collateral: "0"}}
 	if next.Archive != nil {
-		archive.PrincipalRetained = next.Archive.PrincipalRetained
-		archive.PrincipalRetentions = slices.Clone(next.Archive.PrincipalRetentions)
-		archive.NativeApprovalHead = next.Archive.NativeApprovalHead
-		archive.PrincipalEffects = next.Archive.PrincipalEffects
-		archive.FeeRevisionHead = next.Archive.FeeRevisionHead
-		archive.FeeRetirements, archive.NativeFees = slices.Clone(next.Archive.FeeRetirements), next.Archive.NativeFees
-		archive.Segments = slices.Clone(next.Archive.Segments)
-		archive.Counts, archive.Amounts = next.Archive.Counts, next.Archive.Amounts
-		archive.LastRenewalHash, archive.LastRenewalOrdinal = next.Archive.LastRenewalHash, next.Archive.LastRenewalOrdinal
-		for pool, boundary := range next.Archive.PoolBoundaries {
-			archive.PoolBoundaries[pool] = boundary
-		}
+		archive.carry(next.Archive)
 	}
 	if original.Renewal != nil {
 		archive.LastRenewalHash, archive.LastRenewalOrdinal = rootObjectHash(original.Renewal), original.Renewal.Ordinal

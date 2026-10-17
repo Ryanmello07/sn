@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/urnetwork/connect"
+
+	"github.com/urfoundation/sn/internal/durablesync"
 )
 
 // One published list. Snapshots are never mutated after publication.
@@ -321,11 +323,7 @@ func writeCache(path string, raw []byte) (returnErr error) {
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return err
 	}
-	parent, err := os.Open(directory)
-	if err != nil {
-		return err
-	}
-	return errors.Join(parent.Sync(), parent.Close())
+	return durablesync.SyncDir(directory)
 }
 
 func sha256Digest(raw []byte) string {
