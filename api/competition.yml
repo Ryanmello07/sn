@@ -143,7 +143,7 @@ paths:
         - name: include_staging
           in: query
           required: false
-          description: Include finalized fee-free staging epochs after their embargo lifts.
+          description: Include finalized legacy v1 fee-free staging epochs after their embargo lifts. Explicit v2 staging uses the versioned round result and reward event contracts, not this legacy winner projection.
           schema:
             type: boolean
             default: false
@@ -190,6 +190,8 @@ paths:
       tags: [Competition operator]
       summary: Generate the next pre-production staging epoch
       description: |
+        Legacy v1 staging only. Explicit v2 staging is created by the fenced
+        supervisor after source activation; this route cannot bypass it.
         Creates the next independently numbered staging epoch, beginning with
         epoch zero. Staging submissions exercise authenticated patch
         validation, immutable artifact retention, cache identity, the real
@@ -232,6 +234,8 @@ paths:
       tags: [Competition operator]
       summary: Close current staging admission and preserve its FIFO
       description: |
+        Legacy v1 staging only; explicit v2 staging retains its frozen admission
+        window and is closed/drained by the v2 supervisor, not this route.
         Atomically stops accepting submissions for the current open staging
         epoch without canceling accepted jobs. The evaluator continues in FIFO
         order until every accepted job is terminal, then automatically names
@@ -428,6 +432,9 @@ paths:
         Submitter only; legacy operators do not inherit this capability. Same
         canonical patch cache, fee agreement, FIFO and evaluator as v1. A v1
         round is rejected. Persist status_url exactly; never guess a job URL.
+        Explicit v2 staging rounds are fee-free, have zero evaluator takeover
+        margin, and use shadow reward decisions. They still require every
+        evaluation gate, nine replicates, and exact activated-source readiness.
       requestBody:
         required: true
         content:
@@ -484,6 +491,11 @@ paths:
         remain. Neither approved source carry-forward nor a receipt approves
         the current reward candidate. source_approval belongs to that candidate;
         source_decision describes the separately selected reviewed incumbent.
+        A staging result and each reward decision carry staging: true and
+        settlement_mode: shadow. Staging elects the best gate-passing entry
+        without a significance/improvement requirement; this does not approve
+        its source or authorize money movement. Use the advertised v2 contract,
+        not the legacy leaderboard, to reconcile provisional reward revisions.
       parameters:
         - {name: roundId, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
@@ -793,6 +805,10 @@ components:
       additionalProperties: false
       required: [round_id, environment, competition_id, season_id, epoch, sealed_at, publication_at, source_choice_at, policy_sha256, baseline_raw_score, takeover_margin, inventory_sha256, ranking_sha256, seal_sha256, terminal_counts, entries]
       properties:
+        staging:
+          type: boolean
+          default: false
+          description: Explicit fee-free staging mode bound into the seal digest; absent means historical production, not an inferred zero-margin mode.
         round_id: {type: string, format: uuid}
         environment: {type: string}
         competition_id: {type: string}
@@ -818,6 +834,10 @@ components:
       additionalProperties: false
       required: [round_id, environment, competition_id, season_id, revision, decision_sha256, seal_sha256, action, selected_job_id, reason_code, decided_at, settlement_policy_version, burn_policy_version, settlement_mode]
       properties:
+        staging:
+          type: boolean
+          default: false
+          description: True only for a mode-bound shadow staging decision; it cannot be replayed into a production reward inbox.
         round_id: {type: string, format: uuid}
         environment: {type: string}
         competition_id: {type: string}
@@ -971,6 +991,10 @@ components:
       additionalProperties: false
       required: [decision_mode, required_api_capability, seal, reward_revision, provisional_reward_winner, integrity_review, source_approval, decisions, integrity_reviews, settlement_status, settlement_receipts, incidents, invalidated]
       properties:
+        staging:
+          type: boolean
+          default: false
+          description: Must match the sealed round and every reward decision. A staging winner remains provisional and does not approve source.
         decision_mode: {$ref: "#/components/schemas/CompetitionDecisionMode"}
         required_api_capability: {$ref: "#/components/schemas/CompetitionRequiredCapability"}
         seal: {$ref: "#/components/schemas/CompetitionEvaluationSeal"}
@@ -990,6 +1014,20 @@ components:
       required: [target_round_id]
       description: Separately authorized reviewed source intent; public projection omits raw manifest and private Git refs.
       properties:
+        staging:
+          type: boolean
+          default: false
+          description: Immutable mode; staging source refs use only sim-latency-staging, never the production branches.
+        staging_round_window_seconds:
+          type: integer
+          minimum: 60
+          maximum: 604800
+          description: Frozen admission duration for explicit staging, omitted for production.
+        staging_preparation_seconds:
+          type: integer
+          minimum: 0
+          maximum: 57600
+          description: Frozen staging preparation delay; zero does not waive exact-source readiness or containment. Omitted for production and when zero.
         environment: {type: string}
         competition_id: {type: string}
         season_id: {type: string}
@@ -997,7 +1035,7 @@ components:
         expected_generation: {type: integer, format: int64}
         source_generation: {type: integer}
         target_epoch: {type: integer}
-        target_round_id: {type: string, format: uuid, description: Immutable reserved identity shared by readiness receipts and the later production round.}
+        target_round_id: {type: string, format: uuid, description: Immutable reserved identity shared by readiness receipts and the later round in the same explicit mode.}
         source_decision_digest: {$ref: "#/components/schemas/Sha256"}
         approved_patch_sha256: {$ref: "#/components/schemas/Sha256"}
         kind: {type: string}
@@ -1030,6 +1068,10 @@ components:
       additionalProperties: false
       required: [environment, competition_id, season_id, generation, target_round_id, role, actor_id, manifest_commit, manifest_sha256, source_lock_sha256, runtime_image_digest, qualification_sha256, ready, recorded_at]
       properties:
+        staging:
+          type: boolean
+          default: false
+          description: Must match the exact reserved source intent; a production acknowledgment cannot qualify staging or vice versa.
         environment: {type: string}
         competition_id: {type: string}
         season_id: {type: string}
@@ -1319,14 +1361,23 @@ components:
     CompetitionSeasonPolicy:
       type: object
       additionalProperties: false
+      description: Production policy remains six weekly $20 epochs. Explicit v2 staging freezes matching staging timing and a zero fee; a zero fee alone cannot select staging mode.
       required: [epoch_count, submission_window_seconds, preparation_window_seconds, submission_fee_usd]
+      oneOf:
+        - properties:
+            submission_fee_usd: {const: 20}
+            submission_window_seconds: {const: 604800}
+        - properties:
+            submission_fee_usd: {const: 0}
+            preparation_window_seconds: {maximum: 57600}
       properties:
         epoch_count:
           type: integer
           const: 6
         submission_window_seconds:
           type: integer
-          const: 604800
+          minimum: 60
+          maximum: 604800
         preparation_window_seconds:
           description: Time reserved for the same-round rebaseline before submissions open.
           type: integer
@@ -1334,8 +1385,8 @@ components:
           maximum: 604800
         submission_fee_usd:
           type: integer
-          const: 20
-          description: Fee collected exactly once by the Apex adapter for each admitted submission.
+          enum: [0, 20]
+          description: Production charges $20 exactly once per admitted submission. Explicit v2 staging requires zero and must not invoke the fee collector; legacy staging remains fee-free despite its historical production-policy projection.
 
     CompetitionGenerateRoundArgs:
       type: object
@@ -1403,10 +1454,10 @@ components:
         epoch:
           type: integer
           minimum: 0
-          description: Staging epochs begin at zero and advance independently; production epochs are 1 through 6.
+          description: Legacy staging epochs begin at zero and advance independently. Explicit v2 staging seasons and production seasons each use epochs 1 through 6.
         staging:
           type: boolean
-          description: True for a fee-free pre-production epoch evaluated against frozen source epoch zero and excluded from winner promotion and the production leaderboard.
+          description: True for a fee-free pre-production epoch, excluded from production rewards and branches. Legacy staging uses source epoch zero; explicit v2 staging binds its separately reviewed staging source generation and versioned provisional reward contract.
         status:
           type: string
           enum: [scheduled, open, grading, finalized, canceled, sealed]
