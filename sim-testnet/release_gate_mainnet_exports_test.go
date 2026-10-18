@@ -757,8 +757,6 @@ func newReleaseGateMainnetExportsBuild(t *testing.T) *releaseGateMainnetExportsB
 	for _, repository := range []string{"sn", "server"} {
 		checkout := filepath.Join(self.workspace, repository)
 		runTestGit(t, checkout, "init", "-q")
-		runTestGit(t, checkout, "config", "user.email", "sim-testnet@example.invalid")
-		runTestGit(t, checkout, "config", "user.name", "sim-testnet")
 		if err := os.WriteFile(filepath.Join(checkout, "README.md"), []byte(repository+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
