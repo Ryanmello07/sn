@@ -36,7 +36,10 @@ info:
     queued staging work; it refuses to race a running staging evaluation.
 
     V2 is disabled by default and requires a prospectively approved frozen
-    provisional_reward_v2 policy and competition.reward.v2 capability. An open
+    provisional_reward_v2 policy and an explicit supported runtime capability.
+    competition.reward.v2 uses provisioned filesystem manifests;
+    competition.reward.v2.runtime-blob.v1 uses independently authenticated,
+    immutable retained runtime manifests. An open
     legacy round cannot change mode. Discovery, admission, and polling advertise
     the immutable contract; legacy score URLs reject v2 with unsupported_decision_mode.
     V2 publishes only after close, complete authoritative drain, seal, and reveal.
@@ -763,7 +766,8 @@ components:
       const: provisional_reward_v2
     CompetitionRequiredCapability:
       type: string
-      const: competition.reward.v2
+      enum: [competition.reward.v2, competition.reward.v2.runtime-blob.v1]
+      description: Frozen runtime transport contract; a runtime must support the exact advertised capability.
     CompetitionV2SubmissionPreflight:
       type: object
       additionalProperties: false
