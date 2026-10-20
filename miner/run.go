@@ -136,6 +136,8 @@ Usage:
     provider claim-daemon-v2 --config=<path> [--v1-config=<path>] [--threshold-rao=<rao>] [--claim-now]
         [--durable-volumes=<path> --durable-volumes-sha256=<hash>]
         [-v...]
+    provider fleet init --chain_id=<n> --coordinator=<0xhex> --hotkey=<hotkey> [--netuid=<n>] [--fleet_id=<0xhex>] [--generation=<n>] [--client_seed_file=<path>] [--client_id=<hex>] [--member=<client_id>:<client_key>]...
+        [-v...]
     provider fleet manifest --manifest=<path>
         [-v...]
     provider fleet register --manifest=<path> --hotkey_seed_file=<path> --coldkey_seed_file=<path> --substrate=<ws_url>...
@@ -252,7 +254,18 @@ Options:
 	--runtime-observation-dir=<path>   Absolute durable directory required with the provisional profile.
 	--mainnet-runtime-authority=<path>  Independently reviewed exact mainnet fleet runtime authority document.
 	--mainnet-runtime-authority-sha256=<hex>  Approved SHA-256 of the exact authority bytes (64 lowercase hex digits).
-	--manifest=<path>                  Canonical urnetwork-fleet-manifest-v1 JSON file.
+	--manifest=<path>                  Canonical urnetwork-fleet-manifest-v1 JSON file; fleet init prints one.
+	--chain_id=<n>                     fleet init: EVM chain id of the fleet coordinator.
+	--coordinator=<0xhex>              fleet init: 20-byte fleet coordinator contract address.
+	--hotkey=<hotkey>                  fleet init: fleet hotkey public key as 0x 32-byte hex or ss58.
+	--netuid=<n>                       fleet init: subnet netuid; default 25.
+	--fleet_id=<0xhex>                 fleet init: 32-byte fleet id; default 32 random bytes.
+	--generation=<n>                   fleet init: manifest generation; default 1.
+	--member=<client_id>:<client_key>  fleet init: one member, the client id as 16-byte hex or uuid and the
+	                                   client key as a 0x 32-byte Ed25519 public key; repeatable. Also
+	                                   with --client_seed_file and --client_id it adds this device.
+	                                   fleet init reads only local files, sends nothing and prints the
+	                                   manifest as fleet manifest does; save it as the --manifest file.
 	--client_id=<hex>                  Stable 16-byte UR client identity from the fleet manifest. fleet sign:
 	                                   optional with --client_seed_file (the member holding that key).
 	--client_seed_file=<path>          Raw or hex 32-byte Ed25519 client key seed (a provider's is
