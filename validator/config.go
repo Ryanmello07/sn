@@ -158,6 +158,9 @@ func loadReleaseConfig(path string, mode releaseConfigLoadMode) (*ReleaseConfig,
 
 // Reads the bounded regular file once; callers decode exactly these bytes.
 func readReleaseConfigFile(path string) (string, []byte, error) {
+	if path == "" {
+		return readBundledReleaseConfig()
+	}
 	if strings.TrimSpace(path) == "" {
 		return "", nil, errors.New("validator config path is empty")
 	}
