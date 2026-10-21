@@ -721,7 +721,24 @@ func cliPanicMessage(args []string, recovered any) string {
 			"  to a file of that proxy's root CA certificates.\n" +
 			"  For technical details run the command again with -vv."
 	}
+	if strings.Contains(text, "registration parent must be owned and not writable by other users") {
+		dir, dirErr := providerStateDir()
+		if dirErr != nil {
+			dir = "~/.urnetwork"
+		}
+		return fmt.Sprintf("The state folder %s can be changed by other users, so the miner won't keep its keys there.\n"+
+			"  Make it private, then run the command again:\n"+
+			"  chmod 700 %s", dir, cliShellQuote(dir))
+	}
 	return fmt.Sprintf("%v\n  For technical details run the command again with -vv.", recovered)
+}
+
+// cliShellQuote quotes a path for a command the user copies, only when needed.
+func cliShellQuote(path string) string {
+	if regexp.MustCompile(`^[A-Za-z0-9_./~-]+$`).MatchString(path) {
+		return path
+	}
+	return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
 }
 
 func recoverCliPanic(args []string, stderr io.Writer) {

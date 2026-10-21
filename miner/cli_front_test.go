@@ -224,6 +224,11 @@ func TestCliPanicMessage(t *testing.T) {
 	if !strings.Contains(message, "Couldn't reach the URnetwork API") || !strings.Contains(message, "URNETWORK_CONNECT_EXTRA_ROOT_CA_FILE") {
 		t.Fatal(message)
 	}
+	t.Setenv("URNETWORK_STATE_DIR", "/home/me/my state")
+	message = cliPanicMessage([]string{"auth", "CODE"}, errors.New("registration parent must be owned and not writable by other users"))
+	if !strings.Contains(message, "/home/me/my state can be changed by other users") || !strings.HasSuffix(message, "chmod 700 '/home/me/my state'") {
+		t.Fatal(message)
+	}
 	message = cliPanicMessage([]string{"provide"}, errors.New("disk full"))
 	if !strings.HasPrefix(message, "disk full\n") || !strings.Contains(message, "-vv") {
 		t.Fatal(message)
