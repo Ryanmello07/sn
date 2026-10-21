@@ -83,9 +83,13 @@ func (self *minerInstaller) autoUpdate() (on bool, known bool) {
 		_, err := os.Stat(filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "urnetwork-update.lnk"))
 		return err == nil, true
 	}
-	out, err := cliRun("systemctl", "--user", "is-enabled", "urnetwork-update.timer")
-	if out == "" && err != nil {
-		return false, false
+	out, _ := cliRun("systemctl", "--user", "is-enabled", "urnetwork-update.timer")
+	switch out {
+	case "enabled":
+		return true, true
+	case "disabled", "masked", "not-found":
+		return false, true
 	}
-	return out == "enabled", true
+	// no user systemd to ask, as over plain sudo or in a container
+	return false, false
 }

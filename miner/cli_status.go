@@ -51,6 +51,8 @@ type minerStatusReport struct {
 	Next       string            `json:"next,omitempty"`
 }
 
+const minerInstallerUpdateUnknown = "can't tell whether it checks for updates here"
+
 type minerUpdateReport struct {
 	Auto      bool   `json:"auto"`
 	Why       string `json:"why_not,omitempty"`
@@ -105,7 +107,7 @@ func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
 			on, known := installer.autoUpdate()
 			report.Update = minerUpdateReport{Auto: on, By: installer.display()}
 			if !known {
-				report.Update.Why = "can't tell whether " + installer.display() + " checks for updates"
+				report.Update.Why = minerInstallerUpdateUnknown
 			} else if !on {
 				report.Update.Why = "turned off in " + installer.display()
 			}
@@ -209,9 +211,12 @@ func statusCmd(opts docopt.Opts, stdout io.Writer) int {
 	_, release := parseMinerReleaseVersion(report.Version)
 	_, testFeed := minerUpdateSource()
 	if by := report.Update.By; by != "" {
-		if report.Update.Auto {
+		switch {
+		case report.Update.Auto:
 			w.row(true, "Updates", "automatic, by "+by)
-		} else {
+		case report.Update.Why == minerInstallerUpdateUnknown:
+			w.row(nil, "Updates", cliDim(stdout, "by "+by+"; "+report.Update.Why))
+		default:
 			w.warn("Updates", report.Update.Why+" (provider update --on)")
 		}
 	} else if !release && !testFeed {
