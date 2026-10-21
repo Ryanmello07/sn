@@ -541,8 +541,9 @@ func Lock(file *os.File) error {
 }
 
 // Rename replaces to with from inside dir (renameat) and flushes the renamed
-// file, which is how Windows makes a rename durable. Only the open is retried
-// on a sharing conflict; a step that ran is never repeated.
+// file, which is how Windows makes a rename durable. Only the open and the
+// rename itself are retried on a sharing conflict, each only while it has
+// not happened; a step that ran is never repeated.
 func Rename(dir windows.Handle, path string, from string, to string) error {
 	if !ValidName(to) {
 		return errors.New("custody rename leaf is invalid")
@@ -551,7 +552,9 @@ func Rename(dir windows.Handle, path string, from string, to string) error {
 	if err != nil {
 		return err
 	}
-	renameErr := renameHandle(dir, path, handle, to, true)
+	// a failed rename changed nothing, so it alone may be tried again while
+	// a reader without delete sharing holds the replaced file
+	renameErr := retrySharing(func() error { return renameHandle(dir, path, handle, to, true) })
 	if renameErr == nil {
 		renameErr = flushHandle(handle)
 	}
