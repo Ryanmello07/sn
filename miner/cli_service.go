@@ -1,0 +1,642 @@
+package miner
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"os/user"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/docopt/docopt-go"
+)
+
+// provider service runs the miner in the background and on every boot, with
+// the system's own service manager: a systemd unit on Linux, a launchd job
+// on macOS. Next to it a timer runs provider update --auto (cli_update.go).
+// It never touches the URnetwork installer's urnetwork.service.
+
+const minerServiceDefaultName = "urnetwork-provider"
+const minerLaunchdLabel = "xyz.ur.provider"
+
+// The state directory a system service uses unless URNETWORK_STATE_DIR names one.
+const minerSystemStateDir = "/var/lib/urnetwork"
+
+// minerServiceName is the unit name; URNETWORK_SERVICE_NAME changes it, so
+// a test build can sit beside a real install.
+func minerServiceName() string {
+	if name := strings.TrimSpace(os.Getenv("URNETWORK_SERVICE_NAME")); name != "" && minerServiceNamePattern(name) {
+		return name
+	}
+	return minerServiceDefaultName
+}
+
+func minerServiceNamePattern(name string) bool {
+	if len(name) == 0 || 64 < len(name) {
+		return false
+	}
+	for _, r := range name {
+		if !(r == '-' || r == '_' || r == '.' || '0' <= r && r <= '9' || 'a' <= r && r <= 'z') {
+			return false
+		}
+	}
+	return true
+}
+
+func minerLaunchdName() string {
+	if name := minerServiceName(); name != minerServiceDefaultName {
+		return minerLaunchdLabel + "." + name
+	}
+	return minerLaunchdLabel
+}
+
+// cliRun runs a service manager command. Tests replace it.
+var cliRun = func(name string, args ...string) (string, error) {
+	command := exec.Command(name, args...)
+	var out bytes.Buffer
+	command.Stdout = &out
+	command.Stderr = &out
+	err := command.Run()
+	return strings.TrimSpace(out.String()), err
+}
+
+// cliRunAttached runs a command on this terminal (logs --follow). Tests replace it.
+var cliRunAttached = func(name string, args ...string) error {
+	command := exec.Command(name, args...)
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	return command.Run()
+}
+
+// cliExecutable is the binary a service runs. Tests replace it.
+var cliExecutable = func() (string, error) {
+	path, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(path)
+}
+
+// minerServiceManager is what one platform's service manager can do.
+type minerServiceManager interface {
+	kind() string
+	installed() bool
+	active() bool
+	install(executable string, stateDir string, out io.Writer) error
+	uninstall(out io.Writer) error
+	control(action string) error
+	logs(follow bool) error
+	// foreign names a miner service this command didn't install, if any.
+	foreign() string
+}
+
+// minerServiceFor picks the manager for this system, or explains why none.
+func minerServiceFor(system bool) (minerServiceManager, error) {
+	switch runtime.GOOS {
+	case "linux":
+		if _, err := exec.LookPath("systemctl"); err != nil {
+			return nil, errors.New("This system has no systemd, so provider service can't manage the miner here.\n  Run provider start under your own service manager, tmux or screen instead.")
+		}
+		return newSystemdService(system), nil
+	case "darwin":
+		return newLaunchdService(system), nil
+	}
+	return nil, fmt.Errorf("provider service doesn't support %s yet.\n  Run provider start under your system's service manager instead.", runtime.GOOS)
+}
+
+// minerServiceStateDir is the state directory the service will use.
+func minerServiceStateDir(system bool) (string, error) {
+	if override := strings.TrimSpace(os.Getenv("URNETWORK_STATE_DIR")); override != "" || !system {
+		return providerStateDir()
+	}
+	return minerSystemStateDir, nil
+}
+
+func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
+	system, _ := opts.Bool("--system")
+	if system && os.Geteuid() != 0 {
+		writeCliError(stderr, "A system service needs root. Run it again with sudo:\n  sudo "+strings.Join(append([]string{"provider"}, os.Args[1:]...), " "))
+		return 1
+	}
+	manager, err := minerServiceFor(system)
+	if err != nil {
+		writeCliError(stderr, err.Error())
+		return 1
+	}
+	name := minerServiceName()
+	switch {
+	case cliOptBool(opts, "install"):
+		if other := manager.foreign(); other != "" {
+			writeCliError(stderr, fmt.Sprintf("This device already runs the miner with the URnetwork installer (%s).\n  Keep using that one, or remove it first with the installer's uninstall script.", other))
+			return 1
+		}
+		executable, err := cliExecutable()
+		if err != nil {
+			writeCliError(stderr, "Couldn't find this program's own path: "+err.Error())
+			return 1
+		}
+		stateDir, err := minerServiceStateDir(system)
+		if err != nil {
+			writeCliError(stderr, err.Error())
+			return 1
+		}
+		if err := manager.install(executable, stateDir, stdout); err != nil {
+			writeCliError(stderr, "The service wasn't installed: "+err.Error())
+			return 1
+		}
+		fmt.Fprintf(stdout, "  %s Installed %s (%s); it starts now and on every boot\n", cliGreen(stdout, "✓"), name, manager.kind())
+		fmt.Fprintf(stdout, "  %s Automatic updates: checked every 6 hours\n", cliGreen(stdout, "✓"))
+		reportServiceStart(stdout, 20*time.Second)
+		fmt.Fprintln(stdout, "\nCheck on it any time: provider status")
+		return 0
+	case cliOptBool(opts, "uninstall"):
+		if !manager.installed() {
+			fmt.Fprintf(stdout, "%s isn't installed; nothing to remove.\n", name)
+			return 0
+		}
+		if err := manager.uninstall(stdout); err != nil {
+			writeCliError(stderr, "The service wasn't removed: "+err.Error())
+			return 1
+		}
+		fmt.Fprintf(stdout, "  %s Removed %s. Your sign-in and miner identity in %s are kept.\n", cliGreen(stdout, "✓"), name, displayStateDir())
+		return 0
+	case cliOptBool(opts, "logs"):
+		if !manager.installed() {
+			writeCliError(stderr, name+" isn't installed. Install it with: provider service install")
+			return 1
+		}
+		follow, _ := opts.Bool("--follow")
+		if err := manager.logs(follow); err != nil {
+			writeCliError(stderr, err.Error())
+			return 1
+		}
+		return 0
+	case cliOptBool(opts, "status"):
+		if !manager.installed() {
+			fmt.Fprintf(stdout, "%s isn't installed. Install it with: provider service install\n", name)
+			return minerExitOffline
+		}
+		if manager.active() {
+			fmt.Fprintf(stdout, "%s is running (%s).\n", name, manager.kind())
+			return 0
+		}
+		fmt.Fprintf(stdout, "%s is installed but not running. Start it with: provider service start\n", name)
+		return minerExitOffline
+	}
+	for _, action := range []string{"start", "stop", "restart"} {
+		if !cliOptBool(opts, action) {
+			continue
+		}
+		if !manager.installed() {
+			writeCliError(stderr, name+" isn't installed. Install it with: provider service install")
+			return 1
+		}
+		if err := manager.control(action); err != nil {
+			writeCliError(stderr, fmt.Sprintf("Couldn't %s %s: %s", action, name, err))
+			return 1
+		}
+		switch action {
+		case "stop":
+			fmt.Fprintf(stdout, "  %s Stopped %s. It starts again on the next boot; provider service uninstall removes it.\n", cliGreen(stdout, "✓"), name)
+		default:
+			fmt.Fprintf(stdout, "  %s %sed %s\n", cliGreen(stdout, "✓"), strings.ToUpper(action[:1])+action[1:], name)
+			reportServiceStart(stdout, 20*time.Second)
+		}
+		return 0
+	}
+	return 1
+}
+
+func cliOptBool(opts docopt.Opts, key string) bool {
+	value, _ := opts.Bool(key)
+	return value
+}
+
+// reportServiceStart waits a little for the service's miner to report in.
+func reportServiceStart(stdout io.Writer, wait time.Duration) {
+	deadline := time.Now().Add(wait)
+	for time.Now().Before(deadline) {
+		if status, err := readMinerLocalStatus(); err == nil && status.running(time.Now()) {
+			if status.connected() {
+				fmt.Fprintf(stdout, "  %s Miner running and connected\n", cliGreen(stdout, "✓"))
+			} else {
+				fmt.Fprintf(stdout, "  %s Miner running, still connecting\n", cliGreen(stdout, "✓"))
+			}
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	fmt.Fprintf(stdout, "  %s The miner hasn't reported in yet. Check with: provider status\n", cliYellow(stdout, "!"))
+}
+
+// systemd
+
+type systemdService struct {
+	system bool
+	name   string
+	dir    string
+}
+
+func newSystemdService(system bool) *systemdService {
+	dir := "/etc/systemd/system"
+	if !system {
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			home, _ := os.UserHomeDir()
+			configDir = filepath.Join(home, ".config")
+		}
+		dir = filepath.Join(configDir, "systemd", "user")
+	}
+	return &systemdService{system: system, name: minerServiceName(), dir: dir}
+}
+
+func (self *systemdService) kind() string {
+	if self.system {
+		return "systemd system service"
+	}
+	return "systemd user service"
+}
+
+func (self *systemdService) systemctl(args ...string) (string, error) {
+	if !self.system {
+		args = append([]string{"--user"}, args...)
+	}
+	out, err := cliRun("systemctl", args...)
+	if err != nil && out != "" {
+		return out, fmt.Errorf("%s", firstLine(out))
+	}
+	return out, err
+}
+
+func (self *systemdService) unitPath(suffix string) string {
+	return filepath.Join(self.dir, self.name+suffix)
+}
+
+func (self *systemdService) installed() bool {
+	_, err := os.Stat(self.unitPath(".service"))
+	return err == nil
+}
+
+func (self *systemdService) active() bool {
+	out, _ := self.systemctl("is-active", self.name+".service")
+	return out == "active"
+}
+
+func (self *systemdService) foreign() string {
+	if _, err := os.Stat(filepath.Join(self.dir, "urnetwork.service")); err == nil {
+		return "urnetwork.service"
+	}
+	return ""
+}
+
+func systemdQuote(value string) string {
+	if !strings.ContainsAny(value, " \t\"\\'") {
+		return value
+	}
+	return strconv.Quote(value)
+}
+
+// systemdUnits are the files provider service install writes on Linux.
+func systemdUnits(name string, executable string, stateDir string, system bool) map[string]string {
+	wantedBy := "default.target"
+	if system {
+		wantedBy = "multi-user.target"
+	}
+	environment := fmt.Sprintf("Environment=%s\n", systemdQuote("URNETWORK_STATE_DIR="+stateDir))
+	if name != minerServiceDefaultName {
+		environment += fmt.Sprintf("Environment=%s\n", systemdQuote("URNETWORK_SERVICE_NAME="+name))
+	}
+	return map[string]string{
+		name + ".service": fmt.Sprintf(`# Installed by provider service install. Remove with: provider service uninstall
+[Unit]
+Description=URnetwork miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=%s start
+%s# 3 means the device needs setup (provider setup); restarting won't help
+Restart=on-failure
+RestartSec=15
+RestartPreventExitStatus=3
+
+[Install]
+WantedBy=%s
+`, systemdQuote(executable), environment, wantedBy),
+		name + "-update.service": fmt.Sprintf(`# Installed by provider service install. Turn updates off with: provider update --off
+[Unit]
+Description=URnetwork miner automatic update
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%s update --auto
+%s`, systemdQuote(executable), environment),
+		name + "-update.timer": `# Installed by provider service install
+[Unit]
+Description=Check for URnetwork miner updates every 6 hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+`,
+	}
+}
+
+func (self *systemdService) install(executable string, stateDir string, out io.Writer) error {
+	if err := os.MkdirAll(self.dir, 0755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return err
+	}
+	units := systemdUnits(self.name, executable, stateDir, self.system)
+	removeUnits := func() {
+		for file := range units {
+			os.Remove(filepath.Join(self.dir, file))
+		}
+		_, _ = self.systemctl("daemon-reload")
+	}
+	for file, text := range units {
+		if err := os.WriteFile(filepath.Join(self.dir, file), []byte(text), 0644); err != nil {
+			removeUnits()
+			return err
+		}
+	}
+	if _, err := self.systemctl("daemon-reload"); err != nil {
+		removeUnits()
+		if strings.Contains(err.Error(), "bus") && !self.system {
+			return fmt.Errorf("%s.\n  This login has no systemd user session (common over su, some SSH setups and containers).\n  Use a system service instead: sudo provider service install --system", err)
+		}
+		return err
+	}
+	if _, err := self.systemctl("enable", "--now", self.name+".service", self.name+"-update.timer"); err != nil {
+		removeUnits()
+		return err
+	}
+	if !self.system {
+		// without lingering, a user service stops at logout and waits for a login after boot
+		if current, err := user.Current(); err == nil {
+			if _, err := cliRun("loginctl", "enable-linger", current.Username); err != nil {
+				fmt.Fprintf(out, "  %s Couldn't keep the service running after you log out (loginctl enable-linger failed).\n    Run: sudo loginctl enable-linger %s\n", cliYellow(out, "!"), current.Username)
+			}
+		}
+	}
+	return nil
+}
+
+func (self *systemdService) uninstall(out io.Writer) error {
+	_, _ = self.systemctl("disable", "--now", self.name+".service", self.name+"-update.timer")
+	for _, suffix := range []string{".service", "-update.service", "-update.timer"} {
+		if err := os.Remove(self.unitPath(suffix)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	_, err := self.systemctl("daemon-reload")
+	return err
+}
+
+func (self *systemdService) control(action string) error {
+	_, err := self.systemctl(action, self.name+".service")
+	return err
+}
+
+func (self *systemdService) logs(follow bool) error {
+	args := []string{"-u", self.name + ".service", "-u", self.name + "-update.service", "-n", "100", "--no-pager"}
+	if !self.system {
+		args = append([]string{"--user"}, args...)
+	}
+	if follow {
+		args = append(args, "-f")
+	}
+	return cliRunAttached("journalctl", args...)
+}
+
+// launchd
+
+type launchdService struct {
+	system bool
+	label  string
+	dir    string
+}
+
+func newLaunchdService(system bool) *launchdService {
+	dir := "/Library/LaunchDaemons"
+	if !system {
+		home, _ := os.UserHomeDir()
+		dir = filepath.Join(home, "Library", "LaunchAgents")
+	}
+	return &launchdService{system: system, label: minerLaunchdName(), dir: dir}
+}
+
+func (self *launchdService) kind() string {
+	if self.system {
+		return "launchd daemon"
+	}
+	return "launchd agent"
+}
+
+func (self *launchdService) domain() string {
+	if self.system {
+		return "system"
+	}
+	return "gui/" + strconv.Itoa(os.Getuid())
+}
+
+func (self *launchdService) plistPath(label string) string {
+	return filepath.Join(self.dir, label+".plist")
+}
+
+func (self *launchdService) installed() bool {
+	_, err := os.Stat(self.plistPath(self.label))
+	return err == nil
+}
+
+func (self *launchdService) active() bool {
+	out, err := cliRun("launchctl", "print", self.domain()+"/"+self.label)
+	return err == nil && strings.Contains(out, "state = running")
+}
+
+func (self *launchdService) foreign() string { return "" }
+
+func plistEscape(value string) string {
+	var b strings.Builder
+	for _, r := range value {
+		switch r {
+		case '&':
+			b.WriteString("&amp;")
+		case '<':
+			b.WriteString("&lt;")
+		case '>':
+			b.WriteString("&gt;")
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// launchdPlists are the files provider service install writes on macOS.
+func launchdPlists(label string, executable string, stateDir string, serviceName string) map[string]string {
+	environment := fmt.Sprintf("\t\t<key>URNETWORK_STATE_DIR</key>\n\t\t<string>%s</string>\n", plistEscape(stateDir))
+	if serviceName != minerServiceDefaultName {
+		environment += fmt.Sprintf("\t\t<key>URNETWORK_SERVICE_NAME</key>\n\t\t<string>%s</string>\n", plistEscape(serviceName))
+	}
+	logPath := plistEscape(filepath.Join(stateDir, "service.log"))
+	return map[string]string{
+		label: fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Installed by provider service install. Remove with: provider service uninstall -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>%s</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>%s</string>
+		<string>start</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+%s	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+	<key>StandardOutPath</key>
+	<string>%s</string>
+	<key>StandardErrorPath</key>
+	<string>%s</string>
+</dict>
+</plist>
+`, plistEscape(label), plistEscape(executable), environment, logPath, logPath),
+		label + ".update": fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Installed by provider service install. provider update with the off option turns updates off. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>%s.update</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>%s</string>
+		<string>update</string>
+		<string>--auto</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+%s	</dict>
+	<key>StartInterval</key>
+	<integer>21600</integer>
+	<key>StandardOutPath</key>
+	<string>%s</string>
+	<key>StandardErrorPath</key>
+	<string>%s</string>
+</dict>
+</plist>
+`, plistEscape(label), plistEscape(executable), environment, logPath, logPath),
+	}
+}
+
+func (self *launchdService) install(executable string, stateDir string, out io.Writer) error {
+	if err := os.MkdirAll(self.dir, 0755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return err
+	}
+	for label, text := range launchdPlists(self.label, executable, stateDir, minerServiceName()) {
+		path := self.plistPath(label)
+		// a job that is already loaded must be unloaded to take the new file
+		_, _ = cliRun("launchctl", "bootout", self.domain()+"/"+label)
+		if err := os.WriteFile(path, []byte(text), 0644); err != nil {
+			return err
+		}
+		if out, err := cliRun("launchctl", "bootstrap", self.domain(), path); err != nil {
+			if out != "" {
+				return fmt.Errorf("%s", firstLine(out))
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (self *launchdService) uninstall(out io.Writer) error {
+	for _, label := range []string{self.label, self.label + ".update"} {
+		_, _ = cliRun("launchctl", "bootout", self.domain()+"/"+label)
+		if err := os.Remove(self.plistPath(label)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (self *launchdService) control(action string) error {
+	target := self.domain() + "/" + self.label
+	var err error
+	switch action {
+	case "start":
+		_, err = cliRun("launchctl", "kickstart", target)
+	case "restart":
+		_, err = cliRun("launchctl", "kickstart", "-k", target)
+	case "stop":
+		_, err = cliRun("launchctl", "kill", "SIGTERM", target)
+	}
+	return err
+}
+
+func (self *launchdService) logs(follow bool) error {
+	stateDir, err := minerServiceStateDir(self.system)
+	if err != nil {
+		return err
+	}
+	args := []string{"-n", "100"}
+	if follow {
+		args = append(args, "-f")
+	}
+	return cliRunAttached("tail", append(args, filepath.Join(stateDir, "service.log"))...)
+}
+
+// minerServiceState is what provider status says about the service.
+type minerServiceState struct {
+	Installed bool   `json:"installed"`
+	Active    bool   `json:"active"`
+	Name      string `json:"name,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	Foreign   string `json:"other,omitempty"`
+}
+
+func readMinerServiceState() minerServiceState {
+	for _, system := range []bool{false, true} {
+		manager, err := minerServiceFor(system)
+		if err != nil {
+			return minerServiceState{}
+		}
+		if manager.installed() {
+			return minerServiceState{Installed: true, Active: manager.active(), Name: minerServiceName(), Kind: manager.kind()}
+		}
+		if other := manager.foreign(); other != "" {
+			return minerServiceState{Foreign: other}
+		}
+	}
+	return minerServiceState{}
+}

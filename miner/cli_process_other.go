@@ -1,0 +1,8 @@
+//go:build !linux && !darwin
+
+package miner
+
+// Without a signal-0 probe, a fresh status file is taken as a live miner.
+func minerProcessAlive(pid int) bool {
+	return 0 < pid
+}
