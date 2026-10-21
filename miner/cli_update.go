@@ -186,7 +186,28 @@ func (self *minerRelease) asset() (*minerReleaseAsset, error) {
 	return nil, fmt.Errorf("release %s has no provider download", self.TagName)
 }
 
-var minerUpdateClient = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}}
+var minerUpdateClient = &http.Client{
+	Transport: &http.Transport{Proxy: http.ProxyFromEnvironment},
+	CheckRedirect: func(request *http.Request, via []*http.Request) error {
+		if 10 <= len(via) {
+			return errors.New("too many redirects")
+		}
+		if request.URL.Scheme != "https" && via[0].URL.Scheme == "https" {
+			return errors.New("refusing a redirect away from https")
+		}
+		return nil
+	},
+}
+
+// minerTrustedDownload is where the default feed's downloads may come from.
+func minerTrustedDownload(location string) bool {
+	parsed, err := url.Parse(location)
+	if err != nil || parsed.Scheme != "https" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "github.com" || host == "api.github.com" || strings.HasSuffix(host, ".githubusercontent.com")
+}
 
 // minerOpen opens a feed or download: an http(s) URL, or a file path
 // (relative paths are relative to the feed's directory).
@@ -258,12 +279,20 @@ func minerUpdateAvailable(release *minerRelease) (bool, string) {
 		if _, test := minerUpdateSource(); test {
 			return true, ""
 		}
-		return false, "this is a development build (" + cliBareVersion() + "), which never replaces itself with a release"
+		return false, "this is " + cliBuildName() + ", which never replaces itself with a release"
 	}
 	if latest.newerThan(current) {
 		return true, ""
 	}
 	return false, ""
+}
+
+// cliBuildName names a development build for a sentence.
+func cliBuildName() string {
+	if version := RequireVersion(); version != "" {
+		return "a development build (" + version + ")"
+	}
+	return "a development build"
 }
 
 // minerRolloutDelay is this device's place in the rollout of a release:
@@ -289,13 +318,21 @@ func installMinerRelease(ctx context.Context, release *minerRelease, executable 
 	if !ok || len(want) != 64 {
 		return fmt.Errorf("release %s lists no sha256 digest for %s, so it can't be checked", release.TagName, asset.Name)
 	}
+	if runtime.GOOS == "windows" {
+		return errors.New("updating in place isn't supported on Windows yet; download the new release by hand")
+	}
 	dir := filepath.Dir(executable)
-	newPath := executable + ".new"
-	file, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	// a fresh name each time (O_EXCL), so nothing planted there is followed
+	file, err := os.CreateTemp(dir, "."+filepath.Base(executable)+".new-*")
 	if err != nil {
 		return fmt.Errorf("can't write beside %s: %w", executable, err)
 	}
+	newPath := file.Name()
 	defer os.Remove(newPath)
+	if _, test := minerUpdateSource(); !test && !minerTrustedDownload(asset.Url) {
+		file.Close()
+		return fmt.Errorf("release %s points its download outside GitHub (%s); nothing was changed", release.TagName, minerHost(asset.Url))
+	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 	body, err := minerOpen(ctx, asset.Url, release.base)
@@ -308,6 +345,15 @@ func installMinerRelease(ctx context.Context, release *minerRelease, executable 
 	found, extractErr := extractMinerBinary(io.TeeReader(io.LimitReader(body, minerUpdateMaxDownload), hash), file)
 	// hash every byte, also those after the binary
 	_, _ = io.Copy(io.Discard, io.TeeReader(io.LimitReader(body, minerUpdateMaxDownload), hash))
+	if err := file.Chmod(0755); err != nil {
+		file.Close()
+		return err
+	}
+	// on disk before it can take the binary's name
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
 	if err := file.Close(); err != nil {
 		return err
 	}
@@ -327,16 +373,42 @@ func installMinerRelease(ctx context.Context, release *minerRelease, executable 
 	if got := strings.TrimSpace(string(versionOut)); got != release.version() {
 		return fmt.Errorf("the new binary says it is %q, not %s; nothing was changed", got, release.version())
 	}
+	// keep the old binary under a second name, then take the binary's name
+	// in one rename: at every moment there is a whole binary at executable
 	previous := executable + ".previous"
-	if err := os.Rename(executable, previous); err != nil {
-		return fmt.Errorf("can't replace %s: %w", executable, err)
+	_ = os.Remove(previous)
+	if err := os.Link(executable, previous); err != nil {
+		if err := copyFile(executable, previous); err != nil {
+			return fmt.Errorf("can't keep the previous version beside %s: %w", executable, err)
+		}
 	}
 	if err := os.Rename(newPath, executable); err != nil {
-		_ = os.Rename(previous, executable)
 		return fmt.Errorf("can't replace %s: %w", executable, err)
 	}
 	syncDir(dir)
 	return nil
+}
+
+func copyFile(from string, to string) error {
+	in, err := os.Open(from)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0755)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(to)
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func syncDir(dir string) {
@@ -435,7 +507,30 @@ func waitMinerHealthy(version string, needConnected bool, window time.Duration, 
 	return false
 }
 
+// minerUpdateTarget is the binary an update replaces: the installed
+// service's own, when there is one, else this one. With a service, its
+// state folder is used too, so a sudo run reads the service's status and
+// settings rather than root's own.
+func minerUpdateTarget() (string, error) {
+	for _, system := range []bool{false, true} {
+		manager, err := minerServiceFor(system)
+		if err != nil || !manager.installed() {
+			continue
+		}
+		executable, stateDir := manager.configured()
+		if stateDir != "" && os.Getenv("URNETWORK_STATE_DIR") == "" {
+			os.Setenv("URNETWORK_STATE_DIR", stateDir)
+		}
+		if executable != "" {
+			return executable, nil
+		}
+		break
+	}
+	return cliExecutable()
+}
+
 func updateCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
+	executable, executableErr := minerUpdateTarget()
 	state := readMinerUpdateState()
 	switch {
 	case cliOptBool(opts, "--on"), cliOptBool(opts, "--off"):
@@ -459,7 +554,15 @@ func updateCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		printMinerUpdateStatus(stdout, state)
 		return 0
 	case cliOptBool(opts, "--auto"):
-		return autoUpdate(stdout, state)
+		if executableErr != nil {
+			fmt.Fprintf(stdout, "automatic update: can't find the binary: %s\n", executableErr)
+			return 0
+		}
+		return autoUpdate(stdout, state, executable)
+	}
+	if executableErr != nil {
+		writeCliError(stderr, "Couldn't find the binary to update: "+executableErr.Error())
+		return 1
 	}
 	check := cliOptBool(opts, "--check")
 	fmt.Fprintln(stdout, "Checking for a new version…")
@@ -490,18 +593,19 @@ func updateCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "  Install it with: provider update")
 		return 0
 	}
-	return applyMinerUpdate(stdout, stderr, release, false)
+	return applyMinerUpdate(stdout, stderr, release, executable, false)
 }
 
 // applyMinerUpdate installs the release, restarts the service's miner and
 // rolls back when it doesn't come back as healthy as it was.
-func applyMinerUpdate(stdout io.Writer, stderr io.Writer, release *minerRelease, auto bool) int {
-	state := readMinerUpdateState()
-	executable, err := cliExecutable()
+func applyMinerUpdate(stdout io.Writer, stderr io.Writer, release *minerRelease, executable string, auto bool) int {
+	unlock, err := lockMinerUpdate()
 	if err != nil {
-		writeCliError(stderr, "Couldn't find this program's own path: "+err.Error())
+		writeCliError(stderr, "Not updated: another update is running right now")
 		return 1
 	}
+	defer unlock()
+	state := readMinerUpdateState()
 	before := readMinerRunningState()
 	if err := installMinerRelease(context.Background(), release, executable); err != nil {
 		state.LastResult = "update failed: " + firstLine(err.Error())
@@ -523,7 +627,17 @@ func applyMinerUpdate(stdout io.Writer, stderr io.Writer, release *minerRelease,
 		return 0
 	}
 	if err := before.service.control("restart"); err != nil {
-		writeCliError(stderr, "Updated, but the service didn't restart: "+err.Error())
+		// no health check is possible: go back to what ran before
+		rollbackErr := rollBackMiner(executable)
+		_ = before.service.control("restart")
+		state.Updated = ""
+		state.LastResult = "the service didn't restart after the update; rolled back"
+		_ = writeMinerUpdateState(state)
+		if rollbackErr != nil {
+			writeCliError(stderr, fmt.Sprintf("The service didn't restart (%s) and the previous version couldn't be restored: %s", err, rollbackErr))
+		} else {
+			writeCliError(stderr, "The service didn't restart after the update ("+err.Error()+"), so the previous version is back.")
+		}
 		return 1
 	}
 	window := minerUpdateHealthWindow
@@ -551,7 +665,7 @@ func applyMinerUpdate(stdout io.Writer, stderr io.Writer, release *minerRelease,
 }
 
 // autoUpdate is one run of the update timer: quiet unless it acts.
-func autoUpdate(stdout io.Writer, state minerUpdateState) int {
+func autoUpdate(stdout io.Writer, state minerUpdateState, executable string) int {
 	if on, why := minerAutoUpdate(state); !on {
 		fmt.Fprintf(stdout, "automatic update skipped: %s\n", why)
 		return 0
@@ -592,7 +706,7 @@ func autoUpdate(stdout io.Writer, state minerUpdateState) int {
 	_ = writeMinerUpdateState(state)
 	fmt.Fprintf(stdout, "automatic update: installing %s (was %s)\n", release.version(), cliBareVersion())
 	// a failed automatic update already said why; the timer itself succeeded
-	_ = applyMinerUpdate(stdout, stdout, release, true)
+	_ = applyMinerUpdate(stdout, stdout, release, executable, true)
 	return 0
 }
 
@@ -601,7 +715,7 @@ func printMinerUpdateStatus(stdout io.Writer, state minerUpdateState) {
 	row := func(label string, value string) { fmt.Fprintf(stdout, "  %-18s %s\n", label, value) }
 	if _, ok := parseMinerReleaseVersion(cliBareVersion()); !ok {
 		if _, test := minerUpdateSource(); !test {
-			row("Automatic updates", "never: this is a development build ("+cliBareVersion()+")")
+			row("Automatic updates", "never: this is "+cliBuildName())
 			return
 		}
 	}

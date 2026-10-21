@@ -45,7 +45,7 @@ func readHiddenInterruptible(fd int) ([]byte, error) {
 }
 
 // cliAsk asks a yes/no question on the terminal; Enter takes the default.
-// Ctrl-C answers no.
+// Ctrl-C cancels the whole command, as it does at the auth code prompt.
 func cliAsk(in io.Reader, out io.Writer, question string, yesByDefault bool) bool {
 	choices := "[y/N]"
 	if yesByDefault {
@@ -55,7 +55,7 @@ func cliAsk(in io.Reader, out io.Writer, question string, yesByDefault bool) boo
 	answer, ok := cliReadLine(in)
 	if !ok {
 		fmt.Fprintln(out)
-		return false
+		panic(errPromptInterrupted)
 	}
 	switch strings.ToLower(strings.TrimSpace(answer)) {
 	case "":

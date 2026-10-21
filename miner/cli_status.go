@@ -50,6 +50,7 @@ type minerStatusReport struct {
 
 type minerUpdateReport struct {
 	Auto      bool   `json:"auto"`
+	Why       string `json:"why_not,omitempty"`
 	Latest    string `json:"latest,omitempty"`
 	LastCheck string `json:"last_check,omitempty"`
 	Result    string `json:"last_result,omitempty"`
@@ -62,7 +63,7 @@ func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
 	device := readMinerDevice()
 	report.SignedIn = signIn.signedIn
 	report.Network = signIn.networkName
-	report.Registered = device.hasKey
+	report.Registered = device.registered
 	report.ClientId = device.clientId
 	local, localErr := readMinerLocalStatus()
 	if localErr == nil && local.running(now) {
@@ -80,7 +81,12 @@ func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
 	}
 	report.Service = readMinerServiceState()
 	updateState := readMinerUpdateState()
-	report.Update.Auto, _ = minerAutoUpdate(updateState)
+	report.Update.Auto, report.Update.Why = minerAutoUpdate(updateState)
+	if _, release := parseMinerReleaseVersion(report.Version); !release {
+		if _, test := minerUpdateSource(); !test {
+			report.Update.Auto, report.Update.Why = false, "this is "+cliBuildName()
+		}
+	}
 	report.Update.Latest = updateState.Latest
 	report.Update.Result = updateState.LastResult
 	if updateState.LastCheck != nil {
@@ -94,10 +100,10 @@ func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
 		report.Problems = append(report.Problems, "not signed in")
 		report.Next = "provider setup"
 		code = minerExitNeedsSetup
-	case !device.hasHistory:
+	case !device.registered && !(report.Running && report.Connected):
 		report.State = "needs_setup"
 		report.Problems = append(report.Problems, "this device isn't registered yet")
-		report.Next = "provider start"
+		report.Next = "provider setup"
 		code = minerExitNeedsSetup
 	case !report.Running:
 		report.State = "stopped"
@@ -158,6 +164,8 @@ func statusCmd(opts docopt.Opts, stdout io.Writer) int {
 		w.row(true, "Device", "registered, miner identity "+shortId(report.ClientId))
 	case report.Registered:
 		w.row(true, "Device", "registered")
+	case readMinerDevice().hasKey:
+		w.row(false, "Device", "registration didn't finish")
 	case report.SignedIn:
 		w.row(false, "Device", "not registered yet")
 	}
@@ -260,7 +268,7 @@ func doctorCmd(opts docopt.Opts, stdout io.Writer) int {
 	if report.SignedIn {
 		w.row(true, "Signed in", report.Network)
 	} else {
-		fail("Signed in", "no: provider login")
+		fail("Signed in", "no: provider setup")
 	}
 
 	// the network: DNS, TCP and the TLS certificate the miner will see

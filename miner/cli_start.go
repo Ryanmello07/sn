@@ -47,16 +47,27 @@ func providePreflight(opts docopt.Opts, start bool, in *os.File, out io.Writer, 
 	signIn := readMinerSignIn()
 	device := readMinerDevice()
 	if !signIn.signedIn && !device.hasHistory {
-		writeCliError(stderr, "This device isn't signed in yet.\n"+
-			"  Get an auth code from your URnetwork app or account page, then run:\n"+
-			"  provider login")
+		writeCliError(stderr, "This device isn't signed in yet. Set it up with:\n"+
+			"  provider setup\n"+
+			"  (or sign in by hand with provider login, using an auth code from your URnetwork app)")
 		return false
 	}
-	if !start || device.hasHistory {
+	if allow, _ := opts.Bool("--allow-client-registration"); !start || allow || device.registered {
 		return true
 	}
-	if allow, _ := opts.Bool("--allow-client-registration"); allow {
-		return true
+	if device.hasHistory {
+		// an earlier first start made the key but never got a client;
+		// only a person who sees this finishes it without the flag
+		if !device.hasKey || !cliIsTerminal(in) || !cliIsTerminal(out) {
+			return true
+		}
+		fmt.Fprintln(out, "This device's registration didn't finish last time.")
+		if cliAsk(in, out, "Finish registering it now?", true) {
+			opts["--allow-client-registration"] = true
+			return true
+		}
+		fmt.Fprintln(out, "Not registered. Run provider start again when you're ready.")
+		return false
 	}
 	if cliIsTerminal(in) && cliIsTerminal(out) {
 		network := ""
@@ -246,6 +257,11 @@ func (self *startTerminalUi) finish(err error, interrupted bool) {
 	case interrupted:
 		fmt.Fprintln(self.out, "\nStopped.")
 	case err != nil:
+		fmt.Fprintf(self.log, "provider start: the miner stopped: %v\n", err)
+		if strings.Contains(err.Error(), "requires recovery") || strings.Contains(err.Error(), "requires_explicit_recovery") || strings.Contains(err.Error(), "retained history") {
+			fmt.Fprintf(self.out, "\n%s This device's miner identity in %s is incomplete or doesn't match,\n  so the miner won't start rather than risk making a second identity.\n  If you have a backup of that folder, restore it. Details: %s\n", cliRed(self.out, "✗"), displayStateDir(), displayStatePath(minerLogFileName))
+			return
+		}
 		fmt.Fprintf(self.out, "\n%s The miner stopped: %s\n  Details: %s\n", cliRed(self.out, "✗"), firstLine(err.Error()), displayStatePath(minerLogFileName))
 	default:
 		fmt.Fprintf(self.out, "\nThe miner stopped. Details: %s\n", displayStatePath(minerLogFileName))

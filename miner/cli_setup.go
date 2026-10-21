@@ -24,6 +24,10 @@ import (
 // --yes answers every question with its default and --auth-code-file
 // supplies the sign-in, so a fleet can run it unattended.
 
+// cliSetupStepEnv marks a command that provider setup runs as one of its
+// steps: its errors are plain sentences even though setup reads them.
+const cliSetupStepEnv = "URNETWORK_SETUP_STEP"
+
 // runSelf runs this binary with args. Tests replace it.
 var runSelf = func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	executable, err := cliExecutable()
@@ -31,6 +35,7 @@ var runSelf = func(args []string, stdin io.Reader, stdout io.Writer, stderr io.W
 		return err
 	}
 	command := exec.Command(executable, args...)
+	command.Env = append(os.Environ(), cliSetupStepEnv+"=1")
 	command.Stdin = stdin
 	command.Stdout = stdout
 	command.Stderr = stderr
@@ -44,6 +49,7 @@ var startSelf = func(args []string, stdout io.Writer, stderr io.Writer) (*exec.C
 		return nil, err
 	}
 	command := exec.Command(executable, args...)
+	command.Env = append(os.Environ(), cliSetupStepEnv+"=1")
 	command.Stdout = stdout
 	command.Stderr = stderr
 	return command, command.Start()
@@ -100,7 +106,8 @@ func setupCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	run := &setupRun{in: os.Stdin, out: stdout, errOut: stderr, yes: yes, steps: 4}
-	fmt.Fprintf(stdout, "%s   %s\n", cliBold(stdout, "URnetwork miner setup"), cliDim(stdout, cliBareVersion()+" · "+runtime.GOOS+"/"+runtime.GOARCH+" · state in "+displayStateDir()))
+	fmt.Fprintf(stdout, "%s   %s\n", cliBold(stdout, "URnetwork miner setup"), cliDim(stdout, cliBareVersion()+" · "+runtime.GOOS+"/"+runtime.GOARCH))
+	fmt.Fprintf(stdout, "%s\n", cliDim(stdout, "State folder: "+displayStateDir()))
 
 	// 1. sign in
 	run.heading("Sign in")
@@ -126,10 +133,18 @@ func setupCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 	run.heading("Register this device")
 	device := readMinerDevice()
 	switch {
-	case device.hasHistory && device.clientId != "":
+	case device.clientId != "":
 		run.ok("Already registered, miner identity " + shortId(device.clientId))
 	case device.hasHistory:
-		run.ok("Already has a miner identity")
+		// an earlier first start made the key but didn't finish registering
+		fmt.Fprintln(stdout, "  An earlier registration of this device didn't finish.")
+		if !run.ask("Finish it now?", true) {
+			fmt.Fprintln(stdout, "  Not registered. Run provider setup again when you're ready.")
+			return minerExitNeedsSetup
+		}
+		if !setupRegister(run) {
+			return 1
+		}
 	default:
 		fmt.Fprintln(stdout, "  This device is new, so it gets its own miner identity.")
 		if !run.ask("Register it now?", true) {
@@ -148,6 +163,13 @@ func setupCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 
 	// 4. keep it running
 	run.heading("Keep it running")
+	if !system && os.Geteuid() == 0 {
+		// root has no user session to keep a user service; use a system one
+		// on the state folder set up above
+		system = true
+		dir, _ := providerStateDir()
+		os.Setenv("URNETWORK_STATE_DIR", dir)
+	}
 	if noService {
 		run.note("Skipped (--no-service). Start it by hand with: provider start")
 	} else if manager, err := minerServiceFor(system); err != nil {
@@ -164,7 +186,8 @@ func setupCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 	} else if run.ask("Start the miner now and on every boot?", true) {
 		opts := docopt.Opts{"install": true, "--system": system}
 		if code := serviceCmd(opts, stdout, stderr); code != 0 {
-			return code
+			fmt.Fprintln(stdout, "\n  Everything else is set up. Start the miner by hand with: provider start")
+			return minerExitOffline
 		}
 	} else {
 		run.note("Start it by hand with: provider start")
@@ -183,8 +206,8 @@ func setupSignIn(run *setupRun, codeFile string) bool {
 		}
 		var out bytes.Buffer
 		// the code goes in on stdin, never on a command line others can see
-		if err := runSelf([]string{"auth", "-f"}, bytes.NewReader(raw), &out, &out); err != nil {
-			writeCliError(run.errOut, "Sign-in failed:\n"+indent(strings.TrimSpace(out.String())))
+		if err := runSelf([]string{"auth", "-f"}, bytes.NewReader(raw), &out, newMinerLogFilter(&out)); err != nil {
+			writeCliError(run.errOut, "Sign-in failed: "+setupChildMessage(out.String()))
 			return false
 		}
 	} else {
@@ -193,7 +216,7 @@ func setupSignIn(run *setupRun, codeFile string) bool {
 			return false
 		}
 		fmt.Fprintln(run.out, "  Get an auth code from your URnetwork app or account page, and paste it here.")
-		if err := runSelf([]string{"auth", "-f"}, run.in, run.out, run.errOut); err != nil {
+		if err := runSelf([]string{"auth", "-f"}, run.in, run.out, newMinerLogFilter(run.errOut)); err != nil {
 			return false
 		}
 	}
@@ -300,6 +323,64 @@ func setupPayout(run *setupRun) {
 		return
 	}
 	run.ok("Payouts will go to " + shortId(address))
+}
+
+// setupChildMessage is what a step printed, without its prompt or the mark
+// of its own error line.
+func setupChildMessage(output string) string {
+	lines := []string{}
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, authCodePrompt), "✗ "))
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return "no reason given"
+	}
+	return strings.Join(lines, "\n  ")
+}
+
+// minerLogFilter passes a step's messages on and sends the miner's log
+// lines (glog and the standard log) to miner.log instead.
+type minerLogFilter struct {
+	out    io.Writer
+	buffer []byte
+}
+
+var minerLogLinePattern = regexp.MustCompile(`^([IWEF]\d{4} \d\d:\d\d:\d\d|\d{4}/\d\d/\d\d \d\d:\d\d:\d\d )`)
+
+func newMinerLogFilter(out io.Writer) io.Writer {
+	return &minerLogFilter{out: out}
+}
+
+func (self *minerLogFilter) Write(p []byte) (int, error) {
+	self.buffer = append(self.buffer, p...)
+	for {
+		i := bytes.IndexByte(self.buffer, '\n')
+		if i < 0 {
+			break
+		}
+		line := self.buffer[:i+1]
+		if minerLogLinePattern.Match(line) {
+			appendMinerLog(line)
+		} else {
+			self.out.Write(line)
+		}
+		self.buffer = self.buffer[i+1:]
+	}
+	return len(p), nil
+}
+
+func appendMinerLog(line []byte) {
+	path, err := providerStatePath(minerLogFileName)
+	if err != nil {
+		return
+	}
+	if file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600); err == nil {
+		file.Write(line)
+		file.Close()
+	}
 }
 
 func indent(text string) string {

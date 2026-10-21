@@ -157,8 +157,12 @@ func TestStatusReportAndExitCodes(t *testing.T) {
 		next  string
 	}{
 		{func() {}, "needs_setup", minerExitNeedsSetup, "provider setup"},
-		{func() { writeState(t, dir, "jwt", fakeJwt(map[string]any{"network_name": "kitchen-pi"})) }, "needs_setup", minerExitNeedsSetup, "provider start"},
-		{func() { writeState(t, dir, ".provider.key", strings.Repeat("k", 32)) }, "stopped", minerExitOffline, "provider start"},
+		{func() { writeState(t, dir, "jwt", fakeJwt(map[string]any{"network_name": "kitchen-pi"})) }, "needs_setup", minerExitNeedsSetup, "provider setup"},
+		// a key alone is a registration that didn't finish
+		{func() { writeState(t, dir, ".provider.key", strings.Repeat("k", 32)) }, "needs_setup", minerExitNeedsSetup, "provider setup"},
+		{func() {
+			writeState(t, dir, ".provider.jwt", fakeJwt(map[string]any{"client_id": "01a15cc0-0000-0000-0000-00000000c21f", "device_id": "x"}))
+		}, "stopped", minerExitOffline, "provider start"},
 		{func() { writeLocalStatus(t, false, time.Minute) }, "connecting", minerExitOffline, "provider doctor"},
 		{func() { writeLocalStatus(t, true, 76*time.Hour) }, "running", 0, ""},
 	}
@@ -343,7 +347,7 @@ func TestUpdateOptOut(t *testing.T) {
 		t.Fatal("--off didn't stick")
 	}
 	out.Reset()
-	if autoUpdate(&out, readMinerUpdateState()); !strings.Contains(out.String(), "skipped") {
+	if autoUpdate(&out, readMinerUpdateState(), "/nonexistent/provider"); !strings.Contains(out.String(), "skipped") {
 		t.Fatalf("--auto ran while off: %q", out.String())
 	}
 	updateCmd(docopt.Opts{"--on": true}, &out, &errOut)
@@ -369,7 +373,7 @@ func TestAutoUpdateSkipsAHeldBackVersion(t *testing.T) {
 	until := time.Now().Add(time.Hour)
 	state := minerUpdateState{HeldBack: "2026.10.22-6", HeldUntil: &until}
 	var out bytes.Buffer
-	autoUpdate(&out, state)
+	autoUpdate(&out, state, "/nonexistent/provider")
 	if !strings.Contains(out.String(), "rolled back; skipped") {
 		t.Fatalf("%q", out.String())
 	}
@@ -489,5 +493,80 @@ func TestPhase2CommandsParse(t *testing.T) {
 	}
 	if _, err := parser.ParseArgs(mainUsage(), []string{"update", "--on", "--off"}, ""); err == nil {
 		t.Fatal("--on with --off parsed")
+	}
+}
+
+func TestServiceFilesRoundTrip(t *testing.T) {
+	phase2State(t)
+	unitDir := t.TempDir()
+	systemd := &systemdService{name: "urnetwork-provider", dir: unitDir}
+	executable, stateDir := "/opt/50% $HOME/provider", "/var/lib/ur state"
+	for file, text := range systemdUnits(systemd.name, executable, stateDir, false) {
+		os.WriteFile(filepath.Join(unitDir, file), []byte(text), 0644)
+	}
+	unit, _ := os.ReadFile(filepath.Join(unitDir, "urnetwork-provider.service"))
+	if !strings.Contains(string(unit), "50%% $$HOME") {
+		t.Fatalf("specifiers not escaped:\n%s", unit)
+	}
+	if gotExe, gotDir := systemd.configured(); gotExe != executable || gotDir != stateDir {
+		t.Fatalf("systemd: %q %q", gotExe, gotDir)
+	}
+	launchd := &launchdService{label: minerLaunchdLabel, dir: t.TempDir()}
+	for label, text := range launchdPlists(launchd.label, "/Users/me/a&b/provider", "/Users/me/.urnetwork", minerServiceDefaultName) {
+		os.WriteFile(launchd.plistPath(label), []byte(text), 0644)
+	}
+	if gotExe, gotDir := launchd.configured(); gotExe != "/Users/me/a&b/provider" || gotDir != "/Users/me/.urnetwork" {
+		t.Fatalf("launchd: %q %q", gotExe, gotDir)
+	}
+}
+
+func TestUpdateDownloadsOnlyFromGitHub(t *testing.T) {
+	for location, want := range map[string]bool{
+		"https://github.com/urnetwork/build/releases/download/v1/a.tar.gz": true,
+		"https://objects.githubusercontent.com/x":                          true,
+		"http://github.com/x":                                              false,
+		"https://example.com/a.tar.gz":                                     false,
+		"https://github.com.evil.example/a":                                false,
+		"a.tar.gz":                                                         false,
+		"file:///tmp/a.tar.gz":                                             false,
+	} {
+		if minerTrustedDownload(location) != want {
+			t.Errorf("%s: want %v", location, want)
+		}
+	}
+}
+
+func TestSystemServiceNeedsARootOnlyBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix ownership")
+	}
+	path := filepath.Join(t.TempDir(), "provider")
+	os.WriteFile(path, []byte("x"), 0755)
+	if os.Geteuid() == 0 {
+		os.Chmod(filepath.Dir(path), 0777)
+	}
+	if rootOnlyProblem(path) == "" {
+		t.Fatal("a binary others can change passed")
+	}
+	if rootOnlyProblem("/bin/sh") != "" && os.Geteuid() == 0 {
+		t.Log("/bin/sh is not root-only here")
+	}
+}
+
+func TestStartLeavesAnUnfinishedRegistrationToAPerson(t *testing.T) {
+	dir := phase2State(t)
+	writeState(t, dir, "jwt", fakeJwt(map[string]any{"network_name": "kitchen-pi"}))
+	writeState(t, dir, ".provider.key", strings.Repeat("k", 32))
+	opts := docopt.Opts{}
+	var out, errOut bytes.Buffer
+	// outside a terminal the miner starts as it always did and says why it can't
+	if !providePreflight(opts, true, nil, &out, &errOut) {
+		t.Fatal(errOut.String())
+	}
+	if allow, _ := opts.Bool("--allow-client-registration"); allow {
+		t.Fatal("registration allowed without a person")
+	}
+	if report, code := buildMinerStatusReport(time.Now()); report.Registered || code != minerExitNeedsSetup {
+		t.Fatalf("a key alone reads as registered: %+v", report)
 	}
 }

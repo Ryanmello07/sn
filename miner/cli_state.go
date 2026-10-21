@@ -203,6 +203,8 @@ func readMinerSignIn() minerSignIn {
 type minerDevice struct {
 	hasKey     bool
 	hasHistory bool
+	// registered: the network gave some slot of this device a client
+	registered bool
 	clientId   string
 }
 
@@ -224,6 +226,9 @@ func readMinerDevice() minerDevice {
 		device.hasHistory = true
 		if name == ".provider.key" {
 			device.hasKey = true
+		}
+		if strings.HasSuffix(name, ".jwt") {
+			device.registered = true
 		}
 	}
 	if raw, err := os.ReadFile(filepath.Join(dir, ".provider.jwt")); err == nil {

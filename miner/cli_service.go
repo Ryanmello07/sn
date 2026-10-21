@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -84,6 +85,18 @@ var cliExecutable = func() (string, error) {
 	return filepath.EvalSymlinks(path)
 }
 
+// minerServiceEnvironment is the part of this environment the service needs
+// too: extra TLS roots behind an inspecting proxy, and the update settings.
+func minerServiceEnvironment() []string {
+	out := []string{}
+	for _, key := range []string{"URNETWORK_CONNECT_EXTRA_ROOT_CA_FILE", "URNETWORK_AUTO_UPDATE", "URNETWORK_UPDATE_URL"} {
+		if value := os.Getenv(key); value != "" {
+			out = append(out, key+"="+value)
+		}
+	}
+	return out
+}
+
 // minerServiceManager is what one platform's service manager can do.
 type minerServiceManager interface {
 	kind() string
@@ -95,6 +108,8 @@ type minerServiceManager interface {
 	logs(follow bool) error
 	// foreign names a miner service this command didn't install, if any.
 	foreign() string
+	// configured is the binary and state folder the installed service uses.
+	configured() (executable string, stateDir string)
 }
 
 // minerServiceFor picks the manager for this system, or explains why none.
@@ -142,6 +157,13 @@ func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 			writeCliError(stderr, "Couldn't find this program's own path: "+err.Error())
 			return 1
 		}
+		if system {
+			// root will run this file: only root may be able to change it
+			if problem := rootOnlyProblem(executable); problem != "" {
+				writeCliError(stderr, problem+"\n  A system service runs as root, so its binary must be one only root can change. Copy it first:\n  sudo install -m 755 "+cliShellQuote(executable)+" /usr/local/bin/provider\n  sudo /usr/local/bin/provider service install --system")
+				return 1
+			}
+		}
 		stateDir, err := minerServiceStateDir(system)
 		if err != nil {
 			writeCliError(stderr, err.Error())
@@ -153,6 +175,12 @@ func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "  %s Installed %s (%s); it starts now and on every boot\n", cliGreen(stdout, "✓"), name, manager.kind())
 		fmt.Fprintf(stdout, "  %s Automatic updates: checked every 6 hours\n", cliGreen(stdout, "✓"))
+		if problem := writableDirProblem(filepath.Dir(executable)); problem != "" {
+			fmt.Fprintf(stdout, "  %s But updates can't install: %s.\n    Put the binary in a folder you own (like ~/.local/bin), or use a system service.\n", cliYellow(stdout, "!"), problem)
+		}
+		if source, test := minerUpdateSource(); test {
+			fmt.Fprintf(stdout, "  %s Updates come from the test feed %s (URNETWORK_UPDATE_URL), not from releases\n", cliYellow(stdout, "!"), source)
+		}
 		reportServiceStart(stdout, 20*time.Second)
 		fmt.Fprintln(stdout, "\nCheck on it any time: provider status")
 		return 0
@@ -296,11 +324,42 @@ func (self *systemdService) foreign() string {
 	return ""
 }
 
+// systemdQuote writes one value for a unit file: % and $ are systemd's
+// specifier and variable marks, so they are doubled.
 func systemdQuote(value string) string {
+	value = strings.ReplaceAll(strings.ReplaceAll(value, "%", "%%"), "$", "$$")
 	if !strings.ContainsAny(value, " \t\"\\'") {
 		return value
 	}
 	return strconv.Quote(value)
+}
+
+func systemdUnquote(value string) string {
+	value = strings.TrimSpace(value)
+	if unquoted, err := strconv.Unquote(value); err == nil {
+		value = unquoted
+	}
+	return strings.ReplaceAll(strings.ReplaceAll(value, "%%", "%"), "$$", "$")
+}
+
+func (self *systemdService) configured() (string, string) {
+	raw, err := os.ReadFile(self.unitPath(".service"))
+	if err != nil {
+		return "", ""
+	}
+	executable, stateDir := "", ""
+	for _, line := range strings.Split(string(raw), "\n") {
+		if rest, ok := strings.CutPrefix(line, "ExecStart="); ok {
+			rest = strings.TrimSuffix(strings.TrimSpace(rest), " start")
+			executable = systemdUnquote(rest)
+		}
+		if rest, ok := strings.CutPrefix(line, "Environment="); ok {
+			if value, ok := strings.CutPrefix(systemdUnquote(rest), "URNETWORK_STATE_DIR="); ok {
+				stateDir = value
+			}
+		}
+	}
+	return executable, stateDir
 }
 
 // systemdUnits are the files provider service install writes on Linux.
@@ -312,6 +371,9 @@ func systemdUnits(name string, executable string, stateDir string, system bool) 
 	environment := fmt.Sprintf("Environment=%s\n", systemdQuote("URNETWORK_STATE_DIR="+stateDir))
 	if name != minerServiceDefaultName {
 		environment += fmt.Sprintf("Environment=%s\n", systemdQuote("URNETWORK_SERVICE_NAME="+name))
+	}
+	for _, variable := range minerServiceEnvironment() {
+		environment += fmt.Sprintf("Environment=%s\n", systemdQuote(variable))
 	}
 	return map[string]string{
 		name + ".service": fmt.Sprintf(`# Installed by provider service install. Remove with: provider service uninstall
@@ -379,7 +441,11 @@ func (self *systemdService) install(executable string, stateDir string, out io.W
 	if _, err := self.systemctl("daemon-reload"); err != nil {
 		removeUnits()
 		if strings.Contains(err.Error(), "bus") && !self.system {
-			return fmt.Errorf("%s.\n  This login has no systemd user session (common over su, some SSH setups and containers).\n  Use a system service instead: sudo provider service install --system", err)
+			sudo := "sudo "
+			if os.Geteuid() == 0 {
+				sudo = ""
+			}
+			return fmt.Errorf("%s.\n  This login has no systemd user session (common over su, some SSH setups and containers).\n  Use a system service instead: %sprovider service install --system", err, sudo)
 		}
 		return err
 	}
@@ -472,6 +538,28 @@ func (self *launchdService) active() bool {
 
 func (self *launchdService) foreign() string { return "" }
 
+var launchdProgramPattern = regexp.MustCompile(`<key>ProgramArguments</key>\s*<array>\s*<string>([^<]*)</string>`)
+var launchdStatePattern = regexp.MustCompile(`<key>URNETWORK_STATE_DIR</key>\s*<string>([^<]*)</string>`)
+
+func plistUnescape(value string) string {
+	return strings.NewReplacer("&lt;", "<", "&gt;", ">", "&amp;", "&").Replace(value)
+}
+
+func (self *launchdService) configured() (string, string) {
+	raw, err := os.ReadFile(self.plistPath(self.label))
+	if err != nil {
+		return "", ""
+	}
+	executable, stateDir := "", ""
+	if match := launchdProgramPattern.FindSubmatch(raw); match != nil {
+		executable = plistUnescape(string(match[1]))
+	}
+	if match := launchdStatePattern.FindSubmatch(raw); match != nil {
+		stateDir = plistUnescape(string(match[1]))
+	}
+	return executable, stateDir
+}
+
 func plistEscape(value string) string {
 	var b strings.Builder
 	for _, r := range value {
@@ -494,6 +582,10 @@ func launchdPlists(label string, executable string, stateDir string, serviceName
 	environment := fmt.Sprintf("\t\t<key>URNETWORK_STATE_DIR</key>\n\t\t<string>%s</string>\n", plistEscape(stateDir))
 	if serviceName != minerServiceDefaultName {
 		environment += fmt.Sprintf("\t\t<key>URNETWORK_SERVICE_NAME</key>\n\t\t<string>%s</string>\n", plistEscape(serviceName))
+	}
+	for _, variable := range minerServiceEnvironment() {
+		key, value, _ := strings.Cut(variable, "=")
+		environment += fmt.Sprintf("\t\t<key>%s</key>\n\t\t<string>%s</string>\n", key, plistEscape(value))
 	}
 	logPath := plistEscape(filepath.Join(stateDir, "service.log"))
 	return map[string]string{
@@ -570,7 +662,17 @@ func (self *launchdService) install(executable string, stateDir string, out io.W
 		if err := os.WriteFile(path, []byte(text), 0644); err != nil {
 			return err
 		}
-		if out, err := cliRun("launchctl", "bootstrap", self.domain(), path); err != nil {
+		var out string
+		var err error
+		for attempt := 0; attempt < 5; attempt++ {
+			if out, err = cliRun("launchctl", "bootstrap", self.domain(), path); err == nil {
+				break
+			}
+			// "Input/output error" while the old job is still being torn down
+			time.Sleep(time.Second)
+		}
+		if err != nil {
+			_ = self.uninstall(io.Discard)
 			if out != "" {
 				return fmt.Errorf("%s", firstLine(out))
 			}

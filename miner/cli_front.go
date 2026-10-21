@@ -201,8 +201,8 @@ Examples
   provider login                 # or by hand: paste the auth code when asked,
   provider start                 # then start mining in this terminal
 
-State lives in ~/.urnetwork. Docs: https://ur.xyz/docs/miner
-`, version)
+State lives in %s. Docs: https://ur.xyz/docs/miner
+`, version, displayStateDir())
 }
 
 func cliBareVersion() string {
@@ -748,6 +748,9 @@ func cliPanicMessage(args []string, recovered any) string {
 	if errors.Is(err, errPromptInterrupted) {
 		return "Cancelled. Nothing was changed."
 	}
+	if (command == "auth" || command == "login") && (errors.Is(err, io.EOF) || errors.Is(err, errEmptyAuthCode)) && os.Getenv(cliSetupStepEnv) != "" {
+		return "No auth code was entered. Get one from your URnetwork app or account page,\n  then run provider setup again."
+	}
 	if (command == "auth" || command == "login" || command == "auth-provide") && (errors.Is(err, io.EOF) || errors.Is(err, errEmptyAuthCode)) {
 		return "No auth code was entered.\n" +
 			"  Get one from your URnetwork app or account page, then run:\n" +
@@ -799,8 +802,9 @@ func recoverCliPanic(args []string, stderr io.Writer) {
 		fmt.Fprintln(stderr, cliPanicMessage(args, recovered))
 		os.Exit(130)
 	}
-	// logs (systemd, docker) keep the full panic, as before
-	if 2 <= cliVerbosity(args) || os.Getenv("PROVIDER_DEBUG") != "" || !cliIsTerminal(stderr) {
+	// logs (systemd, docker) keep the full panic, as before; a step of
+	// provider setup answers in plain words, since setup shows it to a person
+	if 2 <= cliVerbosity(args) || os.Getenv("PROVIDER_DEBUG") != "" || !cliIsTerminal(stderr) && os.Getenv(cliSetupStepEnv) == "" {
 		panic(recovered)
 	}
 	writeCliError(stderr, cliPanicMessage(args, recovered))
