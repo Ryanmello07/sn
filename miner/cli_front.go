@@ -1,0 +1,582 @@
+package miner
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"regexp"
+	"runtime"
+	"sort"
+	"strings"
+
+	"golang.org/x/term"
+
+	"github.com/docopt/docopt-go"
+)
+
+// The friendly front of the CLI. mainUsage stays the one grammar and the
+// complete reference; this layer answers help and version itself, gives
+// everyday commands friendlier names, and turns a parse error or a panic
+// into a short message instead of the whole usage text or a goroutine trace.
+// Every existing invocation still parses and runs exactly as before.
+
+// cliAliases maps a friendly command to the argv it stands for. Only the
+// leading words are rewritten; the rest of argv follows unchanged.
+var cliAliases = []struct {
+	words   []string
+	replace []string
+}{
+	{[]string{"start"}, []string{"provide"}},
+	{[]string{"login"}, []string{"auth"}},
+	{[]string{"network", "show"}, []string{"choose_network", "--show"}},
+	{[]string{"network", "reset"}, []string{"choose_network", "--reset"}},
+	{[]string{"network", "use"}, []string{"choose_network"}},
+	{[]string{"network"}, []string{"choose_network", "--show"}},
+}
+
+// cliAliasCommands returns each alias's first word, so docs may name it.
+func cliAliasCommands() map[string]bool {
+	out := map[string]bool{}
+	for _, alias := range cliAliases {
+		out[alias.words[0]] = true
+	}
+	return out
+}
+
+// cliCommandHelp is the plain-language part of `provider <command> --help`.
+// The usage forms and option text come from mainUsage, so they never drift.
+var cliCommandHelp = map[string]struct {
+	summary  string
+	alias    string
+	examples []string
+}{
+	"auth": {
+		summary: "Sign this device in to the network. Get an auth code from your URnetwork app or\naccount page; with no code on the command line you are asked to paste it.",
+		alias:   "login",
+		examples: []string{
+			"provider login                       # paste the code when asked",
+			"provider login --user_auth=you@example.com",
+			"provider auth --operator=<domain>    # sign in to one operator from the list",
+		},
+	},
+	"provide": {
+		summary: "Run the miner in this terminal until it is stopped (Ctrl-C).\nThe very first start on a new device needs --allow-client-registration.",
+		alias:   "start",
+		examples: []string{
+			"provider start --allow-client-registration   # first start on a new device",
+			"provider start                               # every start after that",
+			"provider start --all-operators               # mine every listed operator",
+		},
+	},
+	"auth-provide": {
+		summary: "Sign in, then start mining: auth followed by provide in one command.",
+	},
+	"operators": {
+		summary: "List the operators in the published operator list and whether this device\nis signed in to each.",
+		examples: []string{
+			"provider operators",
+		},
+	},
+	"wallet": {
+		summary: "Set the wallet your rewards are paid to: a Bittensor coldkey address (ss58,\nstarts with 5). You prove you own it by signing a challenge, either here with\nthe seed file or on another device.",
+		examples: []string{
+			"provider wallet challenge 5Grw...utQY      # print the text to sign elsewhere",
+			"provider wallet set 5Grw...utQY --message=\"$(cat challenge.txt)\" --signature=0x...",
+			"provider wallet set 5Grw...utQY --coldkey_seed_file=~/.keys/cold.seed",
+		},
+	},
+	"claim": {
+		summary: "Fetch and verify the pool claim for an epoch. With --key_file it also submits it.",
+		examples: []string{
+			"provider claim --rpc=<rpc_url> --dry-run",
+		},
+	},
+	"claim-daemon": {
+		summary: "Submit claims automatically from a durable queue (release-1.0 configuration).",
+	},
+	"claim-daemon-v2": {
+		summary: "Claim each account automatically once its balance passes a threshold.",
+	},
+	"fleet": {
+		summary: "Head-tier fleet management: manifests, registration, bindings and revocation.\nRegistration is a dry run unless --apply is given.",
+	},
+	"proxy": {
+		summary: "Add or remove SOCKS5 exits. Each exit gets its own provider slot.",
+		examples: []string{
+			"provider proxy add 203.0.113.7:1080:user:pass",
+			"provider proxy add --proxy_file=proxies.txt",
+		},
+	},
+	"choose_network": {
+		summary: "Show or switch the network this device connects to. The default is the main network.",
+		alias:   "network",
+		examples: []string{
+			"provider network                     # show the network in effect",
+			"provider network use <api_url> <connect_url>",
+			"provider network reset               # back to the main network",
+		},
+	},
+}
+
+func cliOverview() string {
+	version := RequireVersion()
+	if version == "" {
+		version = "development build"
+	}
+	return fmt.Sprintf(`provider: the URnetwork miner                     %s
+
+Usage: provider <command> [options]
+
+Get started
+  login         Sign this device in with an auth code     (same as auth)
+  start         Start mining in this terminal             (same as provide)
+  wallet        Set the wallet your rewards are paid to
+
+Manage
+  operators     List operators and whether you are signed in to each
+  network       Show or switch the network          (same as choose_network)
+  proxy         Add or remove SOCKS5 exits
+
+Advanced
+  claim, claim-daemon, claim-daemon-v2, fleet, auth-provide
+
+Help
+  provider <command> --help    Usage, options and examples for one command
+  provider help all            The complete reference: every command and option
+  provider --version           Print the version
+
+Examples
+  provider login                                # paste the auth code when asked
+  provider start --allow-client-registration    # first start on a new device
+  provider start                                # every start after that
+
+State lives in ~/.urnetwork. Docs: https://ur.xyz/docs/miner
+`, version)
+}
+
+func cliVersion() string {
+	version := RequireVersion()
+	if version == "" {
+		version = "(development build)"
+	}
+	return fmt.Sprintf("provider %s %s/%s", version, runtime.GOOS, runtime.GOARCH)
+}
+
+// cliFront handles what the friendly front answers on its own. It returns the
+// argv to parse, or done with the exit code when it already answered.
+func cliFront(args []string, stdout io.Writer, stderr io.Writer) (rest []string, done bool, code int) {
+	if len(args) == 0 {
+		fmt.Fprint(stdout, cliOverview())
+		return nil, true, 0
+	}
+	switch args[0] {
+	case "--version", "version":
+		fmt.Fprintln(stdout, cliVersion())
+		return nil, true, 0
+	case "-h", "--help":
+		fmt.Fprint(stdout, cliOverview())
+		return nil, true, 0
+	case "help":
+		if len(args) == 1 {
+			fmt.Fprint(stdout, cliOverview())
+			return nil, true, 0
+		}
+		if args[1] == "all" || args[1] == "advanced" {
+			fmt.Fprintln(stdout, mainUsage())
+			return nil, true, 0
+		}
+		args = append(rewriteCliAlias(args[1:]), "--help")
+	}
+
+	args = rewriteCliAlias(args)
+	commands := usageCommands(mainUsage(), "provider")
+	if !commands[args[0]] {
+		writeCliError(stderr, unknownCliCommand(args[0], commands))
+		return nil, true, 1
+	}
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" {
+			fmt.Fprint(stdout, cliCommandUsage(args))
+			return nil, true, 0
+		}
+	}
+	return args, false, 0
+}
+
+func rewriteCliAlias(args []string) []string {
+	for _, alias := range cliAliases {
+		if len(alias.words) <= len(args) && equalWords(alias.words, args[:len(alias.words)]) {
+			out := append([]string{}, alias.replace...)
+			return append(out, args[len(alias.words):]...)
+		}
+	}
+	return args
+}
+
+func equalWords(a []string, b []string) bool {
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func unknownCliCommand(name string, commands map[string]bool) string {
+	if strings.HasPrefix(name, "-") {
+		return fmt.Sprintf("%q needs a command before it.\n  All commands: provider --help", name)
+	}
+	candidates := []string{}
+	for command := range commands {
+		candidates = append(candidates, command)
+	}
+	for command := range cliAliasCommands() {
+		candidates = append(candidates, command)
+	}
+	if suggestion := closestWord(name, candidates); suggestion != "" {
+		return fmt.Sprintf("Unknown command %q. Did you mean %q?\n  All commands: provider --help", name, suggestion)
+	}
+	return fmt.Sprintf("Unknown command %q.\n  All commands: provider --help", name)
+}
+
+// cliParseError explains why argv did not match the usage of its command, in
+// place of docopt printing every usage line.
+func cliParseError(args []string) string {
+	known := usageOptionNames(mainUsage())
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			continue
+		}
+		name, _, _ := strings.Cut(arg, "=")
+		if isVerbosityArg(name) || known[name] {
+			continue
+		}
+		names := []string{}
+		for option := range known {
+			names = append(names, option)
+		}
+		message := fmt.Sprintf("Unknown option %s for %q.", name, "provider "+args[0])
+		if suggestion := closestWord(name, names); suggestion != "" {
+			message = fmt.Sprintf("Unknown option %s for %q. Did you mean %s?", name, "provider "+args[0], suggestion)
+		}
+		return message + "\n  Help: provider " + args[0] + " --help"
+	}
+	words := commandWords(args)
+	command := "provider " + strings.Join(words, " ")
+	forms := commandUsageForms(mainUsage(), words)
+	if len(words) < len(args) && !strings.HasPrefix(args[len(words)], "-") {
+		if subcommands := commandSubcommands(forms, words); 0 < len(subcommands) {
+			message := fmt.Sprintf("Unknown command %q for %q.", args[len(words)], command)
+			if suggestion := closestWord(args[len(words)], subcommands); suggestion != "" {
+				message = fmt.Sprintf("Unknown command %q for %q. Did you mean %q?", args[len(words)], command, suggestion)
+			}
+			return message + "\n  Help: " + command + " --help"
+		}
+	}
+	var b strings.Builder
+	if len(words) == len(args) {
+		fmt.Fprintf(&b, "%q needs more. It can be run as:\n", command)
+	} else {
+		fmt.Fprintf(&b, "Those arguments don't match %q. It can be run as:\n", command)
+	}
+	for _, form := range forms {
+		fmt.Fprintf(&b, "    %s\n", firstLine(form))
+	}
+	fmt.Fprintf(&b, "  Help: %s --help", command)
+	return b.String()
+}
+
+// commandSubcommands returns the literal words that may follow words in forms.
+func commandSubcommands(forms []string, words []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, form := range forms {
+		fields := strings.Fields(firstLine(form))
+		if len(words)+1 < len(fields) {
+			next := fields[len(words)+1]
+			if regexp.MustCompile(`^[a-z][a-z0-9_-]*$`).MatchString(next) && !seen[next] {
+				seen[next] = true
+				out = append(out, next)
+			}
+		}
+	}
+	return out
+}
+
+// cliParser parses argv against mainUsage, answering a mismatch with
+// cliParseError rather than the whole usage text.
+func cliParser(args []string, stderr io.Writer) *docopt.Parser {
+	return &docopt.Parser{
+		HelpHandler: func(err error, usage string) {
+			if err != nil {
+				writeCliError(stderr, cliParseError(args))
+				os.Exit(1)
+			}
+			docopt.PrintHelpAndExit(err, usage)
+		},
+	}
+}
+
+// cliCommandUsage is `provider <command> --help`: a summary, the command's
+// usage forms, the options those forms use and a few examples.
+func cliCommandUsage(args []string) string {
+	usage := mainUsage()
+	words := commandWords(args)
+	help := cliCommandHelp[words[0]]
+	var b strings.Builder
+	title := "provider " + strings.Join(words, " ")
+	if help.alias != "" && len(words) == 1 {
+		title += "  (also: provider " + help.alias + ")"
+	}
+	fmt.Fprintf(&b, "%s\n\n", title)
+	if help.summary != "" {
+		fmt.Fprintf(&b, "%s\n\n", help.summary)
+	}
+	forms := commandUsageForms(usage, words)
+	fmt.Fprintf(&b, "Usage:\n")
+	for _, form := range forms {
+		fmt.Fprintf(&b, "%s\n", form)
+	}
+	if options := commandOptionText(usage, forms); options != "" {
+		fmt.Fprintf(&b, "\nOptions:\n%s", options)
+	}
+	if 0 < len(help.examples) && len(words) == 1 {
+		fmt.Fprintf(&b, "\nExamples:\n")
+		for _, example := range help.examples {
+			fmt.Fprintf(&b, "    %s\n", example)
+		}
+	}
+	fmt.Fprintf(&b, "\nEvery command and option: provider help all\n")
+	return b.String()
+}
+
+// commandWords is the command and the subcommands of argv that the usage
+// knows, e.g. [wallet hotkey set] from "wallet hotkey set 5F... --x".
+func commandWords(args []string) []string {
+	usage := mainUsage()
+	words := []string{args[0]}
+	for _, arg := range args[1:] {
+		if strings.HasPrefix(arg, "-") {
+			break
+		}
+		next := append(append([]string{}, words...), arg)
+		if len(commandUsageForms(usage, next)) == 0 {
+			break
+		}
+		words = next
+	}
+	return words
+}
+
+// commandUsageForms returns the usage entries (a `provider ...` line and its
+// continuation lines) whose words start with words.
+func commandUsageForms(usage string, words []string) []string {
+	section := usageSection(usage, "Usage:")
+	prefix := "provider " + strings.Join(words, " ")
+	var forms []string
+	var current []string
+	flush := func() {
+		if 0 < len(current) {
+			forms = append(forms, strings.Join(current, "\n"))
+		}
+		current = nil
+	}
+	matching := false
+	for _, line := range section {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "provider ") {
+			flush()
+			matching = trimmed == prefix || strings.HasPrefix(trimmed, prefix+" ")
+			if matching {
+				current = []string{"    " + trimmed}
+			}
+			continue
+		}
+		if matching && trimmed != "" {
+			current = append(current, "        "+trimmed)
+		}
+	}
+	flush()
+	return forms
+}
+
+// commandOptionText returns the Options entries for the options and
+// arguments that appear in forms, in the order the reference lists them.
+func commandOptionText(usage string, forms []string) string {
+	// "--x=<value>" names the option --x; only a bare <arg> names an argument
+	used := map[string]bool{}
+	for _, name := range optionPattern.FindAllString(optionValuePattern.ReplaceAllString(strings.Join(forms, " "), ""), -1) {
+		used[name] = true
+	}
+	var b strings.Builder
+	take := false
+	for _, line := range usageSection(usage, "Options:") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "-") || strings.HasPrefix(trimmed, "<") {
+			declaration, _, _ := strings.Cut(trimmed, "  ")
+			take = false
+			for _, name := range optionPattern.FindAllString(optionValuePattern.ReplaceAllString(declaration, ""), -1) {
+				if used[name] {
+					take = true
+				}
+			}
+		}
+		if take {
+			fmt.Fprintf(&b, "    %s\n", strings.ReplaceAll(strings.TrimRight(line, " "), "\t", "    ")[leadingWidth(line):])
+		}
+	}
+	return b.String()
+}
+
+var optionPattern = regexp.MustCompile(`--?[A-Za-z][A-Za-z0-9_-]*|<[a-z0-9_]+>`)
+
+var optionValuePattern = regexp.MustCompile(`=<[^>]*>`)
+
+// leadingWidth is how much of a reference line's indentation help drops; the
+// reference mixes tabs and spaces, so continuation lines keep their offset.
+func leadingWidth(line string) int {
+	expanded := strings.ReplaceAll(line, "\t", "    ")
+	width := len(expanded) - len(strings.TrimLeft(expanded, " "))
+	if 4 < width {
+		return 4
+	}
+	return width
+}
+
+func usageSection(usage string, header string) []string {
+	_, body, found := strings.Cut(usage, "\n"+header+"\n")
+	if !found {
+		return nil
+	}
+	if header == "Usage:" {
+		body, _, _ = strings.Cut(body, "\nOptions:\n")
+	}
+	return strings.Split(body, "\n")
+}
+
+func usageOptionNames(usage string) map[string]bool {
+	out := map[string]bool{"-h": true, "--help": true}
+	for _, name := range optionPattern.FindAllString(usage, -1) {
+		if strings.HasPrefix(name, "-") {
+			out[name] = true
+		}
+	}
+	return out
+}
+
+func isVerbosityArg(arg string) bool {
+	return regexp.MustCompile(`^-v+$`).MatchString(arg)
+}
+
+func cliVerbosity(args []string) int {
+	level := 0
+	for _, arg := range args {
+		if isVerbosityArg(arg) {
+			level += len(arg) - 1
+		}
+	}
+	return level
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	return strings.TrimSpace(line)
+}
+
+// closestWord returns the candidate within two edits of word (or that word
+// abbreviates), or "" when none is that close.
+func closestWord(word string, candidates []string) string {
+	sort.Strings(candidates)
+	best, bestDistance := "", 3
+	for _, candidate := range candidates {
+		distance := editDistance(word, candidate)
+		if 3 <= len(word) && strings.HasPrefix(candidate, word) && distance > 1 {
+			distance = 1
+		}
+		if distance < bestDistance {
+			best, bestDistance = candidate, distance
+		}
+	}
+	return best
+}
+
+func editDistance(a string, b string) int {
+	previous := make([]int, len(b)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		current := make([]int, len(b)+1)
+		current[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			current[j] = min(previous[j]+1, current[j-1]+1, previous[j-1]+cost)
+		}
+		previous = current
+	}
+	return previous[len(b)]
+}
+
+// writeCliError prints "✗ message" to w, the mark in red on a color terminal.
+func writeCliError(w io.Writer, message string) {
+	mark := "✗"
+	if cliColor(w) {
+		mark = "\x1b[31m✗\x1b[0m"
+	}
+	fmt.Fprintf(w, "%s %s\n", mark, message)
+}
+
+func cliColor(w io.Writer) bool {
+	file, ok := w.(*os.File)
+	if !ok || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+		return false
+	}
+	return term.IsTerminal(int(file.Fd()))
+}
+
+// cliPanicMessage is what a panic in a command becomes, unless -vv or
+// PROVIDER_DEBUG asks for the trace.
+func cliPanicMessage(args []string, recovered any) string {
+	err, _ := recovered.(error)
+	command := ""
+	if 0 < len(args) {
+		command = args[0]
+	}
+	if (command == "auth" || command == "login" || command == "auth-provide") && (errors.Is(err, io.EOF) || errors.Is(err, errEmptyAuthCode)) {
+		return "No auth code was entered.\n" +
+			"  Get one from your URnetwork app or account page, then run:\n" +
+			"  provider login <auth_code>"
+	}
+	return fmt.Sprintf("%v\n  For technical details run the command again with -vv.", recovered)
+}
+
+func recoverCliPanic(args []string, stderr io.Writer) {
+	recovered := recover()
+	if recovered == nil {
+		return
+	}
+	if 2 <= cliVerbosity(args) || os.Getenv("PROVIDER_DEBUG") != "" {
+		panic(recovered)
+	}
+	writeCliError(stderr, cliPanicMessage(args, recovered))
+	// a panic exited 2 before, and supervisors may rely on it
+	os.Exit(2)
+}
+
+// usageCommands returns the first word after the binary name on each docopt
+// usage line.
+func usageCommands(usage string, binary string) map[string]bool {
+	line := regexp.MustCompile(`(?m)^\s*` + binary + ` ([a-z][a-z0-9_-]*)`)
+	out := map[string]bool{}
+	for _, match := range line.FindAllStringSubmatch(usage, -1) {
+		out[match[1]] = true
+	}
+	return out
+}

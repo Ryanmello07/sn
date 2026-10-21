@@ -319,12 +319,17 @@ Options:
 // the subnet's provider: it runs the provide/proxy/auth flows plus the on-chain
 // wallet / claim / fleet actions (formerly connect/provider).
 func Run(args []string) {
+	defer recoverCliPanic(args, os.Stderr)
+	args, done, code := cliFront(args, os.Stdout, os.Stderr)
+	if done {
+		os.Exit(code)
+	}
 	// docopt alone would answer these with the whole usage text
 	if err := operatorArgsError(args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	opts, err := docopt.ParseArgs(mainUsage(), args, RequireVersion())
+	opts, err := cliParser(args, os.Stderr).ParseArgs(mainUsage(), args, RequireVersion())
 
 	if err != nil {
 		panic(err)
