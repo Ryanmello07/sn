@@ -160,7 +160,12 @@ func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		if system {
 			// root will run this file: only root may be able to change it
 			if problem := rootOnlyProblem(executable); problem != "" {
-				writeCliError(stderr, problem+"\n  A system service runs as root, so its binary must be one only root can change. Copy it first:\n  sudo install -m 755 "+cliShellQuote(executable)+" /usr/local/bin/provider\n  sudo /usr/local/bin/provider service install --system")
+				// Homebrew makes /usr/local/bin a user's own folder
+				dest := "/usr/local/bin"
+				if rootOnlyProblem(dest) != "" {
+					dest = "/opt/urnetwork/bin"
+				}
+				writeCliError(stderr, problem+"\n  A system service runs as root, so its binary must be one only root can change. Copy it first:\n  sudo mkdir -p "+dest+" && sudo install -m 755 "+cliShellQuote(executable)+" "+dest+"/provider\n  sudo "+dest+"/provider service install --system")
 				return 1
 			}
 		}
@@ -324,14 +329,19 @@ func (self *systemdService) foreign() string {
 	return ""
 }
 
-// systemdQuote writes one value for a unit file: % and $ are systemd's
-// specifier and variable marks, so they are doubled.
+// systemdQuote writes one value for a unit file: % is systemd's specifier
+// mark, so it is doubled.
 func systemdQuote(value string) string {
-	value = strings.ReplaceAll(strings.ReplaceAll(value, "%", "%%"), "$", "$$")
+	value = strings.ReplaceAll(value, "%", "%%")
 	if !strings.ContainsAny(value, " \t\"\\'") {
 		return value
 	}
 	return strconv.Quote(value)
+}
+
+// systemdExecQuote is systemdQuote for a command line, where $ also expands.
+func systemdExecQuote(value string) string {
+	return systemdQuote(strings.ReplaceAll(value, "$", "$$"))
 }
 
 func systemdUnquote(value string) string {
@@ -339,7 +349,7 @@ func systemdUnquote(value string) string {
 	if unquoted, err := strconv.Unquote(value); err == nil {
 		value = unquoted
 	}
-	return strings.ReplaceAll(strings.ReplaceAll(value, "%%", "%"), "$$", "$")
+	return strings.ReplaceAll(value, "%%", "%")
 }
 
 func (self *systemdService) configured() (string, string) {
@@ -351,7 +361,7 @@ func (self *systemdService) configured() (string, string) {
 	for _, line := range strings.Split(string(raw), "\n") {
 		if rest, ok := strings.CutPrefix(line, "ExecStart="); ok {
 			rest = strings.TrimSuffix(strings.TrimSpace(rest), " start")
-			executable = systemdUnquote(rest)
+			executable = strings.ReplaceAll(systemdUnquote(rest), "$$", "$")
 		}
 		if rest, ok := strings.CutPrefix(line, "Environment="); ok {
 			if value, ok := strings.CutPrefix(systemdUnquote(rest), "URNETWORK_STATE_DIR="); ok {
@@ -391,7 +401,7 @@ RestartPreventExitStatus=3
 
 [Install]
 WantedBy=%s
-`, systemdQuote(executable), environment, wantedBy),
+`, systemdExecQuote(executable), environment, wantedBy),
 		name + "-update.service": fmt.Sprintf(`# Installed by provider service install. Turn updates off with: provider update --off
 [Unit]
 Description=URnetwork miner automatic update
@@ -401,7 +411,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=%s update --auto
-%s`, systemdQuote(executable), environment),
+%s`, systemdExecQuote(executable), environment),
 		name + "-update.timer": `# Installed by provider service install
 [Unit]
 Description=Check for URnetwork miner updates every 6 hours

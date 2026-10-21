@@ -274,7 +274,7 @@ func fetchMinerRelease(ctx context.Context) (*minerRelease, error) {
 // build only takes updates from a test feed (URNETWORK_UPDATE_URL).
 func minerUpdateAvailable(release *minerRelease) (bool, string) {
 	latest, _ := parseMinerReleaseVersion(release.TagName)
-	current, ok := parseMinerReleaseVersion(cliBareVersion())
+	current, ok := parseMinerReleaseVersion(minerTargetVersion())
 	if !ok {
 		if _, test := minerUpdateSource(); test {
 			return true, ""
@@ -287,9 +287,27 @@ func minerUpdateAvailable(release *minerRelease) (bool, string) {
 	return false, ""
 }
 
+var errMinerUpdateLocked = errors.New("another update is running")
+
+// minerUpdateTargetPath, once set, is a binary other than this one that the
+// update replaces (the installed service's).
+var minerUpdateTargetPath string
+
+// minerTargetVersion is the version of the binary an update replaces.
+func minerTargetVersion() string {
+	if minerUpdateTargetPath == "" {
+		return cliBareVersion()
+	}
+	out, err := exec.Command(minerUpdateTargetPath, "--version").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // cliBuildName names a development build for a sentence.
 func cliBuildName() string {
-	if version := RequireVersion(); version != "" {
+	if version := minerTargetVersion(); version != "" {
 		return "a development build (" + version + ")"
 	}
 	return "a development build"
@@ -522,6 +540,9 @@ func minerUpdateTarget() (string, error) {
 			os.Setenv("URNETWORK_STATE_DIR", stateDir)
 		}
 		if executable != "" {
+			if own, err := cliExecutable(); err != nil || own != executable {
+				minerUpdateTargetPath = executable
+			}
 			return executable, nil
 		}
 		break
@@ -529,8 +550,29 @@ func minerUpdateTarget() (string, error) {
 	return cliExecutable()
 }
 
+// minerUpdateAccessProblem is why this user can't change the update state
+// or the binary of a service another user (root) owns.
+func minerUpdateAccessProblem(executable string, binary bool) string {
+	if dir, err := providerStateDir(); err == nil {
+		if _, err := os.Stat(dir); err == nil && writableDirProblem(dir) != "" || errors.Is(err, os.ErrPermission) {
+			return "its state in " + dir + " belongs to another user"
+		}
+	}
+	if binary && writableDirProblem(filepath.Dir(executable)) != "" {
+		return filepath.Dir(executable) + " isn't writable by this user"
+	}
+	return ""
+}
+
 func updateCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 	executable, executableErr := minerUpdateTarget()
+	if !cliOptBool(opts, "--status") && !cliOptBool(opts, "--check") && !cliOptBool(opts, "--auto") && executableErr == nil {
+		binary := !cliOptBool(opts, "--on") && !cliOptBool(opts, "--off")
+		if problem := minerUpdateAccessProblem(executable, binary); problem != "" && os.Geteuid() != 0 {
+			writeCliError(stderr, "Can't change this miner's updates: "+problem+".\n  Run it with sudo: sudo "+strings.Join(append([]string{"provider"}, os.Args[1:]...), " "))
+			return 1
+		}
+	}
 	state := readMinerUpdateState()
 	switch {
 	case cliOptBool(opts, "--on"), cliOptBool(opts, "--off"):
@@ -583,11 +625,11 @@ func updateCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		if why != "" {
 			fmt.Fprintf(stdout, "  The latest release is %s, but %s.\n", release.version(), why)
 		} else {
-			fmt.Fprintf(stdout, "  %s Up to date: %s is the latest release.\n", cliGreen(stdout, "✓"), cliBareVersion())
+			fmt.Fprintf(stdout, "  %s Up to date: %s is the latest release.\n", cliGreen(stdout, "✓"), minerTargetVersion())
 		}
 		return 0
 	}
-	fmt.Fprintf(stdout, "  %s is out (you have %s).\n", release.version(), cliBareVersion())
+	fmt.Fprintf(stdout, "  %s is out (%s has %s).\n", release.version(), executable, minerTargetVersion())
 	_ = writeMinerUpdateState(state)
 	if check {
 		fmt.Fprintln(stdout, "  Install it with: provider update")
@@ -600,8 +642,11 @@ func updateCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 // rolls back when it doesn't come back as healthy as it was.
 func applyMinerUpdate(stdout io.Writer, stderr io.Writer, release *minerRelease, executable string, auto bool) int {
 	unlock, err := lockMinerUpdate()
-	if err != nil {
+	if errors.Is(err, errMinerUpdateLocked) {
 		writeCliError(stderr, "Not updated: another update is running right now")
+		return 1
+	} else if err != nil {
+		writeCliError(stderr, "Not updated: "+err.Error())
 		return 1
 	}
 	defer unlock()
@@ -704,7 +749,7 @@ func autoUpdate(stdout io.Writer, state minerUpdateState, executable string) int
 		}
 	}
 	_ = writeMinerUpdateState(state)
-	fmt.Fprintf(stdout, "automatic update: installing %s (was %s)\n", release.version(), cliBareVersion())
+	fmt.Fprintf(stdout, "automatic update: installing %s (was %s)\n", release.version(), minerTargetVersion())
 	// a failed automatic update already said why; the timer itself succeeded
 	_ = applyMinerUpdate(stdout, stdout, release, executable, true)
 	return 0
@@ -713,7 +758,7 @@ func autoUpdate(stdout io.Writer, state minerUpdateState, executable string) int
 func printMinerUpdateStatus(stdout io.Writer, state minerUpdateState) {
 	on, why := minerAutoUpdate(state)
 	row := func(label string, value string) { fmt.Fprintf(stdout, "  %-18s %s\n", label, value) }
-	if _, ok := parseMinerReleaseVersion(cliBareVersion()); !ok {
+	if _, ok := parseMinerReleaseVersion(minerTargetVersion()); !ok {
 		if _, test := minerUpdateSource(); !test {
 			row("Automatic updates", "never: this is "+cliBuildName())
 			return

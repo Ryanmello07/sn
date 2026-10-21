@@ -34,6 +34,9 @@ func lockMinerUpdate() (func(), error) {
 	}
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		file.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, errMinerUpdateLocked
+		}
 		return nil, err
 	}
 	return func() {

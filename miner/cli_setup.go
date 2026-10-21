@@ -205,8 +205,12 @@ func setupSignIn(run *setupRun, codeFile string) bool {
 			return false
 		}
 		var out bytes.Buffer
-		// the code goes in on stdin, never on a command line others can see
-		if err := runSelf([]string{"auth", "-f"}, bytes.NewReader(raw), &out, newMinerLogFilter(&out)); err != nil {
+		filter := newMinerLogFilter(&out)
+		// the code goes in on stdin, never on a command line others can see;
+		// one writer for both streams, so exec copies them one at a time
+		err = runSelf([]string{"auth", "-f"}, bytes.NewReader(raw), filter, filter)
+		filter.flush()
+		if err != nil {
 			writeCliError(run.errOut, "Sign-in failed: "+setupChildMessage(out.String()))
 			return false
 		}
@@ -216,7 +220,10 @@ func setupSignIn(run *setupRun, codeFile string) bool {
 			return false
 		}
 		fmt.Fprintln(run.out, "  Get an auth code from your URnetwork app or account page, and paste it here.")
-		if err := runSelf([]string{"auth", "-f"}, run.in, run.out, newMinerLogFilter(run.errOut)); err != nil {
+		filter := newMinerLogFilter(run.errOut)
+		err := runSelf([]string{"auth", "-f"}, run.in, run.out, filter)
+		filter.flush()
+		if err != nil {
 			return false
 		}
 	}
@@ -350,8 +357,15 @@ type minerLogFilter struct {
 
 var minerLogLinePattern = regexp.MustCompile(`^([IWEF]\d{4} \d\d:\d\d:\d\d|\d{4}/\d\d/\d\d \d\d:\d\d:\d\d )`)
 
-func newMinerLogFilter(out io.Writer) io.Writer {
+func newMinerLogFilter(out io.Writer) *minerLogFilter {
 	return &minerLogFilter{out: out}
+}
+
+// flush passes on a last line that had no newline.
+func (self *minerLogFilter) flush() {
+	if 0 < len(self.buffer) {
+		self.Write([]byte("\n"))
+	}
 }
 
 func (self *minerLogFilter) Write(p []byte) (int, error) {

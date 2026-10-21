@@ -746,7 +746,7 @@ func cliPanicMessage(args []string, recovered any) string {
 		command = args[0]
 	}
 	if errors.Is(err, errPromptInterrupted) {
-		return "Cancelled. Nothing was changed."
+		return "Cancelled."
 	}
 	if (command == "auth" || command == "login") && (errors.Is(err, io.EOF) || errors.Is(err, errEmptyAuthCode)) && os.Getenv(cliSetupStepEnv) != "" {
 		return "No auth code was entered. Get one from your URnetwork app or account page,\n  then run provider setup again."
