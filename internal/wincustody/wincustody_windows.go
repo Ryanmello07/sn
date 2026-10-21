@@ -608,17 +608,28 @@ func Delete(dir windows.Handle, path string, name string, flush *os.File) error 
 // handle is reopened from it (its attributes cleared of read-only first, as
 // a Unix rename never minds a file's mode) and flushed.
 func flushHandle(handle windows.Handle) error {
-	writer, err := reOpenFile(handle, windows.FILE_WRITE_DATA|windows.SYNCHRONIZE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_FLAG_OPEN_REPARSE_POINT)
-	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
-		if clearErr := clearReadOnly(handle); clearErr != nil {
-			return errors.Join(err, clearErr)
-		}
-		writer, err = reOpenFile(handle, windows.FILE_WRITE_DATA|windows.SYNCHRONIZE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_FLAG_OPEN_REPARSE_POINT)
-	}
+	var writer windows.Handle
+	// a reader without write sharing (a scanner, a backup) only delays it
+	err := retrySharing(func() error {
+		var err error
+		writer, err = reopenForFlush(handle)
+		return err
+	})
 	if err != nil {
 		return err
 	}
 	return errors.Join(windows.FlushFileBuffers(writer), windows.CloseHandle(writer))
+}
+
+func reopenForFlush(handle windows.Handle) (windows.Handle, error) {
+	writer, err := reOpenFile(handle, windows.FILE_WRITE_DATA|windows.SYNCHRONIZE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_FLAG_OPEN_REPARSE_POINT)
+	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		if clearErr := clearReadOnly(handle); clearErr != nil {
+			return windows.InvalidHandle, errors.Join(err, clearErr)
+		}
+		writer, err = reOpenFile(handle, windows.FILE_WRITE_DATA|windows.SYNCHRONIZE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_FLAG_OPEN_REPARSE_POINT)
+	}
+	return writer, err
 }
 
 // fileBasicInfo is FILE_BASIC_INFO.
@@ -758,6 +769,11 @@ func renameHandle(dir windows.Handle, path string, handle windows.Handle, to str
 		info.Flags |= windows.FILE_RENAME_REPLACE_IF_EXISTS | windows.FILE_RENAME_IGNORE_READONLY_ATTRIBUTE
 	}
 	err = windows.NtSetInformationFile(handle, &windows.IO_STATUS_BLOCK{}, (*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), fileRenameInformationExClass)
+	if err == windows.STATUS_INVALID_PARAMETER && replace {
+		// Windows 10 1607-1803 has POSIX renames but not the read-only flag
+		info.Flags &^= windows.FILE_RENAME_IGNORE_READONLY_ATTRIBUTE
+		err = windows.NtSetInformationFile(handle, &windows.IO_STATUS_BLOCK{}, (*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), fileRenameInformationExClass)
+	}
 	if err != nil {
 		// before Windows 10 1607, a volume without POSIX renames (FAT), or a
 		// filter or redirector without the extended class: the plain rename
