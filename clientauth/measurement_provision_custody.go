@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 package clientauth
 
@@ -6,8 +6,6 @@ import (
 	"bytes"
 	"errors"
 	"os"
-
-	"golang.org/x/sys/unix"
 )
 
 // Spends a completed provisioning with the store's publication discipline:
@@ -39,9 +37,8 @@ func spendMeasurementProvisioning(store *registrationStore, expected []byte) err
 	if err := store.check(); err != nil {
 		return err
 	}
-	directory := int(store.directory.Fd())
-	if err := unix.Renameat(directory, measurementProvisioningMarker, directory, measurementProvisionedMarker); err != nil {
+	if err := store.renameLeaf(measurementProvisioningMarker, measurementProvisionedMarker); err != nil {
 		return err
 	}
-	return errors.Join(store.directory.Sync(), store.check())
+	return errors.Join(store.syncDirectory(), store.check())
 }

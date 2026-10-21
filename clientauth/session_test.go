@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -93,7 +94,8 @@ func TestLoadOrCreateClientJwtBootstrapsAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := info.Mode().Perm(); got != 0600 {
+	// Windows has no mode bits; the custody tests check its descriptors
+	if got := info.Mode().Perm(); got != 0600 && runtime.GOOS != "windows" {
 		t.Fatalf("client JWT mode = %o, want 600", got)
 	}
 }

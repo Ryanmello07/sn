@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 package clientauth
 
@@ -54,7 +54,7 @@ func TestQuarantineNetworkTokenSetsTheRejectedTokenAside(t *testing.T) {
 		t.Fatalf("the rejected token is still in place: %v", err)
 	}
 	info, err := os.Stat(quarantine.Path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || !testFilePrivate(quarantine.Path, info) {
 		t.Fatalf("set-aside file mode: %v %v", info, err)
 	}
 	if token, _ := ReadToken(quarantine.Path); token != "sign-in-renewed" {

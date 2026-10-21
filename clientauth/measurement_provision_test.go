@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 // Real custody and HTTP qualify first provisioning: one created client, crash
 // resumption before any send, replay after it, and refusal of every remnant.

@@ -105,7 +105,7 @@ func networkCredentialFingerprintOf(token string, modTimeNano int64, hasModTime 
 // readNetworkCredential reads the token and its fingerprint from one open
 // file, so a rename between the read and the stat cannot mix two files.
 func readNetworkCredential(path string) (token string, fingerprint string, returnErr error) {
-	file, err := os.Open(path)
+	file, err := openCredentialFile(path)
 	if err != nil {
 		return "", "", err
 	}
@@ -179,7 +179,7 @@ func appendNetworkCredentialLineage(members []string, fingerprint string) []stri
 // readNetworkCredentialLineage returns the lineage members of the token at
 // path, or none when it has no lineage file.
 func readNetworkCredentialLineage(path string) ([]string, error) {
-	raw, err := os.ReadFile(networkCredentialLineagePath(path))
+	raw, err := readCredentialFile(networkCredentialLineagePath(path))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
