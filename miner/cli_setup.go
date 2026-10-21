@@ -181,8 +181,13 @@ func setupCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 			_ = manager.control("start")
 		}
 		reportServiceStart(stdout, 20*time.Second)
-	} else if other := manager.foreign(); other != "" {
-		run.ok("The URnetwork installer's " + other + " already runs the miner on this device")
+	} else if other := installerService(manager); other != nil && other.enabled() {
+		run.ok("The URnetwork installer's " + other.name + ".service runs the miner on this device")
+		if !other.active() {
+			if err := other.control("start"); err != nil {
+				run.warn("It isn't running and didn't start: " + firstLine(err.Error()))
+			}
+		}
 	} else if run.ask("Start the miner now and on every boot?", true) {
 		opts := docopt.Opts{"install": true, "--system": system}
 		if code := serviceCmd(opts, stdout, stderr); code != 0 {

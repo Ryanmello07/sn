@@ -73,7 +73,7 @@ var cliCommandHelp = map[string]struct {
 		summary: "Look for why the miner can't sign in or connect: the state folder, DNS, the\nconnection, a TLS-inspecting proxy, the clock, and whether updates can install.",
 	},
 	"service": {
-		summary: "Run the miner in the background and on every boot (systemd on Linux, launchd on\nmacOS), with automatic updates checked every 6 hours.",
+		summary: "Run the miner in the background and on every boot (systemd on Linux, launchd on\nmacOS), with automatic updates checked every 6 hours. If the URnetwork installer's\nurnetwork.service is already there, start, stop, status and logs work on it.",
 		examples: []string{
 			"provider service install     # start now and on every boot",
 			"provider service logs --follow",
@@ -81,7 +81,7 @@ var cliCommandHelp = map[string]struct {
 		},
 	},
 	"update": {
-		summary: "Update the miner to the newest release. With the background service installed,\nupdates install automatically within a day of a release, and a version that\ndoesn't come back connected is rolled back. Turn that off with provider update\n--off, or set URNETWORK_AUTO_UPDATE=0.",
+		summary: "Update the miner to the newest release. With the background service installed,\nupdates install automatically within a day of a release, and a version that\ndoesn't come back connected is rolled back. Turn that off with provider update\n--off, or set URNETWORK_AUTO_UPDATE=0. A miner the URnetwork installer set up\nkeeps updating through its urnet-tools, and these commands run that.",
 		examples: []string{
 			"provider update            # update now",
 			"provider update --status   # automatic update settings and last check",

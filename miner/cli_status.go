@@ -42,6 +42,9 @@ type minerStatusReport struct {
 	Members    int               `json:"members,omitempty"`
 	MembersUp  int               `json:"members_connected,omitempty"`
 	Service    minerServiceState `json:"service"`
+	// Unreported: a service runs the miner, but it doesn't report its
+	// connection (an older version, or one just starting).
+	Unreported bool              `json:"connection_unreported,omitempty"`
 	Update     minerUpdateReport `json:"update"`
 	StateDir   string            `json:"state_dir"`
 	Problems   []string          `json:"problems"`
@@ -54,6 +57,8 @@ type minerUpdateReport struct {
 	Latest    string `json:"latest,omitempty"`
 	LastCheck string `json:"last_check,omitempty"`
 	Result    string `json:"last_result,omitempty"`
+	// By names the official installer's tool when it handles updates.
+	By string `json:"by,omitempty"`
 }
 
 func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
@@ -80,6 +85,9 @@ func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
 		}
 	}
 	report.Service = readMinerServiceState()
+	if !report.Running && report.Service.Active {
+		report.Running, report.Unreported = true, true
+	}
 	updateState := readMinerUpdateState()
 	report.Update.Auto, report.Update.Why = minerAutoUpdate(updateState)
 	if _, release := parseMinerReleaseVersion(report.Version); !release {
@@ -91,6 +99,17 @@ func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
 	report.Update.Result = updateState.LastResult
 	if updateState.LastCheck != nil {
 		report.Update.LastCheck = updateState.LastCheck.Format(time.RFC3339)
+	}
+	if executable, err := cliExecutable(); err == nil {
+		if installer := findMinerInstaller(executable); installer != nil {
+			on, known := installer.autoUpdate()
+			report.Update = minerUpdateReport{Auto: on, By: installer.display()}
+			if !known {
+				report.Update.Why = "can't tell whether " + installer.display() + " checks for updates"
+			} else if !on {
+				report.Update.Why = "turned off in " + installer.display()
+			}
+		}
 	}
 
 	code := 0
@@ -105,6 +124,8 @@ func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
 		report.Problems = append(report.Problems, "this device isn't registered yet")
 		report.Next = "provider setup"
 		code = minerExitNeedsSetup
+	case report.Unreported:
+		report.State = "running"
 	case !report.Running:
 		report.State = "stopped"
 		report.Problems = append(report.Problems, "the miner isn't running")
@@ -112,7 +133,7 @@ func buildMinerStatusReport(now time.Time) (minerStatusReport, int) {
 		case report.Service.Installed:
 			report.Next = "provider service start"
 		case report.Service.Foreign != "":
-			report.Next = "systemctl --user start " + report.Service.Foreign
+			report.Next = "provider service start"
 		default:
 			report.Next = "provider start"
 		}
@@ -143,6 +164,8 @@ func statusCmd(opts docopt.Opts, stdout io.Writer) int {
 	fmt.Fprintf(stdout, "%s %s\n\n", cliBold(stdout, "provider "+report.Version), cliDim(stdout, "· "+network))
 	w := statusWriter{out: stdout}
 	switch {
+	case report.Unreported:
+		w.row(true, "Miner", "running"+serviceNote(report.Service))
 	case report.Running:
 		w.row(true, "Miner", "running for "+cliDuration(time.Duration(report.UptimeS)*time.Second)+serviceNote(report.Service))
 	case report.State == "needs_setup":
@@ -170,6 +193,8 @@ func statusCmd(opts docopt.Opts, stdout io.Writer) int {
 		w.row(false, "Device", "not registered yet")
 	}
 	switch {
+	case report.Unreported:
+		w.row(nil, "Connected", cliDim(stdout, "can't tell: this miner doesn't report it (yet)"))
 	case report.Connected && 1 < report.Members:
 		w.row(true, "Connected", fmt.Sprintf("%d of %d", report.MembersUp, report.Members))
 	case report.Connected:
@@ -183,7 +208,13 @@ func statusCmd(opts docopt.Opts, stdout io.Writer) int {
 	}
 	_, release := parseMinerReleaseVersion(report.Version)
 	_, testFeed := minerUpdateSource()
-	if !release && !testFeed {
+	if by := report.Update.By; by != "" {
+		if report.Update.Auto {
+			w.row(true, "Updates", "automatic, by "+by)
+		} else {
+			w.warn("Updates", report.Update.Why+" (provider update --on)")
+		}
+	} else if !release && !testFeed {
 		w.row(nil, "Updates", cliDim(stdout, "development build, never updates itself"))
 	} else if !release && report.Update.Auto {
 		w.row(true, "Updates", "automatic, from a test feed")
@@ -213,8 +244,10 @@ func serviceNote(service minerServiceState) string {
 		return " (background service)"
 	case service.Installed:
 		return " (background service installed, stopped)"
+	case service.Foreign != "" && service.Active:
+		return " (the installer's " + service.Foreign + ")"
 	case service.Foreign != "":
-		return " (" + service.Foreign + ")"
+		return " (the installer's " + service.Foreign + ", stopped)"
 	}
 	return ""
 }
@@ -291,6 +324,8 @@ func doctorCmd(opts docopt.Opts, stdout io.Writer) int {
 
 	// the miner itself
 	switch {
+	case report.Unreported:
+		w.row(nil, "Miner", "running, but this miner doesn't report whether it's connected; its log: provider service logs")
 	case report.Running && report.Connected:
 		w.row(true, "Miner", "running and connected")
 	case report.Running:
@@ -302,7 +337,13 @@ func doctorCmd(opts docopt.Opts, stdout io.Writer) int {
 	}
 
 	// updates: can this binary replace itself?
-	if executable, err := cliExecutable(); err == nil {
+	if by := report.Update.By; by != "" {
+		if report.Update.Auto {
+			w.row(true, "Updates", "automatic, by "+by)
+		} else {
+			w.row(nil, "Updates", report.Update.Why+" (provider update --on)")
+		}
+	} else if executable, err := cliExecutable(); err == nil {
 		if _, release := parseMinerReleaseVersion(cliBareVersion()); release && report.Update.Auto {
 			if problem := writableDirProblem(filepath.Dir(executable)); problem != "" {
 				fail("Updates", "can't install updates: "+problem)

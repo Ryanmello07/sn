@@ -566,6 +566,11 @@ func minerUpdateAccessProblem(executable string, binary bool) string {
 
 func updateCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 	executable, executableErr := minerUpdateTarget()
+	if executableErr == nil {
+		if installer := findMinerInstaller(executable); installer != nil {
+			return installerUpdateCmd(opts, installer, stdout, stderr)
+		}
+	}
 	if !cliOptBool(opts, "--status") && !cliOptBool(opts, "--check") && !cliOptBool(opts, "--auto") && executableErr == nil {
 		binary := !cliOptBool(opts, "--on") && !cliOptBool(opts, "--off")
 		if problem := minerUpdateAccessProblem(executable, binary); problem != "" && os.Geteuid() != 0 {
@@ -810,4 +815,50 @@ func cliDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm", int(d/time.Minute))
 	}
 	return fmt.Sprintf("%ds", int(d/time.Second))
+}
+
+// installerUpdateCmd hands updates of a binary the official installer
+// manages to its urnet-tools, so only one updater ever runs.
+func installerUpdateCmd(opts docopt.Opts, installer *minerInstaller, stdout io.Writer, stderr io.Writer) int {
+	var args []string
+	switch {
+	case cliOptBool(opts, "--auto"):
+		fmt.Fprintf(stdout, "automatic update: skipped, %s updates this miner\n", installer.display())
+		return 0
+	case cliOptBool(opts, "--status"):
+		on, known := installer.autoUpdate()
+		row := func(label string, value string) { fmt.Fprintf(stdout, "  %-18s %s\n", label, value) }
+		switch {
+		case !known:
+			row("Automatic updates", "unknown")
+		case on:
+			row("Automatic updates", cliGreen(stdout, "on"))
+		default:
+			row("Automatic updates", cliYellow(stdout, "off"))
+		}
+		row("Handled by", installer.display()+", which the URnetwork installer set up")
+		row("Source", "github.com/urnetwork/build releases")
+		if on {
+			row("Turn off", "provider update --off")
+		} else {
+			row("Turn on", "provider update --on")
+		}
+		return 0
+	case cliOptBool(opts, "--on"):
+		args = installer.autoUpdateArgs(true)
+	case cliOptBool(opts, "--off"):
+		args = installer.autoUpdateArgs(false)
+	case cliOptBool(opts, "--check") && installer.windows:
+		args = []string{"version"}
+	case cliOptBool(opts, "--check"):
+		args = []string{"--version"}
+	default:
+		args = []string{"update"}
+	}
+	fmt.Fprintf(stdout, "The URnetwork installer manages this miner, so this runs: %s\n", installer.display(args...))
+	if err := installer.run(args...); err != nil {
+		writeCliError(stderr, installer.display(args...)+" failed: "+firstLine(err.Error()))
+		return 1
+	}
+	return 0
 }

@@ -146,10 +146,17 @@ func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		return 1
 	}
 	name := minerServiceName()
+	byInstaller := false
+	if !cliOptBool(opts, "install") && !cliOptBool(opts, "uninstall") && !manager.installed() {
+		// start, stop, status and logs also work on the installer's service
+		if other := installerService(manager); other != nil {
+			manager, name, byInstaller = other, other.name, true
+		}
+	}
 	switch {
 	case cliOptBool(opts, "install"):
-		if other := manager.foreign(); other != "" {
-			writeCliError(stderr, fmt.Sprintf("This device already runs the miner with the URnetwork installer (%s).\n  Keep using that one, or remove it first with the installer's uninstall script.", other))
+		if other := installerService(manager); other != nil && other.enabled() {
+			writeCliError(stderr, "This device already runs the miner with the URnetwork installer (urnetwork.service).\n  Keep using it: provider service start, stop, status and logs work on it.\n  To switch to this command's service, turn the installer's off first (your identity is kept):\n  systemctl --user disable --now urnetwork.service urnetwork-update.timer\n  Don't use urnet-tools uninstall for this: it also deletes ~/.urnetwork.")
 			return 1
 		}
 		executable, err := cliExecutable()
@@ -235,9 +242,14 @@ func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 			writeCliError(stderr, fmt.Sprintf("Couldn't %s %s: %s", action, name, err))
 			return 1
 		}
-		switch action {
-		case "stop":
+		switch {
+		case action == "stop" && byInstaller:
+			fmt.Fprintf(stdout, "  %s Stopped %s. It starts again on the next boot.\n", cliGreen(stdout, "✓"), name)
+		case action == "stop":
 			fmt.Fprintf(stdout, "  %s Stopped %s. It starts again on the next boot; provider service uninstall removes it.\n", cliGreen(stdout, "✓"), name)
+		case byInstaller:
+			// the installer's miner may be a release that doesn't report in
+			fmt.Fprintf(stdout, "  %s %sed %s. Check on it with: provider status\n", cliGreen(stdout, "✓"), strings.ToUpper(action[:1])+action[1:], name)
 		default:
 			fmt.Fprintf(stdout, "  %s %sed %s\n", cliGreen(stdout, "✓"), strings.ToUpper(action[:1])+action[1:], name)
 			reportServiceStart(stdout, 20*time.Second)
@@ -320,6 +332,36 @@ func (self *systemdService) installed() bool {
 func (self *systemdService) active() bool {
 	out, _ := self.systemctl("is-active", self.name+".service")
 	return out == "active"
+}
+
+// installerService is the URnetwork installer's urnetwork.service, when the
+// manager found one mining this state folder, so the everyday service
+// commands can drive it. A test install with its own state folder is a
+// separate miner and gets its own service.
+func installerService(manager minerServiceManager) *systemdService {
+	systemd, ok := manager.(*systemdService)
+	if !ok || systemd.foreign() == "" {
+		return nil
+	}
+	other := *systemd
+	other.name = "urnetwork"
+	_, stateDir := other.configured()
+	if stateDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		stateDir = filepath.Join(home, ".urnetwork")
+	}
+	if ours, err := providerStateDir(); err != nil || filepath.Clean(ours) != filepath.Clean(stateDir) {
+		return nil
+	}
+	return &other
+}
+
+func (self *systemdService) enabled() bool {
+	out, _ := self.systemctl("is-enabled", self.name+".service")
+	return out == "enabled"
 }
 
 func (self *systemdService) foreign() string {
@@ -746,8 +788,8 @@ func readMinerServiceState() minerServiceState {
 		if manager.installed() {
 			return minerServiceState{Installed: true, Active: manager.active(), Name: minerServiceName(), Kind: manager.kind()}
 		}
-		if other := manager.foreign(); other != "" {
-			return minerServiceState{Foreign: other}
+		if other := installerService(manager); other != nil {
+			return minerServiceState{Foreign: other.name + ".service", Active: other.active()}
 		}
 	}
 	return minerServiceState{}

@@ -570,3 +570,105 @@ func TestStartLeavesAnUnfinishedRegistrationToAPerson(t *testing.T) {
 		t.Fatalf("a key alone reads as registered: %+v", report)
 	}
 }
+
+// A binary the official installer put beside urnet-tools is updated by
+// urnet-tools, never swapped behind it, and its unit is driven as is.
+func TestTheOfficialInstallerKeepsItsUpdates(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the Linux installer")
+	}
+	phase2State(t)
+	// the installer's unit mines ~/.urnetwork
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	os.Mkdir(filepath.Join(home, ".urnetwork"), 0700)
+	t.Setenv("URNETWORK_STATE_DIR", filepath.Join(home, ".urnetwork"))
+	executable := fakeExecutable(t)
+	os.WriteFile(filepath.Join(filepath.Dir(executable), "urnet-tools"), []byte("#!/bin/sh\n"), 0755)
+	var calls []string
+	timer := "enabled"
+	cliRun = func(name string, args ...string) (string, error) {
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		switch strings.Join(args, " ") {
+		case "--user is-enabled urnetwork-update.timer":
+			return timer, nil
+		case "--user is-active urnetwork.service":
+			return "active", nil
+		case "--user is-enabled urnetwork.service":
+			return "enabled", nil
+		}
+		return "", nil
+	}
+	cliRunAttached = func(name string, args ...string) error {
+		calls = append(calls, "attached "+filepath.Base(name)+" "+strings.Join(args, " "))
+		return nil
+	}
+	defer func() { cliRun, cliRunAttached = defaultCliRun, defaultCliRunAttached }()
+
+	run := func(opts docopt.Opts) string {
+		calls = nil
+		var out, errOut bytes.Buffer
+		if code := updateCmd(opts, &out, &errOut); code != 0 {
+			t.Fatalf("%v: exit %d: %s", opts, code, errOut.String())
+		}
+		return out.String() + strings.Join(calls, "\n")
+	}
+	for opts, want := range map[*docopt.Opts]string{
+		{}:                "attached urnet-tools update",
+		{"--off": true}:   "attached urnet-tools auto-update off",
+		{"--on": true}:    "attached urnet-tools auto-update on",
+		{"--check": true}: "attached urnet-tools --version",
+		{"--auto": true}:  "skipped, urnet-tools updates this miner",
+	} {
+		if got := run(*opts); !strings.Contains(got, want) {
+			t.Fatalf("%v: want %q in\n%s", *opts, want, got)
+		}
+	}
+	if path, _ := providerStatePath(minerUpdateFileName); fileExists(path) {
+		t.Fatal("the miner kept its own update state for an installer's binary")
+	}
+	timer = "disabled"
+	if got := run(docopt.Opts{"--status": true}); !strings.Contains(got, "off") || !strings.Contains(got, "urnet-tools") {
+		t.Fatal(got)
+	}
+	report, _ := buildMinerStatusReport(time.Now())
+	if report.Update.Auto || report.Update.By != "urnet-tools" {
+		t.Fatalf("%+v", report.Update)
+	}
+
+	// service start/stop/status/logs drive the installer's urnetwork.service
+	unitDir := newSystemdService(false).dir
+	os.MkdirAll(unitDir, 0755)
+	os.WriteFile(filepath.Join(unitDir, "urnetwork.service"), []byte("[Unit]\n"), 0644)
+	calls = nil
+	var out, errOut bytes.Buffer
+	if code := serviceCmd(docopt.Opts{"restart": true}, &out, &errOut); code != 0 {
+		t.Fatal(errOut.String())
+	}
+	if !strings.Contains(strings.Join(calls, "\n"), "systemctl --user restart urnetwork.service") {
+		t.Fatal(strings.Join(calls, "\n"))
+	}
+	if code := serviceCmd(docopt.Opts{"install": true}, &out, &errOut); code == 0 {
+		t.Fatal("installed a second service beside the installer's")
+	}
+	// a test install with its own state folder is a separate miner
+	t.Setenv("URNETWORK_STATE_DIR", t.TempDir())
+	if installerService(newSystemdService(false)) != nil {
+		t.Fatal("the installer's unit claimed a separate state folder")
+	}
+	t.Setenv("URNETWORK_STATE_DIR", filepath.Join(home, ".urnetwork"))
+	// an older miner under the installer's unit doesn't write a status file
+	writeState(t, os.Getenv("URNETWORK_STATE_DIR"), "jwt", fakeJwt(map[string]any{"network_name": "test"}))
+	writeState(t, os.Getenv("URNETWORK_STATE_DIR"), ".provider.jwt", fakeJwt(map[string]any{"client_id": "01a15cc0"}))
+	report, _ = buildMinerStatusReport(time.Now())
+	if !report.Running || !report.Unreported || report.State != "running" {
+		t.Fatalf("%+v", report)
+	}
+}
+
+var defaultCliRunAttached = cliRunAttached
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
