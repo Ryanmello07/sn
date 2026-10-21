@@ -156,6 +156,21 @@ func TestCliParseErrorIsShort(t *testing.T) {
 	if !strings.Contains(message, `"provider network use"`) || !strings.Contains(message, "short for provider choose_network") {
 		t.Fatal(message)
 	}
+	message = cliParseError([]string{"-v", "provide", "--bogus"}, []string{"-v", "provide", "--bogus"})
+	if !strings.Contains(message, `Unknown option --bogus for "provider provide"`) {
+		t.Fatal(message)
+	}
+	message = cliParseError([]string{"--api_url=x", "wallet", "set"}, []string{"--api_url=x", "wallet", "set"})
+	if !strings.Contains(message, `"provider wallet set"`) || !strings.Contains(message, "provider wallet set <coldkey_ss58>") {
+		t.Fatal(message)
+	}
+	message = cliParseError([]string{"choose_network", "a"}, []string{"network", "a"})
+	if !strings.Contains(message, "short for provider choose_network)") {
+		t.Fatal(message)
+	}
+	if _, stderr, _, done, code := runCliFront(t, "help", "bogus"); !done || code != 1 || !strings.Contains(stderr, `Unknown command "bogus"`) {
+		t.Fatalf("help bogus: done=%v code=%d %q", done, code, stderr)
+	}
 	message = cliParseError([]string{"wallet"}, []string{"wallet"})
 	if !strings.Contains(message, "provider wallet set <coldkey_ss58>") || 10 < strings.Count(message, "\n") {
 		t.Fatal(message)

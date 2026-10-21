@@ -201,7 +201,12 @@ func cliFront(args []string, stdout io.Writer, stderr io.Writer) (rest []string,
 		case args[1] == "version":
 			fmt.Fprintln(stdout, cliVersion())
 		default:
-			fmt.Fprint(stdout, cliHelpFor(rewriteCliAlias(args[1:])))
+			target := rewriteCliAlias(args[1:])
+			if commands := usageCommands(mainUsage(), "provider"); !commands[target[0]] {
+				writeCliError(stderr, unknownCliCommand(args[1], commands))
+				return nil, true, 1
+			}
+			fmt.Fprint(stdout, cliHelpFor(target))
 		}
 		return nil, true, 0
 	}
@@ -298,14 +303,19 @@ func cliParseError(args []string, typed []string) string {
 		// name the command as it was typed, and what it stands for
 		message = strings.ReplaceAll(message, "\"provider "+args[0], "\"provider "+strings.Join(alias, " "))
 		message = strings.Replace(message, "  Help: provider "+args[0], "  Help: provider "+strings.Join(alias, " "), 1)
-		message += fmt.Sprintf("\n  (provider %s is short for provider %s)", strings.Join(alias, " "), strings.Join(rewriteCliAlias(alias), " "))
+		message += fmt.Sprintf("\n  (provider %s is short for provider %s)", strings.Join(alias, " "), strings.Join(cliAliases[cliAliasIndex(typed)].replace, " "))
 	}
 	return message
 }
 
-func cliParseErrorFor(args []string) string {
+func cliParseErrorFor(all []string) string {
+	// options may come before the command; name the command itself
+	args := commandArgs(all)
+	if len(args) == 0 {
+		return "Options need a command after them.\n  All commands: provider --help"
+	}
 	known := usageOptionNames(mainUsage())
-	for _, arg := range args {
+	for _, arg := range all {
 		if arg == "--" {
 			break
 		}
@@ -351,6 +361,20 @@ func cliParseErrorFor(args []string) string {
 	}
 	fmt.Fprintf(&b, "  Help: %s --help", command)
 	return b.String()
+}
+
+// commandArgs is argv from its first known command on.
+func commandArgs(args []string) []string {
+	commands := usageCommands(mainUsage(), "provider")
+	for i, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if commands[arg] {
+			return args[i:]
+		}
+	}
+	return nil
 }
 
 // commandSubcommands returns the literal words that may follow words in forms.
