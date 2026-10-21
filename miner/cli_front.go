@@ -554,6 +554,18 @@ func cliPanicMessage(args []string, recovered any) string {
 			"  Get one from your URnetwork app or account page, then run:\n" +
 			"  provider login <auth_code>"
 	}
+	text := fmt.Sprint(recovered)
+	if (command == "auth" || command == "login" || command == "auth-provide") && strings.Contains(text, "Invalid auth code") {
+		return "That auth code wasn't accepted. It may have expired or been mistyped.\n" +
+			"  Get a fresh one from your URnetwork app or account page, then run:\n" +
+			"  provider login <auth_code>"
+	}
+	if strings.Contains(text, "http request attempts exhausted") {
+		return "Couldn't reach the URnetwork API. Check this device's internet connection.\n" +
+			"  Behind a proxy that inspects TLS, set URNETWORK_CONNECT_EXTRA_ROOT_CA_FILE\n" +
+			"  to a file of that proxy's root CA certificates.\n" +
+			"  For technical details run the command again with -vv."
+	}
 	return fmt.Sprintf("%v\n  For technical details run the command again with -vv.", recovered)
 }
 

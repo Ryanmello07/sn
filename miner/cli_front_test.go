@@ -171,7 +171,15 @@ func TestCliPanicMessage(t *testing.T) {
 			t.Fatal(message)
 		}
 	}
-	message := cliPanicMessage([]string{"provide"}, errors.New("disk full"))
+	message := cliPanicMessage([]string{"auth", "BADCODE"}, "Invalid auth code.")
+	if !strings.Contains(message, "wasn't accepted") {
+		t.Fatal(message)
+	}
+	message = cliPanicMessage([]string{"login", "CODE"}, errors.New("http request attempts exhausted"))
+	if !strings.Contains(message, "Couldn't reach the URnetwork API") || !strings.Contains(message, "URNETWORK_CONNECT_EXTRA_ROOT_CA_FILE") {
+		t.Fatal(message)
+	}
+	message = cliPanicMessage([]string{"provide"}, errors.New("disk full"))
 	if !strings.HasPrefix(message, "disk full\n") || !strings.Contains(message, "-vv") {
 		t.Fatal(message)
 	}
