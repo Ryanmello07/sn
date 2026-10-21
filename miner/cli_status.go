@@ -181,8 +181,12 @@ func statusCmd(opts docopt.Opts, stdout io.Writer) int {
 	default:
 		w.row(nil, "Connected", cliDim(stdout, "not running"))
 	}
-	if _, release := parseMinerReleaseVersion(report.Version); !release {
+	_, release := parseMinerReleaseVersion(report.Version)
+	_, testFeed := minerUpdateSource()
+	if !release && !testFeed {
 		w.row(nil, "Updates", cliDim(stdout, "development build, never updates itself"))
+	} else if !release && report.Update.Auto {
+		w.row(true, "Updates", "automatic, from a test feed")
 	} else if !report.Update.Auto {
 		w.warn("Updates", "automatic updates are off (provider update --on)")
 	} else if report.Update.Latest != "" {
