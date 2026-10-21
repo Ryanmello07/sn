@@ -21,11 +21,18 @@ func runCliFront(t *testing.T, args ...string) (stdout string, stderr string, re
 // The overview a bare `provider` or `provider --help` prints fits one screen,
 // unlike the complete reference.
 func TestCliOverviewFitsOneScreen(t *testing.T) {
-	for _, args := range [][]string{{}, {"--help"}, {"-h"}, {"help"}} {
+	for _, args := range [][]string{{}, {"help"}, {"help", "help"}} {
 		stdout, _, _, done, code := runCliFront(t, args...)
 		if !done || code != 0 {
 			t.Fatalf("%v: done=%v code=%d", args, done, code)
 		}
+		if stdout != cliOverview() {
+			t.Fatalf("%v: not the overview", args)
+		}
+	}
+	// -h and --help reach the parser, whose help handler answers with this
+	for _, args := range [][]string{{"--help"}, {"-h"}, {"-v", "--help"}} {
+		stdout := cliHelpFor(args)
 		if lines := strings.Count(stdout, "\n"); 40 < lines {
 			t.Fatalf("%v: overview is %d lines", args, lines)
 		}
@@ -41,10 +48,15 @@ func TestCliOverviewFitsOneScreen(t *testing.T) {
 
 func TestCliVersion(t *testing.T) {
 	t.Setenv("WARP_VERSION", "2026.10.21-1")
-	for _, arg := range []string{"--version", "version"} {
-		stdout, _, _, done, code := runCliFront(t, arg)
+	// --version prints the bare version, as docopt did, so scripts keep working
+	stdout, _, _, done, code := runCliFront(t, "--version")
+	if !done || code != 0 || stdout != "2026.10.21-1\n" {
+		t.Fatalf("--version: done=%v code=%d %q", done, code, stdout)
+	}
+	for _, args := range [][]string{{"version"}, {"help", "version"}} {
+		stdout, _, _, done, code := runCliFront(t, args...)
 		if !done || code != 0 || !strings.HasPrefix(stdout, "provider 2026.10.21-1 ") {
-			t.Fatalf("%s: done=%v code=%d %q", arg, done, code, stdout)
+			t.Fatalf("%v: done=%v code=%d %q", args, done, code, stdout)
 		}
 	}
 }
@@ -63,6 +75,9 @@ func TestCliAliasesParseAsTheirCommand(t *testing.T) {
 		{[]string{"network", "show"}, []string{"choose_network", "--show"}},
 		{[]string{"network", "reset"}, []string{"choose_network", "--reset"}},
 		{[]string{"network", "use", "https://api.example", "wss://connect.example"}, []string{"choose_network", "https://api.example", "wss://connect.example"}},
+		{[]string{"network", "--show"}, []string{"choose_network", "--show"}},
+		{[]string{"network", "--reset"}, []string{"choose_network", "--reset"}},
+		{[]string{"network", "https://api.example", "wss://connect.example"}, []string{"choose_network", "https://api.example", "wss://connect.example"}},
 	}
 	parser := &docopt.Parser{HelpHandler: docopt.NoHelpHandler, SkipHelpFlags: true}
 	for _, c := range cases {
@@ -95,6 +110,13 @@ func TestCliFrontPassesLegacyArgvThrough(t *testing.T) {
 		{"wallet", "set", "5F3sa2TJAWMqDhXG6jhV4N8ko9SxwGy8TpaNS1repo5EYjQX"},
 		{"choose_network", "--show"},
 		{"fleet", "manifest", "--manifest=m.json"},
+		// options before the command, which docopt has always accepted
+		{"-v", "operators"},
+		{"--port=0", "provide"},
+		{"-f", "auth", "abc"},
+		// help flags are left to the parser, which knows a value from a flag
+		{"auth", "--user_auth=u", "--password", "-h"},
+		{"provide", "--help"},
 	} {
 		_, _, rest, done, _ := runCliFront(t, args...)
 		if done || strings.Join(rest, " ") != strings.Join(args, " ") {
@@ -118,15 +140,23 @@ func TestCliUnknownCommandSuggests(t *testing.T) {
 }
 
 func TestCliParseErrorIsShort(t *testing.T) {
-	message := cliParseError([]string{"provide", "--bogus"})
+	message := cliParseError([]string{"provide", "--bogus"}, []string{"provide", "--bogus"})
 	if !strings.Contains(message, "Unknown option --bogus") {
 		t.Fatal(message)
 	}
-	message = cliParseError([]string{"fleet", "regster"})
+	message = cliParseError([]string{"fleet", "regster"}, []string{"fleet", "regster"})
 	if !strings.Contains(message, `Did you mean "register"?`) {
 		t.Fatal(message)
 	}
-	message = cliParseError([]string{"wallet"})
+	message = cliParseError([]string{"auth", "--", "--version", "x"}, []string{"auth", "--", "--version", "x"})
+	if strings.Contains(message, "Unknown option") {
+		t.Fatal(message)
+	}
+	message = cliParseError([]string{"choose_network", "https://a"}, []string{"network", "use", "https://a"})
+	if !strings.Contains(message, `"provider network use"`) || !strings.Contains(message, "short for provider choose_network") {
+		t.Fatal(message)
+	}
+	message = cliParseError([]string{"wallet"}, []string{"wallet"})
 	if !strings.Contains(message, "provider wallet set <coldkey_ss58>") || 10 < strings.Count(message, "\n") {
 		t.Fatal(message)
 	}
@@ -139,15 +169,15 @@ func TestCliEveryCommandHasHelp(t *testing.T) {
 		if cliCommandHelp[command].summary == "" {
 			t.Errorf("%s has no summary in cliCommandHelp", command)
 		}
-		stdout, _, _, done, code := runCliFront(t, command, "--help")
-		if !done || code != 0 || !strings.Contains(stdout, "provider "+command) {
-			t.Errorf("%s --help: done=%v code=%d", command, done, code)
+		stdout := cliHelpFor([]string{command, "--help"})
+		if !strings.HasPrefix(stdout, "provider "+command) {
+			t.Errorf("%s --help is not its own help", command)
 		}
 	}
 }
 
 func TestCliCommandHelpShowsItsOwnOptions(t *testing.T) {
-	stdout, _, _, _, _ := runCliFront(t, "wallet", "--help")
+	stdout := cliHelpFor([]string{"wallet", "--help"})
 	for _, want := range []string{"provider wallet challenge", "--coldkey_seed_file=<path>", "--signature=<hex>"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("missing %q:\n%s", want, stdout)
@@ -182,5 +212,27 @@ func TestCliPanicMessage(t *testing.T) {
 	message = cliPanicMessage([]string{"provide"}, errors.New("disk full"))
 	if !strings.HasPrefix(message, "disk full\n") || !strings.Contains(message, "-vv") {
 		t.Fatal(message)
+	}
+}
+
+// Help lines stay readable in an 80-100 column terminal, and a continuation
+// line that starts with an option name is not read as a new option.
+func TestCliCommandHelpLayout(t *testing.T) {
+	for _, args := range [][]string{{"auth"}, {"provide"}, {"wallet"}, {"wallet", "hotkey"}, {"fleet"}, {"fleet", "register"}, {"claim"}, {"operators"}, {"proxy"}} {
+		stdout := cliHelpFor(args)
+		for _, line := range strings.Split(stdout, "\n") {
+			if cliHelpWidth < len(line) {
+				t.Errorf("%v: %d-character line %q", args, len(line), line)
+			}
+			if strings.HasPrefix(line, "    --hotkey_seed_file;") {
+				t.Errorf("%v: stray continuation line %q", args, line)
+			}
+		}
+	}
+	if stdout := cliHelpFor([]string{"wallet", "hotkey"}); strings.Contains(stdout, "Set the wallet your rewards are paid to") {
+		t.Fatalf("wallet hotkey reuses the wallet summary:\n%s", stdout)
+	}
+	if stdout := cliHelpFor([]string{"fleet", "register"}); !strings.Contains(stdout, "register_limit") {
+		t.Fatalf("fleet register does not explain its --coldkey_seed_file:\n%s", stdout)
 	}
 }

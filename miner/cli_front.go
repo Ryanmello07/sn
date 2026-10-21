@@ -23,16 +23,19 @@ import (
 
 // cliAliases maps a friendly command to the argv it stands for. Only the
 // leading words are rewritten; the rest of argv follows unchanged.
+// An alias marked alone applies only when it is the whole argv.
 var cliAliases = []struct {
 	words   []string
 	replace []string
+	alone   bool
 }{
-	{[]string{"start"}, []string{"provide"}},
-	{[]string{"login"}, []string{"auth"}},
-	{[]string{"network", "show"}, []string{"choose_network", "--show"}},
-	{[]string{"network", "reset"}, []string{"choose_network", "--reset"}},
-	{[]string{"network", "use"}, []string{"choose_network"}},
-	{[]string{"network"}, []string{"choose_network", "--show"}},
+	{[]string{"start"}, []string{"provide"}, false},
+	{[]string{"login"}, []string{"auth"}, false},
+	{[]string{"network", "show"}, []string{"choose_network", "--show"}, false},
+	{[]string{"network", "reset"}, []string{"choose_network", "--reset"}, false},
+	{[]string{"network", "use"}, []string{"choose_network"}, false},
+	{[]string{"network"}, []string{"choose_network", "--show"}, true},
+	{[]string{"network"}, []string{"choose_network"}, false},
 }
 
 // cliAliasCommands returns each alias's first word, so docs may name it.
@@ -83,14 +86,20 @@ var cliCommandHelp = map[string]struct {
 		examples: []string{
 			"provider wallet challenge 5Grw...utQY      # print the text to sign elsewhere",
 			"provider wallet set 5Grw...utQY --message=\"$(cat challenge.txt)\" --signature=0x...",
-			"provider wallet set 5Grw...utQY --coldkey_seed_file=~/.keys/cold.seed",
+			"provider wallet set 5Grw...utQY --coldkey_seed_file=$HOME/.keys/cold.seed",
 		},
 	},
 	"claim": {
 		summary: "Fetch and verify the pool claim for an epoch. With --key_file it also submits it.",
 		examples: []string{
-			"provider claim --rpc=<rpc_url> --dry-run",
+			"provider claim --rpc=<rpc_url>          # verify the last finished epoch's claim",
 		},
+	},
+	"wallet hotkey": {
+		summary: "Set one coldkey-to-hotkey payout chain for every operator in the list,\nor show its status. Advanced: most miners use provider wallet set.",
+	},
+	"proxy auth": {
+		summary: "Add or remove a SOCKS5 user and password, for every proxy or for one proxy key.",
 	},
 	"claim-daemon": {
 		summary: "Submit claims automatically from a durable queue (release-1.0 configuration).",
@@ -155,12 +164,15 @@ State lives in ~/.urnetwork. Docs: https://ur.xyz/docs/miner
 `, version)
 }
 
-func cliVersion() string {
-	version := RequireVersion()
-	if version == "" {
-		version = "(development build)"
+func cliBareVersion() string {
+	if version := RequireVersion(); version != "" {
+		return version
 	}
-	return fmt.Sprintf("provider %s %s/%s", version, runtime.GOOS, runtime.GOARCH)
+	return "(development build)"
+}
+
+func cliVersion() string {
+	return fmt.Sprintf("provider %s %s/%s", cliBareVersion(), runtime.GOOS, runtime.GOARCH)
 }
 
 // cliFront handles what the friendly front answers on its own. It returns the
@@ -171,22 +183,32 @@ func cliFront(args []string, stdout io.Writer, stderr io.Writer) (rest []string,
 		return nil, true, 0
 	}
 	switch args[0] {
-	case "--version", "version":
+	case "--version":
+		if len(args) == 1 {
+			// the bare version, as docopt printed it
+			fmt.Fprintln(stdout, cliBareVersion())
+			return nil, true, 0
+		}
+	case "version":
 		fmt.Fprintln(stdout, cliVersion())
 		return nil, true, 0
-	case "-h", "--help":
-		fmt.Fprint(stdout, cliOverview())
-		return nil, true, 0
 	case "help":
-		if len(args) == 1 {
+		switch {
+		case len(args) == 1 || args[1] == "help":
 			fmt.Fprint(stdout, cliOverview())
-			return nil, true, 0
-		}
-		if args[1] == "all" || args[1] == "advanced" {
+		case args[1] == "all" || args[1] == "advanced":
 			fmt.Fprintln(stdout, mainUsage())
-			return nil, true, 0
+		case args[1] == "version":
+			fmt.Fprintln(stdout, cliVersion())
+		default:
+			fmt.Fprint(stdout, cliHelpFor(rewriteCliAlias(args[1:])))
 		}
-		args = append(rewriteCliAlias(args[1:]), "--help")
+		return nil, true, 0
+	}
+	if strings.HasPrefix(args[0], "-") {
+		// options may come before the command, as docopt has always allowed;
+		// -h and --help are answered by the parser's help handler
+		return args, false, 0
 	}
 
 	args = rewriteCliAlias(args)
@@ -195,23 +217,51 @@ func cliFront(args []string, stdout io.Writer, stderr io.Writer) (rest []string,
 		writeCliError(stderr, unknownCliCommand(args[0], commands))
 		return nil, true, 1
 	}
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			fmt.Fprint(stdout, cliCommandUsage(args))
-			return nil, true, 0
-		}
-	}
 	return args, false, 0
 }
 
-func rewriteCliAlias(args []string) []string {
-	for _, alias := range cliAliases {
-		if len(alias.words) <= len(args) && equalWords(alias.words, args[:len(alias.words)]) {
-			out := append([]string{}, alias.replace...)
-			return append(out, args[len(alias.words):]...)
+// cliHelpFor is the help for the command args names, ignoring options, or
+// the overview when it names none.
+func cliHelpFor(args []string) string {
+	var words []string
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if !strings.HasPrefix(arg, "-") {
+			words = append(words, arg)
 		}
 	}
+	words = rewriteCliAlias(words)
+	if len(words) == 0 || !usageCommands(mainUsage(), "provider")[words[0]] {
+		return cliOverview()
+	}
+	return cliCommandUsage(words)
+}
+
+func rewriteCliAlias(args []string) []string {
+	if i := cliAliasIndex(args); 0 <= i {
+		out := append([]string{}, cliAliases[i].replace...)
+		return append(out, args[len(cliAliases[i].words):]...)
+	}
 	return args
+}
+
+// matchedCliAlias returns the alias words that start args, or nil.
+func matchedCliAlias(args []string) []string {
+	if i := cliAliasIndex(args); 0 <= i {
+		return cliAliases[i].words
+	}
+	return nil
+}
+
+func cliAliasIndex(args []string) int {
+	for i, alias := range cliAliases {
+		if len(alias.words) <= len(args) && equalWords(alias.words, args[:len(alias.words)]) && (!alias.alone || len(args) == len(alias.words)) {
+			return i
+		}
+	}
+	return -1
 }
 
 func equalWords(a []string, b []string) bool {
@@ -242,9 +292,23 @@ func unknownCliCommand(name string, commands map[string]bool) string {
 
 // cliParseError explains why argv did not match the usage of its command, in
 // place of docopt printing every usage line.
-func cliParseError(args []string) string {
+func cliParseError(args []string, typed []string) string {
+	message := cliParseErrorFor(args)
+	if alias := matchedCliAlias(typed); alias != nil {
+		// name the command as it was typed, and what it stands for
+		message = strings.ReplaceAll(message, "\"provider "+args[0], "\"provider "+strings.Join(alias, " "))
+		message = strings.Replace(message, "  Help: provider "+args[0], "  Help: provider "+strings.Join(alias, " "), 1)
+		message += fmt.Sprintf("\n  (provider %s is short for provider %s)", strings.Join(alias, " "), strings.Join(rewriteCliAlias(alias), " "))
+	}
+	return message
+}
+
+func cliParseErrorFor(args []string) string {
 	known := usageOptionNames(mainUsage())
 	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
 		if !strings.HasPrefix(arg, "-") || arg == "-" {
 			continue
 		}
@@ -281,7 +345,9 @@ func cliParseError(args []string) string {
 		fmt.Fprintf(&b, "Those arguments don't match %q. It can be run as:\n", command)
 	}
 	for _, form := range forms {
-		fmt.Fprintf(&b, "    %s\n", firstLine(form))
+		for _, line := range wrapCliLine("    "+firstLine(form), "            ") {
+			fmt.Fprintf(&b, "%s\n", line)
+		}
 	}
 	fmt.Fprintf(&b, "  Help: %s --help", command)
 	return b.String()
@@ -306,14 +372,20 @@ func commandSubcommands(forms []string, words []string) []string {
 
 // cliParser parses argv against mainUsage, answering a mismatch with
 // cliParseError rather than the whole usage text.
-func cliParser(args []string, stderr io.Writer) *docopt.Parser {
+// A help flag docopt really parsed as one (not an option value) gets that
+// command's help; --version is printed as before.
+func cliParser(args []string, typed []string, stdout io.Writer, stderr io.Writer) *docopt.Parser {
 	return &docopt.Parser{
-		HelpHandler: func(err error, usage string) {
+		HelpHandler: func(err error, output string) {
 			if err != nil {
-				writeCliError(stderr, cliParseError(args))
+				writeCliError(stderr, cliParseError(args, typed))
 				os.Exit(1)
 			}
-			docopt.PrintHelpAndExit(err, usage)
+			if output == strings.Trim(mainUsage(), "\n") {
+				fmt.Fprint(stdout, cliHelpFor(args))
+				os.Exit(0)
+			}
+			docopt.PrintHelpAndExit(err, output)
 		},
 	}
 }
@@ -323,7 +395,10 @@ func cliParser(args []string, stderr io.Writer) *docopt.Parser {
 func cliCommandUsage(args []string) string {
 	usage := mainUsage()
 	words := commandWords(args)
-	help := cliCommandHelp[words[0]]
+	help := cliCommandHelp[strings.Join(words, " ")]
+	if help.summary == "" && len(words) == 1 {
+		help = cliCommandHelp[words[0]]
+	}
 	var b strings.Builder
 	title := "provider " + strings.Join(words, " ")
 	if help.alias != "" && len(words) == 1 {
@@ -336,7 +411,15 @@ func cliCommandUsage(args []string) string {
 	forms := commandUsageForms(usage, words)
 	fmt.Fprintf(&b, "Usage:\n")
 	for _, form := range forms {
-		fmt.Fprintf(&b, "%s\n", form)
+		for _, line := range strings.Split(form, "\n") {
+			indent := "            "
+			if strings.HasPrefix(strings.TrimSpace(line), "[") {
+				indent = "            " + "    "
+			}
+			for _, wrapped := range wrapCliLine(line, indent) {
+				fmt.Fprintf(&b, "%s\n", wrapped)
+			}
+		}
 	}
 	if options := commandOptionText(usage, forms); options != "" {
 		fmt.Fprintf(&b, "\nOptions:\n%s", options)
@@ -410,42 +493,89 @@ func commandOptionText(usage string, forms []string) string {
 		used[name] = true
 	}
 	var b strings.Builder
-	take := false
+	var declaration string
+	var description []string
+	flush := func() {
+		if declaration != "" {
+			writeOptionEntry(&b, declaration, strings.Join(description, " "))
+		}
+		declaration, description = "", nil
+	}
 	for _, line := range usageSection(usage, "Options:") {
-		trimmed := strings.TrimSpace(line)
+		expanded := strings.ReplaceAll(line, "\t", "    ")
+		trimmed := strings.TrimSpace(expanded)
 		if trimmed == "" {
 			continue
 		}
-		if strings.HasPrefix(trimmed, "-") || strings.HasPrefix(trimmed, "<") {
-			declaration, _, _ := strings.Cut(trimmed, "  ")
-			take = false
-			for _, name := range optionPattern.FindAllString(optionValuePattern.ReplaceAllString(declaration, ""), -1) {
+		// a declaration starts near the margin; deeper lines continue the
+		// entry above, even when they start with an option name
+		indent := len(expanded) - len(strings.TrimLeft(expanded, " "))
+		if indent <= 8 && (strings.HasPrefix(trimmed, "-") || strings.HasPrefix(trimmed, "<")) {
+			flush()
+			names, text := splitOptionLine(trimmed)
+			for _, name := range optionPattern.FindAllString(optionValuePattern.ReplaceAllString(names, ""), -1) {
 				if used[name] {
-					take = true
+					declaration, description = names, []string{text}
 				}
 			}
+			continue
 		}
-		if take {
-			fmt.Fprintf(&b, "    %s\n", strings.ReplaceAll(strings.TrimRight(line, " "), "\t", "    ")[leadingWidth(line):])
+		if declaration != "" {
+			description = append(description, trimmed)
 		}
 	}
+	flush()
 	return b.String()
+}
+
+// writeOptionEntry lays out one option: the declaration, then its description
+// from optionDescriptionColumn (on the next line when the declaration is
+// wider), wrapped at cliHelpWidth.
+func writeOptionEntry(b *strings.Builder, declaration string, description string) {
+	pad := strings.Repeat(" ", optionDescriptionColumn)
+	first := "    " + declaration
+	if len(first)+2 <= optionDescriptionColumn {
+		first += strings.Repeat(" ", optionDescriptionColumn-len(first)) + description
+	} else {
+		fmt.Fprintf(b, "%s\n", first)
+		first = pad + description
+	}
+	for _, line := range wrapCliLine(strings.TrimRight(first, " "), pad) {
+		fmt.Fprintf(b, "%s\n", line)
+	}
+}
+
+// optionDescriptionColumn is where option descriptions start in help.
+const optionDescriptionColumn = 37
+
+// cliHelpWidth is the widest line help prints before wrapping.
+const cliHelpWidth = 100
+
+// splitOptionLine splits a reference Options line into its declaration and
+// its description (separated by two or more spaces, or a tab).
+func splitOptionLine(trimmed string) (string, string) {
+	declaration, description, _ := strings.Cut(trimmed, "  ")
+	return strings.TrimSpace(declaration), strings.TrimSpace(description)
+}
+
+// wrapCliLine breaks line at spaces so no piece is wider than cliHelpWidth,
+// starting each continuation with indent.
+func wrapCliLine(line string, indent string) []string {
+	var out []string
+	for cliHelpWidth < len(line) {
+		cut := strings.LastIndex(line[:cliHelpWidth], " ")
+		if cut <= len(indent) {
+			break
+		}
+		out = append(out, strings.TrimRight(line[:cut], " "))
+		line = indent + strings.TrimLeft(line[cut:], " ")
+	}
+	return append(out, line)
 }
 
 var optionPattern = regexp.MustCompile(`--?[A-Za-z][A-Za-z0-9_-]*|<[a-z0-9_]+>`)
 
 var optionValuePattern = regexp.MustCompile(`=<[^>]*>`)
-
-// leadingWidth is how much of a reference line's indentation help drops; the
-// reference mixes tabs and spaces, so continuation lines keep their offset.
-func leadingWidth(line string) int {
-	expanded := strings.ReplaceAll(line, "\t", "    ")
-	width := len(expanded) - len(strings.TrimLeft(expanded, " "))
-	if 4 < width {
-		return 4
-	}
-	return width
-}
 
 func usageSection(usage string, header string) []string {
 	_, body, found := strings.Cut(usage, "\n"+header+"\n")
@@ -534,11 +664,12 @@ func writeCliError(w io.Writer, message string) {
 }
 
 func cliColor(w io.Writer) bool {
+	return cliIsTerminal(w) && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
+}
+
+func cliIsTerminal(w io.Writer) bool {
 	file, ok := w.(*os.File)
-	if !ok || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
-		return false
-	}
-	return term.IsTerminal(int(file.Fd()))
+	return ok && term.IsTerminal(int(file.Fd()))
 }
 
 // cliPanicMessage is what a panic in a command becomes, unless -vv or
@@ -574,7 +705,8 @@ func recoverCliPanic(args []string, stderr io.Writer) {
 	if recovered == nil {
 		return
 	}
-	if 2 <= cliVerbosity(args) || os.Getenv("PROVIDER_DEBUG") != "" {
+	// logs (systemd, docker) keep the full panic, as before
+	if 2 <= cliVerbosity(args) || os.Getenv("PROVIDER_DEBUG") != "" || !cliIsTerminal(stderr) {
 		panic(recovered)
 	}
 	writeCliError(stderr, cliPanicMessage(args, recovered))
