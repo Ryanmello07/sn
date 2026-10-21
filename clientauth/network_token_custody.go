@@ -148,9 +148,13 @@ func RenewNetworkToken(path string, previous string, renewed string) (_ bool, re
 		}
 	}()
 	_, writeErr := io.WriteString(file, renewed)
-	syncErr := file.Sync()
-	modTime, statErr := registrationModTimeNano(file)
-	if err := errors.Join(writeErr, syncErr, statErr, file.Close()); err != nil {
+	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
+		return false, err
+	}
+	// the modification time as a later reader sees it: read after close,
+	// since Windows may stamp a written file's time when its handle closes
+	modTime, err := store.modTimeNano(temporary)
+	if err != nil {
 		return false, err
 	}
 	if hook := networkRenewalTestHooks.afterTemporary; hook != nil && hook() {
@@ -218,6 +222,16 @@ func (self *registrationStore) removeNetworkRenewalLeftovers(name string) error 
 		}
 	}
 	return nil
+}
+
+// modTimeNano is the modification time of a leaf, opened like a read.
+func (self *registrationStore) modTimeNano(name string) (_ int64, returnErr error) {
+	file, err := self.open(name, registrationOpenRead)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { returnErr = errors.Join(returnErr, file.Close()) }()
+	return registrationModTimeNano(file)
 }
 
 // The store's read of the token, with the fingerprint from the same file.

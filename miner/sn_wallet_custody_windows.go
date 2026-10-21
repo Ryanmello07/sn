@@ -8,7 +8,9 @@
 package miner
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -227,10 +229,13 @@ func (self *snWalletConsentStore) write(raw []byte, previousHash [32]byte, hasPr
 	}
 	defer func() {
 		if returnErr != nil {
-			err := wincustody.Delete(windows.Handle(self.directory.Fd()), filepath.Join(self.parentPath, self.name), snWalletConsentPendingName)
-			if !errors.Is(err, os.ErrNotExist) {
-				returnErr = errors.Join(returnErr, err)
+			// renamed aside durably, as Unix unlinks and syncs: a pending
+			// file back after a crash would refuse every later read
+			aside, err := snWalletConsentAsideName()
+			if err == nil {
+				err = wincustody.Remove(windows.Handle(self.directory.Fd()), filepath.Join(self.parentPath, self.name), snWalletConsentPendingName, aside, self.lock)
 			}
+			returnErr = errors.Join(returnErr, err)
 		}
 	}()
 	written, writeErr := file.Write(raw)
@@ -244,6 +249,14 @@ func (self *snWalletConsentStore) write(raw []byte, previousHash [32]byte, hasPr
 		return err
 	}
 	return self.check()
+}
+
+func snWalletConsentAsideName() (string, error) {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return "", err
+	}
+	return ".history.removed-" + hex.EncodeToString(random[:]), nil
 }
 
 // Closing the lock file releases the lease even after process death.

@@ -74,7 +74,9 @@ func TestDescriptorPrivate(t *testing.T) {
 		{"everyone generic write", "O:" + me + profile + "(A;;GW;;;WD)", true, false},
 		{"authenticated users modify", "O:" + me + profile + "(A;OICI;0x1301bf;;;AU)", true, false},
 		{"other user full", "O:" + me + profile + "(A;;FA;;;S-1-5-21-1-2-3-1001)", false, false},
-		{"inherit-only for children", "O:" + me + profile + "(A;OICIIO;FA;;;WD)", true, true},
+		{"inherit-only for files", "O:" + me + profile + "(A;OICIIO;FA;;;WD)", true, false},
+		{"users read inherited by files", "O:" + me + profile + "(A;OICI;0x1200a9;;;BU)", true, false},
+		{"inherit-only for subdirectories", "O:" + me + profile + "(A;CIIO;FA;;;WD)", true, true},
 		{"deny everyone", "O:" + me + profile + "(D;;FA;;;WD)", false, true},
 		{"owner rights", "O:" + me + profile + "(A;;FA;;;OW)", false, true},
 	} {

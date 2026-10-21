@@ -296,7 +296,8 @@ func Descriptor(handle windows.Handle) (string, error) {
 
 // DescriptorPrivate accepts a trusted owner and a DACL in which no other
 // account is granted more than a directory's read rights (readable) or
-// anything at all.
+// anything at all, and no other account is granted anything files created
+// inside would inherit.
 func DescriptorPrivate(sd *windows.SECURITY_DESCRIPTOR, readable bool) error {
 	refused := ErrFileNotPrivate
 	if readable {
@@ -329,16 +330,24 @@ func DescriptorPrivate(sd *windows.SECURITY_DESCRIPTOR, readable bool) error {
 			// object and unknown allow layouts are not read here: refuse
 			return refused
 		}
-		if ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 {
-			// applies only to children, which are each checked themselves
-			continue
-		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		if sidTrusted(sid, trusted) || sid.Equals(ownerRightsSid) {
 			continue
 		}
 		mask := uint32(ace.Mask)
-		if mask == 0 || readable && mask&^uint32(directoryReadRights) == 0 {
+		if mask == 0 {
+			continue
+		}
+		if ace.Header.AceFlags&windows.OBJECT_INHERIT_ACE != 0 {
+			// a file created inside by path (os.CreateTemp) would inherit
+			// it, and Unix files are private whatever their directory says
+			return refused
+		}
+		if ace.Header.AceFlags&windows.INHERIT_ONLY_ACE != 0 {
+			// reaches only subdirectories, which are each checked themselves
+			continue
+		}
+		if readable && mask&^uint32(directoryReadRights) == 0 {
 			continue
 		}
 		return refused
@@ -532,60 +541,128 @@ func Lock(file *os.File) error {
 }
 
 // Rename replaces to with from inside dir (renameat) and flushes the renamed
-// file, which is how Windows makes a rename durable.
+// file, which is how Windows makes a rename durable. Only the open is retried
+// on a sharing conflict; a step that ran is never repeated.
 func Rename(dir windows.Handle, path string, from string, to string) error {
 	if !ValidName(to) {
 		return errors.New("custody rename leaf is invalid")
 	}
-	return retrySharing(func() error {
-		handle, err := openForRename(dir, path, from)
-		if err != nil {
-			return err
-		}
-		renameErr := renameHandle(dir, path, handle, to, true)
-		if renameErr == nil {
-			renameErr = windows.FlushFileBuffers(handle)
-		}
-		return errors.Join(renameErr, windows.CloseHandle(handle))
-	})
+	handle, err := openForRename(dir, path, from)
+	if err != nil {
+		return err
+	}
+	renameErr := renameHandle(dir, path, handle, to, true)
+	if renameErr == nil {
+		renameErr = flushHandle(handle)
+	}
+	return errors.Join(renameErr, windows.CloseHandle(handle))
 }
 
 // Remove deletes name inside dir (unlinkat) with its name durably gone first:
 // it is renamed to aside, a fresh name the caller chose, with a flush, and the
-// leftover is then deleted. A missing name is already absent (nil).
-func Remove(dir windows.Handle, path string, name string, aside string) error {
+// leftover is then deleted and the deletion flushed through flush, a write
+// handle on the same volume (the caller's lock file). A missing name is
+// already absent (nil).
+func Remove(dir windows.Handle, path string, name string, aside string, flush *os.File) error {
 	if !ValidName(aside) {
 		return errors.New("custody removal leaf is invalid")
 	}
-	return retrySharing(func() error {
-		handle, err := openForRename(dir, path, name)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		renameErr := renameHandle(dir, path, handle, aside, false)
-		if renameErr == nil {
-			renameErr = windows.FlushFileBuffers(handle)
-		}
-		if renameErr != nil {
-			return errors.Join(renameErr, windows.CloseHandle(handle))
-		}
-		return errors.Join(deleteHandle(handle), windows.CloseHandle(handle))
-	})
+	handle, err := openForRename(dir, path, name)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	renameErr := renameHandle(dir, path, handle, aside, false)
+	if renameErr == nil {
+		renameErr = flushHandle(handle)
+	}
+	if renameErr != nil {
+		return errors.Join(renameErr, windows.CloseHandle(handle))
+	}
+	if err := errors.Join(deleteHandle(handle), windows.CloseHandle(handle)); err != nil {
+		return err
+	}
+	return flushFile(flush)
 }
 
-// Delete deletes name inside dir without the durable rename aside, for a
-// temporary that was never published. A missing name is os.ErrNotExist.
-func Delete(dir windows.Handle, path string, name string) error {
-	return retrySharing(func() error {
-		handle, err := openForRename(dir, path, name)
-		if err != nil {
-			return err
+// Delete deletes name inside dir and flushes the deletion through flush, as
+// Remove does, without the rename aside; for a temporary that never held a
+// published name. A missing name is os.ErrNotExist.
+func Delete(dir windows.Handle, path string, name string, flush *os.File) error {
+	handle, err := openForRename(dir, path, name)
+	if err != nil {
+		return err
+	}
+	if err := errors.Join(deleteHandle(handle), windows.CloseHandle(handle)); err != nil {
+		return err
+	}
+	return flushFile(flush)
+}
+
+// flushHandle commits a file the caller holds without write access: a write
+// handle is reopened from it (its attributes cleared of read-only first, as
+// a Unix rename never minds a file's mode) and flushed.
+func flushHandle(handle windows.Handle) error {
+	writer, err := reOpenFile(handle, windows.FILE_WRITE_DATA|windows.SYNCHRONIZE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_FLAG_OPEN_REPARSE_POINT)
+	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		if clearErr := clearReadOnly(handle); clearErr != nil {
+			return errors.Join(err, clearErr)
 		}
-		return errors.Join(deleteHandle(handle), windows.CloseHandle(handle))
-	})
+		writer, err = reOpenFile(handle, windows.FILE_WRITE_DATA|windows.SYNCHRONIZE, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, windows.FILE_FLAG_OPEN_REPARSE_POINT)
+	}
+	if err != nil {
+		return err
+	}
+	return errors.Join(windows.FlushFileBuffers(writer), windows.CloseHandle(writer))
+}
+
+// fileBasicInfo is FILE_BASIC_INFO.
+type fileBasicInfo struct {
+	CreationTime   int64
+	LastAccessTime int64
+	LastWriteTime  int64
+	ChangeTime     int64
+	FileAttributes uint32
+	_              uint32
+}
+
+var procReOpenFile = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReOpenFile")
+
+// reOpenFile is kernel32's ReOpenFile: a new handle to the same file, never
+// a fresh path lookup.
+func reOpenFile(handle windows.Handle, access uint32, share uint32, flags uint32) (windows.Handle, error) {
+	reopened, _, err := procReOpenFile.Call(uintptr(handle), uintptr(access), uintptr(share), uintptr(flags))
+	if windows.Handle(reopened) == windows.InvalidHandle {
+		return windows.InvalidHandle, err
+	}
+	return windows.Handle(reopened), nil
+}
+
+func clearReadOnly(handle windows.Handle) error {
+	var info windows.ByHandleFileInformation
+	if err := windows.GetFileInformationByHandle(handle, &info); err != nil {
+		return err
+	}
+	if info.FileAttributes&windows.FILE_ATTRIBUTE_READONLY == 0 {
+		return windows.ERROR_ACCESS_DENIED
+	}
+	// zero times leave the file's times as they are
+	basic := fileBasicInfo{FileAttributes: info.FileAttributes &^ windows.FILE_ATTRIBUTE_READONLY}
+	if basic.FileAttributes == 0 {
+		basic.FileAttributes = windows.FILE_ATTRIBUTE_NORMAL
+	}
+	return windows.SetFileInformationByHandle(handle, windows.FileBasicInfo, (*byte)(unsafe.Pointer(&basic)), uint32(unsafe.Sizeof(basic)))
+}
+
+// flushFile commits the volume's log through any write handle on it: NTFS
+// writes its log in order, so a flush covers every earlier metadata change.
+func flushFile(file *os.File) error {
+	if file == nil {
+		return errors.New("custody removal needs a write handle to flush")
+	}
+	return windows.FlushFileBuffers(windows.Handle(file.Fd()))
 }
 
 // Another process reading a file without FILE_SHARE_DELETE (os.Open, a virus
@@ -612,7 +689,7 @@ func sharingConflict(err error) bool {
 }
 
 // The handle a rename or removal acts on: the leaf itself, never a link's
-// target, with the write access a flush needs.
+// target. Only this open is retried on a sharing conflict.
 func openForRename(dir windows.Handle, path string, name string) (windows.Handle, error) {
 	if !ValidName(name) {
 		return windows.InvalidHandle, errors.New("custody rename leaf is invalid")
@@ -622,21 +699,27 @@ func openForRename(dir windows.Handle, path string, name string) (windows.Handle
 		return windows.InvalidHandle, err
 	}
 	var handle windows.Handle
-	err = windows.NtCreateFile(
-		&handle,
-		windows.DELETE|windows.FILE_GENERIC_WRITE|windows.FILE_READ_ATTRIBUTES|windows.SYNCHRONIZE,
-		attributes,
-		&windows.IO_STATUS_BLOCK{},
-		nil,
-		0,
-		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
-		windows.FILE_OPEN,
-		windows.FILE_NON_DIRECTORY_FILE|windows.FILE_OPEN_REPARSE_POINT|windows.FILE_SYNCHRONOUS_IO_NONALERT,
-		0,
-		0,
-	)
+	err = retrySharing(func() error {
+		err := windows.NtCreateFile(
+			&handle,
+			windows.DELETE|windows.FILE_READ_ATTRIBUTES|windows.FILE_WRITE_ATTRIBUTES|windows.SYNCHRONIZE,
+			attributes,
+			&windows.IO_STATUS_BLOCK{},
+			nil,
+			0,
+			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+			windows.FILE_OPEN,
+			windows.FILE_NON_DIRECTORY_FILE|windows.FILE_OPEN_REPARSE_POINT|windows.FILE_SYNCHRONOUS_IO_NONALERT,
+			0,
+			0,
+		)
+		if err != nil {
+			return ntError("rename", filepath.Join(path, name), err)
+		}
+		return nil
+	})
 	if err != nil {
-		return windows.InvalidHandle, ntError("rename", filepath.Join(path, name), err)
+		return windows.InvalidHandle, err
 	}
 	return handle, nil
 }
@@ -668,14 +751,14 @@ func renameHandle(dir windows.Handle, path string, handle windows.Handle, to str
 	copy(info.FileName[:], name)
 	info.Flags = windows.FILE_RENAME_POSIX_SEMANTICS
 	if replace {
-		info.Flags |= windows.FILE_RENAME_REPLACE_IF_EXISTS
+		// a read-only file in the way doesn't stop a Unix rename either
+		info.Flags |= windows.FILE_RENAME_REPLACE_IF_EXISTS | windows.FILE_RENAME_IGNORE_READONLY_ATTRIBUTE
 	}
 	err = windows.NtSetInformationFile(handle, &windows.IO_STATUS_BLOCK{}, (*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), fileRenameInformationExClass)
-	switch err {
-	case nil:
-		return nil
-	case windows.STATUS_INVALID_INFO_CLASS, windows.STATUS_INVALID_PARAMETER, windows.STATUS_NOT_SUPPORTED:
-		// before Windows 10 1607, or a volume without POSIX renames (FAT)
+	if err != nil {
+		// before Windows 10 1607, a volume without POSIX renames (FAT), or a
+		// filter or redirector without the extended class: the plain rename
+		// acts on the same handle and relative name
 		info.Flags = 0
 		if replace {
 			// the union's first byte is ReplaceIfExists
@@ -685,8 +768,9 @@ func renameHandle(dir windows.Handle, path string, handle windows.Handle, to str
 		if err == nil {
 			return nil
 		}
+		return ntError("rename", filepath.Join(path, to), err)
 	}
-	return ntError("rename", filepath.Join(path, to), err)
+	return nil
 }
 
 type fileDispositionInformationEx struct {
@@ -705,12 +789,14 @@ const (
 // deleteHandle marks an open leaf deleted, with POSIX semantics (the name
 // goes when this handle closes) where the volume has them.
 func deleteHandle(handle windows.Handle) error {
-	info := fileDispositionInformationEx{Flags: windows.FILE_DISPOSITION_DELETE | windows.FILE_DISPOSITION_POSIX_SEMANTICS}
+	info := fileDispositionInformationEx{Flags: windows.FILE_DISPOSITION_DELETE | windows.FILE_DISPOSITION_POSIX_SEMANTICS | windows.FILE_DISPOSITION_IGNORE_READONLY_ATTRIBUTE}
 	err := windows.NtSetInformationFile(handle, &windows.IO_STATUS_BLOCK{}, (*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), fileDispositionInformationExClass)
 	switch err {
 	case nil:
 		return nil
 	case windows.STATUS_INVALID_INFO_CLASS, windows.STATUS_INVALID_PARAMETER, windows.STATUS_NOT_SUPPORTED:
+		// the legacy disposition refuses a read-only file; Unix doesn't mind
+		_ = clearReadOnly(handle)
 		legacy := fileDispositionInformation{DeleteFile: 1}
 		err = windows.NtSetInformationFile(handle, &windows.IO_STATUS_BLOCK{}, (*byte)(unsafe.Pointer(&legacy)), uint32(unsafe.Sizeof(legacy)), fileDispositionInformationClass)
 		if err == nil {

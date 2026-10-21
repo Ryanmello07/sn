@@ -227,7 +227,7 @@ func (self *registrationStore) remove(name string) error {
 	if err != nil {
 		return err
 	}
-	if err := wincustody.Remove(windows.Handle(self.directory.Fd()), self.path, name, aside); err != nil {
+	if err := wincustody.Remove(windows.Handle(self.directory.Fd()), self.path, name, aside, self.lock); err != nil {
 		return err
 	}
 	return self.check()
@@ -253,7 +253,7 @@ func (self *registrationStore) write(name string, raw []byte) (returnErr error) 
 	renamed := false
 	defer func() {
 		if returnErr != nil && !renamed {
-			_ = wincustody.Delete(windows.Handle(self.directory.Fd()), self.path, temporary)
+			_ = wincustody.Delete(windows.Handle(self.directory.Fd()), self.path, temporary, self.lock)
 		}
 	}()
 	_, writeErr := io.Copy(file, bytes.NewReader(raw))

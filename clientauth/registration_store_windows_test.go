@@ -248,3 +248,33 @@ func TestWindowsCustodyPathsAreLocalAndPlain(t *testing.T) {
 		}
 	}
 }
+
+// A Unix rename or unlink never minds a file's mode; a read-only attribute
+// must not stop a replacement or a removal here either.
+func TestWindowsCustodyIgnoresReadOnlyAttribute(t *testing.T) {
+	path := windowsCustodyPath(t)
+	store, err := openRegistrationStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.close()
+	if err := store.write("jwt.lineage", []byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path+".lineage", 0400); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.write("jwt.lineage", []byte("second")); err != nil {
+		t.Fatalf("replacing a read-only leaf: %v", err)
+	}
+	if err := os.Chmod(path+".lineage", 0400); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.remove("jwt.lineage"); err != nil {
+		t.Fatalf("removing a read-only leaf: %v", err)
+	}
+	names, err := store.names(16)
+	if err != nil || !slices.Equal(names, []string{"jwt.registration.lock"}) {
+		t.Fatalf("names = %v, %v", names, err)
+	}
+}
