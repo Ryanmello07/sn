@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 package clientauth
 
@@ -429,8 +429,8 @@ func TestClientRegistrationPrivateCustodyRejectsLinksAndConcurrentOwner(t *testi
 	if err := owner.close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(fixture.networkPath, fixture.clientPath+".registration"); err != nil {
-		t.Fatal(err)
+	if !testSymlink(t, fixture.networkPath, fixture.clientPath+".registration") {
+		return
 	}
 	if _, err := fixture.register(t.Context(), true, registrationHooks{}); err == nil || fixture.postCount() != 0 {
 		t.Fatal("registration followed a substituted private file")

@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 package clientauth
 
@@ -14,8 +14,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 // How long an explicit sign-in waits for the token's owner lock. A renewal
@@ -139,7 +137,7 @@ func RenewNetworkToken(path string, previous string, renewed string) (_ bool, re
 		return false, err
 	}
 	temporary := networkRenewalLeftoverPrefix(name) + hex.EncodeToString(random[:])
-	file, err := store.open(temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL)
+	file, err := store.open(temporary, registrationOpenCreate)
 	if err != nil {
 		return false, err
 	}
@@ -150,17 +148,20 @@ func RenewNetworkToken(path string, previous string, renewed string) (_ bool, re
 		}
 	}()
 	_, writeErr := io.WriteString(file, renewed)
-	syncErr := file.Sync()
-	var stat unix.Stat_t
-	statErr := unix.Fstat(int(file.Fd()), &stat)
-	if err := errors.Join(writeErr, syncErr, statErr, file.Close()); err != nil {
+	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
+		return false, err
+	}
+	// the modification time as a later reader sees it: read after close,
+	// since Windows may stamp a written file's time when its handle closes
+	modTime, err := store.modTimeNano(temporary)
+	if err != nil {
 		return false, err
 	}
 	if hook := networkRenewalTestHooks.afterTemporary; hook != nil && hook() {
 		cleanup = false
 		return false, errNetworkRenewalTestStop
 	}
-	renewedFingerprint := networkCredentialFingerprintOf(renewed, stat.Mtim.Nano(), true)
+	renewedFingerprint := networkCredentialFingerprintOf(renewed, modTime, true)
 	encoded, err := encodeNetworkCredentialLineage(appendNetworkCredentialLineage(members, renewedFingerprint))
 	if err != nil {
 		return false, err
@@ -180,11 +181,11 @@ func RenewNetworkToken(path string, previous string, renewed string) (_ bool, re
 	if err := store.check(); err != nil {
 		return false, err
 	}
-	if err := unix.Renameat(int(store.directory.Fd()), temporary, int(store.directory.Fd()), name); err != nil {
+	if err := store.renameLeaf(temporary, name); err != nil {
 		return false, err
 	}
 	cleanup = false
-	return true, errors.Join(store.directory.Sync(), store.check())
+	return true, errors.Join(store.syncDirectory(), store.check())
 }
 
 // networkRenewalTestHooks stop a renewal right after one of its durable
@@ -223,18 +224,28 @@ func (self *registrationStore) removeNetworkRenewalLeftovers(name string) error 
 	return nil
 }
 
+// modTimeNano is the modification time of a leaf, opened like a read.
+func (self *registrationStore) modTimeNano(name string) (_ int64, returnErr error) {
+	file, err := self.open(name, registrationOpenRead)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { returnErr = errors.Join(returnErr, file.Close()) }()
+	return registrationModTimeNano(file)
+}
+
 // The store's read of the token, with the fingerprint from the same file.
 func (self *registrationStore) readNetworkCredential(name string) (token string, fingerprint string, returnErr error) {
 	if err := self.check(); err != nil {
 		return "", "", err
 	}
-	file, err := self.open(name, unix.O_RDONLY)
+	file, err := self.open(name, registrationOpenRead)
 	if err != nil {
 		return "", "", err
 	}
 	defer func() { returnErr = errors.Join(returnErr, file.Close()) }()
-	var stat unix.Stat_t
-	if err := unix.Fstat(int(file.Fd()), &stat); err != nil {
+	modTime, err := registrationModTimeNano(file)
+	if err != nil {
 		return "", "", err
 	}
 	raw, err := io.ReadAll(io.LimitReader(file, maximumRegistrationBytes+1))
@@ -248,7 +259,7 @@ func (self *registrationStore) readNetworkCredential(name string) (token string,
 	if token == "" {
 		return "", "", errors.New("network token is empty")
 	}
-	return token, networkCredentialFingerprintOf(token, stat.Mtim.Nano(), true), self.check()
+	return token, networkCredentialFingerprintOf(token, modTime, true), self.check()
 }
 
 // QuarantineNetworkToken sets the rejected network token at path aside: it
@@ -299,10 +310,10 @@ func QuarantineNetworkToken(path string, rejected string, now time.Time) (_ Netw
 	if err := store.check(); err != nil {
 		return NetworkTokenQuarantine{}, false, err
 	}
-	if err := unix.Renameat(int(store.directory.Fd()), name, int(store.directory.Fd()), target); err != nil {
+	if err := store.renameLeaf(name, target); err != nil {
 		return NetworkTokenQuarantine{}, false, err
 	}
-	if err := errors.Join(store.directory.Sync(), store.check()); err != nil {
+	if err := errors.Join(store.syncDirectory(), store.check()); err != nil {
 		return NetworkTokenQuarantine{}, false, err
 	}
 	quarantine := NetworkTokenQuarantine{Path: filepath.Join(store.path, target), Time: at, Consecutive: consecutive}

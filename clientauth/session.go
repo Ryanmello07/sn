@@ -43,7 +43,7 @@ func (self ClientRefreshIntegrityListenerFunc) ClientRefreshInvalid(notice *sdk.
 }
 
 func ReadToken(path string) (string, error) {
-	b, err := os.ReadFile(path)
+	b, err := readCredentialFile(path)
 	if err != nil {
 		return "", err
 	}

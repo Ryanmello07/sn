@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 // Real private custody and the qualified versioned HTTP fixture cover provider
 // scope and first-key ownership. Every identity and credential is synthetic.
@@ -179,7 +179,7 @@ func TestProviderClientKeyCreationAndLifetimeAreExplicit(t *testing.T) {
 	info, statErr := os.Stat(path)
 	public := ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)
 	marker, markerErr := os.ReadFile(filepath.Join(filepath.Dir(path), ".provider.key.identity"))
-	if readErr != nil || statErr != nil || markerErr != nil || !bytes.Equal(raw, seed) || info.Mode().Perm() != 0600 || !bytes.Contains(marker, []byte(hex.EncodeToString(public))) {
+	if readErr != nil || statErr != nil || markerErr != nil || !bytes.Equal(raw, seed) || !testFilePrivate(path, info) || !bytes.Contains(marker, []byte(hex.EncodeToString(public))) {
 		t.Fatal("provider key escaped before durable private identity")
 	}
 	seed[0] ^= 1
@@ -301,15 +301,13 @@ func TestProviderClientKeyRejectsChangedOrUnsafeCustody(t *testing.T) {
 		}
 		switch fault {
 		case "mode":
-			if err := os.Chmod(path, 0644); err != nil {
-				t.Fatal(err)
-			}
+			exposeTestFile(t, path)
 		case "symlink":
 			if err := os.Rename(path, path+".saved"); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Symlink(path+".saved", path); err != nil {
-				t.Fatal(err)
+			if !testSymlink(t, path+".saved", path) {
+				continue
 			}
 		case "hardlink":
 			if err := os.Link(path, path+".link"); err != nil {

@@ -21,6 +21,13 @@ import (
 
 const maximumRegistrationBytes = 32 * 1024
 
+// Leaf open modes for callers shared with the Windows store.
+const (
+	registrationOpenRead   = unix.O_RDONLY
+	registrationOpenLock   = unix.O_RDWR | unix.O_CREAT
+	registrationOpenCreate = unix.O_WRONLY | unix.O_CREAT | unix.O_EXCL
+)
+
 type registrationStore struct {
 	directory *os.File
 	lock      *os.File
@@ -245,6 +252,24 @@ func (self *registrationStore) write(name string, raw []byte) (returnErr error) 
 		return err
 	}
 	return errors.Join(self.directory.Sync(), self.check())
+}
+
+// renameLeaf replaces to with from inside the owned directory; the caller
+// syncs the directory before relying on it (syncDirectory).
+func (self *registrationStore) renameLeaf(from string, to string) error {
+	return unix.Renameat(int(self.directory.Fd()), from, int(self.directory.Fd()), to)
+}
+
+func (self *registrationStore) syncDirectory() error {
+	return self.directory.Sync()
+}
+
+func registrationModTimeNano(file *os.File) (int64, error) {
+	var stat unix.Stat_t
+	if err := unix.Fstat(int(file.Fd()), &stat); err != nil {
+		return 0, err
+	}
+	return stat.Mtim.Nano(), nil
 }
 
 // Releasing the lock and directory is part of the caller's completed result.
