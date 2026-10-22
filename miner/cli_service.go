@@ -173,6 +173,8 @@ type installerMiner interface {
 	enabled() bool
 	// switchHint is why install refuses, and how to switch
 	switchHint() string
+	// stopHint is how to stop it and keep it from starting again
+	stopHint() string
 }
 
 // windowsSystemProblem answers --system on Windows, which has no root and no
@@ -218,6 +220,10 @@ func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 			writeCliError(stderr, other.switchHint())
 			return 1
 		}
+		if problem := otherMinerProblem(manager); problem != "" {
+			writeCliError(stderr, problem)
+			return 1
+		}
 		executable, err := cliExecutable()
 		if err != nil {
 			writeCliError(stderr, "Couldn't find this program's own path: "+err.Error())
@@ -238,6 +244,10 @@ func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		stateDir, err := minerServiceStateDir(system)
 		if err != nil {
 			writeCliError(stderr, err.Error())
+			return 1
+		}
+		if problem := serviceValueProblem(append([]string{executable, stateDir}, minerServiceEnvironment()...)...); problem != "" {
+			writeCliError(stderr, "The service wasn't installed: "+problem+".")
 			return 1
 		}
 		if err := manager.install(executable, stateDir, stdout); err != nil {
@@ -296,6 +306,12 @@ func serviceCmd(opts docopt.Opts, stdout io.Writer, stderr io.Writer) int {
 		if !manager.installed() {
 			writeCliError(stderr, name+" isn't installed. Install it with: provider service install")
 			return 1
+		}
+		if action != "stop" && !byInstaller {
+			if problem := otherMinerProblem(manager); problem != "" {
+				writeCliError(stderr, problem)
+				return 1
+			}
 		}
 		if err := manager.control(action); err != nil {
 			writeCliError(stderr, fmt.Sprintf("Couldn't %s %s: %s", action, name, err))
@@ -427,6 +443,10 @@ func (self *systemdService) unit() string { return self.name + ".service" }
 
 func (self *systemdService) switchHint() string {
 	return "This device already runs the miner with the URnetwork installer (urnetwork.service).\n  Keep using it: provider service start, stop, status and logs work on it.\n  To switch to this command's service, turn the installer's off first (your identity is kept):\n  systemctl --user disable --now urnetwork.service urnetwork-update.timer\n  Don't use urnet-tools uninstall for this: it also deletes ~/.urnetwork."
+}
+
+func (self *systemdService) stopHint() string {
+	return "systemctl --user disable --now urnetwork.service urnetwork-update.timer"
 }
 
 func (self *systemdService) enabled() bool {
